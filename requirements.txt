@@ -1,0 +1,16 @@
+# Pinned with floors, and the reason each is here.
+#
+# The measurement itself is IMPORTED from the SEM repo through data/sem, so this app needs the
+# same scientific stack that repo needs -- numpy/scipy/scikit-image -- plus a server. It does
+# NOT need pandas, torch or the detector: nothing here runs a model.
+#
+# scikit-image >=0.26: extended_features.crack_shape_measurements uses regionprops and
+# morphology.skeletonize; earlier releases differ in the deprecated-property names it touches.
+numpy>=2.3
+scipy>=1.16
+scikit-image>=0.26
+Pillow>=11
+# The web layer. FastAPI because the front end is a single page talking to a JSON API, and
+# uvicorn because it is the reference server for it.
+fastapi>=0.115
+uvicorn>=0.32

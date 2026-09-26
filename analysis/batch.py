@@ -1,0 +1,123 @@
+#!/usr/bin/env python3
+"""Measure every mask in the corpus and write one dataset the app serves from.
+
+Sources, and the reason each is a separate arm rather than one pooled pile:
+  sem/gated    the SEM detector plus the operator's strokes, boundaries drawn by the image
+  sem/machine  the SEM detector alone, no human input
+  txm          the TXM export
+
+They are kept apart because they are different instruments and, for the two SEM arms,
+different definitions of the object. Pooling them would produce an average of things nobody
+measured. The app lets you switch arms; it never adds them together.
+
+SPECIMEN GROUPING comes from the SEM repo's own specimen_key(), not from a rule invented
+here, so a frame is grouped the same way the published statistics group it. Frames from one
+specimen are NOT independent: on the 2026-09-15 batch the nine fields per cell are a 3x3 grid
+tiling ~1.2 x 1.1 mm of ONE specimen, so a per-specimen aggregate is the right unit and a
+per-frame one is pseudo-replication.
+
+Writes analysis/out/frames.json, analysis/out/cracks.json, analysis/out/specimens.json.
+"""
+import argparse
+import glob
+import json
+import os
+import sys
+from collections import defaultdict
+
+import numpy as np
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.dirname(_HERE)
+sys.path.insert(0, _HERE)
+sys.path.insert(0, os.path.join(REPO, "data", "sem", "interior_active_learning", "code"))
+
+from measure import measure_path                 # noqa: E402
+from aggregate import specimen_key               # noqa: E402  (the repo's own grouping)
+from scale import txm_specimen_key               # noqa: E402
+
+OUT = os.path.join(_HERE, "out")
+SEM_DERIVED = os.path.join(REPO, "data", "sem", "crack_export", "derived")
+ARMS = {
+    "sem/gated": (os.path.join(SEM_DERIVED, "gated_masks"), "*_gated.png", "sem"),
+    "sem/machine": (os.path.join(SEM_DERIVED, "machine_masks"), "*_machine.png", "sem"),
+    "txm": (os.path.join(REPO, "data", "txm_export"), "*/*_crack_mask.png", "txm"),
+}
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--arm", action="append", choices=list(ARMS) + ["all"], default=None)
+    ap.add_argument("--limit", type=int, default=0)
+    a = ap.parse_args()
+    arms = list(ARMS) if (not a.arm or "all" in a.arm) else a.arm
+
+    os.makedirs(OUT, exist_ok=True)
+    frames, cracks = [], []
+    for arm in arms:
+        root, pat, modality = ARMS[arm]
+        paths = sorted(glob.glob(os.path.join(root, pat)))
+        if a.limit:
+            paths = paths[: a.limit]
+        if not paths:
+            print(f"  {arm}: no masks under {root} -- skipped", flush=True)
+            continue
+        print(f"  {arm}: {len(paths)} masks", flush=True)
+        for i, p in enumerate(paths, 1):
+            try:
+                rows, summ = measure_path(p, modality)
+            except Exception as e:
+                print(f"    [{i}/{len(paths)}] {os.path.basename(p)[:48]} FAILED "
+                      f"{type(e).__name__}: {e}", flush=True)
+                continue
+            summ["arm"] = arm
+            summ["specimen"] = (
+            (txm_specimen_key(summ["frame"]) if modality == "txm"
+             else specimen_key(summ["frame"])) or "unparsed")
+            frames.append(summ)
+            for r in rows:
+                r["frame"] = summ["frame"]
+                r["arm"] = arm
+                r["specimen"] = summ["specimen"]
+            cracks.extend(rows)
+            if i % 20 == 0 or i == len(paths):
+                print(f"    [{i}/{len(paths)}] {summ['frame'][:44]:<44} "
+                      f"{summ['n_cracks_measured']:>5} cracks", flush=True)
+
+    # Per specimen, per arm. Frames within a specimen are not independent, so the specimen is
+    # the inferential unit; frame-level spread is reported so the reader can see it.
+    spec = defaultdict(list)
+    for f in frames:
+        spec[(f["arm"], f["specimen"])].append(f)
+    specimens = []
+    for (arm, s), fs in sorted(spec.items()):
+        af = np.array([f["area_fraction"] for f in fs], float)
+        dens = np.array([f["crack_density_px_per_Mpx"] for f in fs], float)
+        specimens.append({
+            "arm": arm, "specimen": s, "n_frames": len(fs),
+            "area_fraction_median": round(float(np.median(af)), 6),
+            "area_fraction_min": round(float(af.min()), 6),
+            "area_fraction_max": round(float(af.max()), 6),
+            "density_median": round(float(np.median(dens)), 1),
+            "n_cracks_total": int(sum(f["n_cracks_measured"] for f in fs)),
+            "scale_known_frames": int(sum(1 for f in fs if f["scale_known"])),
+            # Reported because a specimen median over 1 frame is not a median.
+            "estimable_dispersion": len(fs) >= 3,
+        })
+
+    for name, obj in (("frames.json", frames), ("cracks.json", cracks),
+                      ("specimens.json", specimens)):
+        with open(os.path.join(OUT, name), "w") as fh:
+            json.dump(obj, fh)
+        print(f"  wrote {name}: {len(obj):,} records "
+              f"({os.path.getsize(os.path.join(OUT, name))/1e6:.1f} MB)")
+
+    print(f"\n  {len(frames)} frames, {len(cracks):,} cracks, {len(specimens)} specimen-arms")
+    ns = sum(1 for f in frames if not f["scale_known"])
+    print(f"  frames without a physical scale: {ns} (their um columns are null, by design)")
+    thin = [s for s in specimens if not s["estimable_dispersion"]]
+    print(f"  specimen-arms with <3 frames, where dispersion is not estimable: {len(thin)}")
+
+
+if __name__ == "__main__":
+    main()

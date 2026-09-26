@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Start the fractography analysis app. Nothing to configure.
+#
+#   ./run
+#
+set -euo pipefail
+cd "$(dirname "$0")"
+
+PORT="${PORT:-8810}"
+VENV="${VENV:-.venv}"
+
+# Is there a WORKING venv here? Asked of the interpreter, not of a file. bin/activate exists
+# after a move and lies about it -- that is what broke all three sibling repos on 2026-09-24,
+# where sourcing a stale activate silently handed the app conda's scikit-learn instead of the
+# venv's and only the detector died.
+venv_is_usable() {
+  [ -x "$VENV/bin/python3" ] || return 1
+  "$VENV/bin/python3" - "$VENV" <<'PYCHECK' 2>/dev/null
+import os, sys
+sys.exit(0 if (sys.prefix != sys.base_prefix
+               and os.path.realpath(sys.prefix) == os.path.realpath(sys.argv[1])) else 1)
+PYCHECK
+}
+
+if ! venv_is_usable; then
+  if [ -e "$VENV" ]; then
+    echo "==> $VENV does not work from this directory. Rebuilding it."
+    rm -rf "$VENV"
+  fi
+  echo "==> creating virtualenv in $VENV"
+  if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)'; then
+    echo "  This app needs Python 3.12 or newer. Found $(python3 -V) at $(command -v python3)."
+    exit 1
+  fi
+  python3 -m venv "$VENV" || { rm -rf "$VENV"; echo "  venv creation failed"; exit 1; }
+fi
+
+# Never `source bin/activate` and never a bare `python3`: the interpreter is named, so no PATH
+# entry can substitute a different one.
+PY="$PWD/$VENV/bin/python3"
+
+STAMP="$VENV/.req-stamp"
+if [ ! -f "$STAMP" ] || ! cmp -s requirements.txt "$STAMP"; then
+  echo "==> installing dependencies"
+  "$PY" -m pip install --quiet --upgrade pip
+  "$PY" -m pip install --quiet -r requirements.txt
+  cp requirements.txt "$STAMP"
+fi
+
+# The data links are what this app reads. A dangling one means every number would be computed
+# on nothing, so say so now rather than serving an empty page.
+for d in sem txm txm_export; do
+  if [ ! -e "data/$d" ]; then
+    echo "==> data/$d is missing or dangling -> $(readlink "data/$d" 2>/dev/null || echo '(no link)')"
+    echo "    This app reads the sibling repos through relative symlinks. Recreate with:"
+    echo "      ln -s ../../<repo> data/$d"
+    exit 1
+  fi
+done
+
+if [ ! -f analysis/out/frames.json ]; then
+  echo "==> no measurements yet. Building them (this takes a few minutes):"
+  "$PY" analysis/batch.py --arm all
+fi
+
+echo "==> http://127.0.0.1:$PORT"
+exec "$PY" -m uvicorn app.server:app --host 127.0.0.1 --port "$PORT" --app-dir .

@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Crack fractography — network measurement</title>
+<style>
+/* Roles, not raw hex, so light/dark swap in one place. Palette slots are the validated
+   defaults; both modes were run through the six checks (light carries a contrast WARN on
+   slots 3-4, which is why every chart here also has a table view and direct labels). */
+:root{
+  color-scheme:light;
+  --surface-1:#fcfcfb; --surface-2:#f4f3f1; --surface-3:#e9e7e4;
+  --text-primary:#0b0b0b; --text-secondary:#52514e; --text-muted:#82807a;
+  --rule:#dedbd6;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100;
+  --warn:#b25000; --bad:#c0362c;
+}
+@media (prefers-color-scheme:dark){:root:where(:not([data-theme=light])){
+  color-scheme:dark;
+  --surface-1:#1a1a19; --surface-2:#222221; --surface-3:#2e2e2c;
+  --text-primary:#fff; --text-secondary:#c3c2b7; --text-muted:#928f86;
+  --rule:#3a3a37;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500;
+  --warn:#e09b4a; --bad:#e8705f;
+}}
+:root[data-theme=dark]{
+  color-scheme:dark;
+  --surface-1:#1a1a19; --surface-2:#222221; --surface-3:#2e2e2c;
+  --text-primary:#fff; --text-secondary:#c3c2b7; --text-muted:#928f86;
+  --rule:#3a3a37;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500;
+  --warn:#e09b4a; --bad:#e8705f;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--surface-1);color:var(--text-primary);
+  font:14px/1.5 ui-sans-serif,-apple-system,"Segoe UI",system-ui,sans-serif}
+header{padding:18px 24px 14px;border-bottom:1px solid var(--rule);
+  display:flex;align-items:baseline;gap:18px;flex-wrap:wrap}
+h1{font-size:17px;margin:0;letter-spacing:-.01em;font-weight:650}
+.sub{color:var(--text-muted);font-size:12.5px}
+.spacer{flex:1}
+button,select{font:inherit;color:var(--text-primary);background:var(--surface-2);
+  border:1px solid var(--rule);border-radius:7px;padding:5px 10px;cursor:pointer}
+button:hover,select:hover{background:var(--surface-3)}
+button[aria-pressed=true]{background:var(--s1);border-color:var(--s1);color:#fff}
+/* Filters in ONE row above the charts. */
+.filters{display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+  padding:12px 24px;border-bottom:1px solid var(--rule);background:var(--surface-2)}
+.filters label{color:var(--text-secondary);font-size:12.5px}
+main{padding:20px 24px 60px;display:grid;gap:20px;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.card{background:var(--surface-2);border:1px solid var(--rule);border-radius:12px;padding:16px}
+.card.wide{grid-column:1/-1}
+.card h2{font-size:13px;margin:0 0 3px;font-weight:650;letter-spacing:.01em}
+.card .note{color:var(--text-muted);font-size:12px;margin:0 0 12px}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th,td{text-align:right;padding:4px 7px;border-bottom:1px solid var(--rule);white-space:nowrap}
+/* The two text columns are what pushed the table past its card: frame stems run to 29 chars
+   and specimen keys to 20. Bound them and keep the full value in a title attribute, so the
+   numeric columns -- the reason the table exists -- are never the ones cut off. */
+#frames td:first-child,#frames td:nth-child(2){max-width:19ch;overflow:hidden;
+  text-overflow:ellipsis}
+#frames td:nth-child(2){max-width:15ch;color:var(--text-secondary)}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--text-secondary);font-weight:600;font-size:12px;cursor:pointer;
+  position:sticky;top:0;background:var(--surface-2)}
+th:hover{color:var(--text-primary)}
+tbody tr:hover{background:var(--surface-3)}
+tbody tr[aria-selected=true]{background:color-mix(in oklab,var(--s1) 18%,transparent)}
+.scroll{max-height:420px;overflow:auto}
+/* A table wider than its card must scroll visibly, not clip. Measured 2026-09-26: the frames
+   table is 1109px against a 512px half-width card, so ten columns were being cut off with no
+   affordance. Frames is now full-width, and this keeps the scrollbar visible if it still
+   overflows on a narrow window. */
+.scroll{scrollbar-gutter:stable}
+.scroll::-webkit-scrollbar{height:9px;width:9px}
+.scroll::-webkit-scrollbar-thumb{background:var(--rule);border-radius:5px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 14px;font-variant-numeric:tabular-nums}
+.kv dt{color:var(--text-secondary);font-size:12.5px}
+.kv dd{margin:0;text-align:right}
+.hero{font-size:30px;font-weight:600;letter-spacing:-.02em;line-height:1.1}
+.flag{color:var(--warn);font-size:12px}
+.flag.bad{color:var(--bad)}
+img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
+  background:#fff;display:block}
+.tip{position:fixed;pointer-events:none;background:var(--surface-1);color:var(--text-primary);
+  border:1px solid var(--rule);border-radius:7px;padding:6px 9px;font-size:12px;
+  box-shadow:0 4px 14px rgba(0,0,0,.18);opacity:0;transition:opacity .08s;z-index:9;
+  font-variant-numeric:tabular-nums}
+.err{color:var(--bad);padding:12px 24px}
+@media (max-width:900px){main{grid-template-columns:1fr}}
+</style></head><body>
+
+<header>
+  <h1>Crack network measurement</h1>
+  <span class="sub" id="hdr">loading…</span>
+  <span class="spacer"></span>
+  <button id="theme" title="Toggle light/dark">◐ theme</button>
+  <button id="csv">↓ CSV</button>
+</header>
+
+<div class="filters">
+  <label for="arm">Arm</label><select id="arm"></select>
+  <label for="spec">Specimen</label><select id="spec"></select>
+  <label for="minarea">Min crack area (px)</label>
+  <input id="minarea" type="range" min="0" max="5000" step="50" value="0">
+  <span id="minareaval" class="sub">0</span>
+  <span class="spacer"></span>
+  <span class="sub" id="armnote"></span>
+</div>
+
+<main>
+  <div class="card wide">
+    <h2>Frames</h2>
+    <p class="note">Click a row to inspect it. Click a header to sort.</p>
+    <div class="scroll"><table id="frames"><thead></thead><tbody></tbody></table></div>
+  </div>
+
+  <div class="card">
+    <h2 id="fsel-title">Frame detail</h2>
+    <p class="note" id="fsel-note">Select a frame.</p>
+    <dl class="kv" id="fsel"></dl>
+  </div>
+
+  <div class="card">
+    <h2>Orientation</h2>
+    <p class="note">Area-weighted, 15° bins, axis not direction (0–180°). Count-weighting
+      would let specks outvote the crack holding the area.</p>
+    <div id="rose"></div>
+  </div>
+
+  <div class="card">
+    <h2>Crack size distribution</h2>
+    <p class="note">Log-spaced bins of region area. The bar is the share of total crack
+      <em>area</em> in that size class, not the share of regions.</p>
+    <div id="sizes"></div>
+  </div>
+
+  <div class="card wide">
+    <h2>The mask these numbers were measured on</h2>
+    <p class="note" id="masknote">Select a frame.</p>
+    <img class="mask" id="mask" alt="" hidden>
+  </div>
+
+  <div class="card wide">
+    <h2>Cracks in this frame</h2>
+    <p class="note" id="cracknote">Select a frame.</p>
+    <div class="scroll"><table id="cracks"><thead></thead><tbody></tbody></table></div>
+  </div>
+</main>
+
+<div class="tip" id="tip"></div>
+<script src="/static/app.js"></script>
+</body></html>

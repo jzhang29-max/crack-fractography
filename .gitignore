@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+# Relative symlinks to the sibling repos. Local wiring, not repo content -- and pointing them
+# at one machine's layout is what this project spent 2026-09-24 repairing.
+data/sem
+data/txm
+data/txm_export
+# Derived measurements. Regenerable with analysis/batch.py, and large.
+analysis/out/
