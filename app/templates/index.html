@@ -48,11 +48,18 @@ button[aria-pressed=true]{background:var(--s1);border-color:var(--s1);color:#fff
 .filters label{color:var(--text-secondary);font-size:12.5px}
 main{padding:20px 24px 60px;display:grid;gap:20px;
   grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
-.card{background:var(--surface-2);border:1px solid var(--rule);border-radius:12px;padding:16px}
+/* min-width:0 on BOTH the track and the item, and it has to be both.
+   A grid item's default min-width is auto, which is its CONTENT's min width -- so the 967px
+   frames table dragged the whole track out to 969px at every viewport and the page scrolled
+   sideways instead of the table doing it. Measured 2026-09-26 in a 390px iframe: 3804
+   elements past the viewport edge before this, 0 after. minmax(0,1fr) fixes the track; this
+   fixes the item. */
+.card{background:var(--surface-2);border:1px solid var(--rule);border-radius:12px;padding:16px;
+  min-width:0}
 .card.wide{grid-column:1/-1}
 .card h2{font-size:13px;margin:0 0 3px;font-weight:650;letter-spacing:.01em}
 .card .note{color:var(--text-muted);font-size:12px;margin:0 0 12px}
-table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+table{width:100%;min-width:0;border-collapse:collapse;font-variant-numeric:tabular-nums}
 th,td{text-align:right;padding:4px 7px;border-bottom:1px solid var(--rule);white-space:nowrap}
 /* The two text columns are what pushed the table past its card: frame stems run to 29 chars
    and specimen keys to 20. Bound them and keep the full value in a title attribute, so the
@@ -66,7 +73,7 @@ th{color:var(--text-secondary);font-weight:600;font-size:12px;cursor:pointer;
 th:hover{color:var(--text-primary)}
 tbody tr:hover{background:var(--surface-3)}
 tbody tr[aria-selected=true]{background:color-mix(in oklab,var(--s1) 18%,transparent)}
-.scroll{max-height:420px;overflow:auto}
+.scroll{max-height:420px;overflow:auto;max-width:100%}
 /* A table wider than its card must scroll visibly, not clip. Measured 2026-09-26: the frames
    table is 1109px against a 512px half-width card, so ten columns were being cut off with no
    affordance. Frames is now full-width, and this keeps the scrollbar visible if it still
@@ -87,7 +94,31 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
   box-shadow:0 4px 14px rgba(0,0,0,.18);opacity:0;transition:opacity .08s;z-index:9;
   font-variant-numeric:tabular-nums}
 .err{color:var(--bad);padding:12px 24px}
-@media (max-width:900px){main{grid-template-columns:1fr}}
+/* Narrow: one column, and minmax(0,...) again -- a bare 1fr reintroduces the min-width:auto
+   blowout the rule above exists to stop. Controls grow to a 40px touch target, and the
+   filter row becomes a two-column grid instead of a single squashed flex line. */
+@media (max-width:900px){
+  main{grid-template-columns:minmax(0,1fr);padding:14px 14px 48px;gap:14px}
+  header{padding:14px 14px 12px;gap:10px}
+  h1{font-size:16px}
+  .filters{padding:10px 14px;display:grid;gap:8px 10px;
+    grid-template-columns:auto minmax(0,1fr);align-items:center}
+  .filters .spacer{display:none}
+  .filters #armnote{grid-column:1/-1;font-size:12px;color:var(--text-muted)}
+  button,select,input[type=range]{min-height:40px}
+  select{width:100%}
+  .card{padding:13px;border-radius:10px}
+  .scroll{max-height:360px}
+  /* The frame stem is the row's identity; give it room and drop the specimen column, which
+     is already in the filter above. */
+  #frames td:first-child{max-width:26ch}
+  #frames th:nth-child(2),#frames td:nth-child(2){display:none}
+}
+@media (max-width:520px){
+  /* Below this the numeric columns matter more than the long stem. */
+  #frames td:first-child{max-width:14ch}
+  .kv{grid-template-columns:minmax(0,1fr) auto}
+}
 </style></head><body>
 
 <header>
