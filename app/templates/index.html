@@ -42,6 +42,10 @@ button,select{font:inherit;color:var(--text-primary);background:var(--surface-2)
   border:1px solid var(--rule);border-radius:7px;padding:5px 10px;cursor:pointer}
 button:hover,select:hover{background:var(--surface-3)}
 button[aria-pressed=true]{background:var(--s1);border-color:var(--s1);color:#fff}
+.upload{font:inherit;background:var(--s1);color:#fff;border:1px solid var(--s1);
+  border-radius:7px;padding:5px 11px;cursor:pointer;white-space:nowrap}
+.upload:hover{filter:brightness(1.08)}
+.upload[aria-busy=true]{opacity:.6;pointer-events:none}
 /* Filters in ONE row above the charts. */
 .filters{display:flex;gap:10px;align-items:center;flex-wrap:wrap;
   padding:12px 24px;border-bottom:1px solid var(--rule);background:var(--surface-2)}
@@ -136,6 +140,8 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
   <input id="minarea" type="range" min="0" max="5000" step="50" value="0">
   <span id="minareaval" class="sub">0</span>
   <span class="spacer"></span>
+  <label class="upload" for="up">+ Add image or mask</label>
+  <input id="up" type="file" accept=".png,.bmp,.gif,.tif,.tiff" hidden>
   <span class="sub" id="armnote"></span>
 </div>
 

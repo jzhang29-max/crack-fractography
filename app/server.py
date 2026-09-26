@@ -12,7 +12,7 @@ definitions of the object, so the API requires an arm and refuses to aggregate a
 import json
 import os
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 
@@ -87,7 +87,8 @@ def cracks(frame: str = Query(...), arm: str = Query(...),
 def mask(arm: str, frame: str):
     """The mask PNG itself, so the page can show what a number was measured on."""
     src = {"sem/gated": (os.path.join(SEM_DERIVED, "gated_masks"), "_gated.png"),
-           "sem/machine": (os.path.join(SEM_DERIVED, "machine_masks"), "_machine.png")}
+           "sem/machine": (os.path.join(SEM_DERIVED, "machine_masks"), "_machine.png"),
+           "uploads": (os.path.join(REPO, "analysis", "out", "uploads"), "_gated.png")}
     if arm in src:
         root, suf = src[arm]
         p = os.path.join(root, frame + suf)
@@ -122,6 +123,108 @@ def export_csv(arm: str = Query(...), level: str = "frames"):
     return Response(buf.getvalue(), media_type="text/csv",
                     headers={"Content-Disposition":
                              f'attachment; filename="{arm.replace("/", "_")}_{level}.csv"'})
+
+
+# ---------------------------------------------------------------------------------------
+# Upload. Two kinds of file, because the owner has both and the split is not the user's job
+# to remember:
+#   a MASK (.png/.bmp)  -> measured directly
+#   a MICROGRAPH (.tif) -> segmented first, then measured
+#
+# The detector lives in the sibling SEM repo and needs pandas, cv2 and a model bundle that
+# this app deliberately does not carry. It is invoked as a subprocess with THAT repo's
+# interpreter rather than imported, which is the only thing that can work across two venvs.
+UPLOAD_DIR = os.path.join(REPO, "analysis", "out", "uploads")
+MASK_EXT = {".png", ".bmp", ".gif"}
+IMAGE_EXT = {".tif", ".tiff"}
+MAX_UPLOAD_MB = 200
+
+
+@app.post("/api/upload")
+async def upload(file: UploadFile = File(...)):
+    import shutil
+    import subprocess
+    import sys as _sys
+    import tempfile
+
+    name = os.path.basename(file.filename or "")
+    stem, ext = os.path.splitext(name)
+    ext = ext.lower()
+    if ext not in MASK_EXT | IMAGE_EXT:
+        raise HTTPException(400, f"{ext or 'no extension'} is not supported. Upload a mask "
+                                 f"(.png/.bmp) or a micrograph (.tif/.tiff).")
+    if not stem:
+        raise HTTPException(400, "the file needs a name")
+
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    blob = await file.read()
+    if len(blob) > MAX_UPLOAD_MB * 1024 * 1024:
+        raise HTTPException(413, f"{len(blob)/1e6:.0f} MB is over the {MAX_UPLOAD_MB} MB limit")
+
+    detected = False
+    if ext in MASK_EXT:
+        mask_path = os.path.join(UPLOAD_DIR, f"{stem}_gated.png")
+        with open(mask_path, "wb") as fh:
+            fh.write(blob)
+    else:
+        # Stage into the SEM repo's originals under a temp name -- run_unified_pipeline
+        # resolves its input by stem from there -- then remove it. The repo's own corpus is
+        # never modified: the staged file is deleted in the finally block whatever happens.
+        sem = os.path.join(REPO, "data", "sem")
+        py = os.path.join(sem, ".venv", "bin", "python3")
+        if not os.path.exists(py):
+            raise HTTPException(503, "the SEM repo's virtualenv is not built, so a raw "
+                                     "micrograph cannot be segmented. Upload a mask instead, "
+                                     "or run ./run in the sem-crack-detector repo first.")
+        tmp_stem = f"__upload_{os.getpid()}_{abs(hash(stem)) % 10**6}"
+        staged = os.path.join(sem, "original", tmp_stem + ".tif")
+        mask_path = os.path.join(UPLOAD_DIR, f"{stem}_gated.png")
+        try:
+            with open(staged, "wb") as fh:
+                fh.write(blob)
+            r = subprocess.run(
+                [py, os.path.join(REPO, "analysis", "detect_one.py"), staged, mask_path, sem],
+                capture_output=True, text=True, timeout=1800)
+            if r.returncode != 0:
+                why = (r.stderr or r.stdout or "").strip()[-500:]
+                raise HTTPException(500, f"segmentation failed: {why}")
+            detected = True
+        finally:
+            for p in (staged,):
+                if os.path.exists(p):
+                    os.remove(p)
+
+    # Measure with the SAME code every other arm uses, so an uploaded frame is comparable.
+    _sys.path.insert(0, os.path.join(REPO, "analysis"))
+    from measure import measure_path
+    try:
+        rows, summ = measure_path(mask_path, "sem", stem=stem)
+    except Exception as e:
+        raise HTTPException(500, f"measurement failed: {type(e).__name__}: {e}")
+    summ["arm"] = "uploads"
+    summ["specimen"] = "uploaded"
+    summ["was_segmented_here"] = detected
+    for r in rows:
+        r["frame"] = stem
+        r["arm"] = "uploads"
+        r["specimen"] = "uploaded"
+
+    # Append to the served dataset and drop the cache so the page sees it immediately.
+    for fname, new in (("frames", [summ]), ("cracks", rows)):
+        p = os.path.join(OUT, f"{fname}.json")
+        cur = json.load(open(p)) if os.path.exists(p) else []
+        cur = [x for x in cur if not (x.get("arm") == "uploads" and x.get("frame") == stem)]
+        cur.extend(new)
+        with open(p, "w") as fh:
+            json.dump(cur, fh)
+    _CACHE.clear()
+
+    return {"ok": True, "frame": stem, "arm": "uploads", "segmented_here": detected,
+            "scale_known": summ["scale_known"],
+            "n_cracks": summ["n_cracks_measured"], "n_specks": summ["speck_count"],
+            "area_fraction": summ["area_fraction"],
+            "note": ("segmented here with the SEM detector, then measured"
+                     if detected else "measured as a mask, as uploaded")}
 
 
 @app.get("/")

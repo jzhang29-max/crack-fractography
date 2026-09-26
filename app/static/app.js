@@ -25,6 +25,11 @@ async function api(path) {
 /* ---------------------------------------------------------------- frames table */
 const FCOLS = [
   ["frame", "Frame"], ["specimen", "Specimen"], ["n_cracks_measured", "Cracks"],
+  // Specks get their own column rather than living only in the detail panel. On some frames
+  // they outnumber the measured cracks by an order of magnitude (36,087 against 3,043 on
+  // MAR_Amb_AS_ETD_0003), and that ratio is a property of the mask worth seeing while
+  // scanning the table -- a frame whose specks dwarf its cracks is mostly debris.
+  ["speck_count", "Specks"],
   ["area_fraction", "Area frac"], ["largest_share_of_area", "Largest share"],
   ["crack_density_px_per_Mpx", "Density"], ["mean_width_px_median", "Median width px"],
   ["tortuosity_median", "Tortuosity"], ["censored_share", "Censored"],
@@ -229,6 +234,41 @@ async function loadArm() {
   };
   $("#csv").onclick = () => location.href =
     `/api/export.csv?arm=${encodeURIComponent(state.arm)}&level=frames`;
+  // Upload. A .tif is segmented here first; a .png is taken as a mask already. The control
+  // says "image or mask" rather than explaining the difference, because the server decides
+  // from the extension and the user should not have to.
+  $("#up").onchange = async (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const lbl = document.querySelector(".upload");
+    const was = lbl.textContent;
+    lbl.setAttribute("aria-busy", "true");
+    lbl.textContent = /\.tiff?$/i.test(f.name) ? "segmenting…" : "measuring…";
+    const fd = new FormData();
+    fd.append("file", f);
+    try {
+      const r = await fetch("/api/upload", { method: "POST", body: fd });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || r.status);
+      state.arm = "uploads"; state.spec = "";
+      const arms = await api("/api/arms");
+      $("#arm").innerHTML = arms.map((a) =>
+        `<option value="${a.arm}"${a.arm === "uploads" ? " selected" : ""}>${a.arm} — ${a.n_frames} frames, ${a.n_cracks.toLocaleString()} cracks</option>`).join("");
+      await loadArm();
+      selectFrame(d.frame);
+      lbl.textContent = was;
+      $("#armnote").textContent =
+        `${d.frame}: ${d.n_cracks.toLocaleString()} cracks, ${d.n_specks.toLocaleString()} specks — ${d.note}` +
+        (d.scale_known ? "" : " · no scale, so µm is withheld");
+    } catch (err) {
+      lbl.textContent = was;
+      $("#armnote").innerHTML = `<span class="flag bad">upload failed: ${err.message}</span>`;
+    } finally {
+      lbl.removeAttribute("aria-busy");
+      e.target.value = "";
+    }
+  };
+
   $("#minarea").oninput = (e) => {
     state.minArea = +e.target.value;
     $("#minareaval").textContent = state.minArea.toLocaleString();
