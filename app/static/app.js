@@ -39,10 +39,37 @@ const FCOLS = [
   ["area_fraction", "Area"],
 ];
 
+// The prefix every visible row shares, computed from what is actually on screen rather
+// than from the specimen name: a filtered list can share more than the specimen, and an
+// unfiltered one may share nothing at all.
+let FRAME_PREFIX = "";
+
+function commonPrefix(names) {
+  if (names.length < 2) return "";
+  let p = names[0];
+  for (const n of names) {
+    let i = 0;
+    while (i < p.length && i < n.length && p[i] === n[i]) i++;
+    p = p.slice(0, i);
+    if (!p) return "";
+  }
+  // Cut back to a separator so a truncated token is never shown, and keep at least a few
+  // characters of identity in every row.
+  const cut = Math.max(p.lastIndexOf("_"), p.lastIndexOf("-"));
+  return cut > 0 ? p.slice(0, cut + 1) : "";
+}
+
+function shortFrame(name) {
+  return (FRAME_PREFIX && name.startsWith(FRAME_PREFIX) &&
+          name.length > FRAME_PREFIX.length + 2)
+    ? name.slice(FRAME_PREFIX.length) : name;
+}
+
 function renderFrames() {
   const t = $("#frames");
   t.querySelector("thead").innerHTML = "<tr>" + FCOLS.map(([k, l]) =>
-    `<th data-k="${k}">${l}${state.sortKey === k ? (state.sortDir > 0 ? " ▲" : " ▼") : ""}</th>`
+    `<th data-k="${k}">${k === "frame" && FRAME_PREFIX ? `…${l}` : l}` +
+    `${state.sortKey === k ? (state.sortDir > 0 ? " ▲" : " ▼") : ""}</th>`
   ).join("") + "</tr>";
   // Composite cells, derived rather than stored, so the dataset keeps its raw fields.
   const derive = (f) => ({
@@ -50,6 +77,7 @@ function renderFrames() {
     _cracks: f.n_cracks_measured,
     _p10min: (f.probe && f.probe.p10_min_per_mm) ?? null,
   });
+  FRAME_PREFIX = commonPrefix(state.frames.map((f) => f.frame));
   const rows = [...state.frames].map(derive).sort((a, b) => {
     const x = a[state.sortKey], y = b[state.sortKey];
     if (x === y) return 0;
@@ -68,7 +96,15 @@ function renderFrames() {
     const noScale = f.scale_known ? "" : ` <span class="flag">no scale</span>`;
     return `<tr data-f="${f.frame}" aria-selected="${state.frame === f.frame}">` +
       FCOLS.map(([k]) => {
-        if (k === "frame") return `<td>${f[k]}${noScale}</td>`;
+        if (k === "frame") {
+          // DROP THE PREFIX THE ROWS SHARE. The list held 653 of the page's 840 words, and
+          // most of that was one string repeated: every row of MAR_AmbB_HIP begins with
+          // "MAR_AmbB_HIP_". The specimen is named in the selector directly above, so the
+          // prefix is redundant with it -- removing it cuts the list's text by more than
+          // half with no information lost, and the full stem is still what the row carries
+          // in data-f, what the CSV exports and what the Frame detail tab shows.
+          return `<td>${esc(shortFrame(f[k]))}${noScale}</td>`;
+        }
         if (k === "_cracks") {
           // One cell, because a count without its speck count invites the fragmentation
           // misreading this project has already made once.
@@ -531,6 +567,7 @@ async function renderSpecimens() {
 const TABS = [
   ["readout", "Read-out"],
   ["mask", "Mask"],
+  ["mark", "Mark"],
   ["specimen", "Specimen"],
   ["detail", "Frame detail"],
   ["orientation", "Orientation"],
@@ -547,6 +584,7 @@ function showTab(id) {
   // The figure is expensive and the rose needs a laid-out box, so both render on reveal
   // rather than on every frame change.
   if (id === "figure" && typeof window.figRenderRef === "function") window.figRenderRef();
+  if (id === "mark") renderMark();
 }
 
 function wireTabs() {
@@ -596,13 +634,34 @@ function renderStrip(rec) {
 // is unreachable on touch and undiscoverable on a laptop.
 const MARK = { good: "●", warn: "▲", bad: "✕", info: "·" };
 
-function roLines(sts, heading) {
-  if (!sts || !sts.length) return "";
-  return `<p class="ro-sec">${heading}</p>` + sts.map((st, i) =>
-    `<div class="ro-line ${st.level}" data-ro="${heading}:${i}" tabindex="0" role="button">
-       <span class="mk">${MARK[st.level] || "·"}</span>
-       <span class="tx">${st.text}</span>
-     </div>`).join("");
+// ONE LIST, SEVERITY FIRST, CAPPED. Two sections of four each showed eight statements and
+// collapsed nothing, because the cap was per section while the reader sees the total. The
+// specimen/frame distinction still matters, so it becomes a tag on the line rather than a
+// heading over a group -- which also removes two headings' worth of words.
+//
+// Sorted so a reader can stop after the first line and not have missed the worst thing.
+const SEV = { bad: 0, warn: 1, good: 2, info: 3 };
+const RO_SHOWN = 5;
+
+function roRender(groups) {
+  const all = [];
+  for (const [heading, sts] of Object.entries(groups)) {
+    (sts || []).forEach((st, i) => all.push({ st, key: `${heading}:${i}`, heading }));
+  }
+  if (!all.length) return "";
+  all.sort((a, b) => (SEV[a.st.level] ?? 9) - (SEV[b.st.level] ?? 9));
+  const one = (x, hidden) =>
+    `<div class="ro-line ${x.st.level}" data-ro="${x.key}" tabindex="0" role="button"${hidden ? " hidden" : ""}>
+       <span class="mk">${MARK[x.st.level] || "\u00b7"}</span>
+       <span class="tx">${x.st.text}</span>
+       <span class="who">${x.heading}</span>
+     </div>`;
+  const rest = all.slice(RO_SHOWN);
+  return all.slice(0, RO_SHOWN).map((x) => one(x, false)).join("") +
+    (rest.length
+      ? rest.map((x) => one(x, true)).join("") +
+        `<button class="ro-more">${rest.length} more</button>`
+      : "");
 }
 
 let RO = {};
@@ -615,10 +674,9 @@ async function renderReadout() {
   let d;
   try { d = await api(`/api/readout?${q}`); }
   catch (e) { el.innerHTML = `<p class="ro-empty">${e.message}</p>`; return; }
-  RO = { "This specimen": d.specimen || [], "This frame": d.frame || [] };
+  RO = { specimen: d.specimen || [], frame: d.frame || [] };
 
-  const body = roLines(RO["This specimen"], "This specimen") +
-               roLines(RO["This frame"], "This frame");
+  const body = roRender(RO);
   const refusals = (d.refusals || []).map((r) => `
     <div class="refuse">
       <h4>${r.question}</h4>
@@ -632,8 +690,14 @@ async function renderReadout() {
     </div>`).join("");
 
   el.innerHTML = (body || `<p class="ro-empty">Nothing this data supports saying yet.</p>`) +
-    `<p class="ro-sec">Not determinable from this data</p>` + refusals;
+    `<p class="ro-sec">Not determinable</p>` + refusals;
 
+  el.querySelectorAll(".ro-more").forEach((b) => {
+    b.onclick = () => {
+      el.querySelectorAll(".ro-line[hidden]").forEach((n) => { n.hidden = false; });
+      b.remove();
+    };
+  });
   el.querySelectorAll(".ro-line").forEach((n) => {
     const open = () => {
       const [h, i] = n.dataset.ro.split(":");
@@ -711,6 +775,57 @@ function defsAll() {
           <dt>How</dt><dd>${how}</dd>
           <dt>When it lies</dt><dd class="lies">${lies}</dd></dl>
     </div>`).join("");
+}
+
+// ---------------------------------------------------------------------------------------
+// MARK. The tool that draws the masks this app measures already existed — paint_server.py
+// in the SEM repo, with Add crack / Not crack / Erase / Brush / Whole region and Retrain —
+// and it was reachable only by knowing it was there and starting it by hand on another
+// port. So the app would tell you a mask was unreviewed and say nothing about where to fix
+// it. It is started on demand and shown here.
+let MARK_URL = null;
+
+async function renderMark() {
+  const el = $("#markbody");
+  if (MARK_URL) return;
+  el.innerHTML = `<p class="note">Checking…</p>`;
+  let st;
+  try { st = await api("/api/paint"); }
+  catch (e) { el.innerHTML = `<p class="note"><span class="flag bad">${e.message}</span></p>`; return; }
+
+  if (!st.available) {
+    el.innerHTML = `<p class="note">Marking needs the SEM repo — ${st.why_not}.` +
+      ` <button id="marksetup">Setup</button></p>`;
+    $("#marksetup").onclick = () => showSetup(true);
+    return;
+  }
+  if (st.running && st.url) { mountMark(st.url); return; }
+  el.innerHTML = `<div class="markintro">
+      <button id="markstart">Start marking</button>
+      <span class="u">Red = crack, cyan = not crack. Corrections feed the next measure.</span>
+    </div>`;
+  $("#markstart").onclick = async () => {
+    $("#markstart").disabled = true;
+    $("#markstart").textContent = "Starting…";
+    try {
+      const r = await fetch("/api/paint", { method: "POST" });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.detail || r.statusText);
+      mountMark(j.url);
+    } catch (e) {
+      el.innerHTML = `<p class="note"><span class="flag bad">${e.message}</span></p>`;
+    }
+  };
+}
+
+function mountMark(url) {
+  MARK_URL = url;
+  $("#markbody").innerHTML = `<div class="markintro">
+      <span class="u">Red = crack, cyan = not crack. Re-measure to pick up corrections.</span>
+      <span class="spacer"></span>
+      <a href="${url}" target="_blank" rel="noopener"><button>Open in a window</button></a>
+    </div>
+    <iframe id="markframe" src="${url}" title="Crack marking"></iframe>`;
 }
 
 async function loadArm() {

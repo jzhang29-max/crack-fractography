@@ -45,10 +45,10 @@ def test_every_statement_is_within_the_word_cap():
 def test_orientation_is_claimed_only_when_it_beats_its_null():
     yes = C.for_frame(frame(rose_beats_null=True, rose_R=0.61, rose_R_null95=0.22,
                             rose_theta_deg=32.4))
-    assert "preferentially oriented" in texts(yes).lower()
+    assert "oriented near" in texts(yes).lower()
     no = C.for_frame(frame(rose_beats_null=False, rose_R=0.24, rose_R_null95=0.31))
     assert "not resolvably oriented" in texts(no).lower()
-    assert "preferentially" not in texts(no).lower()
+    assert "oriented near" not in texts(no).lower()
 
 
 def test_no_orientation_statement_at_all_without_a_null():
@@ -66,7 +66,7 @@ def test_an_empty_frame_says_one_thing_and_stops():
 
 def test_missing_scale_is_stated_and_no_micrometre_claim_is_made():
     out = C.for_frame(frame(scale_known=False))
-    assert "No physical scale" in texts(out)
+    assert "No scale" in texts(out)
     assert "µm" not in texts(out) and "um" not in texts(out).replace("micrometre", "")
 
 
@@ -109,7 +109,7 @@ def test_the_detector_effect_is_never_a_footnote():
     r = {"n_fields": 10, "detector_sensitivity":
          {"cbs_over_etd_median": 2.45, "n_fields_both_detectors": 10}}
     out = C.for_specimen(r)
-    assert "Detector moves this" in texts(out)
+    assert "Detector alone moves" in texts(out)
     assert any(s["level"] == "bad" for s in out), "a 2.45x instrument effect is not 'info'"
 
 
@@ -121,10 +121,10 @@ def test_a_detector_ratio_near_one_is_not_reported():
 
 def test_no_corrections_is_distinguished_from_no_effect():
     none = {"n_fields": 5, "arm_sensitivity": {"n_frames_corrected": 0, "n_paired_frames": 20}}
-    assert "unreviewed" in texts(C.for_specimen(none))
+    assert "Unreviewed" in texts(C.for_specimen(none))
     some = {"n_fields": 5, "arm_sensitivity": {"n_frames_corrected": 11, "n_paired_frames": 13,
                                                "gated_over_machine_where_corrected": 1.435}}
-    assert "Operator corrections change" in texts(C.for_specimen(some))
+    assert "Corrections change area" in texts(C.for_specimen(some))
 
 
 def test_regime_is_a_tally_over_fields_not_a_median():
@@ -210,7 +210,7 @@ def test_an_unmeasured_detector_effect_is_stated_not_left_blank():
     out2 = texts(C.for_specimen({"n_fields": 5, "detector_sensitivity":
                                  {"cbs_over_etd_median": 2.4,
                                   "n_fields_both_detectors": 10}}))
-    assert "effect unmeasured" not in out2 and "Detector moves this" in out2
+    assert "effect unmeasured" not in out2 and "Detector alone moves" in out2
 
 
 # --- the refusal text must not quote this app's retired estimator as its own --------
@@ -242,7 +242,7 @@ def test_the_network_share_distinguishes_a_crack_from_a_network():
     one = C.for_frame(frame(mcl_um=400.0, mcl_share_of_its_network=1.0))
     assert "whole of its region" in texts(one)
     net = C.for_frame(frame(mcl_um=400.0, mcl_share_of_its_network=0.21))
-    assert "21% of its own network" in texts(net)
+    assert "21% of its network" in texts(net)
     assert any(s["level"] == "warn" for s in net)
 
 

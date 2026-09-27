@@ -109,7 +109,21 @@ main{flex:1 1 auto;display:grid;grid-template-columns:minmax(220px,300px) minmax
 .ro-line .tx{flex:1;min-width:0}
 .ro-sec{font-size:11.5px;font-weight:650;letter-spacing:.04em;text-transform:uppercase;
   color:var(--text-muted);margin:6px 0 0}
+/* Which level the statement is about, as a tag on the line rather than a heading over a
+   group -- two fewer headings, and it survives the severity sort that mixes the two. */
+.ro-line .who{flex:0 0 auto;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;
+  color:var(--text-muted);padding-top:3px}
 .ro-empty{color:var(--text-muted);font-size:13px}
+/* "+N more" rather than nine warnings at once. Severity decides what shows: a reader
+   should be able to stop after the first line and not have missed the worst thing. */
+.ro-more{align-self:flex-start;font-size:12.5px;color:var(--text-secondary);
+  background:none;border:none;padding:4px 0;text-decoration:underline}
+.ro-more:hover{background:none;color:var(--text-primary)}
+/* The marking tool, embedded. It is a separate Flask app in the SEM repo on its own port;
+   an iframe is the honest way to reach it without reimplementing a painting canvas. */
+#markframe{width:100%;height:calc(100vh - 210px);min-height:420px;border:1px solid var(--rule);
+  border-radius:9px;background:var(--surface-2)}
+.markintro{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
 .refuse{border:1px dashed var(--rule);border-radius:9px;padding:11px 13px;max-width:68ch}
 .refuse h4{margin:0 0 3px;font-size:13px;font-weight:650}
 .refuse .ans{color:var(--bad);font-size:12.5px}
@@ -250,6 +264,10 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
 
     <div class="pane" id="pane-readout" role="tabpanel">
       <div class="ro" id="readout"></div>
+    </div>
+
+    <div class="pane" id="pane-mark" role="tabpanel" hidden>
+      <div id="markbody"></div>
     </div>
 
     <div class="pane" id="pane-mask" role="tabpanel" hidden>

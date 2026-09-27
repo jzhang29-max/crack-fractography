@@ -72,7 +72,7 @@ def for_frame(f):
     if share is not None:
         if share >= DOMINANT_CUT:
             out.append(_s(
-                f"One crack holds {100 * share:.0f}% of the crack area here.",
+                f"One crack holds {100 * share:.0f}% of the crack area.",
                 "largest_share_of_area; the only metric tested that the CBS/ETD detector "
                 "difference does not move (paired ratio 0.870, p = 0.084 n.s.)",
                 hedge=f"Per-field, not per-specimen, and confounded with field size "
@@ -83,7 +83,7 @@ def for_frame(f):
                 level="good", value=share))
         else:
             out.append(_s(
-                f"Crack area is distributed; largest region holds {100 * share:.0f}%.",
+                f"Distributed: largest crack is {100 * share:.0f}% of the area.",
                 "largest_share_of_area", hedge="Per-field. See the size distribution.",
                 value=share))
 
@@ -92,7 +92,7 @@ def for_frame(f):
     R, R95, th = f.get("rose_R"), f.get("rose_R_null95"), f.get("rose_theta_deg")
     if beats is True and th is not None:
         out.append(_s(
-            f"Cracks preferentially oriented near {th:.0f}° to image x.",
+            f"Oriented near {th:.0f}° to image x.",
             f"length-weighted axial resultant R = {R:.3f} against its own permutation "
             f"null R95 = {R95:.3f} (1000 draws, uniform directions, observed segment "
             f"lengths). Construct: ASTM E1268-19 line-intercept anisotropy; axial "
@@ -103,7 +103,7 @@ def for_frame(f):
             level="good", value=th))
     elif beats is False:
         out.append(_s(
-            "Not resolvably oriented: no more than random would give.",
+            "Not resolvably oriented.",
             f"R = {R:.3f} does not exceed its permutation null R95 = {R95:.3f}. A "
             f"synthetic mask of straight lines at uniform random angles returns "
             f"R = 0.16-0.29 on this pipeline, so a lopsided rose is the default "
@@ -117,8 +117,7 @@ def for_frame(f):
         ratio = bf / sk
         if ratio and (ratio < 1 / LENGTH_TRUST_RATIO or ratio > LENGTH_TRUST_RATIO):
             out.append(_s(
-                f"Skeleton length unreliable here: two estimators differ "
-                f"{max(ratio, 1 / ratio):.1f}×.",
+                f"Length unreliable: two estimators differ {max(ratio, 1 / ratio):.1f}×.",
                 f"skeleton P21 = {sk:.3g} against Buffon (π/2)·mean(P_L) = "
                 f"{bf:.3g} mm/mm² -- two estimators of the same centreline length per "
                 f"unit area, the second skeleton-free. Underwood, Quantitative Stereology.",
@@ -139,14 +138,14 @@ def for_frame(f):
     if share is not None and f.get("mcl_um"):
         if share >= 0.95:
             out.append(_s(
-                f"The longest crack is essentially the whole of its region.",
+                "Longest crack is the whole of its region.",
                 f"tip-to-tip geodesic is {100 * share:.0f}% of that region's total "
                 f"centreline length, so the region is one unbranched crack rather than a "
                 f"network.",
                 value=share))
         else:
             out.append(_s(
-                f"Longest crack is {100 * share:.0f}% of its own network's length.",
+                f"Longest crack is {100 * share:.0f}% of its network.",
                 f"the longest tip-to-tip geodesic against the total centreline of the same "
                 f"region. The remainder is other branches of the same connected network, "
                 f"which a single length cannot represent.",
@@ -160,7 +159,7 @@ def for_frame(f):
     if cl is not None and cl >= 0.25:
         mcl, unc = f.get("mcl_um"), f.get("mcl_um_uncensored_only")
         out.append(_s(
-            f"{100 * cl:.0f}% of crack length touches an edge: MCL is a bound.",
+            f"{100 * cl:.0f}% of length touches an edge: MCL is a bound.",
             f"length-weighted censored share. The count share is "
             f"{100 * (f.get('censored_share') or 0):.1f}%, which understates this several "
             f"times over and is why the weighting is named.",
@@ -173,7 +172,7 @@ def for_frame(f):
     # --- NO SCALE. Not a caveat, a limit on what exists. ------------------------------
     if not scaled:
         out.append(_s(
-            "No physical scale: micrometre quantities withheld, not defaulted.",
+            "No scale: micrometre values withheld, not defaulted.",
             "nm_per_px is unknown for this frame, and the SEM corpus spans a 249× "
             "magnification range, so there is no defensible default.",
             level="warn"))
@@ -181,7 +180,7 @@ def for_frame(f):
     # --- TXM SPECIFIC. Whole-arm caveat stated once. ----------------------------------
     if arm == "txm":
         out.append(_s(
-            "TXM cracks are about 3 px wide; path geometry is mostly artefact.",
+            "TXM cracks are ~3 px wide; path geometry is mostly artefact.",
             "the TXM skeleton overestimates length by ~2.1× against the Buffon "
             "estimator (median ratio 0.466 over 63 frames), consistent with cracks only a "
             "few pixels across.",
@@ -205,7 +204,7 @@ def for_specimen(r, frames=None):
         ra = ci.get("pct_relative_accuracy")
         if ra is not None and ra > E562_RA_TARGET:
             out.append(_s(
-                f"Area fraction is ±{ra:.0f}%: too coarse to rank this specimen.",
+                f"±{ra:.0f}%: too coarse to rank this specimen.",
                 f"ASTM E562-19e1 95% CI from between-field variance over {ci['n_fields']} "
                 f"fields. E562's usual target is ±{E562_RA_TARGET:.0f}%, and nothing in "
                 f"this arm reaches it.",
@@ -221,13 +220,13 @@ def for_specimen(r, frames=None):
                 level="bad", value=ra))
         if ci.get("ci95_lo_clamped"):
             out.append(_s(
-                "Interval extends below zero: lower bound not established.",
+                "Interval reaches below zero: no lower bound.",
                 "the normal-theory interval reaches negative area fraction, which cannot "
                 "occur, so it is clamped for display only.",
                 level="warn"))
     elif r.get("n_fields", 0) < 3:
         out.append(_s(
-            f"Only {r.get('n_fields', 0)} field(s): no interval, no dispersion.",
+            f"Only {r.get('n_fields', 0)} field(s): no interval.",
             "ASTM E562 needs enough fields for the between-field variance to mean "
             "something; below three the interval is unstable enough to mislead.",
             level="warn"))
@@ -255,7 +254,7 @@ def for_specimen(r, frames=None):
         # of 34 specimen-arms have no field imaged both ways, so silence here would be both
         # the common case and the wrong inference.
         out.append(_s(
-            "No field here was imaged by two detectors: effect unmeasured.",
+            "Detector effect unmeasured here.",
             "the CBS/ETD comparison needs the same physical field through both detectors. "
             "Where it exists corpus-wide the median is 2.29×, so an unmeasured effect is "
             "not a small one.",
@@ -264,7 +263,7 @@ def for_specimen(r, frames=None):
         ratio = ds["cbs_over_etd_median"]
         if abs(ratio - 1) > 0.2:
             out.append(_s(
-                f"Detector moves this {ratio:.1f}× on the same physical field.",
+                f"Detector alone moves this {ratio:.1f}×.",
                 f"CBS against ETD on {ds['n_fields_both_detectors']} fields imaged both "
                 f"ways. Corpus-wide the median is 2.29×, CBS higher in 50 of 56, "
                 f"paired Wilcoxon p = 8e-9.",
@@ -278,14 +277,14 @@ def for_specimen(r, frames=None):
     if a:
         if not a.get("n_frames_corrected"):
             out.append(_s(
-                "No operator corrections here: detector output, unreviewed.",
+                "Unreviewed: detector output, no operator corrections.",
                 f"the gated and machine arms are identical on all "
                 f"{a['n_paired_frames']} frames of this specimen.",
                 level="warn"))
         else:
             out.append(_s(
-                f"Operator corrections change area {a['gated_over_machine_where_corrected']}"
-                f"× on {a['n_frames_corrected']} frames.",
+                f"Corrections change area {a['gated_over_machine_where_corrected']}× "
+                f"on {a['n_frames_corrected']} frames.",
                 f"gated against machine on identical frames, "
                 f"{a['n_frames_corrected']} of {a['n_paired_frames']} carrying a stroke.",
                 value=a["gated_over_machine_where_corrected"]))

@@ -335,6 +335,88 @@ def _rebuild_uploads_specimen():
 
 
 # ---------------------------------------------------------------------------------------
+# MARKING. The tool that draws the masks this app measures already exists -- it is
+# interior_active_learning/code/paint_server.py in the SEM repo, a Flask app with Add
+# crack / Not crack / Erase / Brush / Whole region and a Retrain button. It was reachable
+# only by knowing it was there and starting it by hand on another port, which is exactly
+# the "two separate apps" confusion: this app would refuse a bad mask and say nothing about
+# where to fix it.
+#
+# Started as a subprocess with the SEM REPO'S interpreter, the same way detection is,
+# because it needs Flask and a model bundle this app deliberately does not carry.
+_PAINT = {"proc": None, "port": None}
+PAINT_PORT = 8767
+
+
+def _paint_alive():
+    p = _PAINT["proc"]
+    return bool(p and p.poll() is None)
+
+
+@app.get("/api/paint")
+def paint_status():
+    sem = P.sem_repo()
+    py = P.sem_python()
+    return {
+        "available": bool(sem and py),
+        "why_not": (None if (sem and py) else
+                    ("no SEM repo is configured" if not sem else
+                     "the SEM repo's virtualenv is not built -- run ./run in it once")),
+        "running": _paint_alive(),
+        "url": (f"http://127.0.0.1:{_PAINT['port']}" if _paint_alive() else None),
+        "note": "the marking tool writes corrections into the SEM repo, and this app reads "
+                "them back on the next measure",
+    }
+
+
+@app.post("/api/paint")
+def paint_start():
+    import socket
+    import subprocess
+    if _paint_alive():
+        return paint_status()
+    sem, py = P.sem_repo(), P.sem_python()
+    if not (sem and py):
+        raise HTTPException(503, paint_status()["why_not"])
+    code = os.path.join(sem, "interior_active_learning", "code")
+    script = os.path.join(code, "paint_server.py")
+    if not os.path.exists(script):
+        raise HTTPException(503, f"no marking tool at {script}")
+
+    # Its own default port first, so a tool the user already had open on 8767 is reused
+    # rather than duplicated; otherwise whatever the OS gives us.
+    port = PAINT_PORT
+    with socket.socket() as t:
+        if t.connect_ex(("127.0.0.1", port)) == 0:
+            _PAINT["port"] = port
+            return {**paint_status(), "running": True,
+                    "url": f"http://127.0.0.1:{port}", "reused": True}
+    with socket.socket() as t:
+        try:
+            t.bind(("127.0.0.1", port))
+        except OSError:
+            t.bind(("127.0.0.1", 0))
+            port = t.getsockname()[1]
+
+    _PAINT["proc"] = subprocess.Popen(
+        [py, script], cwd=code,
+        env={**os.environ, "PORT": str(port)},
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    _PAINT["port"] = port
+
+    # Wait for it to answer rather than returning a URL that 404s for two seconds.
+    import time as _t
+    for _ in range(80):
+        if not _paint_alive():
+            raise HTTPException(500, "the marking tool exited during startup")
+        with socket.socket() as t:
+            if t.connect_ex(("127.0.0.1", port)) == 0:
+                return paint_status()
+        _t.sleep(0.25)
+    raise HTTPException(504, "the marking tool did not start within 20s")
+
+
+# ---------------------------------------------------------------------------------------
 @app.get("/api/readout")
 def readout(arm: str = Query(...), specimen: str | None = None, frame: str | None = None):
     """The sentences, not the numbers. Computed server-side from the SAME dataset the tables
