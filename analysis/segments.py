@@ -138,8 +138,32 @@ def skeleton_segments(mask, axis_deg=0.0):
     lattice = (float(((np.abs(rl_all - np.sqrt(2)) < 1e-3) | (np.abs(rl_all - 1.0) < 1e-3)).mean())
                if rl_all.size else None)
 
-    njunc = int(ndi.label(junction, structure=np.ones((3, 3), np.uint8))[1]) if junction.any() else 0
-    nb_j = nb[junction]
+    # Junction ORDER is counted per cluster, not per pixel. Counting pixels reported 3,074
+    # junctions alongside "10,359 triple, 5,156 quad+" -- 15,515 pixels against 3,074
+    # clusters, two different units printed as if they were one, which reads as a
+    # contradiction. A junction is a place where branches meet, so its order is the number of
+    # distinct branches touching it. This also matters because skeletonisation manufactures
+    # nodes: a true 4-way crossing usually thins to two adjacent 3-way pixels, and only the
+    # cluster view sees that as one crossing.
+    jlab, njunc = (ndi.label(junction, structure=np.ones((3, 3), np.uint8))
+                   if junction.any() else (np.zeros_like(lab), 0))
+    n_triple = n_quad = 0
+    if njunc:
+        # Dilate each junction cluster by one pixel and count the distinct branch labels it
+        # touches. That count is the cluster's order.
+        for i, sl in enumerate(ndi.find_objects(jlab), start=1):
+            if sl is None:
+                continue
+            pad = (slice(max(0, sl[0].start - 1), sl[0].stop + 1),
+                   slice(max(0, sl[1].start - 1), sl[1].stop + 1))
+            here = jlab[pad] == i
+            grown = ndi.binary_dilation(here, np.ones((3, 3), bool))
+            touching = np.unique(lab[pad][grown & (lab[pad] > 0)])
+            order = int(touching.size)
+            if order == 3:
+                n_triple += 1
+            elif order >= 4:
+                n_quad += 1
     summary = {
         "n_segments": len(segs),
         "total_segment_length_px": round(float(L_all.sum()), 1),
@@ -153,8 +177,9 @@ def skeleton_segments(mask, axis_deg=0.0):
         "R_L_axis_deg": axis_deg,
         "R_L_below_one": bad,
         "n_junctions": njunc,
-        "n_triple": int((nb_j == 3).sum()),
-        "n_quadruple_plus": int((nb_j >= 4).sum()),
+        "n_triple": n_triple,
+        "n_quadruple_plus": n_quad,
+        "junction_order_counted_per": "cluster (branches meeting), not per skeleton pixel",
         # DiameterJ's characteristic length: centreline length per junction.
         "characteristic_length_px": (round(float(L.sum() / njunc), 2) if njunc else None),
         "rose_bin_deg": [int(e) for e in edges[:-1]],

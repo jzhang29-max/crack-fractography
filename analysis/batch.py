@@ -42,6 +42,13 @@ ARMS = {
     "sem/gated": (os.path.join(SEM_DERIVED, "gated_masks"), "*_gated.png", "sem"),
     "sem/machine": (os.path.join(SEM_DERIVED, "machine_masks"), "*_machine.png", "sem"),
     "txm": (os.path.join(REPO, "data", "txm_export"), "*/*_crack_mask.png", "txm"),
+    # Uploads are a first-class arm, not an append-only side channel. They used to be
+    # written straight into frames.json by the upload endpoint, which meant a batch re-run
+    # silently deleted every uploaded frame -- the masks stayed on disk and the rows
+    # vanished. Measuring them here fixes that AND keeps them on the current metric set:
+    # preserving the old rows instead would have left uploads carrying whatever metrics
+    # existed when they were uploaded, silently mixed with everything else.
+    "uploads": (os.path.join(_HERE, "out", "uploads"), "*_gated.png", "sem"),
 }
 
 
@@ -71,9 +78,9 @@ def main():
                       f"{type(e).__name__}: {e}", flush=True)
                 continue
             summ["arm"] = arm
-            summ["specimen"] = (
-            (txm_specimen_key(summ["frame"]) if modality == "txm"
-             else specimen_key(summ["frame"])) or "unparsed")
+            summ["specimen"] = ("uploaded" if arm == "uploads" else
+                            (txm_specimen_key(summ["frame"]) if modality == "txm"
+                             else specimen_key(summ["frame"])) or "unparsed")
             frames.append(summ)
             for r in rows:
                 r["frame"] = summ["frame"]
@@ -105,12 +112,29 @@ def main():
             "estimable_dispersion": len(fs) >= 3,
         })
 
+    # MERGE, do not replace. Writing the whole file on every run made --arm a data-loss
+    # footgun: `--arm uploads` overwrote 355 measured frames with 2, and only the arms in
+    # THIS run survived. Records for arms that were not re-run are carried over untouched;
+    # records for arms that WERE re-run are replaced wholesale, so a frame deleted upstream
+    # does not linger.
+    ran = set(arms)
     for name, obj in (("frames.json", frames), ("cracks.json", cracks),
                       ("specimens.json", specimens)):
-        with open(os.path.join(OUT, name), "w") as fh:
-            json.dump(obj, fh)
-        print(f"  wrote {name}: {len(obj):,} records "
-              f"({os.path.getsize(os.path.join(OUT, name))/1e6:.1f} MB)")
+        path = os.path.join(OUT, name)
+        prior = []
+        if os.path.exists(path):
+            try:
+                prior = [r for r in json.load(open(path)) if r.get("arm") not in ran]
+            except Exception as e:
+                print(f"  could not read existing {name} ({type(e).__name__}); "
+                      f"writing only this run's records")
+        merged = prior + obj
+        with open(path, "w") as fh:
+            json.dump(merged, fh)
+        kept = len(merged) - len(obj)
+        print(f"  wrote {name}: {len(merged):,} records "
+              f"({len(obj):,} from this run, {kept:,} carried over) "
+              f"({os.path.getsize(path)/1e6:.1f} MB)")
 
     print(f"\n  {len(frames)} frames, {len(cracks):,} cracks, {len(specimens)} specimen-arms")
     ns = sum(1 for f in frames if not f["scale_known"])

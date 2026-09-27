@@ -24,16 +24,23 @@ async function api(path) {
 
 /* ---------------------------------------------------------------- frames table */
 const FCOLS = [
-  ["frame", "Frame"], ["specimen", "Specimen"], ["n_cracks_measured", "Cracks"],
-  // Specks get their own column rather than living only in the detail panel. On some frames
-  // they outnumber the measured cracks by an order of magnitude (36,087 against 3,043 on
-  // MAR_Amb_AS_ETD_0003), and that ratio is a property of the mask worth seeing while
-  // scanning the table -- a frame whose specks dwarf its cracks is mostly debris.
-  ["speck_count", "Specks"],
-  ["area_fraction", "Area frac"], ["largest_share_of_area", "Largest share"],
-  ["crack_density_px_per_Mpx", "Density"], ["mean_width_px_median", "Median width px"],
-  ["tortuosity_median", "Tortuosity"], ["censored_share", "Censored"],
-  ["nm_per_px", "nm/px"],
+  // SIX columns, down from eleven. The research verdict was blunt: the table was 1109 px
+  // against a 512 px card and most of it was not what a materials reader asks first. What
+  // survives answers "how much cracking, over how much material, in what units".
+  //
+  // Cracks and specks COLLAPSE INTO ONE CELL -- they were three columns (n_regions_total,
+  // n_cracks_measured, speck_count) telling one story, and the story is the ratio.
+  //
+  // Everything cut is still in the CSV and in the detail view. Nothing is lost, it is
+  // relocated: top1pct_share duplicated largest_share, Orientation_deg was a per-component
+  // second moment now superseded by the segment rose, Tortuosity is gone entirely, and
+  // MaxWidth is the noisiest number on a 1-3 px crack.
+  ["frame", "Frame"],
+  ["_cracks", "Cracks"],                       // "457 (+19 specks)"
+  ["area_fraction", "Area frac"],
+  ["largest_share_of_area", "Largest share"],
+  ["p21_skeleton_mm_per_mm2", "P21 mm/mm²"],   // labelled: not a bare "density"
+  ["_p10min", "P10 min /mm"],                  // the ASTM B456 criterion is a MINIMUM
 ];
 
 function renderFrames() {
@@ -41,7 +48,13 @@ function renderFrames() {
   t.querySelector("thead").innerHTML = "<tr>" + FCOLS.map(([k, l]) =>
     `<th data-k="${k}">${l}${state.sortKey === k ? (state.sortDir > 0 ? " ▲" : " ▼") : ""}</th>`
   ).join("") + "</tr>";
-  const rows = [...state.frames].sort((a, b) => {
+  // Composite cells, derived rather than stored, so the dataset keeps its raw fields.
+  const derive = (f) => ({
+    ...f,
+    _cracks: f.n_cracks_measured,
+    _p10min: (f.probe && f.probe.p10_min_per_mm) ?? null,
+  });
+  const rows = [...state.frames].map(derive).sort((a, b) => {
     const x = a[state.sortKey], y = b[state.sortKey];
     if (x === y) return 0;
     if (x === null || x === undefined) return 1;
@@ -55,7 +68,12 @@ function renderFrames() {
     return `<tr data-f="${f.frame}" aria-selected="${state.frame === f.frame}">` +
       FCOLS.map(([k]) => {
         if (k === "frame") return `<td title="${f[k]}">${f[k]}${noScale}</td>`;
-        if (k === "specimen") return `<td title="${f[k]}">${f[k]}</td>`;
+        if (k === "_cracks") {
+          // One cell, because a count without its speck count invites the fragmentation
+          // misreading this project has already made once.
+          const sp = f.speck_count ? ` <span class="muted">+${f.speck_count.toLocaleString()}</span>` : "";
+          return `<td title="${f.n_cracks_measured} measured, ${f.speck_count} specks at or below ${f.speck_threshold_px} px">${fmt(f.n_cracks_measured)}${sp}</td>`;
+        }
         return `<td>${fmt(f[k], 4)}</td>`;
       }).join("") + "</tr>";
   }).join("");
@@ -151,9 +169,7 @@ function wire(root) {
 
 /* ---------------------------------------------------------------- frame detail */
 const CCOLS = [["crack_id", "ID"], ["area_px", "Area px"], ["SkeletonLength_px", "Length px"],
-  ["MeanWidth_px", "Mean W"], ["MaxWidth_px", "Max W"], ["Tortuosity", "Tortuosity"],
-  ["Orientation_deg", "Orient °"], ["BranchPointCount", "Branches"],
-  ["length_is_censored", "Censored"], ["area_um2", "Area µm²"], ["length_um", "Length µm"]];
+  ["MeanWidth_px", "Mean W"], ["length_is_censored", "Censored"], ["area_um2", "Area µm²"]];
 
 async function selectFrame(name) {
   state.frame = name;
@@ -163,20 +179,27 @@ async function selectFrame(name) {
   $("#fsel-note").textContent = f.scale_known
     ? `${f.nm_per_px} nm/px — physical units available.`
     : `No physical scale established for this frame; µm columns are empty by design.`;
+  const pr = f.probe || {};
   $("#fsel").innerHTML = [
-    ["Cracks measured", fmt(f.n_cracks_measured)],
-    ["Specks excluded (≤25 px)", fmt(f.speck_count)],
+    ["Cracks", `${fmt(f.n_cracks_measured)} <span class="muted">+${fmt(f.speck_count)} specks ≤${f.speck_threshold_px}px</span>`],
     ["Crack area fraction", (f.area_fraction * 100).toFixed(3) + "%"],
-    ["Largest region's share of area", f.largest_share_of_area === null ? "—"
+    ["Largest region's share", f.largest_share_of_area === null ? "—"
       : (f.largest_share_of_area * 100).toFixed(1) + "%"],
-    ["Top 1% of regions hold", f.top1pct_share_of_area === null ? "—"
-      : (f.top1pct_share_of_area * 100).toFixed(1) + "% of area"],
-    ["Total skeleton length", fmt(f.total_skeleton_length_px, 0) + " px"],
-    ["Tortuosity defined for", `${fmt(f.tortuosity_n_defined)} of ${fmt(f.n_cracks_measured)}`],
-    ["Branch points", fmt(f.branch_points_total)],
+    ...(f.area_analysed_mm2 ? [["Area analysed", fmt(f.area_analysed_mm2, 4) + " mm²"]] : []),
+    ...(f.p21_skeleton_mm_per_mm2 ? [["P21 (skeleton)", fmt(f.p21_skeleton_mm_per_mm2, 3) + " mm/mm²"]] : []),
+    ...(pr.p21_buffon_mm_per_mm2 ? [["P21 (Buffon)", fmt(pr.p21_buffon_mm_per_mm2, 3) +
+        ` mm/mm² <span class="muted">${Math.round(100 * Math.abs(pr.p21_buffon_mm_per_mm2 - f.p21_skeleton_mm_per_mm2) / f.p21_skeleton_mm_per_mm2)}% apart — skeletonisation error</span>`]] : []),
+    ...(pr.p10_min_per_mm ? [["P10 min", `${fmt(pr.p10_min_per_mm, 1)} /mm <span class="muted">at ${pr.p10_min_at_deg}°, mean ${fmt(pr.p10_mean_per_mm, 1)}</span>`]] : []),
+    ...(f.p20_per_mm2 ? [["P20", fmt(f.p20_per_mm2, 0) + " /mm²"]] : []),
+    ...(f.mcl_um ? [["Longest crack (MCL)", fmt(f.mcl_um, 1) + " µm"]] : []),
+    ...(f.tcl_um ? [["Total length (TCL)", fmt(f.tcl_um, 0) + " µm"]] : []),
+    ["R_L median", f.R_L_median === null || f.R_L_median === undefined ? "—"
+      : `${fmt(f.R_L_median, 3)} <span class="muted">axis ${f.R_L_axis_deg}°, ${fmt(f.R_L_n_segments)} segments</span>`],
+    ["Junctions", `${fmt(f.n_junctions)} <span class="muted">${fmt(f.n_triple)} triple, ${fmt(f.n_quadruple_plus)} quad+</span>`],
     ["Touching frame edge", f.censored_share === null ? "—"
-      : `${(f.censored_share * 100).toFixed(1)}% (length censored)`],
-    ...(f.total_length_um ? [["Total length", fmt(f.total_length_um, 1) + " µm"]] : []),
+      : `${(f.censored_share * 100).toFixed(1)}% <span class="muted">length censored</span>`],
+    ["Below 10px width envelope", f.width_below_validated_envelope_share === null ? "—"
+      : `${(f.width_below_validated_envelope_share * 100).toFixed(0)}% <span class="muted">of regions</span>`],
   ].map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
 
   $("#mask").hidden = false;
