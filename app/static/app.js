@@ -371,6 +371,15 @@ async function download(url, filename) {
 const pct = (v, d = 2) => v == null ? "—" : (100 * v).toFixed(d) + "%";
 const num = (v, d = 1) => v == null ? "—" : (+v).toFixed(d);
 
+// A normal-theory interval on a small non-negative quantity can reach below zero. Printing
+// the clamp as "0.00%" asserts a measured lower bound of exactly zero, which the data does
+// not support — it is the method running out of validity. Five specimen-arms hit this.
+function ciLo(ci) {
+  if (!ci) return "—";
+  if (!ci.ci95_lo_clamped) return pct(ci.ci95_lo);
+  return `<span class="flag" title="${ci.ci95_lo_note || ""}">&lt;0</span>`;
+}
+
 function raBadge(ci) {
   if (!ci || ci.pct_relative_accuracy == null) return "";
   const v = ci.pct_relative_accuracy;
@@ -385,7 +394,7 @@ function specimenCard(r) {
   const dets = Object.entries(r.detectors || {}).map(([k, v]) => `${k} ${v}`).join(" · ");
   const rows = [
     ["Crack area fraction",
-     ci ? `<span class="big">${pct(ci.mean)}</span> <span class="ci">95% CI ${pct(ci.ci95_lo)}–${pct(ci.ci95_hi)}, ${ci.n_fields} fields</span>${raBadge(ci)}`
+     ci ? `<span class="big">${pct(ci.mean)}</span> <span class="ci">95% CI ${ciLo(ci)}–${pct(ci.ci95_hi)}, ${ci.n_fields} fields</span>${raBadge(ci)}`
         : `<span class="big">${pct(r.area_fraction_median)}</span> <span class="ci">median of ${r.n_fields} field${r.n_fields > 1 ? "s" : ""} — under 3, no interval</span>`],
     ["P10", `${num(r.p10_min_per_mm)} <span class="u">/mm min</span> · ${num(r.p10_mean_per_mm)} <span class="u">/mm mean</span>`],
     ["P21 · P20", `${num(r.p21_skeleton_mm_per_mm2)} <span class="u">mm/mm²</span> · ${num(r.p20_per_mm2, 0)} <span class="u">/mm²</span>`],
@@ -419,7 +428,7 @@ function specimenTable(rows) {
     return `<tr data-spec="${r.specimen}"><td title="${r.specimen}">${r.specimen}</td>` +
       `<td>${r.n_fields}<span class="u">${r.n_frames !== r.n_fields ? ` /${r.n_frames}f` : ""}</span></td>` +
       `<td>${pct(ci ? ci.mean : r.area_fraction_median)}</td>` +
-      `<td>${ci ? `${pct(ci.ci95_lo)}–${pct(ci.ci95_hi)}` : "<span class='u'>n&lt;3</span>"}</td>` +
+      `<td>${ci ? `${ciLo(ci)}–${pct(ci.ci95_hi)}` : "<span class='u'>n&lt;3</span>"}</td>` +
       `<td>${ci ? raBadge(ci) : "—"}</td>` +
       `<td>${ds ? "×" + ds.cbs_over_etd_median : "—"}</td>` +
       `<td title="${as ? as.n_frames_corrected + " of " + as.n_paired_frames + " frames carry a correction" : ""}">${as ? (as.n_frames_corrected ? "×" + as.gated_over_machine_where_corrected : "<span class='u'>none</span>") : "—"}</td></tr>`;
@@ -487,9 +496,14 @@ async function loadArm() {
     const d = document.documentElement;
     d.dataset.theme = d.dataset.theme === "dark" ? "light" : "dark";
   };
-  $("#csv").onclick = () => download(
-    `/api/export.csv?arm=${encodeURIComponent(state.arm)}&level=frames`,
-    `${state.arm.replace("/", "_")}_frames.csv`);
+  // Pass the filters the screen is applying. Without them a filtered view exported
+  // unfiltered rows, and the file carried no record of what had been excluded.
+  $("#csv").onclick = () => {
+    const q = new URLSearchParams({ arm: state.arm, level: "frames" });
+    if (state.spec) q.set("specimen", state.spec);
+    download(`/api/export.csv?${q}`,
+             `${state.arm.replace("/", "_")}${state.spec ? "_" + state.spec : ""}_frames.csv`);
+  };
   // Upload. A .tif is segmented here first; a .png is taken as a mask already. The control
   // says "image or mask" rather than explaining the difference, because the server decides
   // from the extension and the user should not have to.

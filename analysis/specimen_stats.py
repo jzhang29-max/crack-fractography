@@ -67,12 +67,22 @@ def _ci(values):
     mean = float(v.mean())
     s = float(v.std(ddof=1))
     half = _t95(n) * s / np.sqrt(n)
+    # A normal-theory interval on a small, skewed, non-negative quantity can reach below
+    # zero. Clamping it to 0.0 and printing "0.00%" states a measured lower bound of exactly
+    # zero, which is a claim the data does not make -- it is the method running out of
+    # validity, not a finding. Two of nine gated specimen-arms hit this. Clamped, because an
+    # area fraction cannot be negative, but FLAGGED so the UI can say which it is.
+    raw_lo = mean - half
     return {
         "mean": round(mean, 6),
         "sd_between_fields": round(s, 6),
         "n_fields": n,
         "ci95_halfwidth": round(float(half), 6),
-        "ci95_lo": round(max(0.0, mean - half), 6),
+        "ci95_lo": round(max(0.0, raw_lo), 6),
+        "ci95_lo_clamped": bool(raw_lo < 0),
+        "ci95_lo_note": ("the normal-theory interval extends below zero, which an area "
+                         "fraction cannot; the lower bound is not established"
+                         if raw_lo < 0 else None),
         "ci95_hi": round(float(mean + half), 6),
         # E562's own headline: the interval as a percentage of the mean. Under 10% is the
         # usual target; above it the answer is "measure more fields", not "round harder".

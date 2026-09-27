@@ -112,13 +112,25 @@ def mask(arm: str, frame: str):
 
 
 @app.get("/api/export.csv")
-def export_csv(arm: str = Query(...), level: str = "frames"):
-    """Flat CSV of whatever is on screen, because the table IS the product for most users."""
+def export_csv(arm: str = Query(...), level: str = "frames",
+               specimen: str | None = None, min_area_px: int = 0):
+    """Flat CSV of whatever is on screen, because the table IS the product for most users.
+
+    "Whatever is on screen" is now true. It was not: the min-area slider and the specimen
+    selector were client-side only, so a filtered view exported unfiltered rows and the
+    exported file carried no record of the filter. A citable number that silently disagrees
+    with the screen it came from is worse than no export.
+    """
     import csv
     import io
     if level not in ("frames", "specimens", "cracks"):
         raise HTTPException(400, "level must be frames, specimens or cracks")
     rows = [r for r in _load(level) if r.get("arm") == arm]
+    if specimen:
+        rows = [r for r in rows if r.get("specimen") == specimen]
+    n_before = len(rows)
+    if min_area_px and level == "cracks":
+        rows = [r for r in rows if (r.get("area_px") or 0) >= min_area_px]
     if not rows:
         raise HTTPException(404, f"nothing for arm={arm!r} at level={level!r}")
     keys, seen = [], set()
@@ -127,6 +139,12 @@ def export_csv(arm: str = Query(...), level: str = "frames"):
             if k not in seen and not isinstance(r[k], (dict, list)):
                 seen.add(k); keys.append(k)
     buf = io.StringIO()
+    # The filters travel WITH the data. A CSV that does not record what was excluded cannot
+    # be reconciled with the figure it sits beside six months later.
+    buf.write(f"# crack-fractography export  arm={arm}  level={level}"
+              f"  specimen={specimen or 'all'}"
+              f"  min_area_px={min_area_px}"
+              f"  rows={len(rows)} of {n_before} before filtering\n")
     w = csv.DictWriter(buf, fieldnames=keys, extrasaction="ignore")
     w.writeheader()
     w.writerows(rows)

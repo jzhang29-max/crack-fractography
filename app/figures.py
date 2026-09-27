@@ -64,6 +64,48 @@ def _nice(lo, hi):
     return math.floor(lo / step) * step, math.ceil(hi / step) * step, step
 
 
+def _collapse_to_fields(rows, fields_needed):
+    """One observation per PHYSICAL FIELD, not per frame.
+
+    A figure that leaves this app goes into a paper, and this one was double-counting. 142
+    gated frames are 86 distinct fields: 56 were imaged twice, once through CBS and once
+    through ETD. The box plot printed "n=20" for a specimen whose own card said 10 fields,
+    and its caption said "specimen is the inferential unit" directly underneath -- and the
+    two detectors differ by 2.29x on the same physical field, so the box was also mixing two
+    instruments into one spread.
+
+    Uses specimen_stats.field_key rather than a second rule, so the figure and the specimen
+    card can never disagree about what a field is.
+    """
+    import sys as _sys
+    import os as _os
+    _sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.dirname(
+        _os.path.abspath(__file__))), "analysis"))
+    try:
+        from specimen_stats import detector_of, field_key
+    except ImportError:
+        return rows, {}
+
+    groups = {}
+    for r in rows:
+        groups.setdefault((r.get("specimen", "unparsed"),
+                           field_key(r.get("frame", ""))), []).append(r)
+    out, mixed = [], {}
+    for (spec, _fk), fs in sorted(groups.items()):
+        rep = dict(fs[0])
+        for v in fields_needed:
+            vals = [f[v] for f in fs if f.get(v) is not None]
+            if vals:
+                rep[v] = sum(vals) / len(vals)
+        rep["_n_frames_in_field"] = len(fs)
+        out.append(rep)
+        if len(fs) > 1:
+            dets = {detector_of(f.get("frame", "")) for f in fs} - {None}
+            if len(dets) > 1:
+                mixed[spec] = sorted(dets)
+    return out, mixed
+
+
 def build(frames, arm, kind, x=None, y=None, min_frames=3, include_thin=False):
     """Return {'svg': str, 'caption': str, 'n': int, 'dropped': {...}} or raise ValueError."""
     if kind not in KINDS:
@@ -88,6 +130,13 @@ def build(frames, arm, kind, x=None, y=None, min_frames=3, include_thin=False):
         dropped["missing_value"] = before - len(rows)
     if not rows:
         raise ValueError("every frame was dropped: no scale, or the field is empty here")
+
+    n_frames = len(rows)
+    rows, mixed_detectors = _collapse_to_fields(rows, need)
+    if n_frames != len(rows):
+        dropped["_collapsed"] = (n_frames, len(rows))
+    if mixed_detectors:
+        dropped["_mixed_detectors"] = mixed_detectors
 
     if kind == "histogram":
         return _hist(rows, arm, y or x, dropped)
@@ -134,13 +183,26 @@ def _axes(x0, y0, x1, y1, lo, hi, step, horizontal=False):
 
 
 def _cap(arm, n, dropped, extra=""):
-    bits = [f"{arm}", f"n = {n} frames"]
+    # "fields", not "frames". The caption used to say frames while claiming in the same
+    # breath that the specimen is the inferential unit, on a figure whose n double-counted
+    # every field imaged through two detectors.
+    bits = [f"{arm}", f"n = {n} fields"]
+    if dropped.get("_collapsed"):
+        was, now = dropped["_collapsed"]
+        if was != now:
+            bits.append(f"{was} frames collapsed to {now} fields")
     if dropped.get("no_scale"):
         bits.append(f"{dropped['no_scale']} dropped: no physical scale")
     if dropped.get("missing_value"):
         bits.append(f"{dropped['missing_value']} dropped: value not defined")
     if dropped.get("thin_specimens"):
-        bits.append(f"{dropped['thin_specimens']} specimens hidden: under 3 frames")
+        bits.append(f"{dropped['thin_specimens']} specimens hidden: under 3 fields")
+    # Said out loud, because a box built from two detectors that differ by 2.29x on the
+    # same physical field is showing instrument spread as if it were material spread.
+    if dropped.get("_mixed_detectors"):
+        m = dropped["_mixed_detectors"]
+        bits.append(f"{len(m)} specimens average two detectors per field "
+                    f"(CBS reads ~2.3x ETD; the spread is partly instrument)")
     if extra:
         bits.append(extra)
     return "  ·  ".join(bits)
@@ -216,7 +278,7 @@ def _by_specimen(rows, arm, field, kind, min_frames, include_thin, dropped):
         if thin:
             dropped["thin_specimens"] = len(thin)
     if not g:
-        raise ValueError(f"every specimen has fewer than {min_frames} frames; "
+        raise ValueError(f"every specimen has fewer than {min_frames} fields; "
                          f"tick 'include thin specimens' to plot them anyway")
     keys = sorted(g)
     W = max(520, 90 + 74 * len(keys))
