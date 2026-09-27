@@ -18,9 +18,10 @@ inventing its answers.
 
 ## Install
 
-**As an app.** Download `Crack Fractography.app`, drag it to Applications, double-click. It
-opens a small window with the address and a Quit button, and the analysis itself is a page
-in your browser. macOS refuses unsigned apps downloaded from the internet, so once:
+**As an app.** [Download the latest release](https://github.com/jzhang29-max/crack-fractography/releases/latest),
+unzip, drag `Crack Fractography.app` to Applications, double-click. It is a real application
+window — the analysis runs inside it, not in a browser tab. macOS refuses unsigned apps
+downloaded from the internet, so once:
 
 ```bash
 xattr -dr com.apple.quarantine "/Applications/Crack Fractography.app"
