@@ -300,6 +300,34 @@ def _rebuild_uploads_specimen():
 
 
 # ---------------------------------------------------------------------------------------
+@app.get("/api/readout")
+def readout(arm: str = Query(...), specimen: str | None = None, frame: str | None = None):
+    """The sentences, not the numbers. Computed server-side from the SAME dataset the tables
+    read, so a statement can never disagree with the figure beside it."""
+    import sys as _sys
+    _sys.path.insert(0, os.path.join(RES, "analysis"))
+    import conclusions
+
+    frames = [f for f in _load("frames") if f.get("arm") == arm]
+    out = {"arm": arm, "frame": [], "specimen": [], "refusals": conclusions.REFUSALS}
+
+    if frame:
+        f = next((x for x in frames if x["frame"] == frame), None)
+        if f is None:
+            raise HTTPException(404, f"no frame {frame!r} in arm {arm!r}")
+        out["frame"] = conclusions.for_frame(f)
+        specimen = specimen or f.get("specimen")
+
+    if specimen:
+        rec = next((r for r in _load("specimens")
+                    if r.get("arm") == arm and r.get("specimen") == specimen), None)
+        if rec is not None:
+            out["specimen"] = conclusions.for_specimen(
+                rec, [x for x in frames if x.get("specimen") == specimen])
+            out["specimen_name"] = specimen
+    return out
+
+
 @app.get("/api/figure/fields")
 def figure_fields():
     """What can go on an axis, and which choices need a physical scale."""

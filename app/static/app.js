@@ -24,23 +24,13 @@ async function api(path) {
 
 /* ---------------------------------------------------------------- frames table */
 const FCOLS = [
-  // SIX columns, down from eleven. The research verdict was blunt: the table was 1109 px
-  // against a 512 px card and most of it was not what a materials reader asks first. What
-  // survives answers "how much cracking, over how much material, in what units".
-  //
-  // Cracks and specks COLLAPSE INTO ONE CELL -- they were three columns (n_regions_total,
-  // n_cracks_measured, speck_count) telling one story, and the story is the ratio.
-  //
-  // Everything cut is still in the CSV and in the detail view. Nothing is lost, it is
-  // relocated: top1pct_share duplicated largest_share, Orientation_deg was a per-component
-  // second moment now superseded by the segment rose, Tortuosity is gone entirely, and
-  // MaxWidth is the noisiest number on a 1-3 px crack.
+  // THREE columns, because the frames table is now a 300 px list beside the detail pane
+  // rather than a full-width card. It exists to pick a frame, not to be read: its job is
+  // identity plus the one number you scan for. Everything else is one click away in Detail,
+  // and all of it is in the CSV.
   ["frame", "Frame"],
   ["_cracks", "Cracks"],                       // "457 (+19 specks)"
-  ["area_fraction", "Area frac"],
-  ["largest_share_of_area", "Largest share"],
-  ["p21_skeleton_mm_per_mm2", "P21 mm/mm²"],   // labelled: not a bare "density"
-  ["_p10min", "P10 min /mm"],                  // the ASTM B456 criterion is a MINIMUM
+  ["area_fraction", "Area"],
 ];
 
 function renderFrames() {
@@ -64,15 +54,20 @@ function renderFrames() {
   t.querySelector("tbody").innerHTML = rows.map((f) => {
     // A frame with no scale cannot contribute to any physical statistic. Say so in the row
     // rather than showing a blank cell that reads as zero.
-    const noScale = f.scale_known ? "" : ` <span class="flag" title="no physical scale established">no scale</span>`;
+    // NO ECHO TOOLTIPS. There were 346 of these across 142 rows, 1,668 words -- more
+    // hidden text than the entire visible page -- and every one restated the cell it sat
+    // on: the frame stem in a title over a cell showing the frame stem, and the same
+    // specks sentence repeated 142 times. What they meant now lives once, in the
+    // definitions drawer, where it is addressable and reachable without a mouse.
+    const noScale = f.scale_known ? "" : ` <span class="flag">no scale</span>`;
     return `<tr data-f="${f.frame}" aria-selected="${state.frame === f.frame}">` +
       FCOLS.map(([k]) => {
-        if (k === "frame") return `<td title="${f[k]}">${f[k]}${noScale}</td>`;
+        if (k === "frame") return `<td>${f[k]}${noScale}</td>`;
         if (k === "_cracks") {
           // One cell, because a count without its speck count invites the fragmentation
           // misreading this project has already made once.
           const sp = f.speck_count ? ` <span class="muted">+${f.speck_count.toLocaleString()}</span>` : "";
-          return `<td title="${f.n_cracks_measured} measured, ${f.speck_count} specks at or below ${f.speck_threshold_px} px">${fmt(f.n_cracks_measured)}${sp}</td>`;
+          return `<td>${fmt(f.n_cracks_measured)}${sp}</td>`;
         }
         return `<td>${fmt(f[k], 4)}</td>`;
       }).join("") + "</tr>";
@@ -182,7 +177,6 @@ async function selectFrame(name) {
   state.frame = name;
   const f = state.frames.find((x) => x.frame === name);
   renderFrames();
-  $("#fsel-title").textContent = name;
   $("#fsel-note").textContent = f.scale_known
     ? `${f.nm_per_px} nm/px — physical units available.`
     : `No physical scale established for this frame; µm columns are empty by design.`;
@@ -242,12 +236,22 @@ async function selectFrame(name) {
   $("#masknote").textContent = `${state.arm} — black is crack.`;
 
   rose(f.orientation_hist_deg);
+  renderSpecimens();      // the strip follows the frame's specimen
+  renderReadout();
   try {
     const d = await api(`/api/cracks?frame=${encodeURIComponent(name)}&arm=${encodeURIComponent(state.arm)}`);
     state.cracks = d;
     renderCracks();
   } catch (e) { $("#cracknote").textContent = "Could not load cracks: " + e.message; }
 }
+
+//: The largest N regions by area. This was the biggest text mass on the page -- 305 rows
+//: and 1,547 words, more than every label and caption in the app combined -- and it is the
+//: least likely thing a researcher needs first. Ranking by area puts the informative rows
+//: at the top: this project has already seen one region hold 97.45% of total area while
+//: 305 components read as fragmentation. The rest is in the CSV, which now exports what the
+//: screen is filtering.
+const CRACK_ROWS = 25;
 
 function renderCracks() {
   const d = state.cracks;
@@ -260,9 +264,16 @@ function renderCracks() {
     (state.minArea > 0 ? ` · filtered to ≥ ${state.minArea.toLocaleString()} px` : "");
   const t = $("#cracks");
   t.querySelector("thead").innerHTML = "<tr>" + CCOLS.map(([, l]) => `<th>${l}</th>`).join("") + "</tr>";
-  t.querySelector("tbody").innerHTML = rows.slice(0, 400).map((c) => "<tr>" +
+  const shown = rows.slice(0, CRACK_ROWS);
+  t.querySelector("tbody").innerHTML = shown.map((c) => "<tr>" +
     CCOLS.map(([k]) => `<td>${typeof c[k] === "boolean" ? (c[k] ? "yes" : "") : fmt(c[k], 3)}</td>`).join("") +
-    "</tr>").join("");
+    "</tr>").join("") +
+    (rows.length > shown.length
+      ? `<tr><td colspan="${CCOLS.length}" class="u">showing the largest ${shown.length}` +
+        ` of ${rows.length.toLocaleString()} — the rest is in the CSV</td></tr>`
+      : "");
+  // The size distribution is built on ALL the rows, not the 25 displayed: it is a
+  // distribution, and truncating its input would change its shape.
   sizes(rows);
 }
 
@@ -346,7 +357,7 @@ async function wireSetup() {
 async function download(url, filename) {
   const native = window.pywebview && window.pywebview.api && window.pywebview.api.save;
   if (!native) { location.href = url; return; }
-  const note = $("#armnote");
+  const note = $("#listcount");
   const prev = note.textContent;
   note.textContent = "preparing " + filename + "…";
   try {
@@ -448,12 +459,18 @@ function specimenTable(rows) {
 }
 
 async function renderSpecimens() {
-  const card = $("#speccard");
   let rows;
   try { rows = await api(`/api/specimens?arm=${encodeURIComponent(state.arm)}`); }
-  catch (e) { card.hidden = true; return; }
-  card.hidden = false;
+  catch (e) {
+    $("#specnote").innerHTML = `<span class="flag">${e.message}</span>`;
+    renderStrip(null);
+    return;
+  }
   const one = state.spec ? rows.find((r) => r.specimen === state.spec) : null;
+  // The strip shows the selected specimen, or the one the selected frame belongs to, so the
+  // headline number is never blank and never has to be scrolled to.
+  const f = state.frames.find((x) => x.frame === state.frame);
+  renderStrip(one || (f ? rows.find((r) => r.specimen === f.specimen) : null));
   if (one) {
     $("#specnote").textContent = `${one.specimen} · ${one.n_fields} fields`;
     $("#specbody").innerHTML = specimenCard(one);
@@ -470,11 +487,203 @@ async function renderSpecimens() {
   }
 }
 
+// ---------------------------------------------------------------------------------------
+// TABS. The selector is the navigation, so there is no nav furniture: the frame list stays
+// on the left and this changes what you are looking at. Read-out is the default because the
+// owner's request was "tell me what it says", not "give me another table".
+const TABS = [
+  ["readout", "Read-out"],
+  ["mask", "Mask"],
+  ["specimen", "Specimen"],
+  ["detail", "Frame detail"],
+  ["orientation", "Orientation"],
+  ["cracks", "Cracks"],
+  ["figure", "Figure"],
+];
+let TAB = "readout";
+
+function showTab(id) {
+  TAB = id;
+  TABS.forEach(([k]) => { $("#pane-" + k).hidden = k !== id; });
+  $("#tabs").querySelectorAll("button").forEach((b) =>
+    b.setAttribute("aria-selected", String(b.dataset.tab === id)));
+  // The figure is expensive and the rose needs a laid-out box, so both render on reveal
+  // rather than on every frame change.
+  if (id === "figure" && typeof window.figRenderRef === "function") window.figRenderRef();
+}
+
+function wireTabs() {
+  $("#tabs").innerHTML = TABS.map(([k, label]) =>
+    `<button role="tab" data-tab="${k}" aria-selected="${k === TAB}">${label}</button>`).join("");
+  $("#tabs").querySelectorAll("button").forEach((b) => {
+    b.onclick = () => showTab(b.dataset.tab);
+  });
+  showTab(TAB);
+}
+
+// ---------------------------------------------------------------------------------------
+// THE STRIP. The headline number and its caveats, never scrolling away. On the old page it
+// scrolled off at the first flick, and its caveats were in hover text — but they are
+// assertions about the data currently loaded, not stable definitions, so they must not be
+// behind any click at all.
+function renderStrip(rec) {
+  const el = $("#strip");
+  if (!rec) { el.innerHTML = `<span class="who">Select a specimen.</span>`; return; }
+  const ci = rec.area_fraction_ci;
+  const ds = rec.detector_sensitivity;
+  const a = rec.arm_sensitivity;
+  const bits = [
+    `<span class="who">${rec.specimen}</span>`,
+    ci ? `<span class="big">${pct(ci.mean)}</span>` : `<span class="big">${pct(rec.area_fraction_median)}</span>`,
+    `<span class="u">crack area</span>`,
+    ci ? `<span class="ci">95% CI ${ciLo(ci)}–${pct(ci.ci95_hi)}</span>${raBadge(ci)}`
+       : `<span class="ci">no interval, ${rec.n_fields} field${rec.n_fields === 1 ? "" : "s"}</span>`,
+    `<span class="u">${rec.n_fields} fields${rec.n_frames !== rec.n_fields ? ` / ${rec.n_frames} frames` : ""}</span>`,
+  ];
+  if (ds && Math.abs(ds.cbs_over_etd_median - 1) > 0.2) {
+    bits.push(`<span class="banner bad" title="CBS against ETD on ${ds.n_fields_both_detectors} fields imaged both ways. Detector is confounded with specimen here.">detector ×${ds.cbs_over_etd_median}</span>`);
+  }
+  if (a && !a.n_frames_corrected) {
+    bits.push(`<span class="banner" title="The gated and machine arms are identical on all ${a.n_paired_frames} frames of this specimen.">no human review</span>`);
+  }
+  if (rec.scale_known_frames === 0) {
+    bits.push(`<span class="banner" title="No frame in this specimen has a recoverable nm/px, and the corpus spans a 249x magnification range, so there is no defensible default.">no scale</span>`);
+  }
+  el.innerHTML = bits.join(" ");
+}
+
+// ---------------------------------------------------------------------------------------
+// THE READ-OUT. Four or five sentences instead of a table. Each line is clickable and
+// opens its own reasoning in the definitions drawer, so the "why" is one click from the
+// number rather than on hover — 2,392 words used to live in 398 title= attributes, which
+// is unreachable on touch and undiscoverable on a laptop.
+const MARK = { good: "●", warn: "▲", bad: "✕", info: "·" };
+
+function roLines(sts, heading) {
+  if (!sts || !sts.length) return "";
+  return `<p class="ro-sec">${heading}</p>` + sts.map((st, i) =>
+    `<div class="ro-line ${st.level}" data-ro="${heading}:${i}" tabindex="0" role="button">
+       <span class="mk">${MARK[st.level] || "·"}</span>
+       <span class="tx">${st.text}</span>
+     </div>`).join("");
+}
+
+let RO = {};
+
+async function renderReadout() {
+  const el = $("#readout");
+  const q = new URLSearchParams({ arm: state.arm });
+  if (state.frame) q.set("frame", state.frame);
+  if (state.spec) q.set("specimen", state.spec);
+  let d;
+  try { d = await api(`/api/readout?${q}`); }
+  catch (e) { el.innerHTML = `<p class="ro-empty">${e.message}</p>`; return; }
+  RO = { "This specimen": d.specimen || [], "This frame": d.frame || [] };
+
+  const body = roLines(RO["This specimen"], "This specimen") +
+               roLines(RO["This frame"], "This frame");
+  const refusals = (d.refusals || []).map((r) => `
+    <div class="refuse">
+      <h4>${r.question}</h4>
+      <div class="ans">${r.answer}</div>
+      <details><summary>Why, and what would answer it</summary>
+        <p>${r.why}</p>
+        ${r.would_need && r.would_need.length
+          ? `<ul>${r.would_need.map((w) => `<li>${w}</li>`).join("")}</ul>` : ""}
+        ${r.not_this ? `<p><strong>Not this:</strong> ${r.not_this}</p>` : ""}
+      </details>
+    </div>`).join("");
+
+  el.innerHTML = (body || `<p class="ro-empty">Nothing this data supports saying yet.</p>`) +
+    `<p class="ro-sec">Not determinable from this data</p>` + refusals;
+
+  el.querySelectorAll(".ro-line").forEach((n) => {
+    const open = () => {
+      const [h, i] = n.dataset.ro.split(":");
+      openDefs((RO[h] || [])[+i]);
+    };
+    n.onclick = open;
+    n.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } };
+  });
+}
+
+// ---------------------------------------------------------------------------------------
+// DEFINITIONS DRAWER. Addressable, persistent, keyboard-reachable and selectable — none of
+// which hover text is. Three slots per entry, and the third is the one documentation
+// normally omits: when the number lies.
+function openDefs(st) {
+  $("#defs").hidden = false;
+  const body = $("#defsbody");
+  if (st) {
+    body.innerHTML = `
+      <div class="def hi">
+        <h5>${st.text}</h5>
+        <dl>
+          <dt>Basis</dt><dd>${st.basis || "—"}</dd>
+          ${st.hedge ? `<dt>When it lies</dt><dd class="lies">${st.hedge}</dd>` : ""}
+          ${st.value != null ? `<dt>Value</dt><dd>${typeof st.value === "number" ? (+st.value).toFixed(4) : st.value}</dd>` : ""}
+        </dl>
+      </div>` + defsAll();
+  } else {
+    body.innerHTML = defsAll();
+  }
+  body.scrollTop = 0;
+}
+
+const DEFS = [
+  ["Crack area fraction", "Crack pixels divided by analysed pixels.",
+   "Delesse: an area ratio on a section estimates the volume fraction.",
+   "It is the most detector-sensitive number here — CBS reads 2.29× ETD on the same physical field."],
+  ["95% CI and ±%", "Sampling interval over fields, and its width as a share of the mean.",
+   "ASTM E562-19e1: t(0.975, n−1)·s/√n on between-FIELD variance, n = fields.",
+   "It describes this specimen's surface, not the material. 0 of 22 specimen-arms here reach E562's ±10% target."],
+  ["Field vs frame", "A field is one place on the specimen; a frame is one image of it.",
+   "56 of 86 gated fields were imaged twice, once through CBS and once through ETD.",
+   "Counting frames as fields inflates n by up to √2 and mixes two instruments into one spread."],
+  ["Largest share of area", "The biggest connected crack's share of all crack area.",
+   "Reported beside the count because 305 components once read as fragmentation while the largest held 97.45%.",
+   "Confounded with field size: coarser pixels merge separate cracks, Spearman +0.49 with nm/px."],
+  ["P21, P20, P10", "Crack length per area, count per area, and intercepts per probe length.",
+   "Dershowitz & Herda (1992): the six Pij densities are incompatible and cannot be unit-converted.",
+   "P10 is reported as a MINIMUM over directions, because ASTM B456's criterion is a minimum, not a mean."],
+  ["Orientation", "Length-weighted axial direction of the skeleton branches.",
+   "Axial statistics on doubled angles, against a 1000-draw permutation null.",
+   "Without the null it is meaningless: uniform random angles return R = 0.16–0.29 on this pipeline."],
+  ["MCL bracket", "Longest crack, with and without edge-touching regions.",
+   "Reported as a pair because neither end is the value.",
+   "Keeping censored regions biases it down; dropping them biases it up, since long cracks reach edges more often."],
+  ["Censored share", "How much crack sits in regions touching the field edge.",
+   "Weighted by length beside length statistics, by area beside area fraction.",
+   "The count share understates it about 5× in SEM and 3× in TXM — that is why the weighting is named."],
+  ["Buffon vs skeleton", "Two independent estimates of the same centreline length per area.",
+   "L_A = (π/2)·mean(P_L) is skeleton-free, so a disagreement is skeletonisation error.",
+   "They differ by ~2.1× on TXM, where cracks are about 3 px wide — there, length is not a measurement."],
+  ["Gated vs machine", "Detector output with and without the operator's strokes.",
+   "Compared on identical frames, so it is not contaminated by different coverage.",
+   "Only 44 of 142 frames carry any correction, and five specimens carry none at all."],
+  ["Specks", "Regions too small for a shape to be measurable, counted but not measured.",
+   "Threshold is the larger of a pixel floor and a physical one, per frame.",
+   "Pixels decide whether a shape is measurable; physical area decides whether two frames excluded the same thing."],
+];
+
+function defsAll() {
+  return DEFS.map(([t, what, how, lies]) => `
+    <div class="def">
+      <h5>${t}</h5>
+      <dl><dt>Is</dt><dd>${what}</dd>
+          <dt>How</dt><dd>${how}</dd>
+          <dt>When it lies</dt><dd class="lies">${lies}</dd></dl>
+    </div>`).join("");
+}
+
 async function loadArm() {
   try {
     state.frames = await api(`/api/frames?arm=${encodeURIComponent(state.arm)}` +
       (state.spec ? `&specimen=${encodeURIComponent(state.spec)}` : ""));
-  } catch (e) { $("#hdr").innerHTML = `<span class="flag bad">${e.message}</span>`; return; }
+  } catch (e) {
+    $("#strip").innerHTML = `<span class="flag bad">${e.message}</span>`;
+    return;
+  }
   // The specimen list comes from the specimen table, not from the frames just fetched:
   // those are already filtered to one specimen, so deriving the options from them left the
   // dropdown reading "all (1 specimens)" with no way back to the rest.
@@ -487,20 +696,20 @@ async function loadArm() {
   $("#spec").innerHTML = `<option value="">all (${specs.length} specimens)</option>` +
     specs.map((s) => `<option${s === cur ? " selected" : ""}>${s}</option>`).join("");
   const noScale = state.frames.filter((f) => !f.scale_known).length;
-  $("#armnote").textContent = noScale
+  $("#listcount").textContent = noScale
     ? `${noScale}/${state.frames.length} frames: no scale, µm withheld`
     : `all ${state.frames.length} frames scaled`;
   renderFrames();
   renderSpecimens();
+  renderReadout();
   if (typeof window.figRenderRef === "function") window.figRenderRef();
   if (state.frames.length) selectFrame(state.frames[0].frame);
 }
 
 (async function () {
-  $("#theme").onclick = () => {
-    const d = document.documentElement;
-    d.dataset.theme = d.dataset.theme === "dark" ? "light" : "dark";
-  };
+  // The theme toggle is gone: a macOS app should follow system appearance, and the
+  // stylesheet already implements prefers-color-scheme, so the button existed to
+  // demonstrate the CSS.
   // Pass the filters the screen is applying. Without them a filtered view exported
   // unfiltered rows, and the file carried no record of what had been excluded.
   $("#csv").onclick = () => {
@@ -532,22 +741,16 @@ async function loadArm() {
       await loadArm();
       selectFrame(d.frame);
       lbl.textContent = was;
-      $("#armnote").textContent =
+      $("#listcount").textContent =
         `${d.frame}: ${d.n_cracks.toLocaleString()} cracks, ${d.n_specks.toLocaleString()} specks — ${d.note}` +
         (d.scale_known ? "" : " · no scale, so µm is withheld");
     } catch (err) {
       lbl.textContent = was;
-      $("#armnote").innerHTML = `<span class="flag bad">upload failed: ${err.message}</span>`;
+      $("#listcount").innerHTML = `<span class="flag bad">upload failed: ${err.message}</span>`;
     } finally {
       lbl.removeAttribute("aria-busy");
       e.target.value = "";
     }
-  };
-
-  $("#minarea").oninput = (e) => {
-    state.minArea = +e.target.value;
-    $("#minareaval").textContent = state.minArea.toLocaleString();
-    renderCracks();
   };
   // --- figure builder ------------------------------------------------------------------
   // The field list comes from the server so the menu can never offer a quantity the
@@ -562,7 +765,12 @@ async function loadArm() {
     $("#figxwrap").hidden = kind !== "scatter";
     const q = new URLSearchParams({ arm: state.arm, kind, y });
     if (kind === "scatter") q.set("x", x);
-    if ($("#figthin").checked) q.set("include_thin", "true");
+    // Thin specimens are always included now. The checkbox asked the reader to settle a
+    // statistics question by clicking, and the two answers are not equally defensible:
+    // either those specimens are admissible, in which case show them with their n, or they
+    // are not, in which case hiding them behind an opt-in is worse than excluding them.
+    // The figure labels n per specimen, so a box built on two fields announces itself.
+    q.set("include_thin", "true");
     out.innerHTML = `<p class="note">drawing…</p>`;
     const r = await fetch(`/api/figure.svg?${q}`);
     if (!r.ok) {
@@ -589,8 +797,29 @@ async function loadArm() {
     $("#figkind").innerHTML = FIG.kinds.map((k) =>
       `<option value="${k}">${k.replace(/_/g, " ")}</option>`).join("");
     $("#figkind").value = "box_by_specimen";
-    ["figkind", "figy", "figx", "figthin"].forEach((id) => $("#" + id).onchange = figRender);
+    ["figkind", "figy", "figx"].forEach((id) => $("#" + id).onchange = figRender);
   } catch (e) { $("#figout").innerHTML = `<p class="note">figures unavailable: ${e.message}</p>`; }
+
+  wireTabs();
+  $("#defsbtn").onclick = () => {
+    const d = $("#defs");
+    if (d.hidden) { openDefs(null); } else { d.hidden = true; }
+  };
+  $("#defsclose").onclick = () => { $("#defs").hidden = true; };
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") $("#defs").hidden = true;
+  });
+  // A 142-row list needs a filter, and a filter is cheaper than any navigation.
+  $("#search").oninput = (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    let n = 0;
+    $("#frames").querySelectorAll("tbody tr").forEach((tr) => {
+      const hit = !q || tr.dataset.f?.toLowerCase().includes(q);
+      tr.hidden = !hit;
+      if (hit) n++;
+    });
+    $("#listcount").textContent = q ? `${n}` : "";
+  };
 
   await wireSetup();
   try { await health(); } catch (e) { /* the page still works without it */ }
@@ -601,19 +830,17 @@ async function loadArm() {
     // No dataset is the normal first launch of a downloaded copy, not a failure. Open Setup
     // and say the one thing that is true: you can start by adding an image.
     showSetup(true);
-    $("#hdr").textContent = "no measurements yet";
-    $("#armnote").textContent = "Add a mask or micrograph above to measure one, " +
+    $("#strip").innerHTML = `<span class="who">No measurements yet.</span>`;
+    $("#listcount").textContent = "Add a mask or micrograph above to measure one, " +
       "or point the app at a SEM repo in Setup.";
     return;
   }
   $("#arm").innerHTML = arms.map((a) =>
-    `<option value="${a.arm}">${a.arm} — ${a.n_frames} frames, ${a.n_cracks.toLocaleString()} cracks</option>`).join("");
+    `<option value="${a.arm}">${a.arm} · ${a.n_frames} frames</option>`).join("");
   state.arm = arms[0].arm;
-  // The arm dropdown already carries per-arm counts, so the header says the total once
-  // instead of repeating every arm. Fewer words, same information.
-  const tf = arms.reduce((n, a) => n + a.n_frames, 0);
-  const tc = arms.reduce((n, a) => n + a.n_cracks, 0);
-  $("#hdr").textContent = `${tf} frames · ${tc.toLocaleString()} cracks · ${arms.length} arms`;
+  // No total-count subtitle any more. The arm dropdown carries its own count and the strip
+  // carries the number people actually cite, so a third tally of the same corpus was words
+  // for their own sake.
   if (HEALTH && !HEALTH.sem_repo) showSetup(true);
   $("#arm").onchange = (e) => { state.arm = e.target.value; state.spec = ""; loadArm(); };
   $("#spec").onchange = (e) => { state.spec = e.target.value; loadArm(); };
