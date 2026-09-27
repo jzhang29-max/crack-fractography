@@ -137,7 +137,10 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
     grid-template-columns:auto minmax(0,1fr);align-items:center}
   .filters .spacer{display:none}
   .filters #armnote{grid-column:1/-1;font-size:12px;color:var(--text-muted)}
-  button,select,input[type=range]{min-height:40px}
+  /* input[type=text] is here because Setup added the page's first text field and the
+     original list did not anticipate one: measured at 375px it came out 35px against
+     40px for every control beside it. */
+  button,select,input[type=range],input[type=text]{min-height:40px}
   select{width:100%}
   .card{padding:13px;border-radius:10px}
   .scroll{max-height:360px}
