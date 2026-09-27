@@ -109,6 +109,21 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
   box-shadow:0 4px 14px rgba(0,0,0,.18);opacity:0;transition:opacity .08s;z-index:9;
   font-variant-numeric:tabular-nums}
 .err{color:var(--bad);padding:12px 24px}
+/* Specimen card. Six rows and no prose: it is the first thing read, so anything that is not
+   a number with its unit and its uncertainty does not belong on it. */
+.spec{display:grid;grid-template-columns:auto 1fr;gap:6px 18px;align-items:baseline}
+.spec dt{color:var(--text-secondary);font-size:12.5px;white-space:nowrap}
+.spec dd{margin:0;font-variant-numeric:tabular-nums;font-size:14px}
+.spec dd .u{color:var(--text-muted);font-size:12px}
+.spec dd.off{color:var(--text-muted)}
+.big{font-size:22px;font-weight:600;letter-spacing:-.01em}
+.ci{color:var(--text-secondary);font-size:12.5px;font-weight:400}
+.ra{font-size:11px;border-radius:5px;padding:1px 6px;margin-left:6px;white-space:nowrap;
+  border:1px solid var(--rule);color:var(--text-secondary)}
+.ra.bad{color:var(--warn);border-color:var(--warn)}
+#spectable td:first-child,#spectable th:first-child{text-align:left}
+#spectable tr[aria-selected=true]{background:color-mix(in oklab,var(--s1) 18%,transparent)}
+#spectable tbody tr{cursor:pointer}
 /* Setup. Shown automatically when something the app needs is not configured -- which is
    the normal first launch of a downloaded copy, where there are no sibling repos to find.
    It is a panel rather than a modal so the rest of the page stays usable: measuring an
@@ -193,6 +208,12 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
 </div>
 
 <main>
+  <div class="card wide" id="speccard">
+    <h2 title="The specimen is the inferential unit: frames within one specimen are not independent — nine fields per cell tile about 1.2 x 1.1 mm of ONE specimen. The interval is ASTM E562's, computed from between-FIELD variance. n counts fields, not frames: 56 fields here were imaged twice, once through CBS and once through ETD, and counting those as two would put spurious precision into every interval.">Specimen <span class="hint">?</span></h2>
+    <p class="note" id="specnote"></p>
+    <div id="specbody"></div>
+  </div>
+
   <div class="card wide">
     <h2>Frames</h2>
     <p class="note">Click a row. Click a header to sort.</p>

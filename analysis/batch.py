@@ -38,6 +38,7 @@ for _d in P.sem_code_dirs():
 
 from measure import measure_path                 # noqa: E402
 from scale import txm_specimen_key               # noqa: E402
+import specimen_stats                            # noqa: E402
 
 # The repo's own grouping, not a rule invented here. Absent without a SEM checkout, in which
 # case SEM frames are not measurable anyway -- but uploads are, so the import must not be
@@ -106,24 +107,33 @@ def main():
 
     # Per specimen, per arm. Frames within a specimen are not independent, so the specimen is
     # the inferential unit; frame-level spread is reported so the reader can see it.
+    #
+    # MERGING MAKES THIS SUBTLE. Specimen records are recomputed only for the arms in this
+    # run, so an --arm run must read the carried-over frames too or it would rewrite the
+    # specimen table for arms it never measured.
+    prior_frames = []
+    fp = os.path.join(OUT, "frames.json")
+    if os.path.exists(fp):
+        try:
+            prior_frames = [r for r in json.load(open(fp)) if r.get("arm") not in set(arms)]
+        except Exception:
+            prior_frames = []
+    all_frames = frames + prior_frames
+
+    by_arm = defaultdict(list)
+    for f in all_frames:
+        by_arm[f["arm"]].append(f)
+
     spec = defaultdict(list)
     for f in frames:
         spec[(f["arm"], f["specimen"])].append(f)
     specimens = []
     for (arm, s), fs in sorted(spec.items()):
-        af = np.array([f["area_fraction"] for f in fs], float)
-        dens = np.array([f["crack_density_px_per_Mpx"] for f in fs], float)
-        specimens.append({
-            "arm": arm, "specimen": s, "n_frames": len(fs),
-            "area_fraction_median": round(float(np.median(af)), 6),
-            "area_fraction_min": round(float(af.min()), 6),
-            "area_fraction_max": round(float(af.max()), 6),
-            "density_median": round(float(np.median(dens)), 1),
-            "n_cracks_total": int(sum(f["n_cracks_measured"] for f in fs)),
-            "scale_known_frames": int(sum(1 for f in fs if f["scale_known"])),
-            # Reported because a specimen median over 1 frame is not a median.
-            "estimable_dispersion": len(fs) >= 3,
-        })
+        rec = specimen_stats.summarise(arm, s, fs)
+        # Segmentation sensitivity, on identical frames. Only meaningful for the SEM arms.
+        rec["arm_sensitivity"] = (specimen_stats.paired_arm_ratio(by_arm, s)
+                                  if arm.startswith("sem/") else None)
+        specimens.append(rec)
 
     # MERGE, do not replace. Writing the whole file on every run made --arm a data-loss
     # footgun: `--arm uploads` overwrote 355 measured frames with 2, and only the arms in

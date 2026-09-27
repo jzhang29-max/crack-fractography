@@ -337,12 +337,116 @@ async function download(url, filename) {
   setTimeout(() => { if (note.textContent !== prev) note.textContent = prev; }, 4000);
 }
 
+// ---------------------------------------------------------------------------------------
+// Specimen card. First on the page, because the specimen is the inferential unit: frames
+// within one are not independent, so a per-frame statistic is pseudo-replication.
+//
+// The interval is ASTM E562's -- t(0.975, n-1)*s/sqrt(n) over the between-FIELD variance --
+// and %RA is E562's own headline, the interval as a share of the mean. The usual target is
+// 10%. Nothing in this corpus is close, which is the single most useful thing the card
+// says: with the fields measured, area fraction cannot rank these specimens, and the fix
+// is more fields rather than more decimal places.
+const pct = (v, d = 2) => v == null ? "—" : (100 * v).toFixed(d) + "%";
+const num = (v, d = 1) => v == null ? "—" : (+v).toFixed(d);
+
+function raBadge(ci) {
+  if (!ci || ci.pct_relative_accuracy == null) return "";
+  const v = ci.pct_relative_accuracy;
+  return `<span class="ra${v > 10 ? " bad" : ""}" title="ASTM E562 relative accuracy: the 95% interval as a percentage of the mean. The usual target is 10% or better; above it, the answer is more fields, not more decimals.">±${v}%</span>`;
+}
+
+function specimenCard(r) {
+  const ci = r.area_fraction_ci;
+  const scaled = r.scale_known_frames > 0;
+  const off = scaled ? "" : ' class="off"';
+  const ds = r.detector_sensitivity, as = r.arm_sensitivity;
+  const dets = Object.entries(r.detectors || {}).map(([k, v]) => `${k} ${v}`).join(" · ");
+  const rows = [
+    ["Crack area fraction",
+     ci ? `<span class="big">${pct(ci.mean)}</span> <span class="ci">95% CI ${pct(ci.ci95_lo)}–${pct(ci.ci95_hi)}, ${ci.n_fields} fields</span>${raBadge(ci)}`
+        : `<span class="big">${pct(r.area_fraction_median)}</span> <span class="ci">median of ${r.n_fields} field${r.n_fields > 1 ? "s" : ""} — under 3, no interval</span>`],
+    ["P10", `${num(r.p10_min_per_mm)} <span class="u">/mm min</span> · ${num(r.p10_mean_per_mm)} <span class="u">/mm mean</span>`],
+    ["P21 · P20", `${num(r.p21_skeleton_mm_per_mm2)} <span class="u">mm/mm²</span> · ${num(r.p20_per_mm2, 0)} <span class="u">/mm²</span>`],
+    // null / 1000 is 0 in JavaScript, so an unscaled specimen was reporting "0.00 mm" of
+    // total crack length -- a measured zero where the truth is "not measurable".
+    ["MCL · TCL", `${num(r.mcl_um)} <span class="u">µm</span> · ${num(r.tcl_um_total == null ? null : r.tcl_um_total / 1000, 2)} <span class="u">mm</span>`],
+  ];
+  const extra = [
+    ["Detector", `${dets}${ds ? ` · CBS/ETD <b>×${ds.cbs_over_etd_median}</b> <span class="u">on ${ds.n_fields_both_detectors} field${ds.n_fields_both_detectors > 1 ? "s" : ""} imaged both ways</span>` : ""}`],
+  ];
+  if (as) extra.push(["Gated / machine", as.n_frames_corrected
+    ? `<b>×${as.gated_over_machine_where_corrected}</b> <span class="u">where corrected — ${as.n_frames_corrected} of ${as.n_paired_frames} frames</span>`
+    : `<span class="u">no corrections on these ${as.n_paired_frames} frames — the two arms are the same mask</span>`]);
+  // "over N frames" was wrong next to an area summed over FIELDS -- it named the larger
+  // number beside the smaller quantity, which is how the double-count read as plausible.
+  extra.push(["Analysed", scaled
+    ? `${num(r.area_analysed_mm2, 3)} <span class="u">mm² over ${r.n_fields_scaled ?? r.n_fields} field${(r.n_fields_scaled ?? r.n_fields) > 1 ? "s" : ""}</span>`
+    : `<span class="u">no physical scale — µm and mm rows withheld</span>`]);
+
+  return `<dl class="spec">` +
+    rows.map(([k, v]) => `<dt>${k}</dt><dd${k === "Crack area fraction" ? "" : off}>${v}</dd>`).join("") +
+    extra.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("") + `</dl>`;
+}
+
+function specimenTable(rows) {
+  // All specimens: the comparison view. Six columns, sorted by the mean it is ranking on.
+  const body = rows.slice().sort((a, b) =>
+    ((b.area_fraction_ci || {}).mean ?? b.area_fraction_median) -
+    ((a.area_fraction_ci || {}).mean ?? a.area_fraction_median)).map((r) => {
+    const ci = r.area_fraction_ci, ds = r.detector_sensitivity, as = r.arm_sensitivity;
+    return `<tr data-spec="${r.specimen}"><td title="${r.specimen}">${r.specimen}</td>` +
+      `<td>${r.n_fields}<span class="u">${r.n_frames !== r.n_fields ? ` /${r.n_frames}f` : ""}</span></td>` +
+      `<td>${pct(ci ? ci.mean : r.area_fraction_median)}</td>` +
+      `<td>${ci ? `${pct(ci.ci95_lo)}–${pct(ci.ci95_hi)}` : "<span class='u'>n&lt;3</span>"}</td>` +
+      `<td>${ci ? raBadge(ci) : "—"}</td>` +
+      `<td>${ds ? "×" + ds.cbs_over_etd_median : "—"}</td>` +
+      `<td title="${as ? as.n_frames_corrected + " of " + as.n_paired_frames + " frames carry a correction" : ""}">${as ? (as.n_frames_corrected ? "×" + as.gated_over_machine_where_corrected : "<span class='u'>none</span>") : "—"}</td></tr>`;
+  }).join("");
+  return `<div class="scroll"><table id="spectable"><thead><tr>` +
+    `<th>Specimen</th><th title="Fields, and frames where they differ. A field imaged through two detectors is ONE field.">Fields</th>` +
+    `<th>Area frac</th><th title="ASTM E562, between-field variance">95% CI</th>` +
+    `<th title="Interval as a share of the mean. Target 10%.">±</th>` +
+    `<th title="Same physical field, two detectors. Away from 1 is instrument, not material.">CBS/ETD</th>` +
+    `<th title="Same frames, operator strokes vs detector alone.">G/M</th>` +
+    `</tr></thead><tbody>${body}</tbody></table></div>`;
+}
+
+async function renderSpecimens() {
+  const card = $("#speccard");
+  let rows;
+  try { rows = await api(`/api/specimens?arm=${encodeURIComponent(state.arm)}`); }
+  catch (e) { card.hidden = true; return; }
+  card.hidden = false;
+  const one = state.spec ? rows.find((r) => r.specimen === state.spec) : null;
+  if (one) {
+    $("#specnote").textContent = `${one.specimen} · ${one.n_fields} fields`;
+    $("#specbody").innerHTML = specimenCard(one);
+  } else {
+    const withCI = rows.filter((r) => r.area_fraction_ci);
+    const meeting = withCI.filter((r) => r.area_fraction_ci.pct_relative_accuracy <= 10);
+    $("#specnote").innerHTML = withCI.length
+      ? `${rows.length} specimens · <span class="${meeting.length ? "" : "flag"}">${meeting.length} of ${withCI.length} reach ASTM E562's 10% relative accuracy</span>`
+      : `${rows.length} specimens`;
+    $("#specbody").innerHTML = specimenTable(rows);
+    $("#spectable").querySelectorAll("tbody tr").forEach((tr) => {
+      tr.onclick = () => { $("#spec").value = state.spec = tr.dataset.spec; loadArm(); };
+    });
+  }
+}
+
 async function loadArm() {
   try {
     state.frames = await api(`/api/frames?arm=${encodeURIComponent(state.arm)}` +
       (state.spec ? `&specimen=${encodeURIComponent(state.spec)}` : ""));
   } catch (e) { $("#hdr").innerHTML = `<span class="flag bad">${e.message}</span>`; return; }
-  const specs = [...new Set(state.frames.map((f) => f.specimen))].sort();
+  // The specimen list comes from the specimen table, not from the frames just fetched:
+  // those are already filtered to one specimen, so deriving the options from them left the
+  // dropdown reading "all (1 specimens)" with no way back to the rest.
+  let specs;
+  try {
+    specs = (await api(`/api/specimens?arm=${encodeURIComponent(state.arm)}`))
+      .map((r) => r.specimen).sort();
+  } catch (e) { specs = [...new Set(state.frames.map((f) => f.specimen))].sort(); }
   const cur = state.spec;
   $("#spec").innerHTML = `<option value="">all (${specs.length} specimens)</option>` +
     specs.map((s) => `<option${s === cur ? " selected" : ""}>${s}</option>`).join("");
@@ -351,6 +455,7 @@ async function loadArm() {
     ? `${noScale}/${state.frames.length} frames: no scale, µm withheld`
     : `all ${state.frames.length} frames scaled`;
   renderFrames();
+  renderSpecimens();
   if (typeof window.figRenderRef === "function") window.figRenderRef();
   if (state.frames.length) selectFrame(state.frames[0].frame);
 }
