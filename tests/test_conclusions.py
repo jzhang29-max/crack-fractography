@@ -232,3 +232,27 @@ def test_the_refusal_does_not_make_an_unfalsifiable_negative_claim():
 def test_the_grain_size_is_labelled_an_estimate():
     q = [r for r in C.REFUSALS if "ransgranular" in r["question"]][0]
     assert "visual estimate" in q["why"] or "by eye" in q["why"]
+
+
+# --- MCL after the geodesic fix ------------------------------------------------------
+def test_the_network_share_distinguishes_a_crack_from_a_network():
+    """mcl_um used to be max(SkeletonLength_px), the total centreline of a whole branched
+    network, under the label "Longest crack". It is now a tip-to-tip geodesic, and the share
+    of its own network that path represents is the information that reading was missing."""
+    one = C.for_frame(frame(mcl_um=400.0, mcl_share_of_its_network=1.0))
+    assert "whole of its region" in texts(one)
+    net = C.for_frame(frame(mcl_um=400.0, mcl_share_of_its_network=0.21))
+    assert "21% of its own network" in texts(net)
+    assert any(s["level"] == "warn" for s in net)
+
+
+def test_a_looping_skeleton_is_hedged():
+    out = C.for_frame(frame(mcl_um=400.0, mcl_share_of_its_network=0.4, mcl_has_cycles=True))
+    hedges = " ".join(s["hedge"] or "" for s in out)
+    assert "shorter way round" in hedges
+    out2 = C.for_frame(frame(mcl_um=400.0, mcl_share_of_its_network=0.4, mcl_has_cycles=False))
+    assert "shorter way round" not in " ".join(s["hedge"] or "" for s in out2)
+
+
+def test_no_network_share_statement_without_an_mcl():
+    assert "own network" not in texts(C.for_frame(frame(mcl_share_of_its_network=0.3)))

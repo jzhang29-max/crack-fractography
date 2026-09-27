@@ -128,6 +128,33 @@ def for_frame(f):
                       "app's own.",
                 level="bad", value=ratio))
 
+    # --- IS THE LONGEST CRACK A CRACK, OR A NETWORK? ----------------------------------
+    #
+    # mcl_um used to be max(SkeletonLength_px) over regions, which is the TOTAL centreline
+    # of a whole branched network and was labelled "Longest crack". It is now the longest
+    # tip-to-tip geodesic, and the share of its own network that path represents is the
+    # thing that reading was missing: 1.0 means the region is a single unbranched crack,
+    # 0.2 means the longest route through it is a fifth of the centreline present.
+    share = f.get("mcl_share_of_its_network")
+    if share is not None and f.get("mcl_um"):
+        if share >= 0.95:
+            out.append(_s(
+                f"The longest crack is essentially the whole of its region.",
+                f"tip-to-tip geodesic is {100 * share:.0f}% of that region's total "
+                f"centreline length, so the region is one unbranched crack rather than a "
+                f"network.",
+                value=share))
+        else:
+            out.append(_s(
+                f"Longest crack is {100 * share:.0f}% of its own network's length.",
+                f"the longest tip-to-tip geodesic against the total centreline of the same "
+                f"region. The remainder is other branches of the same connected network, "
+                f"which a single length cannot represent.",
+                hedge=("That region's skeleton loops, so the tip-to-tip route is the "
+                       "shorter way round and sits below the longest simple path through "
+                       "it." if f.get("mcl_has_cycles") else None),
+                level="warn", value=share))
+
     # --- CENSORING, weighted by what it bears on. -------------------------------------
     cl = f.get("censored_share_by_length")
     if cl is not None and cl >= 0.25:
