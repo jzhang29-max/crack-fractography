@@ -137,6 +137,14 @@ def detector_sensitivity(frames):
                     "not material"}
 
 
+def _gradient(frames):
+    try:
+        import stage
+        return stage.gradient(frames)
+    except Exception:
+        return None
+
+
 def summarise(arm, specimen, frames):
     """One specimen-arm record."""
     af_fields = collapse_to_fields(frames, "area_fraction")
@@ -188,6 +196,10 @@ def summarise(arm, specimen, frames):
                                                                  "area_analysed_mm2"))), 6)
                               if scaled else None),
         "n_fields_scaled": len({field_key(f["frame"]) for f in scaled}),
+
+        # Are these fields a sample of a surface, or a raster across one patch? E562
+        # presumes the former and the 2026-09-15 batch is the latter.
+        "stage_gradient": _gradient(frames),
 
         # The detector, because it is confounded with the specimen and moves the answer.
         "detectors": {},

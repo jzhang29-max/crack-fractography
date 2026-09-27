@@ -168,6 +168,11 @@ def for_specimen(r, frames=None):
     """Read-out for one specimen-arm record, optionally with its frames for field tallies."""
     out = []
     ci = r.get("area_fraction_ci")
+    grad = r.get("stage_gradient")
+    # When the fields form a spatial trend, "measure more fields" is the WRONG advice: more
+    # tiles in the same patch cannot narrow an interval that is tracking a gradient, so the
+    # remedy clause is suppressed whenever the gradient statement fires.
+    grad_fires = bool(grad and grad.get("significant"))
 
     if ci:
         ra = ci.get("pct_relative_accuracy")
@@ -175,11 +180,17 @@ def for_specimen(r, frames=None):
             out.append(_s(
                 f"Area fraction is ±{ra:.0f}%: too coarse to rank this specimen.",
                 f"ASTM E562-19e1 95% CI from between-field variance over {ci['n_fields']} "
-                f"fields. E562's usual target is ±{E562_RA_TARGET:.0f}%; 0 of 22 "
-                f"specimen-arms in this corpus reaches it.",
-                hedge="The remedy is more fields, not more decimal places. This is a "
-                      "sampling interval for this specimen's surface, not a confidence "
-                      "interval for the material.",
+                f"fields. E562's usual target is ±{E562_RA_TARGET:.0f}%, and nothing in "
+                f"this arm reaches it.",
+                # "0 of 22" pooled all four arms, which is the one thing this app refuses
+                # to do anywhere else: the arms are different instruments, or different
+                # definitions of the object. Per arm the count is 0 of 9.
+                hedge=("This is a sampling interval for this specimen's surface, not a "
+                       "confidence interval for the material."
+                       if grad_fires else
+                       "The remedy is more fields, not more decimal places. This is a "
+                       "sampling interval for this specimen's surface, not a confidence "
+                       "interval for the material."),
                 level="bad", value=ra))
         if ci.get("ci95_lo_clamped"):
             out.append(_s(
@@ -194,9 +205,35 @@ def for_specimen(r, frames=None):
             "something; below three the interval is unstable enough to mislead.",
             level="warn"))
 
+    # --- SPATIAL GRADIENT. Are these fields a sample, or a raster across one patch? ---
+    if grad_fires:
+        rr = grad.get("row_mean_ratio")
+        out.append(_s(
+            (f"Cracking varies {rr:.0f}× across this patch; fields are not independent."
+             if rr else
+             "Cracking trends across this patch; fields are not independent."),
+            f"Spearman rho = {grad['spearman_rho']:+.3f}, p = {grad['p_value']:.5f} against "
+            f"{grad['axis'].replace('_', ' ')} over {grad['n_frames_with_position']} frames "
+            f"in {grad['n_stage_rows']} stage rows. {grad['note']}",
+            hedge="The interval above is then describing a spatial trend rather than "
+                  "sampling error, so more tiles in the SAME patch will not narrow it. "
+                  "Stage units are the instrument's and are not asserted to be "
+                  "millimetres, so the patch extent is not quoted.",
+            level="bad", value=grad["spearman_rho"]))
+
     # --- DETECTOR. Confounded with specimen, so it is never a footnote. ---------------
     ds = r.get("detector_sensitivity")
-    if ds and ds.get("cbs_over_etd_median"):
+    if ds is None or not ds.get("cbs_over_etd_median"):
+        # A BLANK READS AS "NO DETECTOR EFFECT", which is a control that reads nothing. 28
+        # of 34 specimen-arms have no field imaged both ways, so silence here would be both
+        # the common case and the wrong inference.
+        out.append(_s(
+            "No field here was imaged by two detectors: effect unmeasured.",
+            "the CBS/ETD comparison needs the same physical field through both detectors. "
+            "Where it exists corpus-wide the median is 2.29×, so an unmeasured effect is "
+            "not a small one.",
+            level="warn"))
+    else:
         ratio = ds["cbs_over_etd_median"]
         if abs(ratio - 1) > 0.2:
             out.append(_s(
@@ -263,27 +300,41 @@ REFUSALS = [
         "question": "Transgranular or intergranular?",
         "answer": "Not determinable from a crack mask.",
         "why": "The distinction is defined by the crack path's relationship to GRAIN "
-               "BOUNDARIES, so the boundaries have to be visible and co-registered with the "
-               "crack. No geometric proxy from a binary mask is validated for it: this "
-               "corpus's own test -- if a crack follows boundaries, the islands it encloses "
-               "are grains -- fails because the detected band is far wider than the crack "
-               "and never closes a loop around a grain. Enclosed islands run 10-100 px "
-               "against grains of 300-500 px.",
+               "BOUNDARIES, so the boundaries have to be visible and co-registered with "
+               "the crack. We know of no validated proxy for this input -- a binary mask "
+               "with no grain partition. This corpus's own test, that if a crack follows "
+               "boundaries the islands it encloses are grains, fails because the detected "
+               "band is far wider than the crack and never closes a loop around one: "
+               "enclosed islands run 10-100 px against grains estimated by eye at 300-500 "
+               "px in the sibling repo's crops. Treat that grain figure as a visual "
+               "estimate, not a measurement -- it is one reading across a 3.1x intra-set "
+               "pixel-scale spread, and no 316 CBS frame in this dataset has a recoverable "
+               "nm/px at all.",
         "would_need": [
             "EBSD on one or two of the SAME fields, then score crack centreline length "
             "coincident with a reconstructed boundary. The only direct route.",
             "An etched image of the same field, co-registered.",
             "A much thinner segmentation of the 316 steel CBS frames, where grains are "
-            "already visible through backscatter channelling contrast. Note this covers "
-            "only part of the corpus: most CBS frames show no grain contrast, and the "
-            "visible grains carry heavy twin and slip striations that a naive boundary "
-            "detector would read as boundaries.",
+            "already visible through backscatter channelling contrast. This covers only "
+            "part of the corpus: most CBS frames show no grain contrast, the visible "
+            "grains carry heavy twin and slip striations that a naive boundary detector "
+            "would read as boundaries, and channelling contrast cannot separate a "
+            "coherent annealing twin from a general boundary -- so this route needs a "
+            "declared misorientation threshold just as the EBSD route does.",
         ],
-        "not_this": "Tortuosity, turn angles or branching as a mode index. Tortuosity here "
-                    "is ~1.09 in every set with no separation, a mathematically straight "
-                    "line measures 1.048 through this pipeline, and turn angles show no "
-                    "population near the 60° deviation expected at 120° triple "
-                    "junctions.",
+        "not_this": "Tortuosity, turn angles or branching as a mode index. The tortuosity "
+                    "figures behind that -- ~1.09 across every set, against 1.048 for a "
+                    "mathematically straight line -- come from the SIBLING repo's "
+                    "estimator, which this app retired after it produced impossible "
+                    "sub-one values; they are quoted as its findings, not as this app's "
+                    "measurements. Turn angles showed no population near the 60° deviation "
+                    "expected at 120° triple junctions, but that test cannot register one: "
+                    "the branch extraction deletes junction pixels first, so a "
+                    "triple-junction deviation is absent by construction rather than "
+                    "measured to be absent. And branching does not carry the sign it is "
+                    "assumed to: Wale, SKI 2006:24 §6.3.3 reports microscopic branching at "
+                    "half to one grain diameter as COMMON for intergranular SCC in "
+                    "austenitic stainless -- the same scale this app measures.",
     },
     {
         "question": "Ductile or brittle? Dimples, cleavage, striations?",

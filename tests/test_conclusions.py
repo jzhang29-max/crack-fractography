@@ -160,3 +160,75 @@ def test_the_field_tally_counts_fields_not_frames():
     out = texts(C.for_specimen(r, frames))
     assert "1 of 2 fields" in out, out
     assert "of 4" not in out, "four frames are two fields"
+
+
+# --- the spatial gradient, and what it does to the advice ---------------------------
+GRAD = {"significant": True, "spearman_rho": 0.755, "p_value": 0.00012,
+        "axis": "stage_y", "n_frames_with_position": 20, "n_stage_rows": 10,
+        "row_mean_ratio": 5.3, "note": "E562 presumes fields placed over a surface."}
+
+
+def test_a_spatial_gradient_is_stated():
+    r = {"n_fields": 10, "stage_gradient": GRAD}
+    out = texts(C.for_specimen(r))
+    assert "not independent" in out and "5×" in out
+
+
+def test_a_gradient_suppresses_the_measure_more_fields_advice():
+    """More tiles in the SAME patch cannot narrow an interval that is tracking a trend, so
+    the standard remedy becomes wrong advice exactly when the gradient fires."""
+    ci = {"pct_relative_accuracy": 81.7, "n_fields": 10, "ci95_lo_clamped": False}
+    flat = C.for_specimen({"n_fields": 10, "area_fraction_ci": ci})
+    grad = C.for_specimen({"n_fields": 10, "area_fraction_ci": ci, "stage_gradient": GRAD})
+    hedges = lambda o: " ".join(s["hedge"] or "" for s in o)
+    assert "remedy is more fields" in hedges(flat)
+    assert "remedy is more fields" not in hedges(grad)
+
+
+def test_a_nonsignificant_gradient_says_nothing():
+    r = {"n_fields": 10, "stage_gradient": dict(GRAD, significant=False, p_value=0.4)}
+    assert "not independent" not in texts(C.for_specimen(r))
+
+
+def test_the_relative_accuracy_basis_does_not_pool_arms():
+    """It quoted "0 of 22 specimen-arms", which pools all four arms — the one thing this app
+    refuses to do anywhere else, since the arms are different instruments or different
+    definitions of the object."""
+    r = {"n_fields": 6, "area_fraction_ci": {"pct_relative_accuracy": 138.0, "n_fields": 6,
+                                             "ci95_lo_clamped": False}}
+    basis = " ".join(s["basis"] or "" for s in C.for_specimen(r))
+    assert "0 of 22" not in basis
+    assert "this arm" in basis
+
+
+# --- a blank is not an answer -------------------------------------------------------
+def test_an_unmeasured_detector_effect_is_stated_not_left_blank():
+    """28 of 34 specimen-arms have no field imaged both ways. Silence there reads as "no
+    detector effect", which is a control that reads nothing."""
+    out = texts(C.for_specimen({"n_fields": 5}))
+    assert "effect unmeasured" in out
+    out2 = texts(C.for_specimen({"n_fields": 5, "detector_sensitivity":
+                                 {"cbs_over_etd_median": 2.4,
+                                  "n_fields_both_detectors": 10}}))
+    assert "effect unmeasured" not in out2 and "Detector moves this" in out2
+
+
+# --- the refusal text must not quote this app's retired estimator as its own --------
+def test_the_refusal_attributes_the_tortuosity_numbers_to_the_sibling_repo():
+    q = [r for r in C.REFUSALS if "ransgranular" in r["question"]][0]
+    nt = q["not_this"]
+    assert "sibling" in nt.lower() or "SIBLING" in nt
+    assert "retired" in nt.lower()
+    # And the branching argument must not be asserted with the wrong sign.
+    assert "COMMON" in nt or "common" in nt
+
+
+def test_the_refusal_does_not_make_an_unfalsifiable_negative_claim():
+    q = [r for r in C.REFUSALS if "ransgranular" in r["question"]][0]
+    assert "No geometric proxy from a binary mask is validated" not in q["why"]
+    assert "know of no validated proxy" in q["why"]
+
+
+def test_the_grain_size_is_labelled_an_estimate():
+    q = [r for r in C.REFUSALS if "ransgranular" in r["question"]][0]
+    assert "visual estimate" in q["why"] or "by eye" in q["why"]
