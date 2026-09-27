@@ -79,3 +79,24 @@ def test_detection_limit_says_unresolved_not_absent():
     assert d["speck_cutoff_um2"] == pytest.approx(25 * 0.05 * 0.05)
     assert "unresolved" in d["note"]
     assert C.detection_limit(None, 25)["one_pixel_um"] is None
+
+
+def test_censored_share_is_reported_in_three_weightings():
+    """A COUNT share of censored regions was the only one reported, and it sat next to MCL
+    and TCL. Measured over the corpus the median frame is 4.2% of regions censored but 22.1%
+    of crack AREA and 16.6% of crack LENGTH; on TXM, 25.0% of regions against 71.0% of area.
+    One frame reads 6% of regions and 44% of area. A count share beside a length statistic
+    invites the reader to dismiss it."""
+    import numpy as np
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "analysis"))
+    from measure import measure_frame
+    m = np.zeros((200, 200), bool)
+    m[95:105, 0:190] = True        # one big region touching the LEFT edge -> censored
+    m[20:24, 60:70] = True         # one small interior region -> not censored
+    _, s = measure_frame(m, "synthetic", "sem")
+    assert s["censored_share"] == pytest.approx(0.5), "1 of 2 regions"
+    # The big one holds almost all the area and length, so those shares must be far higher.
+    assert s["censored_share_by_area"] > 0.9, s["censored_share_by_area"]
+    assert s["censored_share_by_length"] > 0.9, s["censored_share_by_length"]
+    assert "regions (count)" in s["censored_share_weighting"]

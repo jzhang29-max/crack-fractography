@@ -209,8 +209,13 @@ async function selectFrame(name) {
     ["R_L median", f.R_L_median === null || f.R_L_median === undefined ? "—"
       : `${fmt(f.R_L_median, 3)} <span class="muted">axis ${f.R_L_axis_deg}°, ${fmt(f.R_L_n_segments)} segments</span>`],
     ["Junctions", `${fmt(f.n_junctions)} <span class="muted">${fmt(f.n_triple)} triple, ${fmt(f.n_quadruple_plus)} quad+</span>`],
+    // Weighted by LENGTH, because this caveat sits beside MCL and TCL. The count share
+    // was the only one reported and it understates by ~5x in SEM and ~3x in TXM: a frame
+    // can be 6% of regions censored and 44% of crack AREA censored.
     ["Touching frame edge", f.censored_share === null ? "—"
-      : `${(f.censored_share * 100).toFixed(1)}% <span class="muted">length censored</span>`],
+      : `${((f.censored_share_by_length ?? f.censored_share) * 100).toFixed(0)}% <span class="muted">of crack length` +
+        `${f.censored_share_by_area != null ? `, ${(f.censored_share_by_area * 100).toFixed(0)}% of area` : ""}` +
+        `, ${(f.censored_share * 100).toFixed(1)}% of regions</span>`],
     ["Below 10px width envelope", f.width_below_validated_envelope_share === null ? "—"
       : `${(f.width_below_validated_envelope_share * 100).toFixed(0)}% <span class="muted">of regions</span>`],
     // Cleaning, recorded per frame. The speck threshold is per frame now -- max of a pixel
