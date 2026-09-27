@@ -306,6 +306,37 @@ async function wireSetup() {
   };
 }
 
+// ---------------------------------------------------------------------------------------
+// Downloading, in a browser and in the app window.
+//
+// `location.href = url` is how a browser downloads a Content-Disposition response, and it
+// is exactly what a WKWebView cannot do: there is no download manager behind it, so the
+// same navigation shows the CSV as text or silently does nothing. In the app the bytes are
+// handed to Python, which opens the real macOS save panel -- a better outcome than the
+// browser's silent drop into ~/Downloads, and the only one that works at all.
+//
+// Detected by capability, not by user agent.
+async function download(url, filename) {
+  const native = window.pywebview && window.pywebview.api && window.pywebview.api.save;
+  if (!native) { location.href = url; return; }
+  const note = $("#armnote");
+  const prev = note.textContent;
+  note.textContent = "preparing " + filename + "…";
+  try {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
+    const buf = new Uint8Array(await r.arrayBuffer());
+    let bin = "";
+    for (let i = 0; i < buf.length; i += 0x8000) {
+      bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+    }
+    note.textContent = await window.pywebview.api.save(filename, btoa(bin));
+  } catch (e) {
+    note.innerHTML = `<span class="flag bad">${e.message}</span>`;
+  }
+  setTimeout(() => { if (note.textContent !== prev) note.textContent = prev; }, 4000);
+}
+
 async function loadArm() {
   try {
     state.frames = await api(`/api/frames?arm=${encodeURIComponent(state.arm)}` +
@@ -329,8 +360,9 @@ async function loadArm() {
     const d = document.documentElement;
     d.dataset.theme = d.dataset.theme === "dark" ? "light" : "dark";
   };
-  $("#csv").onclick = () => location.href =
-    `/api/export.csv?arm=${encodeURIComponent(state.arm)}&level=frames`;
+  $("#csv").onclick = () => download(
+    `/api/export.csv?arm=${encodeURIComponent(state.arm)}&level=frames`,
+    `${state.arm.replace("/", "_")}_frames.csv`);
   // Upload. A .tif is segmented here first; a .png is taken as a mask already. The control
   // says "image or mask" rather than explaining the difference, because the server decides
   // from the extension and the user should not have to.
@@ -393,7 +425,11 @@ async function loadArm() {
       return;
     }
     out.innerHTML = await r.text();
-    $("#figdl").onclick = () => { q.set("download", "true"); location.href = `/api/figure.svg?${q}`; };
+    $("#figdl").onclick = () => {
+      q.set("download", "true");
+      download(`/api/figure.svg?${q}`,
+               `${state.arm.replace("/", "_")}_${q.get("kind")}_${q.get("y") || q.get("x")}.svg`);
+    };
   };
   window.figRenderRef = figRender;
   try {

@@ -21,21 +21,46 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 REPO = os.path.abspath(os.path.join(SPECPATH, ".."))
 
-hidden = (collect_submodules("skimage")
+# pywebview loads its macOS backend by name at runtime, so the module graph never sees it.
+# Without these the app starts and falls back to the browser -- which looks like it works.
+hidden = (collect_submodules("webview")
+          + collect_submodules("skimage")
           + collect_submodules("scipy.ndimage")
           + collect_submodules("scipy.spatial")
           + ["uvicorn.logging", "uvicorn.loops.auto", "uvicorn.loops.asyncio",
              "uvicorn.protocols.http.auto", "uvicorn.protocols.http.h11_impl",
              "uvicorn.protocols.websockets.auto", "uvicorn.lifespan.on",
-             "multipart", "python_multipart"])
+             "multipart", "python_multipart",
+             "objc", "Foundation", "AppKit", "WebKit", "Quartz", "Security",
+             "UniformTypeIdentifiers"])
+
+# analysis/ is listed FILE BY FILE, not as a directory. Copying the directory swept in
+# analysis/out -- 30 MB of measured JSON plus every mask ever uploaded here -- which a
+# frozen build never even reads, because output goes to the per-user data directory. It was
+# 20% of the download and it was somebody's measurements travelling inside a code bundle.
+analysis_files = [
+    (os.path.join(REPO, "analysis", f), "analysis")
+    for f in sorted(os.listdir(os.path.join(REPO, "analysis")))
+    if f.endswith(".py")
+] + [
+    (os.path.join(REPO, "analysis", "_vendor", f), "analysis/_vendor")
+    for f in ("extended_features.py", "MANIFEST.json", "__init__.py")
+]
+
+# skimage ships 7.4 MB of sample photographs (astronaut, coffee, chelsea...) behind
+# skimage.data. Nothing here calls it: the imports are measure, morphology and filters. The
+# MODULE stays -- only the pictures are dropped -- so an accidental import still resolves.
+skimage_data = [(src, dst) for src, dst in collect_data_files("skimage")
+                if os.sep + "data" + os.sep not in src
+                or os.path.splitext(src)[1].lower() not in
+                (".png", ".jpg", ".jpeg", ".tif", ".tiff", ".npy", ".npz")]
 
 datas = [
     (os.path.join(REPO, "app", "templates"), "app/templates"),
     (os.path.join(REPO, "app", "static"), "app/static"),
-    (os.path.join(REPO, "analysis"), "analysis"),
     (os.path.join(REPO, "docs"), "docs"),
     (os.path.join(REPO, "README.md"), "."),
-] + collect_data_files("skimage")
+] + analysis_files + skimage_data
 
 a = Analysis(
     [os.path.join(REPO, "packaging", "launcher.py")],

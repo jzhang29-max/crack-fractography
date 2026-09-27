@@ -1,25 +1,30 @@
 #!/usr/bin/env python3
-"""Entry point for the packaged app: start the server, open the page, stay quittable.
+"""Entry point for the packaged app: a native window with the analysis inside it.
 
-A double-clicked .app has no terminal. That changes three things a `./run` script never has
-to think about:
+WHY A WEBVIEW AND NOT A BROWSER TAB. The first version of this started a server and opened
+the system browser. That works, but it is not an app: there is no Dock icon that is the
+thing you are using, the window is one tab among forty, and quitting the browser does not
+quit the program while quitting the program leaves a dead tab behind. pywebview puts the
+same page inside a real WKWebView window, so it is an application -- and none of the UI had
+to change, because it is the same page served by the same local server.
 
-  IT NEEDS A WINDOW. Not for the UI -- the UI is the browser page -- but so the process can
-  be QUIT. A server with no window and no Dock presence is a process the user can only kill
-  from Activity Monitor, and they will not know its name. So there is a small control window
-  with the address, the data folder and a Quit button. Tkinter, because it is in the standard
-  library: a menu-bar library would add a dependency to solve a four-button problem.
+WHY NOT TKINTER FOR THE UI. The interface is charts, SVG figures and tables. Rebuilding
+those in a widget toolkit would be a rewrite of the entire front end to gain nothing.
 
-  THE PORT MIGHT BE TAKEN. A checkout can hardcode 8810 and let the user notice the clash.
-  An app cannot, so it binds port 0, asks the OS what it got, and reports that.
+WHY NOT ELECTRON. It would ship a second browser engine, roughly the size of everything
+else here combined. WKWebView is already on the machine.
 
-  ERRORS HAVE NOWHERE TO GO. stderr from a bundled app goes to the system log, which nobody
-  reads. Startup failures are shown in the window and written to the data folder.
+DOWNLOADS ARE THE ONE THING A WEBVIEW BREAKS. In a browser, "download CSV" is a navigation
+that the browser turns into a file. WKWebView has no download manager, so the same
+navigation shows the CSV as text or does nothing at all. So the page asks Python instead,
+through the js_api below, and gets a real macOS save panel -- which is a better result than
+the browser's silent drop into ~/Downloads. See the download() helper in app/static/app.js.
 
-Run from source with:  python3 packaging/launcher.py
+Falls back to the system browser when pywebview is unavailable, so running this from a
+checkout still works with nothing extra installed.
 """
+import base64
 import os
-import queue
 import socket
 import sys
 import threading
@@ -33,22 +38,21 @@ else:
 
 from app import paths as P   # noqa: E402
 
-_LOG = queue.Queue()
+TITLE = "Crack Fractography"
 
 
 def log(msg):
-    _LOG.put(str(msg))
     try:
         with open(os.path.join(P.DATA, "launcher.log"), "a") as fh:
             fh.write(str(msg) + "\n")
     except OSError:
         pass
+    print(msg, flush=True)
 
 
 def free_port():
-    """Ask the OS for a port rather than guessing one. Bound and closed immediately; the
-    race with another process grabbing it in between is theoretical and uvicorn would report
-    it in the window."""
+    """Ask the OS rather than guessing. An app cannot hardcode 8810 and let the user
+    notice the clash."""
     s = socket.socket()
     s.bind(("127.0.0.1", 0))
     port = s.getsockname()[1]
@@ -64,13 +68,53 @@ def serve(port, ready):
 
     def watch():
         import time
-        for _ in range(600):
+        for _ in range(1200):
             if server.started:
                 ready.set()
                 return
             time.sleep(0.05)
     threading.Thread(target=watch, daemon=True).start()
     server.run()
+
+
+class Api:
+    """Exposed to the page as window.pywebview.api."""
+
+    def __init__(self):
+        self.window = None
+
+    def save(self, filename, b64, _text=None):
+        """Write a file the page produced, through the OS save panel.
+
+        Returns a short status the page shows, rather than raising: a cancelled save panel
+        is a normal outcome and must not surface as a JavaScript error.
+        """
+        import webview
+        try:
+            ext = os.path.splitext(filename)[1].lstrip(".") or "*"
+            dest = self.window.create_file_dialog(
+                webview.FileDialog.SAVE, save_filename=filename,
+                file_types=(f"{ext.upper()} (*.{ext})", "All files (*.*)"))
+            if not dest:
+                return "cancelled"
+            dest = dest if isinstance(dest, str) else dest[0]
+            with open(dest, "wb") as fh:
+                fh.write(base64.b64decode(b64))
+            return "saved " + os.path.basename(dest)
+        except Exception as e:
+            return f"save failed: {type(e).__name__}: {e}"
+
+    def reveal_data(self):
+        if sys.platform == "darwin":
+            os.system(f"open {P.DATA!r}")
+        elif os.name == "nt":
+            os.startfile(P.DATA)                                     # noqa: S606
+        else:
+            os.system(f"xdg-open {P.DATA!r}")
+        return P.DATA
+
+    def data_dir(self):
+        return P.DATA
 
 
 def main():
@@ -87,91 +131,26 @@ def main():
             ready.set()
     threading.Thread(target=boot, daemon=True).start()
 
-    log(f"Crack Fractography")
-    log(f"address    {url}")
-    log(f"data       {P.DATA}")
-    sem = P.sem_repo()
-    log(f"SEM repo   {sem or 'not set -- uploaded masks still work; open Setup on the page'}")
+    log(f"{TITLE}\n  address  {url}\n  data     {P.DATA}")
+    log(f"  SEM repo {P.sem_repo() or 'not set -- masks you add still measure'}")
+
+    if not ready.wait(timeout=60):
+        log("the server did not come up within 60s")
 
     try:
-        window(url, ready)
-    except Exception:
-        # No display, or tkinter is unavailable in this build. Fall back to running headless
-        # and say so, rather than exiting with a GUI traceback nobody sees.
-        log("no window available; running headless, stop with Ctrl-C")
-        ready.wait(timeout=30)
+        import webview
+    except ImportError:
+        log("pywebview not installed; opening the system browser instead")
         webbrowser.open(url)
         threading.Event().wait()
+        return
 
-
-def window(url, ready):
-    import tkinter as tk
-    from tkinter import scrolledtext
-
-    root = tk.Tk()
-    root.title("Crack Fractography")
-    root.geometry("560x320")
-    root.minsize(420, 240)
-
-    head = tk.Frame(root, padx=14, pady=12)
-    head.pack(fill="x")
-    tk.Label(head, text="Crack Fractography", font=("Helvetica", 16, "bold")).pack(anchor="w")
-    status = tk.Label(head, text="starting...", fg="#666")
-    status.pack(anchor="w", pady=(2, 0))
-
-    btns = tk.Frame(root, padx=14)
-    btns.pack(fill="x")
-    open_btn = tk.Button(btns, text="Open in browser", command=lambda: webbrowser.open(url),
-                         state="disabled")
-    open_btn.pack(side="left")
-
-    def reveal():
-        if sys.platform == "darwin":
-            os.system(f'open {P.DATA!r}')
-        elif os.name == "nt":
-            os.startfile(P.DATA)                                   # noqa: S606
-        else:
-            os.system(f'xdg-open {P.DATA!r}')
-    tk.Button(btns, text="Data folder", command=reveal).pack(side="left", padx=6)
-
-    def quit_now():
-        root.destroy()
-        os._exit(0)          # the uvicorn thread is not interruptible from here
-    tk.Button(btns, text="Quit", command=quit_now).pack(side="right")
-    root.protocol("WM_DELETE_WINDOW", quit_now)
-
-    txt = scrolledtext.ScrolledText(root, height=9, font=("Menlo", 11), bg="#f6f6f6",
-                                    relief="flat")
-    txt.pack(fill="both", expand=True, padx=14, pady=12)
-    txt.configure(state="disabled")
-
-    def pump():
-        while True:
-            try:
-                line = _LOG.get_nowait()
-            except queue.Empty:
-                break
-            txt.configure(state="normal")
-            txt.insert("end", line + "\n")
-            txt.see("end")
-            txt.configure(state="disabled")
-        root.after(200, pump)
-    pump()
-
-    opened = {"done": False}
-
-    def check_ready():
-        if ready.is_set():
-            status.config(text=f"running at {url}", fg="#0a0")
-            open_btn.config(state="normal")
-            if not opened["done"]:
-                opened["done"] = True
-                webbrowser.open(url)
-            return
-        root.after(150, check_ready)
-    check_ready()
-
-    root.mainloop()
+    api = Api()
+    api.window = webview.create_window(TITLE, url, js_api=api,
+                                       width=1440, height=940, min_size=(720, 560))
+    # Nothing here needs a Chromium; WKWebView is what macOS already has.
+    webview.start(gui="cocoa" if sys.platform == "darwin" else None,
+                  private_mode=False, storage_path=os.path.join(P.DATA, "webview"))
 
 
 if __name__ == "__main__":

@@ -64,8 +64,11 @@ def test_every_file_loaded_by_path_is_in_the_bundle():
     spec has to name them. Anything loaded by path and NOT under a datas entry ships
     missing and fails on first use."""
     spec = open(os.path.join(REPO, "packaging", "fractography.spec")).read()
-    for needed in ("app/templates", "app/static", '"analysis"'):
+    for needed in ("app/templates", "app/static", "analysis_files", "analysis/_vendor"):
         assert needed in spec, f"{needed} is not in the spec's datas"
+    # And it must NOT sweep the whole analysis directory: that ships analysis/out.
+    assert '(os.path.join(REPO, "analysis"), "analysis")' not in spec, (
+        "the spec copies all of analysis/, which includes analysis/out")
     for f in ("analysis/_vendor/extended_features.py", "analysis/_vendor/MANIFEST.json",
               "analysis/detect_one.py", "app/templates/index.html", "app/static/app.js"):
         assert os.path.exists(os.path.join(REPO, f)), f
@@ -128,3 +131,27 @@ def test_configuring_a_repo_switches_the_implementation_without_a_restart():
     assert a == "bundled copy"
     assert b == "bundled copy", "cached, as designed"
     assert c == "sem repo", "reset() must re-resolve to the live repo"
+
+
+def test_the_native_window_backend_is_importable():
+    """The app window is pywebview over WKWebView. If the backend is missing the launcher
+    falls back to the system browser and still 'works', which is exactly the kind of
+    downgrade that ships unnoticed -- so it is asserted rather than trusted."""
+    import importlib
+    try:
+        importlib.import_module("webview")
+    except ImportError:
+        pytest.fail("pywebview is not installed; the packaged app would open a browser "
+                    "instead of its own window")
+    if sys.platform == "darwin":
+        importlib.import_module("WebKit")      # the Cocoa backend pywebview loads by name
+
+
+def test_downloads_do_not_rely_on_navigation():
+    """WKWebView has no download manager, so `location.href = <a CSV url>` shows the CSV as
+    text instead of saving it. Both download buttons must go through the bridge."""
+    js = open(os.path.join(REPO, "app", "static", "app.js")).read()
+    import re
+    for m in re.finditer(r"location\.href\s*=\s*`?/?api/[^\n]*", js):
+        pytest.fail(f"a download still navigates: {m.group(0)[:90]}")
+    assert "window.pywebview.api.save" in js

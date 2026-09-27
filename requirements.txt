@@ -16,3 +16,8 @@ fastapi>=0.115
 uvicorn>=0.32
 # FastAPI needs this for multipart/form-data, which is how a file upload arrives.
 python-multipart>=0.0.9
+# The packaged app's window. pywebview renders the same page inside a native WKWebView
+# instead of a browser tab, which is what makes this an application rather than a local
+# server you have to remember to visit. It is optional at runtime: launcher.py falls back
+# to the system browser if it is not installed, and ./run never needs it.
+pywebview>=6.2
