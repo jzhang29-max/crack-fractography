@@ -254,6 +254,7 @@ async function loadArm() {
     ? `${noScale}/${state.frames.length} frames: no scale, µm withheld`
     : `all ${state.frames.length} frames scaled`;
   renderFrames();
+  if (typeof window.figRenderRef === "function") window.figRenderRef();
   if (state.frames.length) selectFrame(state.frames[0].frame);
 }
 
@@ -304,6 +305,45 @@ async function loadArm() {
     $("#minareaval").textContent = state.minArea.toLocaleString();
     renderCracks();
   };
+  // --- figure builder ------------------------------------------------------------------
+  // The field list comes from the server so the menu can never offer a quantity the
+  // renderer does not know, and so "needs a scale" is stated by the same code that
+  // enforces it.
+  let FIG = null;
+  window.figRenderRef = null;
+  const figRender = async () => {
+    const out = $("#figout");
+    if (!FIG || !state.arm) return;
+    const kind = $("#figkind").value, y = $("#figy").value, x = $("#figx").value;
+    $("#figxwrap").hidden = kind !== "scatter";
+    const q = new URLSearchParams({ arm: state.arm, kind, y });
+    if (kind === "scatter") q.set("x", x);
+    if ($("#figthin").checked) q.set("include_thin", "true");
+    out.innerHTML = `<p class="note">drawing…</p>`;
+    const r = await fetch(`/api/figure.svg?${q}`);
+    if (!r.ok) {
+      let d = {}; try { d = await r.json(); } catch (_) {}
+      out.innerHTML = `<p class="note"><span class="flag">${d.detail || "could not draw this"}</span></p>`;
+      return;
+    }
+    out.innerHTML = await r.text();
+    $("#figdl").onclick = () => { q.set("download", "true"); location.href = `/api/figure.svg?${q}`; };
+  };
+  window.figRenderRef = figRender;
+  try {
+    FIG = await api("/api/figure/fields");
+    const opts = FIG.fields.map((f) =>
+      `<option value="${f.key}">${f.label}${f.unit ? " (" + f.unit + ")" : ""}${f.needs_scale ? " ·needs scale" : ""}</option>`).join("");
+    $("#figy").innerHTML = opts;
+    $("#figx").innerHTML = opts;
+    $("#figy").value = "area_fraction";
+    $("#figx").value = "n_cracks_measured";
+    $("#figkind").innerHTML = FIG.kinds.map((k) =>
+      `<option value="${k}">${k.replace(/_/g, " ")}</option>`).join("");
+    $("#figkind").value = "box_by_specimen";
+    ["figkind", "figy", "figx", "figthin"].forEach((id) => $("#" + id).onchange = figRender);
+  } catch (e) { $("#figout").innerHTML = `<p class="note">figures unavailable: ${e.message}</p>`; }
+
   let arms;
   try { arms = await api("/api/arms"); }
   catch (e) {

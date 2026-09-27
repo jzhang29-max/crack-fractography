@@ -160,6 +160,10 @@ def measure_frame(mask, stem, modality="sem", r_l_axis_deg=0.0):
         "n_junctions": segsum.get("n_junctions"),
         "n_triple": segsum.get("n_triple"),
         "n_quadruple_plus": segsum.get("n_quadruple_plus"),
+        # The unit travels with the numbers. Without it a reader has no way to know these
+        # are clusters rather than skeleton pixels -- which is exactly how the previous
+        # version printed 3,074 junctions beside 15,515 "triple and quad" and looked wrong.
+        "junction_order_counted_per": segsum.get("junction_order_counted_per"),
         "characteristic_length_px": segsum.get("characteristic_length_px"),
 
         # Length-weighted, per segment. The old rose was area-weighted per component, which

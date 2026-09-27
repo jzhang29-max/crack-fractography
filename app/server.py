@@ -227,6 +227,35 @@ async def upload(file: UploadFile = File(...)):
                      if detected else "measured as a mask, as uploaded")}
 
 
+# ---------------------------------------------------------------------------------------
+@app.get("/api/figure/fields")
+def figure_fields():
+    """What can go on an axis, and which choices need a physical scale."""
+    from . import figures as F
+    return {"fields": [{"key": k, "label": v[0], "unit": v[1], "needs_scale": k in F.NEEDS_SCALE}
+                       for k, v in F.FIELDS.items()],
+            "kinds": list(F.KINDS)}
+
+
+@app.get("/api/figure.svg")
+def figure_svg(arm: str = Query(...), kind: str = Query("box_by_specimen"),
+               x: str | None = None, y: str | None = None,
+               min_frames: int = 3, include_thin: bool = False,
+               download: bool = False):
+    """Render a figure the user chose. SVG, so what is shown and what downloads are the
+    same bytes -- and so a figure in a paper stays editable and resolution-independent."""
+    from . import figures as F
+    try:
+        out = F.build(_load("frames"), arm, kind, x, y, min_frames, include_thin)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    headers = {}
+    if download:
+        name = f"{arm.replace('/', '_')}_{kind}_{y or x or 'figure'}.svg"
+        headers["Content-Disposition"] = f'attachment; filename="{name}"'
+    return Response(out["svg"], media_type="image/svg+xml", headers=headers)
+
+
 @app.get("/")
 def index():
     """Serve the page with a cache-busting token on its script.

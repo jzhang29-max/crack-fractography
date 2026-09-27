@@ -66,6 +66,10 @@ main{padding:20px 24px 60px;display:grid;gap:20px;
 /* The reasoning behind each number still matters, but it does not need to be on screen all
    the time -- the owner asked for fewer words. It lives in title= on the heading, marked by
    a small ? so it is discoverable rather than hidden. */
+.figbar{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.chk{display:flex;gap:5px;align-items:center;color:var(--text-secondary);font-size:12.5px;cursor:pointer}
+#figout svg{max-width:100%;height:auto;border:1px solid var(--rule);border-radius:8px;
+  background:var(--surface-2)}
 .hint{color:var(--text-muted);font-weight:400;cursor:help;font-size:11px;
   border:1px solid var(--rule);border-radius:50%;padding:0 4px;margin-left:3px}
 h2[title]{cursor:help}
@@ -174,6 +178,20 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
     <h2 title="Log-spaced bins of region area. Each bar is the share of total crack AREA in that size class, not the share of regions — so one large crack cannot be hidden by many small ones.">Size distribution <span class="hint">?</span></h2>
     <p class="note">Share of area, log bins.</p>
     <div id="sizes"></div>
+  </div>
+
+  <div class="card wide">
+    <h2 title="Build a figure from any measured quantity and download it as SVG — editable and resolution-independent, and the same bytes you see here. Frames without a physical scale are dropped from any figure using physical units, and the count is printed on the figure rather than hidden.">Figure <span class="hint">?</span></h2>
+    <p class="note">Pick what to plot. Downloads as SVG.</p>
+    <div class="figbar">
+      <select id="figkind"></select>
+      <select id="figy"></select>
+      <span id="figxwrap" hidden>vs <select id="figx"></select></span>
+      <label class="chk"><input type="checkbox" id="figthin"> include specimens under 3 frames</label>
+      <span class="spacer"></span>
+      <button id="figdl">↓ SVG</button>
+    </div>
+    <div id="figout"></div>
   </div>
 
   <div class="card wide">
