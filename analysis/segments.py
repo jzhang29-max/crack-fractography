@@ -38,8 +38,30 @@ from skimage import morphology
 #: share is reported so the gate is visible rather than silent.
 MIN_DIRECTIONAL_PX = 20
 
+#: Permutation draws for the anisotropy null. 1000 is enough for a 95th
+#: percentile and is vectorised, so it costs a few ms per frame.
+ROSE_NULL_DRAWS = 1000
+
 #: 8-connectivity neighbour count kernel, centre excluded.
 _K = np.array([[1, 1, 1], [1, 0, 1], [1, 1, 1]], np.uint8)
+
+
+#: The summary's field set, with every value None, so a frame with no skeleton returns the
+#: SAME SHAPE as one with cracks. Two early returns used to hand back a two-key dict, so any
+#: consumer reading a real field -- rose_beats_null, R_L_median -- raised KeyError on the 8
+#: zero-crack frames in this corpus instead of reading "no verdict".
+def _empty_summary(note, axis_deg=0.0):
+    keys = ("total_segment_length_px", "median_segment_length_px", "n_segments_directional",
+            "directional_length_share", "lattice_locked_share_all_segments", "R_L_median",
+            "R_L_n", "R_L_below_one", "n_junctions", "n_triple", "n_quadruple_plus",
+            "characteristic_length_px", "rose_bin_deg", "rose_length_share", "rose_R",
+            "rose_theta_deg", "rose_R_null95", "rose_beats_null")
+    out = {k: None for k in keys}
+    out.update(n_segments=0, note=note, min_directional_px=MIN_DIRECTIONAL_PX,
+               R_L_axis_deg=axis_deg, rose_weighted_by="segment length",
+               junction_order_counted_per="cluster (branches meeting), not per skeleton pixel",
+               rose_null=None)
+    return out
 
 
 def _neighbours(skel):
@@ -54,7 +76,7 @@ def skeleton_segments(mask, axis_deg=0.0):
     """
     skel = morphology.skeletonize(mask)
     if not skel.any():
-        return [], {"n_segments": 0, "note": "no skeleton"}
+        return [], _empty_summary("no skeleton", axis_deg)
 
     nb = _neighbours(skel)
     junction = skel & (nb >= 3)
@@ -108,7 +130,7 @@ def skeleton_segments(mask, axis_deg=0.0):
                      "R_L_axis_deg": axis_deg})
 
     if not segs:
-        return [], {"n_segments": 0, "note": "skeleton had no measurable branch"}
+        return [], _empty_summary("skeleton had no measurable branch", axis_deg)
 
     L_all = np.array([s["length_px"] for s in segs])
     # Direction-dependent quantities use only branches long enough to HAVE a direction.
@@ -128,6 +150,34 @@ def skeleton_segments(mask, axis_deg=0.0):
     else:
         hist, edges = np.zeros(12), np.linspace(0, 180, 13)
     tot = hist.sum()
+
+    # ANISOTROPY, WITH A NULL. A bare rose is uninterpretable and this one was shipped
+    # without a null for weeks. The reason it matters here, measured: a synthetic mask of
+    # perfectly straight 3-px lines at UNIFORM RANDOM angles returns R = 0.267-0.285, which
+    # is at or ABOVE this corpus's median R of 0.257. So the observed R alone cannot
+    # distinguish "preferentially oriented" from "random", and a reader looking at a lopsided
+    # rose would conclude the former every time.
+    #
+    # Axial statistics, on DOUBLED angles: a crack has an axis, not a direction, so 10 deg
+    # and 170 deg are nearly the same orientation and must not cancel. Mardia & Jupp,
+    # Directional Statistics, for the construction.
+    #
+    # The null is a permutation: uniform random directions carrying the OBSERVED segment
+    # lengths. That is the right null because R depends on the length distribution -- a few
+    # long segments give a high R by chance, which is exactly how a rose over 103 segments
+    # can look anisotropic and mean nothing. Deterministic seed so a frame's verdict does
+    # not change between runs.
+    R = theta = R_null95 = None
+    if len(A) and L.sum() > 0:
+        w = L / L.sum()
+        two = np.deg2rad(2.0 * A)
+        C, S = float((w * np.cos(two)).sum()), float((w * np.sin(two)).sum())
+        R = float(np.hypot(C, S))
+        theta = float((np.rad2deg(np.arctan2(S, C)) / 2.0) % 180.0)
+        rng = np.random.default_rng(0)
+        draws = rng.uniform(0.0, 2.0 * np.pi, size=(ROSE_NULL_DRAWS, len(w)))
+        Rn = np.hypot((w * np.cos(draws)).sum(axis=1), (w * np.sin(draws)).sum(axis=1))
+        R_null95 = float(np.percentile(Rn, 95))
 
     # How much of the skeleton the directional gate kept. A rose built on 8% of the length
     # is a different claim from one built on 80%.
@@ -185,5 +235,14 @@ def skeleton_segments(mask, axis_deg=0.0):
         "rose_bin_deg": [int(e) for e in edges[:-1]],
         "rose_length_share": ([round(float(h / tot), 4) for h in hist] if tot else None),
         "rose_weighted_by": "segment length",
+        # The rose's own verdict. rose_beats_null is the only one of these safe to read on
+        # its own; R without R_null95 beside it means nothing on this corpus.
+        "rose_R": (round(R, 4) if R is not None else None),
+        "rose_theta_deg": (round(theta, 1) if theta is not None else None),
+        "rose_R_null95": (round(R_null95, 4) if R_null95 is not None else None),
+        "rose_beats_null": (bool(R > R_null95) if (R is not None and R_null95 is not None)
+                            else None),
+        "rose_null": (f"uniform random directions with the observed segment lengths, "
+                      f"{ROSE_NULL_DRAWS} draws, 95th percentile"),
     }
     return segs, summary
