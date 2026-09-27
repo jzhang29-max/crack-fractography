@@ -115,8 +115,15 @@ function rose(hist) {
   const ta = ((top + 0.5) * 180 / n - 90) * Math.PI / 180;
   const tl = `<text x="${(cx + (R * 0.62) * Math.cos(ta)).toFixed(0)}" y="${(cy + (R * 0.62) * Math.sin(ta)).toFixed(0)}"
     fill="var(--text-primary)" font-size="12" font-weight="600" text-anchor="middle">${(max * 100).toFixed(0)}%</text>`;
+  const note = document.querySelector("#rosenote");
+  if (note) {
+    // Read the weighting off the payload rather than hardcoding it. The caption said
+    // "Area-weighted" for a while after the rose became length-weighted, because the word
+    // lived in the HTML and the behaviour lived in Python.
+    note.textContent = `${hist.weighted_by === "segment length" ? "Length" : hist.weighted_by}-weighted, 15° bins.`;
+  }
   el.innerHTML = `<svg viewBox="0 0 300 150" width="100%" role="img"
-    aria-label="Area-weighted crack orientation, 15 degree bins">
+    aria-label="Length-weighted crack orientation by skeleton branch, 15 degree bins">
     <line x1="${cx - R - 8}" y1="${cy}" x2="${cx + R + 8}" y2="${cy}" stroke="var(--rule)"/>
     ${p}${ticks}${tl}</svg>`;
   wire(el);

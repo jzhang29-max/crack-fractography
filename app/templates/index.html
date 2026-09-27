@@ -165,8 +165,8 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
   </div>
 
   <div class="card">
-    <h2 title="15° bins over 0–180°: a crack has an axis, not a direction. Weighted by area, because count-weighting lets a thousand specks outvote the one crack that holds the frame.">Orientation <span class="hint">?</span></h2>
-    <p class="note">Area-weighted, 15° bins.</p>
+    <h2 title="15° bins over 0–180°: a crack has an axis, not a direction. Weighted by SEGMENT LENGTH, measured per skeleton branch — not by component area, which made it a width-weighted rose over a meaningless per-component axis. Branches under 20 px are excluded because a branch that short can only point along the pixel lattice.">Orientation <span class="hint">?</span></h2>
+    <p class="note" id="rosenote">Length-weighted, 15° bins.</p>
     <div id="rose"></div>
   </div>
 

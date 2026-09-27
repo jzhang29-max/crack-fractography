@@ -229,10 +229,25 @@ async def upload(file: UploadFile = File(...)):
 
 @app.get("/")
 def index():
+    """Serve the page with a cache-busting token on its script.
+
+    Without this the browser keeps a cached app.js across edits: the page reloads, the HTML
+    is fresh, and the JavaScript is whatever it fetched the first time. Caught on 2026-09-26
+    when the orientation caption updated to "Length-weighted" while the chart's aria-label
+    still said "Area-weighted" -- two strings set by the same file, disagreeing, because one
+    lived in the HTML and the other in a stale script. Hard-reloading the page did not fix
+    it; only the query token does. The token is the file's mtime, so it changes exactly when
+    the file does and never otherwise.
+    """
     p = os.path.join(_HERE, "templates", "index.html")
     if not os.path.exists(p):
         return HTMLResponse("<h1>index.html missing</h1>", status_code=500)
-    return HTMLResponse(open(p).read())
+    html = open(p).read()
+    js = os.path.join(_HERE, "static", "app.js")
+    if os.path.exists(js):
+        html = html.replace('src="/static/app.js"',
+                            f'src="/static/app.js?v={int(os.path.getmtime(js))}"')
+    return HTMLResponse(html)
 
 
 # Mounted last so it cannot shadow /api/*.
