@@ -1,0 +1,13 @@
+Crack Fractography bundles third-party components in its packaged builds:
+
+  NumPy, SciPy, scikit-image, Pillow   BSD-3-Clause / HPND
+  FastAPI, Starlette, uvicorn           MIT / BSD-3-Clause
+  pywebview, pyobjc                     BSD-3-Clause / MIT
+  CPython                               PSF License
+
+analysis/_vendor/extended_features.py is a verbatim copy of a file from
+sem-crack-detector (MIT, same author), kept as a copy so the app can measure with no
+second checkout installed. See packaging/vendor.py for why, and how it is kept in step.
+
+This repository contains NO micrograph data. The packaged app ships no images and no
+measurements; it computes them on your machine, into your own data directory.
