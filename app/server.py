@@ -232,6 +232,12 @@ async def upload(file: UploadFile = File(...)):
         cur.extend(new)
         with open(p, "w") as fh:
             json.dump(cur, fh)
+
+    # And rebuild the uploads specimen record. Without this an upload adds a frame and no
+    # specimen, so the specimen card -- the FIRST card on the page -- simply disappeared
+    # for the uploads arm, which is the only arm a downloaded copy has. batch.py maintains
+    # this table for every other arm; the upload path was writing two of the three files.
+    _rebuild_uploads_specimen()
     _CACHE.clear()
 
     return {"ok": True, "frame": stem, "arm": "uploads", "segmented_here": detected,
@@ -240,6 +246,39 @@ async def upload(file: UploadFile = File(...)):
             "area_fraction": summ["area_fraction"],
             "note": ("segmented here with the SEM detector, then measured"
                      if detected else "measured as a mask, as uploaded")}
+
+
+def _rebuild_uploads_specimen():
+    """Recompute the uploads arm's specimen record from whatever frames are on disk.
+
+    Only the uploads arm: every other arm's record is batch.py's, and recomputing those
+    here would let a web request silently rewrite the measured dataset.
+    """
+    import sys as _sys
+    _sys.path.insert(0, os.path.join(RES, "analysis"))
+    try:
+        import specimen_stats
+    except ImportError:
+        return
+    fp = os.path.join(OUT, "frames.json")
+    sp = os.path.join(OUT, "specimens.json")
+    if not os.path.exists(fp):
+        return
+    frames = [f for f in json.load(open(fp)) if f.get("arm") == "uploads"]
+    others = []
+    if os.path.exists(sp):
+        try:
+            others = [r for r in json.load(open(sp)) if r.get("arm") != "uploads"]
+        except Exception:
+            others = []
+    recs = []
+    for spec in sorted({f.get("specimen") or "uploaded" for f in frames}):
+        fs = [f for f in frames if (f.get("specimen") or "uploaded") == spec]
+        r = specimen_stats.summarise("uploads", spec, fs)
+        r["arm_sensitivity"] = None
+        recs.append(r)
+    with open(sp, "w") as fh:
+        json.dump(others + recs, fh)
 
 
 # ---------------------------------------------------------------------------------------

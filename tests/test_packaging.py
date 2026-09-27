@@ -155,3 +155,19 @@ def test_downloads_do_not_rely_on_navigation():
     for m in re.finditer(r"location\.href\s*=\s*`?/?api/[^\n]*", js):
         pytest.fail(f"a download still navigates: {m.group(0)[:90]}")
     assert "window.pywebview.api.save" in js
+
+
+def test_uploading_maintains_all_three_dataset_files():
+    """The upload path writes frames.json and cracks.json. It used to skip specimens.json,
+    so an upload added a frame and no specimen -- and the specimen card, the first card on
+    the page, simply vanished for the uploads arm, which is the only arm a downloaded copy
+    has until a SEM repo is configured."""
+    import re
+    src = open(os.path.join(REPO, "app", "server.py")).read()
+    up = src[src.index("async def upload("):src.index("def _rebuild_uploads_specimen")]
+    assert "_rebuild_uploads_specimen()" in up, "upload must maintain the specimen table"
+    reb = src[src.index("def _rebuild_uploads_specimen"):]
+    # And it must only ever touch the uploads arm: a web request that can rewrite the
+    # measured arms' records would let an upload silently alter published numbers.
+    assert 'r.get("arm") != "uploads"' in reb
+    assert re.search(r'summarise\(\s*"uploads"', reb)
