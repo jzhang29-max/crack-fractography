@@ -103,6 +103,10 @@ main{flex:1 1 auto;display:grid;grid-template-columns:minmax(220px,300px) minmax
 .ro-line{display:flex;gap:9px;align-items:flex-start;padding:9px 11px;border-radius:9px;
   background:var(--surface-2);border:1px solid var(--rule);cursor:pointer}
 .ro-line:hover{background:var(--surface-3)}
+/* display:flex on .ro-line OVERRIDES the UA stylesheet's [hidden]{display:none}, so every
+   "hidden" statement was still on screen: the DOM reported 4 hidden and the page showed all
+   9. Caught by looking at a screenshot after the query said the cap was working. */
+.ro-line[hidden]{display:none}
 .ro-line .mk{flex:0 0 auto;font-size:13px;line-height:1.45;width:1.1em;text-align:center}
 .ro-line.good .mk{color:var(--s3)} .ro-line.warn .mk{color:var(--warn)}
 .ro-line.bad .mk{color:var(--bad)} .ro-line.info .mk{color:var(--text-muted)}
@@ -121,9 +125,9 @@ main{flex:1 1 auto;display:grid;grid-template-columns:minmax(220px,300px) minmax
 .ro-more:hover{background:none;color:var(--text-primary)}
 /* The marking tool, embedded. It is a separate Flask app in the SEM repo on its own port;
    an iframe is the honest way to reach it without reimplementing a painting canvas. */
-#markframe{width:100%;height:calc(100vh - 210px);min-height:420px;border:1px solid var(--rule);
-  border-radius:9px;background:var(--surface-2)}
-.markintro{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.markstate{max-width:52ch;display:flex;flex-direction:column;gap:9px;align-items:flex-start}
+.markbig{font-size:15px;font-weight:600;margin:0}
+.markstate .note{margin:0}
 .refuse{border:1px dashed var(--rule);border-radius:9px;padding:11px 13px;max-width:68ch}
 .refuse h4{margin:0 0 3px;font-size:13px;font-weight:650}
 .refuse .ans{color:var(--bad);font-size:12.5px}

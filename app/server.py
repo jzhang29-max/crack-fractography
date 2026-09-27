@@ -348,22 +348,44 @@ _PAINT = {"proc": None, "port": None}
 PAINT_PORT = 8767
 
 
+def _listening(port):
+    """Is something answering on this port? Asked of the socket, not of a handle we kept."""
+    import socket
+    with socket.socket() as t:
+        t.settimeout(0.3)
+        return t.connect_ex(("127.0.0.1", port)) == 0
+
+
 def _paint_alive():
+    """Whether the marking tool is reachable, NOT whether this process started it.
+
+    It was the latter, so restarting this server reported a perfectly healthy tool as
+    stopped and offered to start a second one -- the subprocess handle lives in memory and
+    the tool does not. Same shape as the dataset cache keyed on a name: state held here
+    that should be read from the world.
+    """
     p = _PAINT["proc"]
-    return bool(p and p.poll() is None)
+    if p and p.poll() is None:
+        return True
+    for port in (_PAINT.get("port"), PAINT_PORT):
+        if port and _listening(port):
+            _PAINT["port"] = port
+            return True
+    return False
 
 
 @app.get("/api/paint")
 def paint_status():
     sem = P.sem_repo()
     py = P.sem_python()
+    alive = _paint_alive()
     return {
         "available": bool(sem and py),
         "why_not": (None if (sem and py) else
                     ("no SEM repo is configured" if not sem else
                      "the SEM repo's virtualenv is not built -- run ./run in it once")),
-        "running": _paint_alive(),
-        "url": (f"http://127.0.0.1:{_PAINT['port']}" if _paint_alive() else None),
+        "running": alive,
+        "url": (f"http://127.0.0.1:{_PAINT['port']}" if alive else None),
         "note": "the marking tool writes corrections into the SEM repo, and this app reads "
                 "them back on the next measure",
     }
@@ -386,11 +408,9 @@ def paint_start():
     # Its own default port first, so a tool the user already had open on 8767 is reused
     # rather than duplicated; otherwise whatever the OS gives us.
     port = PAINT_PORT
-    with socket.socket() as t:
-        if t.connect_ex(("127.0.0.1", port)) == 0:
-            _PAINT["port"] = port
-            return {**paint_status(), "running": True,
-                    "url": f"http://127.0.0.1:{port}", "reused": True}
+    if _listening(port):
+        _PAINT["port"] = port
+        return {**paint_status(), "reused": True}
     with socket.socket() as t:
         try:
             t.bind(("127.0.0.1", port))

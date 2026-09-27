@@ -800,9 +800,10 @@ async function renderMark() {
     return;
   }
   if (st.running && st.url) { mountMark(st.url); return; }
-  el.innerHTML = `<div class="markintro">
-      <button id="markstart">Start marking</button>
-      <span class="u">Red = crack, cyan = not crack. Corrections feed the next measure.</span>
+  el.innerHTML = `<div class="markstate">
+      <p class="markbig">Draw or correct a crack mask.</p>
+      <button id="markstart" class="upload">Start marking tool</button>
+      <p class="note">Red = crack, cyan = not crack. Corrections feed the next measure.</p>
     </div>`;
   $("#markstart").onclick = async () => {
     $("#markstart").disabled = true;
@@ -820,12 +821,23 @@ async function renderMark() {
 
 function mountMark(url) {
   MARK_URL = url;
-  $("#markbody").innerHTML = `<div class="markintro">
-      <span class="u">Red = crack, cyan = not crack. Re-measure to pick up corrections.</span>
-      <span class="spacer"></span>
-      <a href="${url}" target="_blank" rel="noopener"><button>Open in a window</button></a>
-    </div>
-    <iframe id="markframe" src="${url}" title="Crack marking"></iframe>`;
+  // A HAND-OFF, NOT AN EMBED. The iframe loaded -- 750 px tall, HTTP 200, no blocking
+  // header, no console error -- and rendered blank. It is cross-origin (a different port),
+  // so there is no way to see inside it and find out why, and I am not going to ship a
+  // frame I cannot verify: a blank panel is worse for navigation than a plain link, which
+  // was the complaint in the first place.
+  //
+  // What this tab has to fix is that the tool was UNDISCOVERABLE. A named tab, a live
+  // status and one click does that. Embedding it properly would mean reverse-proxying the
+  // whole Flask app through this one to make it same-origin, which is a lot of surface for
+  // a canvas that POSTs image layers.
+  $("#markbody").innerHTML = `
+    <div class="markstate">
+      <p class="markbig">Marking tool is running.</p>
+      <a href="${url}" target="_blank" rel="noopener"><button class="upload">Open marking tool</button></a>
+      <p class="note">Red = crack, cyan = not crack. Re-measure to pick up corrections.</p>
+      <p class="note u">${url}</p>
+    </div>`;
 }
 
 async function loadArm() {
