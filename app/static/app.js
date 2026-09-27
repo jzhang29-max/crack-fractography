@@ -7,6 +7,12 @@
 const $ = (s) => document.querySelector(s);
 const state = { arm: null, spec: "", frames: [], frame: null, cracks: null, minArea: 0,
                 sortKey: "frame", sortDir: 1 };
+// Every row here is built with innerHTML, so anything from the record that lands inside an
+// attribute has to be escaped. The definition strings are written in measure.py and contain
+// apostrophes and parentheses today; one double quote added there later would otherwise end
+// the attribute and swallow the rest of the row silently.
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (ch) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 const fmt = (v, d = 2) =>
   v === null || v === undefined ? "—"
   : typeof v === "number" ? (Number.isInteger(v) ? v.toLocaleString()
@@ -170,7 +176,11 @@ function wire(root) {
 }
 
 /* ---------------------------------------------------------------- frame detail */
-const CCOLS = [["crack_id", "ID"], ["area_px", "Area px"], ["SkeletonLength_px", "Length px"],
+// "Length px" was SkeletonLength_px alone -- the region's whole network centreline, under
+// a name that reads as the crack's length. Both columns, both named: the longest single
+// crack tip to tip, and the network total the region's branches add up to.
+const CCOLS = [["crack_id", "ID"], ["area_px", "Area px"],
+  ["TipToTipGeodesic_px", "Longest px"], ["SkeletonLength_px", "Network px"],
   ["MeanWidth_px", "Mean W"], ["length_is_censored", "Censored"], ["area_um2", "Area µm²"]];
 
 async function selectFrame(name) {
@@ -201,18 +211,27 @@ async function selectFrame(name) {
     // added up -- under the name "Longest crack", which is what a reader compares with a
     // Varestraint MCL. It read 1578 µm on a frame 213 µm across. The row below it is that
     // network number, kept and named for what it is.
-    ...(f.mcl_um ? [["Longest crack (MCL)",
+    ...(f.mcl_um ? [[`<span title="${esc(f.mcl_definition || "")}">Longest crack (MCL)</span>`,
+      // The bracket note is written beside the number in measure.py and belongs on the
+      // bracket, not in the CSV alone: the two ends are a bracket only if the reader is
+      // told which way each one is biased.
       (f.mcl_um_uncensored_only != null && f.mcl_censored
-        ? `${fmt(f.mcl_um, 1)} µm <span class="muted">censored — ${fmt(f.mcl_um_uncensored_only, 1)} µm if edge-touching cracks are dropped</span>`
+        ? `${fmt(f.mcl_um, 1)} µm <span class="muted" title="${esc(f.mcl_bracket_note || "")}">censored — ${fmt(f.mcl_um_uncensored_only, 1)} µm if edge-touching cracks are dropped</span>`
         : `${fmt(f.mcl_um, 1)} µm <span class="muted">${f.mcl_censored === false ? "does not touch an edge" : ""}</span>`) +
       `<span class="muted"><br>tip to tip along one crack` +
       `${f.mcl_share_of_its_network != null ? `, ${(100 * f.mcl_share_of_its_network).toFixed(0)}% of its own network's centreline` : ""}` +
-      `${f.mcl_is_lower_bound ? " · that region has loops, so this is a lower bound" : ""}` +
+      `${f.mcl_has_cycles ? " · that region loops, so this is the shorter way round" : ""}` +
+      `${f.mcl_method === "sampled_sources_lower_bound" ? " · too large to sweep exhaustively, so a lower bound" : ""}` +
+      `${f.n_regions_geodesic_sampled ? ` · ${f.n_regions_geodesic_sampled} region(s) sampled rather than swept` : ""}` +
       `${f.n_regions_geodesic_undefined ? ` · ${f.n_regions_geodesic_undefined} closed-loop region(s) have no tip and are not in this max` : ""}</span>`]] : []),
-    ...(f.largest_network_centreline_um ? [["Largest network centreline",
-      `${fmt(f.largest_network_centreline_um, 0)} µm <span class="muted">` +
+    ...(f.largest_network_centreline_um ? [[`<span title="${esc(f.largest_network_centreline_definition || "")}">Largest network centreline</span>`,
+      // SAME PRECISION as the MCL row above it. These two are printed next to each other
+      // for the reader to compare, and on an unbranched region they are the same number --
+      // at 0 dp against the other row's 1 dp that identity rendered as "30.9" beside "31",
+      // which reads as a discrepancy in exactly the case where there is none.
+      `${fmt(f.largest_network_centreline_um, 1)} µm <span class="muted">` +
       `${f.largest_network_centreline_um_uncensored_only != null && f.largest_network_centreline_censored
-          ? `censored — ${fmt(f.largest_network_centreline_um_uncensored_only, 0)} µm if edge-touching regions are dropped<br>` : ""}` +
+          ? `<span title="${esc(f.mcl_bracket_note || "")}">censored — ${fmt(f.largest_network_centreline_um_uncensored_only, 1)} µm if edge-touching regions are dropped</span><br>` : ""}` +
       `every branch of one connected network added together — a network size, not a crack length</span>`]] : []),
     ...(f.tcl_um ? [["Total length (TCL)", fmt(f.tcl_um, 0) + " µm"]] : []),
     ["R_L median", f.R_L_median === null || f.R_L_median === undefined ? "—"

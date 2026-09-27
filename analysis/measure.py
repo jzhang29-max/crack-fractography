@@ -95,6 +95,8 @@ def measure_frame(mask, stem, modality="sem", r_l_axis_deg=0.0, grey=None):
         # network's centreline. Both columns are emitted; see analysis/geodesic.py. The
         # UNROUNDED skel_len is what the graph is checked against -- d["SkeletonLength_px"]
         # is rounded to 2 dp, and comparing against it would make the tie a no-op.
+        # This does not skeletonize twice: shared_impl memoizes the call that
+        # crack_shape_measurements just made on the same region.
         skel_len, _bp, _ep, skel, _loc, _spx = skeleton_stats(sub)
         geo, geo_info = geodesic.longest_tip_geodesic(skel, skel_len)
         touches = bool(y0 == 0 or x0 == 0 or y1 >= H or x1 >= W)
@@ -113,11 +115,17 @@ def measure_frame(mask, stem, modality="sem", r_l_axis_deg=0.0, grey=None):
         # for a tip-to-tip path to start at. Carried so a reader can see which regions the
         # max could not consider rather than inferring it from a blank.
         r["geodesic_undefined_reason"] = geo_info.get("reason")
-        # A region with cycles: the value is the longest tip-to-tip SHORTEST route, which
-        # is a lower bound on the longest simple path. On a tree it is exact -- checked on
-        # 1078 of 1078 tree regions against the brute-force all-pixel diameter.
-        r["geodesic_is_lower_bound"] = (None if geo is None
-                                        else bool(geo_info.get("n_cycles")))
+        # TWO DIFFERENT CAVEATS, kept apart because one number cannot carry both.
+        # has_cycles: the region's skeleton loops, so the tip-to-tip route is the shorter
+        # way round and sits below the longest simple path through it. A property of the
+        # definition; on a tree it is False and the value is exact -- checked on 1078 of
+        # 1078 tree regions against the brute-force all-pixel diameter.
+        r["geodesic_has_cycles"] = (None if geo is None
+                                    else bool(geo_info.get("n_cycles")))
+        # method: HOW it was computed. Only "sampled_sources_lower_bound" can sit below
+        # the true tip-to-tip maximum, and it exists because the largest region here has a
+        # 1.25M px skeleton that an all-pairs sweep cannot finish.
+        r["geodesic_method"] = geo_info.get("method")
         if px_um:
             r["area_um2"] = round(p.area * px_um * px_um, 4)
             for src, dst in (("SkeletonLength_px", "network_length_um"),
@@ -318,10 +326,15 @@ def measure_frame(mask, stem, modality="sem", r_l_axis_deg=0.0, grey=None):
         # tip-to-tip path. Reported rather than left as a silent omission from a max().
         summary["n_regions_geodesic_undefined"] = int(np.isnan(geos).sum())
         _arg = (int(np.nanargmax(geos)) if np.isfinite(geos).any() else None)
-        # Whether the MCL-setting region has cycles, i.e. whether its value is exact (tree)
-        # or a lower bound on the longest simple path through it.
-        summary["mcl_is_lower_bound"] = (bool(rows[_arg].get("geodesic_is_lower_bound"))
-                                         if _arg is not None else None)
+        # Whether the MCL-setting region has cycles, and how its value was computed.
+        summary["mcl_has_cycles"] = (bool(rows[_arg].get("geodesic_has_cycles"))
+                                     if _arg is not None else None)
+        summary["mcl_method"] = (rows[_arg].get("geodesic_method")
+                                 if _arg is not None else None)
+        # How many regions on this frame got the sampled fallback rather than an exact
+        # sweep. Zero on almost every frame; not zero is a thing the reader should see.
+        summary["n_regions_geodesic_sampled"] = sum(
+            1 for r in rows if r.get("geodesic_method") == "sampled_sources_lower_bound")
         # What fraction of its own region's network the longest crack actually is. This is
         # the gap between the two columns, on the one region where it matters most; near
         # 1.0 means the region is essentially one unbranched crack.
@@ -412,5 +425,6 @@ if __name__ == "__main__":
     print(f"\n{len(rows)} cracks measured")
     for r in sorted(rows, key=lambda r: -r["area_px"])[:5]:
         print(f"  id {r['crack_id']:>5}  area {r['area_px']:>9,} px  "
-              f"len {r.get('SkeletonLength_px')}  meanW {r.get('MeanWidth_px')}  "
+              f"longest {r.get('TipToTipGeodesic_px')}  network {r.get('SkeletonLength_px')}  "
+              f"meanW {r.get('MeanWidth_px')}  "
               f"tort {r.get('Tortuosity')}  censored {r['length_is_censored']}")

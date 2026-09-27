@@ -53,12 +53,30 @@ skeleton_path_length() on every region, and a region whose two disagree emits no
 at all (`graph_length_mismatch`) rather than a plausible number from the wrong graph.
 
 DEGREE HERE IS PRUNED DEGREE, which is not the 8-neighbour count that skeleton_stats uses
-for BranchPointCount and endpoints, and the difference is not small: on the largest region
-in the corpus, 3175 pixels have pruned degree >= 3 against 8248 with >= 3 eight-neighbours,
-and 1076 have pruned degree 1 against 1051 eight-neighbour endpoints. The 8-neighbour count
-sees a staircase corner as a fork -- three of its neighbours, two of the three edges
-pruned. The pruned graph is the one the length lives on, so it is the one a path length on
-that skeleton has to be computed on; BranchPointCount is left exactly as it was.
+for BranchPointCount and endpoints, and the difference is not small. On the largest region
+in the corpus (Cast_24hr_SE_Side_006, a 929,304 px skeleton) 342,813 pixels have pruned
+degree >= 3 against 617,051 with >= 3 eight-neighbours, and 44,263 have pruned degree 1
+against 39,849 eight-neighbour endpoints. It moves both ways, for one reason: the
+8-neighbour count sees a staircase corner as a fork -- three neighbours, two of the three
+edges pruned -- so it invents junctions, and it hides the tips those same corners are. The
+pruned graph is the one the length lives on, so it is the one a path length on that
+skeleton has to be computed on; BranchPointCount is left exactly as it was.
+
+WHERE THE THIRD METHOD IS NOT EXACT, AND BY HOW MUCH -- MEASURED, NOT ARGUED. A region
+that is both cyclic and too large to sweep from every tip gets an iterated sweep plus an
+evenly spaced sample, which is a lower bound and is labelled one. Against the exact
+all-pairs answer on every cyclic region where exact is computable -- 168 of them, 4 to
+1076 tips, 1 to 1095 independent cycles -- it agreed on 168 of 168, exactly, with a median
+of 3 sweeps. Forced on synthetic cyclic shapes at an eighth of the shipped source budget
+it is still exact on all 35; starved to 4 sources one shape falls 7.8% short, which is how
+the test knows the spread sample is doing work rather than decorating a result the sweep
+had already found. That is evidence, not a guarantee: the two regions that actually need
+the fallback have 159,751 and 101,300 cycles, far outside the range any of this was
+checked over, and their values carry geodesic_method = "sampled_sources_lower_bound" so a
+reader can see which number they are holding. On the corpus as re-measured it is 9 regions
+of 61,154: 47,747 take the exact tree sweep, 13,188 the exact all-pairs, and 210 have no
+tip-to-tip path at all (all tiny -- the largest is 282 px of centreline, and not one of the
+210 has a network longer than its own frame's MCL, so none of them could have set it).
 """
 import math
 
@@ -68,10 +86,35 @@ from scipy.sparse import csgraph
 
 _SQRT2 = math.sqrt(2.0)
 
-#: Sources per Dijkstra call. Caps peak memory at CHUNK x n_anchors floats regardless of
-#: how many tips a region has, which matters: the largest region here has 1076 tips over
-#: 4251 reduced nodes, and an all-at-once dense result grows as the product.
-_CHUNK = 256
+#: TWO SEPARATE BUDGETS, because they bound different things and collapsing them into one
+#: constant is what made the first version of this file unusable.
+#:
+#: _MEM is source-rows x nodes in one scipy call -- a MEMORY bound. 2e7 float64 is ~160 MB.
+#:
+#: _EXACT_WORK is tips x edges, and it answers the only question that matters at the top of
+#: the dispatch: can this region afford an exact all-pairs sweep? Asking it that way rather
+#: than "how many sources fit in a time budget" is not cosmetic. The earlier form capped
+#: sources at ~460 and sent a 5,543-tip TXM region -- 7.5e8 work, 4.0 s -- down the
+#: approximate path, which put the one and only "lower bound" caveat in the whole corpus on
+#: a SCALED frame's headline MCL. (Its sampled answer was 7423.79 px. So is its exact one.)
+#: At 2e9 that region is exact in ~10 s, while the dense SEM mats stay 20x above the line.
+#:
+#: THESE ARE NOT TUNING KNOBS, THEY ARE THE REASON THIS FILE HAS THREE METHODS. The largest
+#: region in the corpus has a 929,304 px skeleton with 44,263 tips -- 16x the skeleton of
+#: the largest region in the first frame, which is what an early version of this file was
+#: profiled on and sized for. An all-pairs sweep over 44,263 tips is not slow, it is
+#: intractable, and a version of this code that only did all-pairs turned a 35-minute batch
+#: into one that had not finished 20 of 142 masks in 25 minutes.
+_MEM = 2e7
+_EXACT_WORK = 2e9
+_MIN_CHUNK = 16
+_MAX_SWEEPS = 12
+#: Sources to spend once a region is over _EXACT_WORK. A FLAT cap, not a budget, because
+#: the iterated sweep above it is what actually finds the answer -- on every cyclic region
+#: where the exact value is computable it already had it, and the spread sample has never
+#: improved on it. More sources here would buy insurance, not accuracy, and would buy it
+#: on exactly the regions where each source is most expensive.
+_SAMPLE_SOURCES = 256
 
 #: Tolerance on "my graph sums to the same length the shared implementation reports".
 #: Both sum the same float64 terms in a different order; observed disagreement on real
@@ -127,8 +170,11 @@ def _reduce(n, r, c, w, deg):
 
     Indices are skeleton-local (0..n-1). Anchors are the nodes of pruned degree != 2: tips
     (1), junctions (>=3), isolated pixels (0). Every path between two anchors runs through
-    whole chains, so the reduction is exact for anchor-to-anchor distance while shrinking
-    the largest region here from 57560 nodes to 4251.
+    whole chains, so the reduction is exact for anchor-to-anchor distance. How much it
+    buys depends on how junction-dense the region is, and both extremes are here: a long
+    wandering crack goes 57,560 nodes -> 4,251, while the largest region of all, a dense
+    mat, only goes 929,304 -> 387,076. The reduction was never going to make that one
+    tractable on its own, which is why there is a budget below it.
 
     Returns (anchor_ids, csr over anchor positions, position lookup).
     """
@@ -230,13 +276,89 @@ def longest_tip_geodesic(skel, network_length=None):
         info["reason"] = "no reducible anchor graph"
         return None, info
     tips = np.flatnonzero(deg[anchor] == 1)
-    best = 0.0
-    for i in range(0, tips.size, _CHUNK):
-        d = csgraph.dijkstra(g, directed=False, indices=tips[i:i + _CHUNK])[:, tips]
-        finite = np.isfinite(d)
-        if finite.any():
-            best = max(best, float(d[finite].max()))
+    info["n_reduced_nodes"] = int(anchor.size)
+
+    # THREE METHODS, AND WHICH ONE RAN TRAVELS WITH THE VALUE. Two of them are exact and
+    # one is not, and a reader cannot tell from the number which they got.
+    if info["is_tree"]:
+        # A tree's diameter is two sweeps: the farthest node from anywhere is an end of
+        # some diameter, and the farthest node from THAT is the other end. Exact, O(E log
+        # V), and it does not care that the region has a million skeleton pixels. Both
+        # endpoints come out tips, because on a tree the farthest node from any node is a
+        # leaf -- so this is the tip-to-tip maximum and not merely a bound on it.
+        info["method"] = "double_sweep_exact"
+        best, src = _iterated_sweep(g, tips)
+        info["n_dijkstra_sources"] = src
+        return best, info
+
+    info["exact_work"] = int(tips.size) * int(w.size)
+    if info["exact_work"] <= _EXACT_WORK:
+        info["method"] = "all_pairs_exact"
+        info["n_dijkstra_sources"] = int(tips.size)
+        return _sweep_from(g, tips, tips)[0], info
+
+    # Cyclic AND too large to sweep from every tip. A LOWER BOUND, and it says so.
+    # Iterated sweep first -- hop to the farthest tip and sweep again until it stops
+    # improving, which on a graph whose cycles are small and local converges on the true
+    # pair in a handful of hops -- then evenly spaced tips to spend the rest of the
+    # budget. Evenly spaced and not random: the same mask must measure the same twice.
+    info["method"] = "sampled_sources_lower_bound"
+    best, used = _iterated_sweep(g, tips)
+    spread = tips[np.unique(np.linspace(0, tips.size - 1,
+                                        max(0, _SAMPLE_SOURCES - used)).round().astype(int))]
+    if spread.size:
+        best = max(best, _sweep_from(g, spread, tips)[0])
+    info["n_dijkstra_sources"] = int(used + spread.size)
     return best, info
+
+
+def _sweep_from(g, sources, tips):
+    """(max distance from any source to any tip, the tip that attained it). Memory-chunked."""
+    best, arg = 0.0, None
+    step = max(_MIN_CHUNK, int(_MEM // max(g.shape[0], 1)))
+    for i in range(0, sources.size, step):
+        d = csgraph.dijkstra(g, directed=False,
+                             indices=sources[i:i + step])[:, tips]
+        d = np.where(np.isfinite(d), d, -np.inf)
+        if d.size and d.max() > best:
+            best = float(d.max())
+            arg = int(tips[int(np.unravel_index(int(d.argmax()), d.shape)[1])])
+    return best, arg
+
+
+def _iterated_sweep(g, tips):
+    """Hop to the farthest tip and sweep again until it stops improving. (value, n_runs).
+
+    Two hops is the classic double sweep, exact on a tree. Continuing past two costs one
+    Dijkstra each and can only raise a lower bound, so it is not a heuristic with a
+    downside -- every value it reports is a real tip-to-tip route that exists in the graph.
+
+    ONCE PER CONNECTED COMPONENT, which an all-pairs sweep gets for free and this does not:
+    hopping from the farthest tip can only ever reach tips in the component it started in,
+    so a seed in the wrong one silently reports that component's diameter as the region's.
+    A region from regionprops is connected and its skeleton is too, so in the pipeline
+    there is exactly one component and this loop runs once -- but "the caller always hands
+    me a connected graph" is not a thing this function can check, and a test that feeds it
+    two blobs at once found the shortfall at 76%.
+    """
+    if tips.size < 2:
+        return 0.0, 0
+    ncomp, lab = csgraph.connected_components(g, directed=False)
+    best, runs = 0.0, 0
+    for comp in np.unique(lab[tips]):
+        ctips = tips[lab[tips] == comp]
+        if ctips.size < 2:
+            continue
+        cur = ctips[0]
+        cbest = 0.0
+        for _ in range(_MAX_SWEEPS):
+            v, nxt = _sweep_from(g, np.array([cur]), ctips)
+            runs += 1
+            if nxt is None or v <= cbest + 1e-12:
+                break
+            cbest, cur = v, nxt
+        best = max(best, cbest)
+    return best, runs
 
 
 def all_pixel_geodesic_diameter(skel):
@@ -251,8 +373,9 @@ def all_pixel_geodesic_diameter(skel):
         return None
     g = _min_dedup(n, r, c, w)
     best = 0.0
-    for i in range(0, n, _CHUNK):
-        d = csgraph.dijkstra(g, directed=False, indices=np.arange(i, min(i + _CHUNK, n)))
+    step = max(_MIN_CHUNK, int(_MEM // max(n, 1)))
+    for i in range(0, n, step):
+        d = csgraph.dijkstra(g, directed=False, indices=np.arange(i, min(i + step, n)))
         finite = np.isfinite(d)
         if finite.any():
             best = max(best, float(d[finite].max()))

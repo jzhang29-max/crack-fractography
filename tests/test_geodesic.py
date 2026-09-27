@@ -52,6 +52,27 @@ def mk(rows):
     return np.array([[ch == "#" for ch in r] for r in rows], bool)
 
 
+def _reachable(obj):
+    """Every key anywhere in the nested record -- same helper as test_no_stranded_fields."""
+    out = set()
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            out.add(k)
+            out |= _reachable(v)
+    return out
+
+
+def s_frame(_rows):
+    """The frame summary for a TXM stem, whose scale is a constant, so the micrometre
+    fields exist. Measuring an unscaled frame would compare against an empty field set and
+    pass for the wrong reason."""
+    m = np.zeros((160, 160), bool)
+    m[78:82, 10:150] = True
+    for x in range(14, 146, 12):
+        m[30:130, x:x + 3] = True
+    return measure_frame(m, "Average_mosaic_260618_B2_2_1", "txm")[1]
+
+
 def brute_tip_geodesic(skel):
     """Reference: Dijkstra on the FULL pixel graph, from every degree-1 pixel.
 
@@ -219,6 +240,63 @@ def main():
           f"{n_cyc_lt} of {n_cyc} cyclic shapes read below the all-pixel diameter -- "
           f"this is what geodesic_is_lower_bound marks")
 
+    # ---- 4b. The fallback for regions too large to sweep exhaustively. --------------
+    # It is a lower bound by construction and labelled one. Two things are checked, and
+    # the second is the one that matters: that it is not a LOOSE bound, and that the part
+    # of it doing the work is actually doing work.
+    #
+    # Forced on by dropping the exact-work budget to nothing -- these shapes are far too
+    # small to trigger it for real, which is the point: a region is approximated only when
+    # tips x edges exceeds _EXACT_WORK, so the fallback has to be provoked to be measured.
+    cyc = []
+    for m in blobs:
+        sl, _, _, skel, _, _ = skeleton_stats(m)
+        nn, r, c, w, deg = G._local_graph(skel)
+        if w.size == 0 or w.size - nn + 1 <= 0:      # trees are exact by construction
+            continue
+        anchor, g, _ = G._reduce(nn, r, c, w, deg)
+        if g is None:
+            continue
+        tp = np.flatnonzero(deg[anchor] == 1)
+        if tp.size < 4:
+            continue
+        ex = G._sweep_from(g, tp, tp)[0]             # all-pairs: the truth
+        if ex > 0:
+            cyc.append((skel, sl, ex))
+    check("there are cyclic shapes to test the fallback on at all", len(cyc) >= 20,
+          f"{len(cyc)} cyclic shapes with >= 4 tips")
+
+    def forced(n_sources):
+        keep = (G._EXACT_WORK, G._SAMPLE_SOURCES)
+        out = []
+        try:
+            G._EXACT_WORK, G._SAMPLE_SOURCES = 0, n_sources
+            for skel, sl, ex in cyc:
+                v, info = G.longest_tip_geodesic(skel, sl)
+                if info.get("method") == "sampled_sources_lower_bound":
+                    out.append((ex, v))
+        finally:
+            G._EXACT_WORK, G._SAMPLE_SOURCES = keep
+        return np.array(out) if out else np.zeros((0, 2))
+
+    thin, fat = forced(4), forced(8)
+    for name, a in (("thin budget", thin), ("realistic budget", fat)):
+        check(f"{name}: the fallback is a LOWER bound, never above exact",
+              a.size and not (a[:, 1] > a[:, 0] + 1e-9).any(), f"n={len(a)}")
+    # At 8 sources -- an eighth of what ships -- it already finds the exact answer every
+    # time. (On the real corpus: 168 of 168 cyclic regions, median 3 sweeps.)
+    check("fallback at 8 sources == exact all-pairs on every cyclic shape",
+          len(fat) >= 20 and bool((np.abs(fat[:, 0] - fat[:, 1]) < 1e-9).all()),
+          f"{int((np.abs(fat[:, 0] - fat[:, 1]) < 1e-9).sum())}/{len(fat)}")
+    # ...and starve it, and it degrades. Without this the check above cannot distinguish
+    # "the spread sample closes the gap" from "these shapes were easy and it never
+    # mattered" -- the spread sample would be decoration and nothing would say so.
+    shortfall = (thin[:, 0] - thin[:, 1]) / thin[:, 0]
+    check("starved of sources it DOES fall short, so the sample is not decoration",
+          len(thin) >= 20 and bool((shortfall > 1e-6).any()),
+          f"worst shortfall at 4 sources: {100 * shortfall.max():.3f}% "
+          f"(vs {100 * ((fat[:, 0] - fat[:, 1]) / fat[:, 0]).max():.3f}% at 8)")
+
     # ---- 5. A closed loop has no tip-to-tip crack, and does not pretend to. ----------
     S = mk([".###.", ".#.#.", ".###."])
     val, info = G.longest_tip_geodesic(S, float(G.skeleton_edges(S)[2].sum()))
@@ -281,6 +359,67 @@ def main():
               or x[f"{k}_um_uncensored_only"] <= x[f"{k}_um"] + 1e-9
               for k, x in (("mcl", a), ("largest_network_centreline", b))),
           f"{a['mcl_um_uncensored_only']} <= {a['mcl_um']}")
+
+    # ---- 6b. The skeleton memo returns the shared implementation's own answer. ------
+    # It exists for speed: measuring a region skeletonizes it twice, and on the corpus's
+    # big frames skeletonize IS the measurement. A cache that returned anything other than
+    # what the SEM repo's function returns would silently decouple this app's numbers from
+    # that repo's, which is the one thing shared_impl exists to prevent.
+    import shared_impl as SI
+    mod = SI._resolve()["module"]
+    raw = getattr(mod.skeleton_stats, "_raw", None)
+    check("the memo is installed on the shared module", raw is not None)
+    if raw is not None:
+        agree = miss = 0
+        for m in blobs[:30]:
+            a, b = raw(m), SI.skeleton_stats(m)
+            same = (a[0] == b[0] and a[1] == b[1] and a[2] == b[2] and a[5] == b[5]
+                    and bool((a[3] == b[3]).all()) and bool((a[4] == b[4]).all()))
+            agree += same
+            miss += not same
+        check("memoized skeleton_stats == the raw function, on every field",
+              miss == 0, f"{agree}/{agree + miss} shapes")
+        # Distinct masks must not collide, and the second look at one mask must be a hit.
+        one, two = blobs[0], blobs[1]
+        SI.skeleton_stats(one)
+        hit = SI.skeleton_stats(one)
+        check("a repeat call returns the cached object (so it was a hit)",
+              hit[3] is SI.skeleton_stats(one)[3])
+        check("a different mask evicts rather than returning the wrong skeleton",
+              SI.skeleton_stats(two)[0] == raw(two)[0])
+        # A cached array a caller writes to would poison the next region silently.
+        try:
+            SI.skeleton_stats(one)[3][0, 0] = True
+            wrote = True
+        except ValueError:
+            wrote = False
+        check("a cached skeleton cannot be written to", not wrote)
+
+    # ---- 7. Nothing computed here may be silently discarded. ------------------------
+    # Same failure as tests/test_no_stranded_fields.py catches for segments.py: a field
+    # produced on every frame of every run that no reader ever looks at. The two
+    # *_definition strings are the ones most likely to rot -- they are prose, so nothing
+    # breaks when they stop being rendered, and a reader then meets the number with the
+    # label alone, which is the whole defect this change exists to fix.
+    js = open(os.path.join(REPO, "app", "static", "app.js")).read()
+    rendered = [k for k in sorted(_reachable(s_frame(rows)))
+                if k.startswith(("mcl", "largest_network_centreline"))]
+    missing = [k for k in rendered if k not in js]
+    check("every frame-level MCL/network field is read by the frame card",
+          not missing, f"{len(rendered)} fields, stranded: {missing}")
+    check("both definitions reach the reader, not just the CSV",
+          "mcl_definition" in js and "largest_network_centreline_definition" in js)
+    # Per-region columns ride the generic CSV writer, which takes every non-dict key -- so
+    # the guard there is that they are actually ON the row, under the names the docs use.
+    for k in ("TipToTipGeodesic_px", "geodesic_has_cycles", "geodesic_method",
+              "geodesic_undefined_reason"):
+        check(f"per-region column '{k}' is on every row", all(k in r for r in rows))
+    # Which method produced the headline number is part of the number.
+    check("every measured region records HOW its geodesic was computed",
+          all(r["geodesic_method"] in ("double_sweep_exact", "all_pairs_exact",
+                                       "sampled_sources_lower_bound")
+              for r in rows if r["TipToTipGeodesic_px"] is not None),
+          str({r["geodesic_method"] for r in rows}))
 
     print()
     if FAILED:

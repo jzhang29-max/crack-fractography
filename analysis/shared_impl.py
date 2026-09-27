@@ -19,6 +19,8 @@ import json
 import os
 import sys
 
+import numpy as np
+
 _HERE = os.path.dirname(os.path.abspath(__file__))
 VENDOR = os.path.join(_HERE, "_vendor")
 _STATE = {}
@@ -66,6 +68,7 @@ def _resolve():
             "no measurement implementation available: neither a configured SEM repo nor "
             f"the bundled copy at {vendored}")
 
+    _install_memo(mod)
     digest = _md5(path)
     _STATE.update(module=mod, source=src, path=path, md5=digest,
                   vendored_md5=recorded,
@@ -100,12 +103,49 @@ def skeleton_stats(mask_bool):
     directly keeps the one-implementation rule: whichever copy won the resolution above is
     the copy that produces both the skeleton and the length summed over it, and the
     geodesic asserts its own graph sums to that length before emitting anything.
-
-    This does mean each region is skeletonized twice (~20% on the batch, measured). The
-    alternative is a cache keyed on the mask bytes inside the SHARED module, which would
-    make a number in this app depend on an optimisation in a repo this app does not own.
     """
     return _resolve()["module"].skeleton_stats(mask_bool)
+
+
+def _install_memo(mod):
+    """Give the shared module's skeleton_stats a one-entry cache, in this process only.
+
+    WHY, with the number that forced it: measuring a region now calls skeletonize twice --
+    once inside crack_shape_measurements for the shape numbers, once here for the skeleton
+    the geodesic needs. On a small frame that was +24%. On the corpus's big frames
+    skeletonize IS the measurement, and the doubled cost took a 35-minute batch past 34
+    minutes without finishing 20 of 142 masks. Both calls pass the same region mask, so
+    the second one is recomputing a pure function of an argument it has already seen.
+
+    THE CACHE IS HERE AND NOT IN THE SEM REPO. Nothing in that repo changes; this rebinds
+    one attribute on the module object inside this process. The rule it must not break is
+    that the app measures exactly what that repo measures, so:
+      - the key is the mask's bytes, not its id() -- an id is reused after a free, and the
+        collision would hand one region another region's skeleton,
+      - the cached arrays are marked read-only, so a future caller that writes to a
+        skeleton it did not allocate fails loudly instead of quietly poisoning the next
+        region that hashes the same,
+      - tests/test_geodesic.py checks the memo returns exactly what the raw function does.
+    """
+    raw = getattr(mod, "skeleton_stats", None)
+    if raw is None or getattr(raw, "_memo", False):
+        return
+    cell = {}
+
+    def memoized(mask_bool):
+        a = np.ascontiguousarray(mask_bool)
+        key = (a.shape, a.dtype.str, hashlib.blake2b(a.tobytes(), digest_size=16).digest())
+        if cell.get("key") != key:
+            out = raw(a)
+            for v in out:
+                if isinstance(v, np.ndarray):
+                    v.setflags(write=False)
+            cell["key"], cell["val"] = key, out
+        return cell["val"]
+
+    memoized._memo = True
+    memoized._raw = raw
+    mod.skeleton_stats = memoized
 
 
 def provenance():

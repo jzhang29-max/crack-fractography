@@ -24,17 +24,52 @@ RES = P.RES
 OUT = P.OUT
 
 app = FastAPI(title="crack fractography")
+# name -> ((mtime_ns, size), parsed). The stamp is half the entry: see _load.
 _CACHE = {}
 
 
 def _load(name):
-    if name in _CACHE:
-        return _CACHE[name]
+    """Read one dataset file, re-reading it whenever the bytes on disk change.
+
+    Keyed on the file's (mtime_ns, size), not on the name alone. Keyed on the name, a
+    server started before an out-of-process `analysis/batch.py --arm all` run served the
+    pre-run dataset for the rest of its life -- and that failure did not look like
+    staleness. Observed 2026-09-27: the page served the CURRENT app.js against the OLD
+    records, so one row showed newly written explanatory prose beside a stale number, and
+    a newly added row was silently absent because its field did not exist in the cached
+    records. A half-fresh page reads as a live one, which is worse than an obviously old
+    one. The three writers inside this process already dropped the cache; nothing covered
+    a rebuild run from the command line, which is how the corpus is normally measured.
+
+    Swapping the object out is safe because no caller mutates what it gets back: every
+    endpoint filters into a new list before sorting, figures.py copies each record it
+    edits, conclusions.py only reads, and the upload path re-reads the file from disk
+    rather than appending to the cached list.
+
+    batch.py truncates these files in place and streams tens of MB into them, and
+    /api/measure_corpus runs it on a thread inside THIS process, so a reload can land on
+    a partly written file. A stale-but-valid dataset beats a 500 in the middle of a
+    rebuild, so a failed reload keeps serving the last good copy and leaves the stamp
+    alone, which makes the next request try again.
+    """
     p = os.path.join(OUT, f"{name}.json")
-    if not os.path.exists(p):
+    try:
+        st = os.stat(p)
+    except OSError:
         raise HTTPException(503, f"{name}.json not built yet -- run analysis/batch.py")
-    _CACHE[name] = json.load(open(p))
-    return _CACHE[name]
+    stamp = (st.st_mtime_ns, st.st_size)
+    cached = _CACHE.get(name)
+    if cached is not None and cached[0] == stamp:
+        return cached[1]
+    try:
+        with open(p) as fh:
+            data = json.load(fh)
+    except (OSError, ValueError):
+        if cached is not None:
+            return cached[1]
+        raise HTTPException(503, f"{name}.json is being written -- retry in a moment")
+    _CACHE[name] = (stamp, data)
+    return data
 
 
 @app.get("/api/arms")

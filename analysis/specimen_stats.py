@@ -181,7 +181,9 @@ def summarise(arm, specimen, frames):
         # The longest single crack, tip to tip on one region's skeleton -- NOT
         # max(SkeletonLength_px), which is the whole network's centreline and was what this
         # field held while being labelled "the longest crack". The network quantity is kept
-        # beside it under its own name; they are a factor of 4.5 apart at the median here.
+        # beside it under its own name. Measured over the 143 scaled frames, the network
+        # figure is 3.70x the MCL at the median, and the old value exceeded the short side
+        # of its own field on 89 of them against 48 now.
         "mcl_um": _median([f.get("mcl_um") for f in scaled]),
         "largest_network_centreline_um": _median([f.get("largest_network_centreline_um")
                                                   for f in scaled]),
