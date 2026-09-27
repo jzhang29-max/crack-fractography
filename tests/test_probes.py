@@ -52,6 +52,42 @@ def main():
     check("an empty mask does not raise and says so",
           line_probe(np.zeros((50, 50), bool)).get("note") is not None)
 
+    # --- segments: R_L geometry and the lattice gate -----------------------------------
+    sys.path.insert(0, os.path.join(os.path.dirname(_H), "analysis"))
+    from segments import skeleton_segments, MIN_DIRECTIONAL_PX
+
+    bar = np.zeros((200, 400), bool); bar[100:103, 40:360] = True
+    _, sb = skeleton_segments(bar, axis_deg=0.0)
+    check("R_L of a straight on-axis bar is 1", abs(sb["R_L_median"] - 1.0) < 0.01,
+          f"{sb['R_L_median']}")
+
+    dia = np.zeros((300, 300), bool)
+    for i in range(30, 270): dia[i - 1:i + 2, i - 1:i + 2] = True
+    _, sd = skeleton_segments(dia, axis_deg=0.0)
+    check("R_L of a 45-degree bar is sqrt(2)", abs(sd["R_L_median"] - 2 ** 0.5) < 0.02,
+          f"{sd['R_L_median']}")
+    check("R_L is never below 1, which a pixel-count numerator once made possible",
+          sb["R_L_below_one"] == 0 and sd["R_L_below_one"] == 0)
+
+    check("the rose is weighted by segment length, not component area",
+          sb["rose_weighted_by"] == "segment length")
+
+    # The gate must actually gate: a field of 5px stubs has no measurable direction.
+    stubs = np.zeros((400, 400), bool)
+    rng2 = np.random.default_rng(1)
+    for _ in range(300):
+        y, x = rng2.integers(10, 390, 2)
+        stubs[y:y + 1, x:x + 5] = True
+    _, ss = skeleton_segments(stubs, axis_deg=0.0)
+    check("short stubs are excluded from direction-dependent statistics",
+          ss["n_segments_directional"] == 0 or ss["directional_length_share"] < 0.2,
+          f"{ss['n_segments_directional']} of {ss['n_segments']} kept")
+    check("the gate threshold and retained length share are both reported",
+          ss["min_directional_px"] == MIN_DIRECTIONAL_PX
+          and ss["directional_length_share"] is not None)
+    check("the lattice-locked share is reported as a diagnostic",
+          "lattice_locked_share_all_segments" in ss)
+
     print(f"\n{len(F)} failed")
     for x in F: print(f"  - {x}")
     return 1 if F else 0

@@ -45,6 +45,8 @@ sys.path.insert(0, os.path.join(REPO, "data", "sem", "interior_active_learning",
 sys.path.insert(0, _HERE)
 
 from extended_features import crack_shape_measurements   # noqa: E402  (the shared implementation)
+from probes import line_probe                            # noqa: E402
+from segments import skeleton_segments                   # noqa: E402
 from scale import nm_per_px                               # noqa: E402
 
 #: Regions at or below this pixel area are counted but excluded from shape statistics: a
@@ -59,7 +61,7 @@ def load_mask(path):
     return a < 128
 
 
-def measure_frame(mask, stem, modality="sem"):
+def measure_frame(mask, stem, modality="sem", r_l_axis_deg=0.0):
     """Per-crack rows plus a frame summary. mask: bool array, True = crack."""
     lab = skmeasure.label(mask, connectivity=2)
     n = int(lab.max())
@@ -104,6 +106,13 @@ def measure_frame(mask, stem, modality="sem"):
     oris = np.array([r["Orientation_deg"] for r in rows if isinstance(r.get("Orientation_deg"), (int, float))], float)
     branches = np.array([r.get("BranchPointCount") or 0 for r in rows], float)
 
+    # Directional line-intercept sampling and branch-level geometry. Both are computed on
+    # the WHOLE frame mask rather than per region: P10 is a property of a test line crossing
+    # the field, and a segment rose weighted per-component would re-introduce the
+    # component-level weighting these replace.
+    probe = line_probe(mask, nm)
+    segs, segsum = skeleton_segments(mask, axis_deg=r_l_axis_deg)
+
     summary = {
         "frame": stem,
         "modality": modality,
@@ -132,11 +141,55 @@ def measure_frame(mask, stem, modality="sem"):
         "censored_share": round(sum(1 for r in rows if r["length_is_censored"]) / len(rows), 4) if rows else None,
 
         "mean_width_px_median": _med(widths),
-        "tortuosity_median": _med(torts),
-        "tortuosity_n_defined": int(len(torts)),
-        "branch_points_total": int(branches.sum()),
-        "orientation_hist_deg": _rose(oris, areas, rows),
+        # DiameterJ's D_SP = Area/Length is validated only for features >= 10 px across.
+        # 84.9% of the regions here are thinner than that, so the median ships with the
+        # share of regions outside the envelope rather than as a bare number.
+        "width_below_validated_envelope_share":
+            (round(float((widths < 10).mean()), 4) if len(widths) else None),
+
+        # R_L replaces tortuosity. The old path/chord gate (exactly 2 skeleton endpoints, 0
+        # branch points) admitted 43.7% of regions holding 2.6% of the crack area here, and
+        # 0 of 285 TXM regions -- a headline number describing almost nothing. R_L is
+        # defined for every branch, against a DECLARED axis that travels with the value.
+        "R_L_median": segsum.get("R_L_median"),
+        "R_L_n_segments": segsum.get("R_L_n"),
+        "R_L_axis_deg": segsum.get("R_L_axis_deg"),
+        "R_L_below_one": segsum.get("R_L_below_one"),
+
+        "n_segments": segsum.get("n_segments"),
+        "n_junctions": segsum.get("n_junctions"),
+        "n_triple": segsum.get("n_triple"),
+        "n_quadruple_plus": segsum.get("n_quadruple_plus"),
+        "characteristic_length_px": segsum.get("characteristic_length_px"),
+
+        # Length-weighted, per segment. The old rose was area-weighted per component, which
+        # is a width-weighted rose over a meaningless per-component axis.
+        "orientation_hist_deg": {
+            "bin_deg": segsum.get("rose_bin_deg"),
+            "area_share": segsum.get("rose_length_share"),
+            "weighted_by": segsum.get("rose_weighted_by", "segment length"),
+        } if segsum.get("rose_length_share") else None,
+
+        # Pij-labelled densities. "Crack density" unqualified is six incompatible
+        # quantities (Dershowitz & Herda 1992); each here carries its subscript and unit.
+        "probe": probe,
     }
+    if nm:
+        um_px = nm / 1000.0
+        area_mm2 = mask.size * (um_px / 1000.0) ** 2
+        summary["area_analysed_mm2"] = round(area_mm2, 6)
+        # P21: crack length per unit area, mm/mm^2, from the skeleton.
+        summary["p21_skeleton_mm_per_mm2"] = round(
+            float(lengths.sum()) * (um_px / 1000.0) / area_mm2, 4) if area_mm2 else None
+        # P20: regions per unit area, with the ISO 643 planimetric edge rule -- an edge
+        # region is half a region, because half of it is outside the field.
+        n_edge = sum(1 for r in rows if r["length_is_censored"])
+        n_int = len(rows) - n_edge
+        summary["p20_per_mm2"] = round((n_int + n_edge / 2.0) / area_mm2, 2) if area_mm2 else None
+        summary["p20_edge_rule"] = "ISO 643 planimetric: n_interior + n_edge/2"
+        # MCL: the longest single crack. Design-relevant in a way the mean is not.
+        summary["mcl_um"] = round(float(lengths.max()) * um_px, 2) if len(lengths) else None
+        summary["tcl_um"] = round(float(lengths.sum()) * um_px, 2)
     if px_um:
         summary["crack_area_um2"] = round(total_px * px_um * px_um, 2)
         summary["total_length_um"] = round(float(lengths.sum()) * px_um, 2)
@@ -174,12 +227,12 @@ def _rose(oris, areas, rows):
             "weighted_by": "area"}
 
 
-def measure_path(path, modality="sem", stem=None):
+def measure_path(path, modality="sem", stem=None, r_l_axis_deg=0.0):
     stem = stem or os.path.splitext(os.path.basename(path))[0]
     for suf in ("_gated", "_machine", "_mask", "_crack_mask"):
         if stem.endswith(suf):
             stem = stem[: -len(suf)]
-    return measure_frame(load_mask(path), stem, modality)
+    return measure_frame(load_mask(path), stem, modality, r_l_axis_deg)
 
 
 if __name__ == "__main__":

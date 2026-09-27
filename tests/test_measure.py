@@ -75,11 +75,22 @@ def main():
           z["n_cracks_measured"] == 0 and z["largest_share_of_area"] is None
           and z["area_fraction"] == 0.0)
 
-    # Orientation must be AREA-weighted: a bar plus many specks must not let the specks
-    # dominate the rose. Here only the bar has a defined orientation, so its bin holds ~all.
+    # Orientation is weighted by SEGMENT LENGTH, not component area. It was area-weighted
+    # until 2026-09-26, which made it a width-weighted rose over a per-component second-moment
+    # axis: one short wide crack outvoted a long thin one, and for a branched network the
+    # component axis is noise. This assertion changed deliberately; the old one is not a
+    # regression to restore.
     r = s["orientation_hist_deg"]
-    check("the rose is area-weighted and declares it",
-          r is not None and r["weighted_by"] == "area" and max(r["area_share"]) > 0.99)
+    check("the rose is weighted by segment length and declares it",
+          r is not None and r["weighted_by"] == "segment length"
+          and max(r["area_share"]) > 0.5,
+          f"weighted_by={r and r['weighted_by']}")
+    check("tortuosity is gone from the frame summary, replaced by R_L on a declared axis",
+          "tortuosity_median" not in s and "R_L_median" in s and "R_L_axis_deg" in s)
+    check("Pij densities are labelled with their subscripts",
+          "p21_skeleton_mm_per_mm2" in s2 and "p20_per_mm2" in s2 and "p20_edge_rule" in s2)
+    check("the ISO 643 edge rule is named in the output, not just applied",
+          "n_edge/2" in str(s2.get("p20_edge_rule", "")))
 
     check("scale is None for a frame with no metadata, not a default",
           nm_per_px("260622_316_H_b2_front_CBS_01") is None)
