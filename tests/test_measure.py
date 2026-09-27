@@ -60,8 +60,13 @@ def main():
     check("a frame with no known scale gets no um columns",
           s["scale_known"] is False and "area_um2" not in rows[0]
           and "crack_area_um2" not in s)
-    # With scale, they appear and are consistent.
-    rows2, s2 = measure_frame(m, "MAR_H_AS_CBS_0001", "sem")
+    # With scale, they appear and are consistent. Through the TXM path deliberately: its
+    # scale is a constant anchored by tile geometry inside scale.py, whereas an SEM stem
+    # resolves through the SEM repo's FEI metadata CSV. Using an SEM stem made this check
+    # pass on a developer machine, where data/sem is a live symlink, and fail anywhere
+    # without that checkout -- which is every clone, every CI run and every user. Caught by
+    # the first CI run on 2026-09-27, and it is the coupling CI was added to find.
+    rows2, s2 = measure_frame(m, "Average_mosaic_260618_B2_2_1", "txm")
     check("a frame with a known scale gets um columns",
           s2["scale_known"] is True and rows2[0].get("area_um2") is not None,
           f"nm_per_px={s2['nm_per_px']}")
