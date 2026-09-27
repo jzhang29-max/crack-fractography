@@ -49,33 +49,41 @@ sys.path.insert(0, _HERE)
 # "one implementation" rule by preferring the repo whenever there is one and reporting which
 # copy answered.
 from shared_impl import crack_shape_measurements          # noqa: E402
+import cleaning                                          # noqa: E402
 from probes import line_probe                            # noqa: E402
 from segments import skeleton_segments                   # noqa: E402
 from scale import nm_per_px                               # noqa: E402
 
-#: Regions at or below this pixel area are counted but excluded from shape statistics: a
-#: handful of pixels has no meaningful width, orientation or tortuosity. They are reported
-#: as speck_count so the exclusion is visible rather than silent.
-SPECK_PX = 25
+#: The resolution floor, re-exported from cleaning so there is one definition. The
+#: threshold actually applied is per frame -- max(this, the physical floor) -- and is
+#: reported on every record as speck_threshold_px with the floor that bound.
+SPECK_PX = cleaning.SPECK_PX_FALLBACK
 
 
-def load_mask(path):
-    """A BW mask, crack = BLACK. Returns a boolean array, True where crack."""
+def load_mask(path, with_grey=False):
+    """A BW mask, crack = BLACK. Returns a boolean array, True where crack.
+
+    with_grey also returns the 8-bit image, which the ingest assertion needs: once it is a
+    boolean there is no way to tell a two-valued mask from a greyscale image that was
+    thresholded at 128, and those are not the same input.
+    """
     a = np.array(Image.open(path).convert("L"))
-    return a < 128
+    m = a < 128
+    return (m, a) if with_grey else m
 
 
-def measure_frame(mask, stem, modality="sem", r_l_axis_deg=0.0):
+def measure_frame(mask, stem, modality="sem", r_l_axis_deg=0.0, grey=None):
     """Per-crack rows plus a frame summary. mask: bool array, True = crack."""
-    lab = skmeasure.label(mask, connectivity=2)
+    lab = skmeasure.label(mask, connectivity=cleaning.CONNECTIVITY)
     n = int(lab.max())
     nm = nm_per_px(stem, modality)
     px_um = (nm / 1000.0) if nm else None       # um per pixel
+    speck_px, speck_info = cleaning.speck_threshold_px(nm)
 
     rows, specks = [], 0
     H, W = mask.shape
     for p in skmeasure.regionprops(lab):
-        if p.area <= SPECK_PX:
+        if p.area <= speck_px:
             specks += 1
             continue
         y0, x0, y1, x1 = p.bbox
@@ -128,7 +136,9 @@ def measure_frame(mask, stem, modality="sem", r_l_axis_deg=0.0):
         "n_regions_total": n,
         "n_cracks_measured": len(rows),
         "speck_count": specks,
-        "speck_threshold_px": SPECK_PX,
+        # The value that was actually applied to THIS frame, not the constant. Reporting the
+        # constant beside a per-frame threshold is a number attached to the wrong object.
+        "speck_threshold_px": speck_px,
 
         "crack_area_px": total_px,
         "area_fraction": round(float(mask.mean()), 6),
@@ -143,6 +153,17 @@ def measure_frame(mask, stem, modality="sem", r_l_axis_deg=0.0):
 
         "n_censored": int(sum(1 for r in rows if r["length_is_censored"])),
         "censored_share": round(sum(1 for r in rows if r["length_is_censored"]) / len(rows), 4) if rows else None,
+
+        # Cleaning step 1: is this actually a two-valued crack mask, and is crack the
+        # minority phase? Recorded, never acted on -- an inverted mask still measures, it
+        # just says so, because the number it produces is otherwise perfectly plausible.
+        "ingest": (cleaning.ingest_assertion(grey, mask) if grey is not None else None),
+        # Step 3: which floor bound, and what it means physically on THIS frame.
+        "speck_threshold": speck_info,
+        # Step 2: what this frame could not have seen.
+        "detection_limit": cleaning.detection_limit(nm, speck_px),
+        # The operations deliberately not applied, so a CSV reader does not have to assume.
+        "cleaning_not_applied": sorted(cleaning.NOT_SHIPPED),
 
         "mean_width_px_median": _med(widths),
         # DiameterJ's D_SP = Area/Length is validated only for features >= 10 px across.
@@ -196,7 +217,24 @@ def measure_frame(mask, stem, modality="sem", r_l_axis_deg=0.0):
         summary["p20_per_mm2"] = round((n_int + n_edge / 2.0) / area_mm2, 2) if area_mm2 else None
         summary["p20_edge_rule"] = "ISO 643 planimetric: n_interior + n_edge/2"
         # MCL: the longest single crack. Design-relevant in a way the mean is not.
+        #
+        # Step 8, the length half: reported BOTH with and without edge-censored regions,
+        # because the two bracket the truth from opposite sides and neither is it. Keeping
+        # them biases MCL down -- a crack leaving the frame is longer than the part seen.
+        # Dropping them biases it up by removing exactly the long cracks, since a longer
+        # crack is likelier to reach an edge. Here 72-74% of crack area is in
+        # border-touching regions, so the gap is not a rounding detail.
         summary["mcl_um"] = round(float(lengths.max()) * um_px, 2) if len(lengths) else None
+        uncens = np.array([r.get("SkeletonLength_px") or 0.0 for r in rows
+                           if not r["length_is_censored"]], float)
+        summary["mcl_um_uncensored_only"] = (round(float(uncens.max()) * um_px, 2)
+                                             if uncens.size else None)
+        summary["mcl_censored"] = (bool(rows[int(np.argmax(lengths))]["length_is_censored"])
+                                   if len(lengths) else None)
+        summary["mcl_bracket_note"] = (
+            "keeping censored regions biases MCL down (a crack leaving the frame is longer "
+            "than measured); dropping them biases it up (long cracks reach edges more "
+            "often). The pair brackets; neither is the value.")
         summary["tcl_um"] = round(float(lengths.sum()) * um_px, 2)
     if px_um:
         summary["crack_area_um2"] = round(total_px * px_um * px_um, 2)
@@ -240,7 +278,8 @@ def measure_path(path, modality="sem", stem=None, r_l_axis_deg=0.0):
     for suf in ("_gated", "_machine", "_mask", "_crack_mask"):
         if stem.endswith(suf):
             stem = stem[: -len(suf)]
-    return measure_frame(load_mask(path), stem, modality, r_l_axis_deg)
+    mask, grey = load_mask(path, with_grey=True)
+    return measure_frame(mask, stem, modality, r_l_axis_deg, grey=grey)
 
 
 if __name__ == "__main__":

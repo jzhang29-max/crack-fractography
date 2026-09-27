@@ -1,0 +1,70 @@
+name: build
+
+# Builds the app on all three platforms. Only macOS is developed and tested by hand here,
+# so the other two exist to answer one question honestly: does it package and start at all?
+# A green run is not a claim that the app has been used on Windows or Linux.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: system deps for pywebview
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgirepository1.0-dev gir1.2-webkit2-4.1 \
+            libcairo2-dev pkg-config python3-dev
+      - run: pip install -r requirements.txt pytest
+      # No SEM checkout on CI, so the tests that need one skip themselves. That is the
+      # point: it proves the app's own code stands up without the sibling repo, which is
+      # exactly the situation a downloaded copy is in.
+      - run: pytest -q tests/ -rs
+
+  build:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: system deps for pywebview (linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgirepository1.0-dev gir1.2-webkit2-4.1 \
+            libcairo2-dev pkg-config python3-dev xvfb
+      - run: pip install -r requirements.txt -r packaging/requirements-build.txt
+      - run: pyinstaller --noconfirm --clean packaging/fractography.spec
+
+      # Does it START and SERVE? A build that produces a binary which cannot answer a
+      # request is a green check on nothing -- this project has shipped that before.
+      # Does it START and SERVE? A build that produces a binary which cannot answer a
+      # request is a green check on nothing -- this project has shipped that before.
+      - name: smoke test
+        shell: bash
+        run: |
+          case "${{ runner.os }}" in
+            macOS)   BIN="dist/Crack Fractography.app/Contents/MacOS/Crack Fractography" ;;
+            Windows) BIN="dist/Crack Fractography/Crack Fractography.exe" ;;
+            *)       BIN="dist/Crack Fractography/Crack Fractography" ;;
+          esac
+          python packaging/smoke_check.py "$BIN" 8899
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: crack-fractography-${{ matrix.os }}
+          path: dist/
+          retention-days: 14

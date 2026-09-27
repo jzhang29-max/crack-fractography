@@ -17,7 +17,10 @@ THE VENDORED COPY IS DATA. shared_impl loads it from a file path with importlib,
 to exist as a file, not as a frozen module.
 """
 import os
+import sys
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+
+MACOS = sys.platform == "darwin"
 
 REPO = os.path.abspath(os.path.join(SPECPATH, ".."))
 
@@ -30,9 +33,11 @@ hidden = (collect_submodules("webview")
           + ["uvicorn.logging", "uvicorn.loops.auto", "uvicorn.loops.asyncio",
              "uvicorn.protocols.http.auto", "uvicorn.protocols.http.h11_impl",
              "uvicorn.protocols.websockets.auto", "uvicorn.lifespan.on",
-             "multipart", "python_multipart",
-             "objc", "Foundation", "AppKit", "WebKit", "Quartz", "Security",
-             "UniformTypeIdentifiers"])
+             "multipart", "python_multipart"]
+          # pyobjc exists only on macOS. Naming it unconditionally makes the Linux and
+          # Windows builds fail at analysis rather than produce a working app.
+          + (["objc", "Foundation", "AppKit", "WebKit", "Quartz", "Security",
+              "UniformTypeIdentifiers"] if MACOS else []))
 
 # analysis/ is listed FILE BY FILE, not as a directory. Copying the directory swept in
 # analysis/out -- 30 MB of measured JSON plus every mask ever uploaded here -- which a
@@ -86,12 +91,15 @@ exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name="Crack Fractography",
 coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False,
                name="Crack Fractography")
 
-app = BUNDLE(coll, name="Crack Fractography.app",
-             icon=None, bundle_identifier="edu.stanford.crack-fractography",
-             info_plist={
-                 "CFBundleShortVersionString": "1.0.0",
-                 "NSHighResolutionCapable": True,
-                 # It has a window, so it belongs in the Dock and can be quit like an app.
-                 "LSBackgroundOnly": False,
-                 "LSMinimumSystemVersion": "12.0",
-             })
+# BUNDLE is the .app wrapper and exists only on macOS. Elsewhere COLLECT's directory IS
+# the deliverable, and naming BUNDLE there produces a warning and no bundle.
+if MACOS:
+    app = BUNDLE(coll, name="Crack Fractography.app",
+                 icon=None, bundle_identifier="edu.stanford.crack-fractography",
+                 info_plist={
+                     "CFBundleShortVersionString": "1.0.0",
+                     "NSHighResolutionCapable": True,
+                     # It has a window, so it belongs in the Dock and quits like an app.
+                     "LSBackgroundOnly": False,
+                     "LSMinimumSystemVersion": "12.0",
+                 })

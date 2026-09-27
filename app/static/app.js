@@ -198,7 +198,13 @@ async function selectFrame(name) {
         ` mm/mm² <span class="muted">${Math.round(100 * Math.abs(pr.p21_buffon_mm_per_mm2 - f.p21_skeleton_mm_per_mm2) / f.p21_skeleton_mm_per_mm2)}% apart — skeletonisation error</span>`]] : []),
     ...(pr.p10_min_per_mm ? [["P10 min", `${fmt(pr.p10_min_per_mm, 1)} /mm <span class="muted">at ${pr.p10_min_at_deg}°, mean ${fmt(pr.p10_mean_per_mm, 1)}</span>`]] : []),
     ...(f.p20_per_mm2 ? [["P20", fmt(f.p20_per_mm2, 0) + " /mm²"]] : []),
-    ...(f.mcl_um ? [["Longest crack (MCL)", fmt(f.mcl_um, 1) + " µm"]] : []),
+    // MCL is reported as a BRACKET, not a value. Keeping edge-censored regions biases it
+    // down (a crack leaving the frame is longer than the part seen); dropping them biases
+    // it up (long cracks reach edges more often). Both ends, or neither.
+    ...(f.mcl_um ? [["Longest crack (MCL)",
+      f.mcl_um_uncensored_only != null && f.mcl_censored
+        ? `${fmt(f.mcl_um, 1)} µm <span class="muted">censored — ${fmt(f.mcl_um_uncensored_only, 1)} µm if edge-touching cracks are dropped</span>`
+        : `${fmt(f.mcl_um, 1)} µm <span class="muted">${f.mcl_censored === false ? "does not touch an edge" : ""}</span>`]] : []),
     ...(f.tcl_um ? [["Total length (TCL)", fmt(f.tcl_um, 0) + " µm"]] : []),
     ["R_L median", f.R_L_median === null || f.R_L_median === undefined ? "—"
       : `${fmt(f.R_L_median, 3)} <span class="muted">axis ${f.R_L_axis_deg}°, ${fmt(f.R_L_n_segments)} segments</span>`],
@@ -207,7 +213,23 @@ async function selectFrame(name) {
       : `${(f.censored_share * 100).toFixed(1)}% <span class="muted">length censored</span>`],
     ["Below 10px width envelope", f.width_below_validated_envelope_share === null ? "—"
       : `${(f.width_below_validated_envelope_share * 100).toFixed(0)}% <span class="muted">of regions</span>`],
+    // Cleaning, recorded per frame. The speck threshold is per frame now -- max of a pixel
+    // floor (is a shape measurable) and a physical one (did two frames exclude the same
+    // class of object) -- so which floor bound is part of the reading.
+    ...(f.speck_threshold ? [["Speck floor",
+      `${f.speck_threshold_px} px <span class="muted">${f.speck_threshold.binding_floor} floor` +
+      `${f.speck_threshold.threshold_um2 ? ` · ${f.speck_threshold.threshold_um2} µm²` : ""}</span>`]] : []),
+    ...(f.detection_limit && f.detection_limit.min_resolvable_width_um ? [["Cannot resolve below",
+      `${fmt(f.detection_limit.min_resolvable_width_um, 3)} µm <span class="muted">one pixel — narrower cracks are unresolved, not absent</span>`]] : []),
   ].map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
+
+  // Ingest assertion. Silent when the mask is what it claims to be, and loud when it is
+  // not: an inverted mask measures the matrix, reports it as crack, and looks plausible.
+  const ing = f.ingest;
+  $("#fsel-note").innerHTML = ($("#fsel-note").textContent || "") +
+    (ing && ing.warnings && ing.warnings.length
+      ? ing.warnings.map((w) => `<br><span class="flag bad">⚠ ${w}</span>`).join("")
+      : "");
 
   $("#mask").hidden = false;
   $("#mask").src = `/api/mask/${state.arm}/${encodeURIComponent(name)}`;
