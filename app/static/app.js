@@ -240,6 +240,72 @@ function renderCracks() {
 }
 
 /* ---------------------------------------------------------------- boot */
+// ---------------------------------------------------------------------------------------
+// Setup. A checkout finds the sibling repos through relative symlinks; a downloaded app has
+// none, so on first launch there is no SEM repo and no dataset. That is a normal state, not
+// an error, and the panel says what already works rather than what is broken: measuring a
+// mask you drop on the page needs nothing configured at all.
+let HEALTH = null;
+
+async function health() {
+  HEALTH = await api("/api/health");
+  const c = HEALTH.capabilities;
+  $("#caps").innerHTML = [
+    [c.measure_uploaded_mask, "Measure a mask you add"],
+    [c.segment_raw_micrograph, "Segment a raw micrograph (.tif)"],
+    [c.reference_corpus, "The reference corpus"],
+  ].map(([on, t]) => `<li class="${on ? "" : "off"}">${t}</li>`).join("");
+  $("#sempath").value = HEALTH.sem_repo || "";
+  $("#corpusrow").hidden = !c.reference_corpus || HEALTH.corpus_measured;
+  const impl = HEALTH.measurement_impl || {};
+  // Drift between the app's bundled copy of the shared measurement code and the repo's own
+  // is not an error -- the repo wins -- but it means a packaged build would measure
+  // differently, so it is said out loud instead of found later as an unexplained gap.
+  $("#semmsg").innerHTML = impl.drift
+    ? `<span class="flag">measuring with the SEM repo's code, which differs from this app's copy</span>`
+    : "";
+  return HEALTH;
+}
+
+function showSetup(on) { $("#setup").hidden = !on; }
+
+async function wireSetup() {
+  $("#setupbtn").onclick = () => showSetup($("#setup").hidden);
+
+  $("#semset").onclick = async () => {
+    const v = $("#sempath").value.trim();
+    if (!v) return;
+    $("#semmsg").textContent = "checking…";
+    try {
+      const r = await fetch("/api/config?sem_repo=" + encodeURIComponent(v), { method: "POST" });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.detail || r.statusText);
+      await health();                       // health() rewrites #semmsg, so say it after
+      $("#semmsg").textContent = "set";
+    } catch (e) { $("#semmsg").innerHTML = `<span class="flag bad">${e.message}</span>`; }
+  };
+
+  $("#measure").onclick = async () => {
+    $("#measure").disabled = true;
+    $("#setuplog").hidden = false;
+    const r = await fetch("/api/measure_corpus?arm=all", { method: "POST" });
+    if (!r.ok) {
+      $("#setuplog").textContent = (await r.json()).detail || r.statusText;
+      $("#measure").disabled = false;
+      return;
+    }
+    const poll = async () => {
+      const j = await api("/api/measure_corpus");
+      $("#setuplog").textContent = j.log.join("\n") || `running… ${j.elapsed_s}s`;
+      $("#setuplog").scrollTop = $("#setuplog").scrollHeight;
+      if (j.state === "running") return setTimeout(poll, 1500);
+      $("#measure").disabled = false;
+      if (j.state === "done") location.reload();
+    };
+    poll();
+  };
+}
+
 async function loadArm() {
   try {
     state.frames = await api(`/api/frames?arm=${encodeURIComponent(state.arm)}` +
@@ -344,11 +410,18 @@ async function loadArm() {
     ["figkind", "figy", "figx", "figthin"].forEach((id) => $("#" + id).onchange = figRender);
   } catch (e) { $("#figout").innerHTML = `<p class="note">figures unavailable: ${e.message}</p>`; }
 
+  await wireSetup();
+  try { await health(); } catch (e) { /* the page still works without it */ }
+
   let arms;
   try { arms = await api("/api/arms"); }
   catch (e) {
-    document.body.insertAdjacentHTML("afterbegin",
-      `<p class="err">Measurements not built yet: ${e.message}</p>`);
+    // No dataset is the normal first launch of a downloaded copy, not a failure. Open Setup
+    // and say the one thing that is true: you can start by adding an image.
+    showSetup(true);
+    $("#hdr").textContent = "no measurements yet";
+    $("#armnote").textContent = "Add a mask or micrograph above to measure one, " +
+      "or point the app at a SEM repo in Setup.";
     return;
   }
   $("#arm").innerHTML = arms.map((a) =>
@@ -359,6 +432,7 @@ async function loadArm() {
   const tf = arms.reduce((n, a) => n + a.n_frames, 0);
   const tc = arms.reduce((n, a) => n + a.n_cracks, 0);
   $("#hdr").textContent = `${tf} frames · ${tc.toLocaleString()} cracks · ${arms.length} arms`;
+  if (HEALTH && !HEALTH.sem_repo) showSetup(true);
   $("#arm").onchange = (e) => { state.arm = e.target.value; state.spec = ""; loadArm(); };
   $("#spec").onchange = (e) => { state.spec = e.target.value; loadArm(); };
   loadArm();

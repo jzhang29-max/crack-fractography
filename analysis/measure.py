@@ -41,10 +41,14 @@ from skimage import measure as skmeasure
 Image.MAX_IMAGE_PIXELS = None
 _HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(_HERE)
-sys.path.insert(0, os.path.join(REPO, "data", "sem", "interior_active_learning", "code"))
 sys.path.insert(0, _HERE)
 
-from extended_features import crack_shape_measurements   # noqa: E402  (the shared implementation)
+# The shared implementation, resolved live-repo-first. It is NOT imported from a fixed path
+# any more: a downloadable app has no sibling checkout to import from, and hardcoding one
+# would make the app fail to measure a mask the user dropped on it. shared_impl keeps the
+# "one implementation" rule by preferring the repo whenever there is one and reporting which
+# copy answered.
+from shared_impl import crack_shape_measurements          # noqa: E402
 from probes import line_probe                            # noqa: E402
 from segments import skeleton_segments                   # noqa: E402
 from scale import nm_per_px                               # noqa: E402

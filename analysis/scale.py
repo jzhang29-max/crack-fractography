@@ -17,10 +17,12 @@ one.
 """
 import csv
 import os
+import sys as _sys
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(_HERE)
-SEM = os.path.join(REPO, "data", "sem")
+_sys.path.insert(0, REPO)
+from app import paths as _P   # noqa: E402
 
 #: Anchored by tile geometry, not by a databar: 9x5 tiles of a 30 um window at 0.35 overlap.
 TXM_NM_PER_PX = 29.24
@@ -31,7 +33,13 @@ _FEI = {}
 def _load_fei():
     if _FEI:
         return _FEI
-    p = os.path.join(SEM, "crack_export", "analysis", "fei_metadata_260915.csv")
+    # The scale table lives in the SEM repo. Without one configured there is no table, so
+    # every SEM frame reports scale_known=false -- which is the honest answer, not an
+    # excuse to fall back to a default nm/px.
+    sem = _P.sem_repo()
+    if not sem:
+        return _FEI
+    p = os.path.join(sem, "crack_export", "analysis", "fei_metadata_260915.csv")
     if not os.path.exists(p):
         return _FEI
     for r in csv.DictReader(open(p)):

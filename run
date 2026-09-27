@@ -47,18 +47,20 @@ if [ ! -f "$STAMP" ] || ! cmp -s requirements.txt "$STAMP"; then
   cp requirements.txt "$STAMP"
 fi
 
-# The data links are what this app reads. A dangling one means every number would be computed
-# on nothing, so say so now rather than serving an empty page.
+# The data links are how a CHECKOUT finds the sibling repos. They are no longer required:
+# the app measures masks you give it with no repo at all, and says so on the page. So a
+# dangling link is a warning about what will be unavailable, not a reason to refuse to start.
+missing=""
 for d in sem txm txm_export; do
-  if [ ! -e "data/$d" ]; then
-    echo "==> data/$d is missing or dangling -> $(readlink "data/$d" 2>/dev/null || echo '(no link)')"
-    echo "    This app reads the sibling repos through relative symlinks. Recreate with:"
-    echo "      ln -s ../../<repo> data/$d"
-    exit 1
-  fi
+  [ -e "data/$d" ] || missing="$missing $d"
 done
+if [ -n "$missing" ]; then
+  echo "==> not linked:$missing"
+  echo "    The reference corpus and .tif segmentation need them. Uploaded masks do not."
+  echo "    Link with:  ln -s ../../<repo> data/<name>       or set the path in Setup."
+fi
 
-if [ ! -f analysis/out/frames.json ]; then
+if [ ! -f analysis/out/frames.json ] && [ -e "data/sem" ]; then
   echo "==> no measurements yet. Building them (this takes a few minutes):"
   "$PY" analysis/batch.py --arm all
 fi

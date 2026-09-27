@@ -11,15 +11,17 @@ definitions of the object, so the API requires an arm and refuses to aggregate a
 """
 import json
 import os
+import time
 
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 
+from . import paths as P
+
 _HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.dirname(_HERE)
-OUT = os.path.join(REPO, "analysis", "out")
-SEM_DERIVED = os.path.join(REPO, "data", "sem", "crack_export", "derived")
+RES = P.RES
+OUT = P.OUT
 
 app = FastAPI(title="crack fractography")
 _CACHE = {}
@@ -86,14 +88,22 @@ def cracks(frame: str = Query(...), arm: str = Query(...),
 @app.get("/api/mask/{arm:path}/{frame}")
 def mask(arm: str, frame: str):
     """The mask PNG itself, so the page can show what a number was measured on."""
-    src = {"sem/gated": (os.path.join(SEM_DERIVED, "gated_masks"), "_gated.png"),
-           "sem/machine": (os.path.join(SEM_DERIVED, "machine_masks"), "_machine.png"),
-           "uploads": (os.path.join(REPO, "analysis", "out", "uploads"), "_gated.png")}
+    derived = P.sem_derived()
+    src = {"sem/gated": (derived and os.path.join(derived, "gated_masks"), "_gated.png"),
+           "sem/machine": (derived and os.path.join(derived, "machine_masks"), "_machine.png"),
+           "uploads": (P.UPLOADS, "_gated.png")}
     if arm in src:
         root, suf = src[arm]
+        if not root:
+            raise HTTPException(503, "no SEM repo is configured, so its masks cannot be "
+                                     "shown. Set one in Setup.")
         p = os.path.join(root, frame + suf)
     elif arm == "txm":
-        p = os.path.join(REPO, "data", "txm_export", frame, f"{frame}_crack_mask.png")
+        tx = P.txm_export()
+        if not tx:
+            raise HTTPException(503, "no TXM export is configured, so its masks cannot be "
+                                     "shown. Set one in Setup.")
+        p = os.path.join(tx, frame, f"{frame}_crack_mask.png")
     else:
         raise HTTPException(400, f"unknown arm {arm!r}")
     if not os.path.exists(p):
@@ -134,7 +144,7 @@ def export_csv(arm: str = Query(...), level: str = "frames"):
 # The detector lives in the sibling SEM repo and needs pandas, cv2 and a model bundle that
 # this app deliberately does not carry. It is invoked as a subprocess with THAT repo's
 # interpreter rather than imported, which is the only thing that can work across two venvs.
-UPLOAD_DIR = os.path.join(REPO, "analysis", "out", "uploads")
+UPLOAD_DIR = P.UPLOADS
 MASK_EXT = {".png", ".bmp", ".gif"}
 IMAGE_EXT = {".tif", ".tiff"}
 MAX_UPLOAD_MB = 200
@@ -170,12 +180,17 @@ async def upload(file: UploadFile = File(...)):
         # Stage into the SEM repo's originals under a temp name -- run_unified_pipeline
         # resolves its input by stem from there -- then remove it. The repo's own corpus is
         # never modified: the staged file is deleted in the finally block whatever happens.
-        sem = os.path.join(REPO, "data", "sem")
-        py = os.path.join(sem, ".venv", "bin", "python3")
-        if not os.path.exists(py):
+        sem = P.sem_repo()
+        py = P.sem_python()
+        if not sem:
+            raise HTTPException(503, "no SEM repo is configured, so a raw micrograph cannot "
+                                     "be segmented. Upload a black-and-white mask instead, "
+                                     "or point the app at a sem-crack-detector checkout in "
+                                     "Setup.")
+        if not py:
             raise HTTPException(503, "the SEM repo's virtualenv is not built, so a raw "
                                      "micrograph cannot be segmented. Upload a mask instead, "
-                                     "or run ./run in the sem-crack-detector repo first.")
+                                     "or run ./run in that repo once first.")
         tmp_stem = f"__upload_{os.getpid()}_{abs(hash(stem)) % 10**6}"
         staged = os.path.join(sem, "original", tmp_stem + ".tif")
         mask_path = os.path.join(UPLOAD_DIR, f"{stem}_gated.png")
@@ -183,7 +198,7 @@ async def upload(file: UploadFile = File(...)):
             with open(staged, "wb") as fh:
                 fh.write(blob)
             r = subprocess.run(
-                [py, os.path.join(REPO, "analysis", "detect_one.py"), staged, mask_path, sem],
+                [py, os.path.join(RES, "analysis", "detect_one.py"), staged, mask_path, sem],
                 capture_output=True, text=True, timeout=1800)
             if r.returncode != 0:
                 why = (r.stderr or r.stdout or "").strip()[-500:]
@@ -195,7 +210,7 @@ async def upload(file: UploadFile = File(...)):
                     os.remove(p)
 
     # Measure with the SAME code every other arm uses, so an uploaded frame is comparable.
-    _sys.path.insert(0, os.path.join(REPO, "analysis"))
+    _sys.path.insert(0, os.path.join(RES, "analysis"))
     from measure import measure_path
     try:
         rows, summ = measure_path(mask_path, "sem", stem=stem)
@@ -256,6 +271,138 @@ def figure_svg(arm: str = Query(...), kind: str = Query("box_by_specimen"),
     return Response(out["svg"], media_type="image/svg+xml", headers=headers)
 
 
+# ---------------------------------------------------------------------------------------
+# Setup. A checkout finds the sibling repos through relative symlinks; a downloaded app has
+# no siblings, so the one thing it cannot discover is where the SEM repo is. That is the
+# whole of the configuration, and the app states plainly what it can and cannot do without
+# it rather than failing at the moment of use.
+@app.get("/api/health")
+def health():
+    """What this install can do right now, and what is missing to do the rest."""
+    import sys as _sys
+    _sys.path.insert(0, os.path.join(RES, "analysis"))
+    try:
+        from shared_impl import provenance
+        impl = provenance()
+    except Exception as e:
+        impl = {"source": None, "error": f"{type(e).__name__}: {e}"}
+
+    sem = P.sem_repo()
+    ok, findings = P.check_sem_repo(sem) if sem else (False, [])
+    # WHICH arms are measured, not merely whether any file exists. One uploaded mask
+    # creates frames.json, and treating that as "the dataset is built" hid the button for
+    # measuring the reference corpus from anyone who added a file before configuring the
+    # repo -- so the corpus could never be measured from the UI at all.
+    arms_measured = []
+    try:
+        arms_measured = sorted({r.get("arm") for r in _load("frames")} - {None})
+    except HTTPException:
+        pass
+    has_data = bool(arms_measured)
+    return {
+        "frozen": P.FROZEN,
+        "data_dir": P.DATA,
+        "dataset_built": has_data,
+        "arms_measured": arms_measured,
+        "corpus_measured": any(a.startswith("sem/") or a == "txm" for a in arms_measured),
+        "sem_repo": sem,
+        "sem_repo_ok": ok,
+        "sem_findings": [{"level": a, "what": b} for a, b in findings],
+        "can_segment": bool(P.sem_python()),
+        "txm_export": P.txm_export(),
+        "measurement_impl": impl,
+        # The two capabilities a user actually cares about, stated as capabilities.
+        "capabilities": {
+            "measure_uploaded_mask": True,
+            "segment_raw_micrograph": bool(P.sem_python()),
+            "reference_corpus": bool(P.sem_derived() and
+                                     os.path.isdir(os.path.join(P.sem_derived(),
+                                                                "gated_masks"))),
+        },
+    }
+
+
+@app.post("/api/config")
+def set_config(sem_repo: str | None = None, txm_export: str | None = None):
+    """Point the app at the repos. Validated before it is saved, so a wrong folder is
+    rejected here with the reason instead of accepted and failing later."""
+    if sem_repo is not None:
+        sem_repo = os.path.expanduser(sem_repo.strip())
+        ok, findings = P.check_sem_repo(sem_repo)
+        if not ok:
+            miss = ", ".join(w for lv, w in findings if lv == "missing")
+            raise HTTPException(400, f"that folder is not a sem-crack-detector checkout "
+                                     f"-- missing: {miss}")
+    if txm_export is not None:
+        txm_export = os.path.expanduser(txm_export.strip())
+        if not os.path.isdir(txm_export):
+            raise HTTPException(400, "that folder does not exist")
+    P.set_config(sem_repo=sem_repo, txm_export=txm_export)
+    _CACHE.clear()
+    # Which measurement implementation answers depends on this setting, and it is resolved
+    # once and cached. Without this, configuring a repo leaves the process measuring with
+    # the bundled copy until it is restarted.
+    import sys as _sys
+    _sys.path.insert(0, os.path.join(RES, "analysis"))
+    try:
+        import shared_impl
+        shared_impl.reset()
+    except Exception:
+        pass
+    return health()
+
+
+# ---------------------------------------------------------------------------------------
+# Measuring the reference corpus. This is the long job, so it runs on a thread and the page
+# polls; a request that blocks for twenty minutes is a request that times out.
+_JOB = {"state": "idle", "log": [], "started": None}
+
+
+@app.post("/api/measure_corpus")
+def measure_corpus(arm: str = "all"):
+    import threading
+    if _JOB["state"] == "running":
+        raise HTTPException(409, "a measurement is already running")
+    if not P.sem_derived():
+        raise HTTPException(503, "no SEM repo is configured, so there is no corpus to "
+                                 "measure. Set one in Setup, or just upload masks.")
+
+    def run():
+        import io
+        import contextlib
+        _JOB.update(state="running", log=[], started=time.time())
+        buf = io.StringIO()
+        try:
+            import sys as _sys
+            _sys.path.insert(0, os.path.join(RES, "analysis"))
+            import importlib
+            batch = importlib.import_module("batch")
+            importlib.reload(batch)
+            argv = _sys.argv
+            _sys.argv = ["batch.py", "--arm", arm]
+            try:
+                with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+                    batch.main()
+            finally:
+                _sys.argv = argv
+            _JOB["state"] = "done"
+        except Exception as e:
+            buf.write(f"\nFAILED {type(e).__name__}: {e}\n")
+            _JOB["state"] = "failed"
+        finally:
+            _JOB["log"] = buf.getvalue().splitlines()[-200:]
+            _CACHE.clear()
+
+    threading.Thread(target=run, daemon=True).start()
+    return {"state": "running"}
+
+
+@app.get("/api/measure_corpus")
+def measure_corpus_status():
+    el = (time.time() - _JOB["started"]) if _JOB["started"] else 0
+    return {"state": _JOB["state"], "elapsed_s": round(el, 1), "log": _JOB["log"][-40:]}
+
+
 @app.get("/")
 def index():
     """Serve the page with a cache-busting token on its script.
@@ -268,11 +415,11 @@ def index():
     it; only the query token does. The token is the file's mtime, so it changes exactly when
     the file does and never otherwise.
     """
-    p = os.path.join(_HERE, "templates", "index.html")
+    p = os.path.join(RES, "app", "templates", "index.html")
     if not os.path.exists(p):
         return HTMLResponse("<h1>index.html missing</h1>", status_code=500)
     html = open(p).read()
-    js = os.path.join(_HERE, "static", "app.js")
+    js = os.path.join(RES, "app", "static", "app.js")
     if os.path.exists(js):
         html = html.replace('src="/static/app.js"',
                             f'src="/static/app.js?v={int(os.path.getmtime(js))}"')
@@ -280,4 +427,4 @@ def index():
 
 
 # Mounted last so it cannot shadow /api/*.
-app.mount("/static", StaticFiles(directory=os.path.join(_HERE, "static")), name="static")
+app.mount("/static", StaticFiles(directory=os.path.join(RES, "app", "static")), name="static")

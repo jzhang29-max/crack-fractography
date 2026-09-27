@@ -109,6 +109,23 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
   box-shadow:0 4px 14px rgba(0,0,0,.18);opacity:0;transition:opacity .08s;z-index:9;
   font-variant-numeric:tabular-nums}
 .err{color:var(--bad);padding:12px 24px}
+/* Setup. Shown automatically when something the app needs is not configured -- which is
+   the normal first launch of a downloaded copy, where there are no sibling repos to find.
+   It is a panel rather than a modal so the rest of the page stays usable: measuring an
+   uploaded mask never needs any of this. */
+#setup{padding:14px 24px;border-bottom:1px solid var(--rule);background:var(--surface-2)}
+#setup[hidden]{display:none}
+#setup h2{font-size:13px;margin:0 0 8px;font-weight:650}
+#setup .row{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:9px}
+#setup input[type=text]{flex:1;min-width:220px;font:inherit;padding:6px 9px;border-radius:7px;
+  border:1px solid var(--rule);background:var(--surface-1);color:var(--text-primary)}
+.caps{display:flex;gap:16px;flex-wrap:wrap;margin:0;padding:0;list-style:none;font-size:12.5px}
+.caps li::before{content:"● ";color:var(--s3)}
+.caps li.off::before{content:"○ ";color:var(--text-muted)}
+.caps li.off{color:var(--text-muted)}
+#setuplog{font:11.5px/1.45 Menlo,monospace;color:var(--text-secondary);white-space:pre-wrap;
+  max-height:150px;overflow:auto;margin:9px 0 0}
+@media (max-width:900px){#setup{padding:12px 14px}}
 /* Narrow: one column, and minmax(0,...) again -- a bare 1fr reintroduces the min-width:auto
    blowout the rule above exists to stop. Controls grow to a 40px touch target, and the
    filter row becomes a two-column grid instead of a single squashed flex line. */
@@ -139,9 +156,26 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
   <h1>Crack network measurement</h1>
   <span class="sub" id="hdr">loading…</span>
   <span class="spacer"></span>
+  <button id="setupbtn" title="Where the app reads from">⚙ Setup</button>
   <button id="theme" title="Toggle light/dark">◐ theme</button>
   <button id="csv">↓ CSV</button>
 </header>
+
+<section id="setup" hidden>
+  <h2>Setup</h2>
+  <ul class="caps" id="caps"></ul>
+  <div class="row">
+    <input id="sempath" type="text" spellcheck="false"
+           placeholder="/path/to/sem-crack-detector">
+    <button id="semset">Use this</button>
+    <span class="sub" id="semmsg"></span>
+  </div>
+  <div class="row" id="corpusrow" hidden>
+    <button id="measure">Measure reference corpus</button>
+    <span class="sub">Minutes, not seconds. Runs once.</span>
+  </div>
+  <pre id="setuplog" hidden></pre>
+</section>
 
 <div class="filters">
   <label for="arm" title="sem/gated = detector + your strokes, edges drawn by the image. sem/machine = detector alone. txm = the TXM export. uploads = files you added. These are never mixed.">Arm <span class="hint">?</span></label><select id="arm"></select>

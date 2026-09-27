@@ -30,25 +30,38 @@ import numpy as np
 _HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(_HERE)
 sys.path.insert(0, _HERE)
-sys.path.insert(0, os.path.join(REPO, "data", "sem", "interior_active_learning", "code"))
+sys.path.insert(0, REPO)
+
+from app import paths as P                       # noqa: E402
+for _d in P.sem_code_dirs():
+    sys.path.insert(0, _d)
 
 from measure import measure_path                 # noqa: E402
-from aggregate import specimen_key               # noqa: E402  (the repo's own grouping)
 from scale import txm_specimen_key               # noqa: E402
 
-OUT = os.path.join(_HERE, "out")
-SEM_DERIVED = os.path.join(REPO, "data", "sem", "crack_export", "derived")
+# The repo's own grouping, not a rule invented here. Absent without a SEM checkout, in which
+# case SEM frames are not measurable anyway -- but uploads are, so the import must not be
+# what stops the app from running.
+try:
+    from aggregate import specimen_key           # noqa: E402
+except ImportError:
+    def specimen_key(_stem):
+        return None
+
+OUT = P.OUT
+SEM_DERIVED = P.sem_derived() or os.path.join(_HERE, "__no_sem_repo__")
 ARMS = {
     "sem/gated": (os.path.join(SEM_DERIVED, "gated_masks"), "*_gated.png", "sem"),
     "sem/machine": (os.path.join(SEM_DERIVED, "machine_masks"), "*_machine.png", "sem"),
-    "txm": (os.path.join(REPO, "data", "txm_export"), "*/*_crack_mask.png", "txm"),
+    "txm": (P.txm_export() or os.path.join(_HERE, "__no_txm_export__"),
+            "*/*_crack_mask.png", "txm"),
     # Uploads are a first-class arm, not an append-only side channel. They used to be
     # written straight into frames.json by the upload endpoint, which meant a batch re-run
     # silently deleted every uploaded frame -- the masks stayed on disk and the rows
     # vanished. Measuring them here fixes that AND keeps them on the current metric set:
     # preserving the old rows instead would have left uploads carrying whatever metrics
     # existed when they were uploaded, silently mixed with everything else.
-    "uploads": (os.path.join(_HERE, "out", "uploads"), "*_gated.png", "sem"),
+    "uploads": (P.UPLOADS, "*_gated.png", "sem"),
 }
 
 
@@ -59,7 +72,7 @@ def main():
     a = ap.parse_args()
     arms = list(ARMS) if (not a.arm or "all" in a.arm) else a.arm
 
-    os.makedirs(OUT, exist_ok=True)
+    P.ensure_dirs()
     frames, cracks = [], []
     for arm in arms:
         root, pat, modality = ARMS[arm]
