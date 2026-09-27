@@ -35,6 +35,11 @@ Apple Silicon, macOS 12+. Your measurements live in
 
 **To build the app yourself:** `./packaging/build.sh`.
 
+**Windows and Linux.** Both build and pass CI's smoke check, but only macOS is used by hand
+here — treat them as untested in practice. On Linux the native window needs GTK or Qt
+bindings that cannot be bundled reliably, so the app falls back to opening your browser and
+says so in its log; everything else is identical.
+
 ### What works without anything else installed
 
 Drop a black-and-white mask on the page and it is measured. That needs nothing configured.

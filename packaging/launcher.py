@@ -137,20 +137,29 @@ def main():
     if not ready.wait(timeout=60):
         log("the server did not come up within 60s")
 
+    # The window is the preferred face of this program and it is not the only one. Any
+    # failure to put it on screen falls back to the system browser, because a server that
+    # is already running and answering is worth more than a matching window.
+    #
+    # Catching Exception and not ImportError, which is what the first version did. pywebview
+    # imports fine on a machine with no GTK or Qt and then raises WebViewException from
+    # start() -- so the Linux build died with an unhandled traceback at launch while the
+    # server behind it was up and serving. Found by the first cross-platform CI run.
     try:
         import webview
-    except ImportError:
-        log("pywebview not installed; opening the system browser instead")
-        webbrowser.open(url)
-        threading.Event().wait()
+        api = Api()
+        api.window = webview.create_window(TITLE, url, js_api=api,
+                                           width=1440, height=940, min_size=(720, 560))
+        # Nothing here needs a Chromium; WKWebView is what macOS already has.
+        webview.start(gui="cocoa" if sys.platform == "darwin" else None,
+                      private_mode=False, storage_path=os.path.join(P.DATA, "webview"))
         return
+    except Exception as e:
+        log(f"no native window ({type(e).__name__}: {e})")
+        log(f"running in the browser instead -- open {url}")
 
-    api = Api()
-    api.window = webview.create_window(TITLE, url, js_api=api,
-                                       width=1440, height=940, min_size=(720, 560))
-    # Nothing here needs a Chromium; WKWebView is what macOS already has.
-    webview.start(gui="cocoa" if sys.platform == "darwin" else None,
-                  private_mode=False, storage_path=os.path.join(P.DATA, "webview"))
+    webbrowser.open(url)
+    threading.Event().wait()
 
 
 if __name__ == "__main__":

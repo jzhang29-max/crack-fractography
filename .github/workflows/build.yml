@@ -40,12 +40,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - name: system deps for pywebview (linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgirepository1.0-dev gir1.2-webkit2-4.1 \
-            libcairo2-dev pkg-config python3-dev xvfb
       - run: pip install -r requirements.txt -r packaging/requirements-build.txt
       - run: pyinstaller --noconfirm --clean packaging/fractography.spec
 
