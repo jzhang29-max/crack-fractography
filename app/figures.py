@@ -32,7 +32,10 @@ FIELDS = {
     "largest_share_of_area":    ("Largest region's share of area", "", 100.0, "%"),
     "p21_skeleton_mm_per_mm2":  ("P21 (skeleton)", "mm/mm²", 1.0, ""),
     "p20_per_mm2":              ("P20", "/mm²", 1.0, ""),
+    # MCL is the longest tip-to-tip crack. The network total is a SEPARATE axis, because
+    # putting a network size on an axis labelled "longest crack" is how it got read as one.
     "mcl_um":                   ("Longest crack (MCL)", "µm", 1.0, ""),
+    "largest_network_centreline_um": ("Largest network centreline", "µm", 1.0, ""),
     "tcl_um":                   ("Total crack length (TCL)", "µm", 1.0, ""),
     "R_L_median":               ("R_L (median)", "", 1.0, ""),
     "mean_width_px_median":     ("Median mean-width", "px", 1.0, ""),
@@ -42,7 +45,8 @@ FIELDS = {
     "crack_area_px":            ("Crack area", "px", 1.0, ""),
 }
 #: Fields that only exist once a physical scale is known.
-NEEDS_SCALE = {"p21_skeleton_mm_per_mm2", "p20_per_mm2", "mcl_um", "tcl_um", "area_analysed_mm2"}
+NEEDS_SCALE = {"p21_skeleton_mm_per_mm2", "p20_per_mm2", "mcl_um",
+               "largest_network_centreline_um", "tcl_um", "area_analysed_mm2"}
 
 KINDS = ("scatter", "box_by_specimen", "bar_by_specimen", "histogram")
 

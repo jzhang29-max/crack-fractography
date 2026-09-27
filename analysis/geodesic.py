@@ -33,6 +33,14 @@ shortest path between them, maximised. Tip = degree 1 in the pruned edge graph b
     no tip-to-tip path at all. It returns None with a reason, never 0, because 0 would read
     as "a crack of no length" and land in a max() as though it had been measured.
 
+THE MEASURE IS NOT NEW AND IS NOT CLAIMED. "Largest shortest path" per skeleton ships in
+Fiji AnalyzeSkeleton (contributed by Huub Hovens; Polder, Hovens & Zweers, ImageJ User and
+Developer Conference 2010), the same plugin this repo already credits for endpoint/slab/
+junction classification. In morphology it is the geodesic diameter (Lantuejoul & Beucher,
+J. Microscopy 121:39-49, 1981). What this file fixes is a wrong label on a column of this
+app's own, not a gap in the literature. It exists here rather than as a call into that
+plugin only because the length it has to stay consistent with is computed here.
+
 THE GRAPH IS THE ONE THE LENGTH IS SUMMED OVER, not a second definition of adjacency. Same
 orthogonal edges (weight 1), same sqrt(2) diagonals, and the same pruning rule: a diagonal
 whose two pixels share an orthogonal neighbour in the skeleton is dropped, because it cuts

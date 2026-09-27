@@ -17,7 +17,7 @@ import sys
 import pytest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SUITES = ["test_measure.py", "test_probes.py"]
+SUITES = ["test_measure.py", "test_probes.py", "test_geodesic.py"]
 
 
 @pytest.mark.parametrize("suite", SUITES)

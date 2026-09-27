@@ -48,8 +48,9 @@ sys.path.insert(0, _HERE)
 # would make the app fail to measure a mask the user dropped on it. shared_impl keeps the
 # "one implementation" rule by preferring the repo whenever there is one and reporting which
 # copy answered.
-from shared_impl import crack_shape_measurements          # noqa: E402
+from shared_impl import crack_shape_measurements, skeleton_stats   # noqa: E402
 import cleaning                                          # noqa: E402
+import geodesic                                          # noqa: E402
 from probes import line_probe                            # noqa: E402
 from segments import skeleton_segments                   # noqa: E402
 from scale import nm_per_px                               # noqa: E402
@@ -89,6 +90,13 @@ def measure_frame(mask, stem, modality="sem", r_l_axis_deg=0.0, grey=None):
         y0, x0, y1, x1 = p.bbox
         sub = lab[y0:y1, x0:x1] == p.label
         d = crack_shape_measurements(sub)
+        # THE LONGEST SINGLE CRACK, which SkeletonLength_px is not for a branched region:
+        # that one is summed over the skeleton's adjacency edges, so it is the whole
+        # network's centreline. Both columns are emitted; see analysis/geodesic.py. The
+        # UNROUNDED skel_len is what the graph is checked against -- d["SkeletonLength_px"]
+        # is rounded to 2 dp, and comparing against it would make the tie a no-op.
+        skel_len, _bp, _ep, skel, _loc, _spx = skeleton_stats(sub)
+        geo, geo_info = geodesic.longest_tip_geodesic(skel, skel_len)
         touches = bool(y0 == 0 or x0 == 0 or y1 >= H or x1 >= W)
         r = {
             "crack_id": int(p.label),
@@ -100,12 +108,23 @@ def measure_frame(mask, stem, modality="sem", r_l_axis_deg=0.0, grey=None):
         }
         for k, v in d.items():
             r[k] = (None if (isinstance(v, float) and not np.isfinite(v)) else v)
+        r["TipToTipGeodesic_px"] = (round(float(geo), 2) if geo is not None else None)
+        # None is not an absence here, it is a stated topology: a closed loop has no tip
+        # for a tip-to-tip path to start at. Carried so a reader can see which regions the
+        # max could not consider rather than inferring it from a blank.
+        r["geodesic_undefined_reason"] = geo_info.get("reason")
+        # A region with cycles: the value is the longest tip-to-tip SHORTEST route, which
+        # is a lower bound on the longest simple path. On a tree it is exact -- checked on
+        # 1078 of 1078 tree regions against the brute-force all-pixel diameter.
+        r["geodesic_is_lower_bound"] = (None if geo is None
+                                        else bool(geo_info.get("n_cycles")))
         if px_um:
             r["area_um2"] = round(p.area * px_um * px_um, 4)
-            for src, dst in (("SkeletonLength_px", "length_um"),
+            for src, dst in (("SkeletonLength_px", "network_length_um"),
+                             ("TipToTipGeodesic_px", "longest_crack_um"),
                              ("MeanWidth_px", "mean_width_um"),
                              ("MaxWidth_px", "max_width_um")):
-                v = d.get(src)
+                v = r.get(src)
                 r[dst] = (round(float(v) * px_um, 4)
                           if isinstance(v, (int, float)) and np.isfinite(v) else None)
         rows.append(r)
@@ -224,6 +243,32 @@ def measure_frame(mask, stem, modality="sem", r_l_axis_deg=0.0, grey=None):
         # Pij-labelled densities. "Crack density" unqualified is six incompatible
         # quantities (Dershowitz & Herda 1992); each here carries its subscript and unit.
         "probe": probe,
+
+        # THE WHOLE SEGMENT SUMMARY, stored wholesale like `probe` above.
+        #
+        # The named keys above forward nine of the twenty-four fields segments.py computes,
+        # and the other fifteen were being calculated on every frame of every run and
+        # thrown away -- including the anisotropy null added minutes before this, which
+        # unit-tested green against skeleton_segments and then landed on 0 of 358 frames
+        # because nothing carried it across. The same gap had already silently dropped two
+        # diagnostics whose own comments in segments.py describe them as reported: the
+        # share of skeleton length the directional gate kept, and the lattice-locked share.
+        #
+        # Forwarding the dict rather than adding four more named keys is the point: a new
+        # field in segments.py now reaches the dataset without a second edit here, so there
+        # is no second place to forget.
+        "segments": segsum,
+
+        # The anisotropy verdict ALSO at the top level, because that is where the read-out
+        # and the figure field list look for it, and a nested-only field is one more place
+        # to forget. rose_beats_null is the only one of the three safe to read alone: R
+        # without its null means nothing on this corpus, where uniform random angles return
+        # R = 0.16-0.29 against a corpus median of 0.257.
+        "rose_R": segsum.get("rose_R"),
+        "rose_R_null95": segsum.get("rose_R_null95"),
+        "rose_theta_deg": segsum.get("rose_theta_deg"),
+        "rose_beats_null": segsum.get("rose_beats_null"),
+        "rose_null": segsum.get("rose_null"),
     }
     if nm:
         um_px = nm / 1000.0
@@ -238,7 +283,17 @@ def measure_frame(mask, stem, modality="sem", r_l_axis_deg=0.0, grey=None):
         n_int = len(rows) - n_edge
         summary["p20_per_mm2"] = round((n_int + n_edge / 2.0) / area_mm2, 2) if area_mm2 else None
         summary["p20_edge_rule"] = "ISO 643 planimetric: n_interior + n_edge/2"
-        # MCL: the longest single crack. Design-relevant in a way the mean is not.
+        # MCL: the longest single crack, tip to tip. Design-relevant in a way the mean is
+        # not, and NOT max(SkeletonLength_px), which is what this used to be.
+        #
+        # SkeletonLength_px is summed over the skeleton's adjacency edges, so for a
+        # branched region it is the whole network's centreline -- every arm and spur added
+        # together. Taking its max and labelling it "longest crack" put a network size
+        # under a name the reader compares with Varestraint/hot-cracking MCL, which is one
+        # crack. Measured before the change: the region setting it had a median 594 branch
+        # points, and the result exceeded the short side of the field on 89 of 143 scaled
+        # frames -- 4893.9 um inside a 107.9 um field at worst. Both quantities are
+        # reported now, each under its own name.
         #
         # Step 8, the length half: reported BOTH with and without edge-censored regions,
         # because the two bracket the truth from opposite sides and neither is it. Keeping
@@ -246,23 +301,68 @@ def measure_frame(mask, stem, modality="sem", r_l_axis_deg=0.0, grey=None):
         # Dropping them biases it up by removing exactly the long cracks, since a longer
         # crack is likelier to reach an edge. Here 72-74% of crack area is in
         # border-touching regions, so the gap is not a rounding detail.
-        summary["mcl_um"] = round(float(lengths.max()) * um_px, 2) if len(lengths) else None
-        uncens = np.array([r.get("SkeletonLength_px") or 0.0 for r in rows
-                           if not r["length_is_censored"]], float)
-        summary["mcl_um_uncensored_only"] = (round(float(uncens.max()) * um_px, 2)
-                                             if uncens.size else None)
-        summary["mcl_censored"] = (bool(rows[int(np.argmax(lengths))]["length_is_censored"])
-                                   if len(lengths) else None)
+        geos = np.array([(r.get("TipToTipGeodesic_px") if r.get("TipToTipGeodesic_px")
+                          is not None else np.nan) for r in rows], float)
+        summary.update(_bracket("mcl", geos, rows, um_px))
+        summary["mcl_definition"] = (
+            "longest tip-to-tip geodesic on one region's skeleton: over all pairs of "
+            "skeleton tips, the shortest path between them, maximised. Equals the region's "
+            "whole centreline exactly when the skeleton is unbranched; on a tree it is the "
+            "longest simple path. NOT max(SkeletonLength_px) -- see "
+            "largest_network_centreline_um for that.")
         summary["mcl_bracket_note"] = (
             "keeping censored regions biases MCL down (a crack leaving the frame is longer "
             "than measured); dropping them biases it up (long cracks reach edges more "
             "often). The pair brackets; neither is the value.")
+        # Regions the max could not consider at all: a closed loop has no tip, so it has no
+        # tip-to-tip path. Reported rather than left as a silent omission from a max().
+        summary["n_regions_geodesic_undefined"] = int(np.isnan(geos).sum())
+        _arg = (int(np.nanargmax(geos)) if np.isfinite(geos).any() else None)
+        # Whether the MCL-setting region has cycles, i.e. whether its value is exact (tree)
+        # or a lower bound on the longest simple path through it.
+        summary["mcl_is_lower_bound"] = (bool(rows[_arg].get("geodesic_is_lower_bound"))
+                                         if _arg is not None else None)
+        # What fraction of its own region's network the longest crack actually is. This is
+        # the gap between the two columns, on the one region where it matters most; near
+        # 1.0 means the region is essentially one unbranched crack.
+        _net = (rows[_arg].get("SkeletonLength_px") or 0.0) if _arg is not None else 0.0
+        summary["mcl_share_of_its_network"] = (round(float(geos[_arg]) / _net, 4)
+                                               if _arg is not None and _net else None)
+
+        # The network quantity, under its own name. Same censored/uncensored bracket, for
+        # the same reason -- a network leaving the frame is bigger than the part seen.
+        summary.update(_bracket("largest_network_centreline",
+                                np.array([r.get("SkeletonLength_px") or 0.0
+                                          for r in rows], float), rows, um_px))
+        summary["largest_network_centreline_definition"] = (
+            "max over regions of SkeletonLength_px: the TOTAL centreline length of one "
+            "connected crack network, summed over every branch. A network size, not a "
+            "crack length; do not compare it with a Varestraint MCL.")
         summary["tcl_um"] = round(float(lengths.sum()) * um_px, 2)
     if px_um:
         summary["crack_area_um2"] = round(total_px * px_um * px_um, 2)
         summary["total_length_um"] = round(float(lengths.sum()) * px_um, 2)
         summary["field_width_um"] = round(W * px_um, 2)
     return rows, summary
+
+
+def _bracket(key, vals, rows, um_px):
+    """{key}_um, {key}_um_uncensored_only, {key}_censored -- one bracket, one definition.
+
+    Written once because MCL and the network length need exactly the same three fields
+    computed exactly the same way, and two copies of an argmax-then-read-the-flag are two
+    chances for the flag to end up read off a different region from the value.
+    """
+    out = {f"{key}_um": None, f"{key}_um_uncensored_only": None, f"{key}_censored": None}
+    if not len(vals) or not np.isfinite(vals).any():
+        return out
+    i = int(np.nanargmax(vals))
+    out[f"{key}_um"] = round(float(vals[i]) * um_px, 2)
+    out[f"{key}_censored"] = bool(rows[i]["length_is_censored"])
+    unc = np.where(np.array([r["length_is_censored"] for r in rows], bool), np.nan, vals)
+    if np.isfinite(unc).any():
+        out[f"{key}_um_uncensored_only"] = round(float(np.nanmax(unc)) * um_px, 2)
+    return out
 
 
 def _med(a):

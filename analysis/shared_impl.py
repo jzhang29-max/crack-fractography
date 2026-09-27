@@ -92,6 +92,22 @@ def crack_shape_measurements(mask_bool):
     return _resolve()["module"].crack_shape_measurements(mask_bool)
 
 
+def skeleton_stats(mask_bool):
+    """The same module's skeletonization, so the geodesic runs on the SAME skeleton.
+
+    analysis/geodesic.py needs the skeleton ARRAY, which crack_shape_measurements does not
+    return -- it returns numbers. Going through here rather than importing skeletonize
+    directly keeps the one-implementation rule: whichever copy won the resolution above is
+    the copy that produces both the skeleton and the length summed over it, and the
+    geodesic asserts its own graph sums to that length before emitting anything.
+
+    This does mean each region is skeletonized twice (~20% on the batch, measured). The
+    alternative is a cache keyed on the mask bytes inside the SHARED module, which would
+    make a number in this app depend on an optimisation in a repo this app does not own.
+    """
+    return _resolve()["module"].skeleton_stats(mask_bool)
+
+
 def provenance():
     """Which implementation is in use, and whether it matches what was bundled."""
     s = _resolve()

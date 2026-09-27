@@ -195,10 +195,25 @@ async function selectFrame(name) {
     // MCL is reported as a BRACKET, not a value. Keeping edge-censored regions biases it
     // down (a crack leaving the frame is longer than the part seen); dropping them biases
     // it up (long cracks reach edges more often). Both ends, or neither.
+    //
+    // TWO ROWS, because they are two quantities. This row used to carry
+    // max(SkeletonLength_px) -- the total centreline of the largest NETWORK, every branch
+    // added up -- under the name "Longest crack", which is what a reader compares with a
+    // Varestraint MCL. It read 1578 µm on a frame 213 µm across. The row below it is that
+    // network number, kept and named for what it is.
     ...(f.mcl_um ? [["Longest crack (MCL)",
-      f.mcl_um_uncensored_only != null && f.mcl_censored
+      (f.mcl_um_uncensored_only != null && f.mcl_censored
         ? `${fmt(f.mcl_um, 1)} µm <span class="muted">censored — ${fmt(f.mcl_um_uncensored_only, 1)} µm if edge-touching cracks are dropped</span>`
-        : `${fmt(f.mcl_um, 1)} µm <span class="muted">${f.mcl_censored === false ? "does not touch an edge" : ""}</span>`]] : []),
+        : `${fmt(f.mcl_um, 1)} µm <span class="muted">${f.mcl_censored === false ? "does not touch an edge" : ""}</span>`) +
+      `<span class="muted"><br>tip to tip along one crack` +
+      `${f.mcl_share_of_its_network != null ? `, ${(100 * f.mcl_share_of_its_network).toFixed(0)}% of its own network's centreline` : ""}` +
+      `${f.mcl_is_lower_bound ? " · that region has loops, so this is a lower bound" : ""}` +
+      `${f.n_regions_geodesic_undefined ? ` · ${f.n_regions_geodesic_undefined} closed-loop region(s) have no tip and are not in this max` : ""}</span>`]] : []),
+    ...(f.largest_network_centreline_um ? [["Largest network centreline",
+      `${fmt(f.largest_network_centreline_um, 0)} µm <span class="muted">` +
+      `${f.largest_network_centreline_um_uncensored_only != null && f.largest_network_centreline_censored
+          ? `censored — ${fmt(f.largest_network_centreline_um_uncensored_only, 0)} µm if edge-touching regions are dropped<br>` : ""}` +
+      `every branch of one connected network added together — a network size, not a crack length</span>`]] : []),
     ...(f.tcl_um ? [["Total length (TCL)", fmt(f.tcl_um, 0) + " µm"]] : []),
     ["R_L median", f.R_L_median === null || f.R_L_median === undefined ? "—"
       : `${fmt(f.R_L_median, 3)} <span class="muted">axis ${f.R_L_axis_deg}°, ${fmt(f.R_L_n_segments)} segments</span>`],
@@ -416,7 +431,10 @@ function specimenCard(r) {
     ["P21 · P20", `${num(r.p21_skeleton_mm_per_mm2)} <span class="u">mm/mm²</span> · ${num(r.p20_per_mm2, 0)} <span class="u">/mm²</span>`],
     // null / 1000 is 0 in JavaScript, so an unscaled specimen was reporting "0.00 mm" of
     // total crack length -- a measured zero where the truth is "not measurable".
+    // MCL here is the longest tip-to-tip crack, not the largest network's total
+    // centreline; the two are separate columns since they stopped being the same number.
     ["MCL · TCL", `${num(r.mcl_um)} <span class="u">µm</span> · ${num(r.tcl_um_total == null ? null : r.tcl_um_total / 1000, 2)} <span class="u">mm</span>`],
+    ["Largest network", `${num(r.largest_network_centreline_um)} <span class="u">µm centreline</span>`],
   ];
   const extra = [
     ["Detector", `${dets}${ds ? ` · CBS/ETD <b>×${ds.cbs_over_etd_median}</b> <span class="u">on ${ds.n_fields_both_detectors} field${ds.n_fields_both_detectors > 1 ? "s" : ""} imaged both ways</span>` : ""}`],
