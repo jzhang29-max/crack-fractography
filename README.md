@@ -16,18 +16,59 @@ intergranular versus transgranular — is read from grayscale surface **texture*
 binary mask has thrown away. This app does not attempt it, and a panel claiming to would be
 inventing its answers.
 
+## Install
+
+**As an app.** Download `Crack Fractography.app`, drag it to Applications, double-click. It
+opens a small window with the address and a Quit button, and the analysis itself is a page
+in your browser. macOS refuses unsigned apps downloaded from the internet, so once:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Crack Fractography.app"
+```
+
+Apple Silicon, macOS 12+. Your measurements live in
+`~/Library/Application Support/Crack Fractography` and survive replacing the app.
+
+**From source.** `./run` — it builds its own virtualenv and serves on
+<http://127.0.0.1:8810>.
+
+**To build the app yourself:** `./packaging/build.sh`.
+
+### What works without anything else installed
+
+Drop a black-and-white mask on the page and it is measured. That needs nothing configured.
+
+Two things need a [sem-crack-detector](https://github.com/jzhang29-max/sem-crack-detector)
+checkout, which you point at once in **Setup**:
+
+| | needs the SEM repo |
+|---|---|
+| measure a mask you add | no |
+| segment a raw micrograph (`.tif`) | yes — the detector's model is pickled against that repo's own interpreter, so it is run there as a subprocess rather than imported |
+| the reference corpus | yes — it is that repo's masks |
+
+The app says which of the three are available on first launch rather than failing when you
+try one.
+
 ## The measurement is imported, not reimplemented
 
 Per-region shape comes from the SEM repo's
-`interior_active_learning/code/extended_features.crack_shape_measurements`, through
-`data/sem`. A second implementation of the same metrics would be a silent mismatch with every
-number that repo has published, and that function carries fixes worth inheriting:
+`interior_active_learning/code/extended_features.crack_shape_measurements`. A second
+implementation of the same metrics would be a silent mismatch with every number that repo
+has published, and that function carries fixes worth inheriting:
 
 * mean width is area ÷ skeleton **length**, not area ÷ pixel count — the count overstates a
   diagonal crack's width by up to √2;
 * max width reads the distance transform on the skeleton **from the same crop the skeleton was
   built on** — a shape mismatch there once made max width fall back to `sqrt(area)` for every
   region ever measured.
+
+The packaged app carries a **byte copy** of that one file in `analysis/_vendor`, because it
+has to measure a mask with no second repo installed. The copy is never edited and never
+preferred: when a SEM repo is configured its own file wins, and the copy's hash is checked
+at runtime and in the test suite, so a repo whose copy has moved on is reported rather than
+quietly diverged from. Re-vendor with `python3 packaging/vendor.py`; `build.sh` does it
+every build.
 
 ## Three guards, each because it already produced a wrong number here
 
