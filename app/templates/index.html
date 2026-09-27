@@ -63,6 +63,12 @@ main{padding:20px 24px 60px;display:grid;gap:20px;
 .card.wide{grid-column:1/-1}
 .card h2{font-size:13px;margin:0 0 3px;font-weight:650;letter-spacing:.01em}
 .card .note{color:var(--text-muted);font-size:12px;margin:0 0 12px}
+/* The reasoning behind each number still matters, but it does not need to be on screen all
+   the time -- the owner asked for fewer words. It lives in title= on the heading, marked by
+   a small ? so it is discoverable rather than hidden. */
+.hint{color:var(--text-muted);font-weight:400;cursor:help;font-size:11px;
+  border:1px solid var(--rule);border-radius:50%;padding:0 4px;margin-left:3px}
+h2[title]{cursor:help}
 table{width:100%;min-width:0;border-collapse:collapse;font-variant-numeric:tabular-nums}
 th,td{text-align:right;padding:4px 7px;border-bottom:1px solid var(--rule);white-space:nowrap}
 /* The two text columns are what pushed the table past its card: frame stems run to 29 chars
@@ -134,9 +140,9 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
 </header>
 
 <div class="filters">
-  <label for="arm">Arm</label><select id="arm"></select>
+  <label for="arm" title="sem/gated = detector + your strokes, edges drawn by the image. sem/machine = detector alone. txm = the TXM export. uploads = files you added. These are never mixed.">Arm <span class="hint">?</span></label><select id="arm"></select>
   <label for="spec">Specimen</label><select id="spec"></select>
-  <label for="minarea">Min crack area (px)</label>
+  <label for="minarea" title="Hide regions below this area. The speck threshold (25 px) is applied before measurement and is separate from this.">Min area px</label>
   <input id="minarea" type="range" min="0" max="5000" step="50" value="0">
   <span id="minareaval" class="sub">0</span>
   <span class="spacer"></span>
@@ -148,7 +154,7 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
 <main>
   <div class="card wide">
     <h2>Frames</h2>
-    <p class="note">Click a row to inspect it. Click a header to sort.</p>
+    <p class="note">Click a row. Click a header to sort.</p>
     <div class="scroll"><table id="frames"><thead></thead><tbody></tbody></table></div>
   </div>
 
@@ -159,27 +165,25 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
   </div>
 
   <div class="card">
-    <h2>Orientation</h2>
-    <p class="note">Area-weighted, 15° bins, axis not direction (0–180°). Count-weighting
-      would let specks outvote the crack holding the area.</p>
+    <h2 title="15° bins over 0–180°: a crack has an axis, not a direction. Weighted by area, because count-weighting lets a thousand specks outvote the one crack that holds the frame.">Orientation <span class="hint">?</span></h2>
+    <p class="note">Area-weighted, 15° bins.</p>
     <div id="rose"></div>
   </div>
 
   <div class="card">
-    <h2>Crack size distribution</h2>
-    <p class="note">Log-spaced bins of region area. The bar is the share of total crack
-      <em>area</em> in that size class, not the share of regions.</p>
+    <h2 title="Log-spaced bins of region area. Each bar is the share of total crack AREA in that size class, not the share of regions — so one large crack cannot be hidden by many small ones.">Size distribution <span class="hint">?</span></h2>
+    <p class="note">Share of area, log bins.</p>
     <div id="sizes"></div>
   </div>
 
   <div class="card wide">
-    <h2>The mask these numbers were measured on</h2>
+    <h2 title="Every number on this page was computed from exactly this image. Black is crack.">Mask <span class="hint">?</span></h2>
     <p class="note" id="masknote">Select a frame.</p>
     <img class="mask" id="mask" alt="" hidden>
   </div>
 
   <div class="card wide">
-    <h2>Cracks in this frame</h2>
+    <h2 title="One row per connected crack region above the 25 px speck threshold. Tortuosity is blank where the region branches, because path÷chord is undefined then.">Cracks <span class="hint">?</span></h2>
     <p class="note" id="cracknote">Select a frame.</p>
     <div class="scroll"><table id="cracks"><thead></thead><tbody></tbody></table></div>
   </div>

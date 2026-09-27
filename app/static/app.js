@@ -221,8 +221,8 @@ async function loadArm() {
     specs.map((s) => `<option${s === cur ? " selected" : ""}>${s}</option>`).join("");
   const noScale = state.frames.filter((f) => !f.scale_known).length;
   $("#armnote").textContent = noScale
-    ? `${noScale} of ${state.frames.length} frames have no physical scale — µm is withheld for those`
-    : `all ${state.frames.length} frames carry a physical scale`;
+    ? `${noScale}/${state.frames.length} frames: no scale, µm withheld`
+    : `all ${state.frames.length} frames scaled`;
   renderFrames();
   if (state.frames.length) selectFrame(state.frames[0].frame);
 }
@@ -284,7 +284,11 @@ async function loadArm() {
   $("#arm").innerHTML = arms.map((a) =>
     `<option value="${a.arm}">${a.arm} — ${a.n_frames} frames, ${a.n_cracks.toLocaleString()} cracks</option>`).join("");
   state.arm = arms[0].arm;
-  $("#hdr").textContent = arms.map((a) => `${a.arm}: ${a.n_frames} frames / ${a.n_specimens} specimens`).join("  ·  ");
+  // The arm dropdown already carries per-arm counts, so the header says the total once
+  // instead of repeating every arm. Fewer words, same information.
+  const tf = arms.reduce((n, a) => n + a.n_frames, 0);
+  const tc = arms.reduce((n, a) => n + a.n_cracks, 0);
+  $("#hdr").textContent = `${tf} frames · ${tc.toLocaleString()} cracks · ${arms.length} arms`;
   $("#arm").onchange = (e) => { state.arm = e.target.value; state.spec = ""; loadArm(); };
   $("#spec").onchange = (e) => { state.spec = e.target.value; loadArm(); };
   loadArm();
