@@ -137,6 +137,22 @@ def detector_sensitivity(frames):
                     "not material"}
 
 
+def _one_frame_per_field(frames):
+    """One representative frame per physical field, for statistics over stage position.
+
+    Position is a property of the field, not of the frame: two detectors imaging the same
+    place report the same coordinates, so passing raw frames doubles every point.
+    """
+    seen, out = set(), []
+    for f in sorted(frames, key=lambda x: x.get("frame", "")):
+        k = field_key(f.get("frame", ""))
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(f)
+    return out
+
+
 def _gradient(frames):
     try:
         import stage
@@ -165,8 +181,22 @@ def summarise(arm, specimen, frames):
         "density_median": _median([f["crack_density_px_per_Mpx"] for f in frames]),
         "estimable_dispersion": len(af_fields) >= 3,
 
-        # The E562 interval, over fields.
-        "area_fraction_ci": _ci(af_fields),
+        # The E562 interval, over fields -- BUT NOT FOR UPLOADS.
+        #
+        # Every uploaded frame is filed under the pseudo-specimen "uploaded", so a user who
+        # drops four unrelated images on the app got a 95% CI over them with a method
+        # string citing "between-FIELD variance". They are not fields of a specimen; they
+        # are four different pieces of metal. The shipped value was +/-156% over a 316
+        # steel frame, two demos and a test image, and this is the only path a user who is
+        # not the author ever takes -- so the app's loudest statistic was fabricated for
+        # everyone but its author, while the README leads with never pooling.
+        #
+        # Gated on the ARM, not on the field count: the count guard cannot tell four fields
+        # of one specimen from four unrelated images.
+        "area_fraction_ci": (None if arm == "uploads" else _ci(af_fields)),
+        "no_ci_reason": ("uploaded images are not fields of one specimen, so a "
+                         "between-field interval over them would not mean anything"
+                         if arm == "uploads" else None),
 
         # Physical quantities, over SCALED fields only, and null when none are scaled.
         "p10_min_per_mm": _median([(f.get("probe") or {}).get("p10_min_per_mm")
@@ -201,7 +231,13 @@ def summarise(arm, specimen, frames):
 
         # Are these fields a sample of a surface, or a raster across one patch? E562
         # presumes the former and the 2026-09-15 batch is the latter.
-        "stage_gradient": _gradient(frames),
+        # COLLAPSED TO FIELDS FIRST, like every other aggregate in this function. It was
+        # the one that skipped it: CBS and ETD sit at byte-identical stage coordinates, so
+        # all eight shipped records read n=20 for 10 physical fields and every p-value was
+        # computed on doubled data -- up to 27x too small. Corrected, the effect is
+        # STRONGER and the significance weaker: rho +0.745..+0.842 at p 0.0022..0.0133,
+        # against the shipped +0.537..+0.782 at p 0.00005..0.0145.
+        "stage_gradient": _gradient(_one_frame_per_field(frames)),
 
         # The detector, because it is confounded with the specimen and moves the answer.
         "detectors": {},

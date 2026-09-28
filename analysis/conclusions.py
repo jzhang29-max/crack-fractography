@@ -254,6 +254,12 @@ def for_specimen(r, frames=None):
                 "the normal-theory interval reaches negative area fraction, which cannot "
                 "occur, so it is clamped for display only.",
                 level="warn"))
+    elif r.get("no_ci_reason"):
+        out.append(_s(
+            "Uploads are not one specimen: no interval over them.",
+            r["no_ci_reason"] + ". Each uploaded image is measured on its own; the numbers "
+            "on a single frame are unaffected.",
+            level="warn"))
     elif r.get("n_fields", 0) < 3:
         out.append(_s(
             f"Only {r.get('n_fields', 0)} field(s): no interval.",

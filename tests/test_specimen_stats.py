@@ -113,3 +113,34 @@ def test_additive_totals_are_summed_over_fields_not_frames():
     assert r["area_analysed_mm2"] == pytest.approx(0.20), "4 frames, but only 2 fields of material"
     assert r["tcl_um_total"] == pytest.approx(2000.0)
     assert r["n_fields_scaled"] == 2
+
+
+def test_uploads_get_no_e562_interval():
+    """Every uploaded frame is filed under the pseudo-specimen "uploaded", so four
+    unrelated images produced a 95% CI with a method string citing between-FIELD variance.
+    They are four different pieces of metal. The shipped value was +/-156%, and this is the
+    only path a user who is not the author ever takes."""
+    frames = [{"frame": f"img{i}", "area_fraction": v, "n_cracks_measured": 5,
+               "crack_density_px_per_Mpx": 1.0, "scale_known": False}
+              for i, v in enumerate((0.01, 0.05, 0.09, 0.2), 1)]
+    up = S.summarise("uploads", "uploaded", frames)
+    assert up["area_fraction_ci"] is None, "an interval over unrelated uploads is fabricated"
+    assert up["no_ci_reason"], "it must say why, not just omit"
+    # The same four values under a real specimen still get one -- the gate is the arm.
+    real = S.summarise("sem/gated", "S1", frames)
+    assert real["area_fraction_ci"] is not None
+
+
+def test_the_stage_gradient_is_computed_over_fields_not_frames():
+    """Two detectors imaging one place report the SAME stage coordinates, so passing raw
+    frames doubles every point. All eight shipped records read n=20 for 10 fields, making
+    every p-value up to 27x too small."""
+    frames = []
+    for i in range(1, 9):
+        for det in ("CBS", "ETD"):
+            frames.append({"frame": f"S_{det}_000{i}", "area_fraction": 0.01 * i,
+                           "n_cracks_measured": 5, "crack_density_px_per_Mpx": 1.0,
+                           "scale_known": False})
+    kept = S._one_frame_per_field(frames)
+    assert len(kept) == 8, f"16 frames are 8 fields, got {len(kept)}"
+    assert len({S.field_key(f["frame"]) for f in kept}) == 8
