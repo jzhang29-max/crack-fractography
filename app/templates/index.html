@@ -202,6 +202,15 @@ tbody tr[aria-selected=true]{background:color-mix(in oklab,var(--s1) 20%,transpa
 .note{color:var(--text-muted);font-size:12px;margin:0 0 10px}
 img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
   background:#fff;display:block}
+/* A crack row is only useful if you can find the region on the image. centroid_x_px and
+   centroid_y_px were measured and served on every row and pointed at nothing. */
+.maskwrap{position:relative;display:inline-block;max-width:100%}
+#crackpin{position:absolute;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;
+  border:2px solid var(--s2);box-shadow:0 0 0 2px rgba(0,0,0,.35);pointer-events:none;
+  transition:left .12s,top .12s}
+#crackpin[hidden]{display:none}
+#cracks tbody tr{cursor:pointer}
+#cracks tbody tr[aria-selected=true]{background:color-mix(in oklab,var(--s2) 22%,transparent)}
 .tip{position:fixed;pointer-events:none;background:var(--surface-1);color:var(--text-primary);
   border:1px solid var(--rule);border-radius:7px;padding:6px 9px;font-size:12px;
   box-shadow:0 4px 14px rgba(0,0,0,.18);opacity:0;transition:opacity .08s;z-index:9;
@@ -252,7 +261,7 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
   <select id="spec" aria-label="Specimen"></select>
   <span class="spacer"></span>
   <label class="upload" for="up">+ Add image</label>
-  <input id="up" type="file" accept=".png,.bmp,.gif,.tif,.tiff" hidden>
+  <input id="up" type="file" accept=".png,.bmp,.gif,.tif,.tiff" multiple hidden>
   <button id="defsbtn" title="What each number means, and when it lies">Definitions</button>
   <button id="csv">&darr; CSV</button>
   <button id="setupbtn" title="Where the app reads from">Setup</button>
@@ -304,7 +313,8 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
 
       <h3 class="sect">The mask these numbers came from</h3>
       <p class="note" id="masknote">Select a frame.</p>
-      <img class="mask" id="mask" alt="" hidden>
+      <div class="maskwrap"><img class="mask" id="mask" alt="" hidden>
+        <div id="crackpin" hidden></div></div>
 
       <h3 class="sect">Measurements</h3>
       <p class="note" id="fsel-note">Select a frame.</p>

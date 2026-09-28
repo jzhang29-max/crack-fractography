@@ -318,6 +318,7 @@ async function selectFrame(name) {
       ? ing.warnings.map((w) => `<br><span class="flag bad">⚠ ${w}</span>`).join("")
       : "");
 
+  { const pin = $("#crackpin"); if (pin) pin.hidden = true; }
   $("#mask").hidden = false;
   $("#mask").src = `/api/mask/${state.arm}/${encodeURIComponent(name)}`;
   $("#mask").alt = `Crack mask for ${name}`;
@@ -345,6 +346,20 @@ async function selectFrame(name) {
 //: screen is filtering.
 const CRACK_ROWS = 25;
 
+// The pin is positioned as a FRACTION of the image, not in pixels: the mask is displayed
+// scaled to fit and the centroid is in the image's own coordinates, so anything else
+// drifts as the window changes.
+function pinCrack(c) {
+  const img = $("#mask"), pin = $("#crackpin");
+  const f = state.frames.find((x) => x.frame === state.frame);
+  if (!img || pin === null || !f || !f.width_px || c.centroid_x_px == null) return;
+  pin.hidden = false;
+  pin.style.left = (100 * c.centroid_x_px / f.width_px) + "%";
+  pin.style.top = (100 * c.centroid_y_px / f.height_px) + "%";
+  pin.title = `region ${c.crack_id}: ${fmt(c.area_px)} px`;
+  img.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
 function renderCracks() {
   const d = state.cracks;
   if (!d) return;
@@ -366,6 +381,20 @@ function renderCracks() {
       : "");
   // The size distribution is built on ALL the rows, not the 25 displayed: it is a
   // distribution, and truncating its input would change its shape.
+  // A CRACK ROW POINTS AT A PLACE ON THE IMAGE. centroid_x_px and centroid_y_px are
+  // measured and served on every row and were referenced nowhere, so a researcher could
+  // read that region 7 holds 55% of the crack area and had no way to find region 7. This
+  // is the only way to sanity-check a mask by eye, and ImageJ's ROI Manager has had it
+  // since 2008.
+  t.querySelectorAll("tbody tr").forEach((tr, i) => {
+    tr.onclick = () => {
+      const c = shown[i];
+      if (!c) return;
+      t.querySelectorAll("tbody tr").forEach((x) => x.removeAttribute("aria-selected"));
+      tr.setAttribute("aria-selected", "true");
+      pinCrack(c);
+    };
+  });
   sizes(rows);
 }
 
@@ -1159,84 +1188,49 @@ async function loadArm() {
   // Upload. A .tif is segmented here first; a .png is taken as a mask already. The control
   // says "image or mask" rather than explaining the difference, because the server decides
   // from the extension and the user should not have to.
+  // BATCH. The input took one file and the handler read files[0], so a researcher with a
+  // folder of masks uploaded them one at a time. Sequential rather than parallel: each
+  // upload measures a full frame, and a dozen at once would compete for the same cores
+  // and make every one slower.
   $("#up").onchange = async (e) => {
-    const f = e.target.files[0];
-    if (!f) return;
-    const lbl = document.querySelector(".upload");
+    const files = [...e.target.files];
+    if (!files.length) return;
+    const lbl = document.querySelector(".upload[for=up]") || document.querySelector(".upload");
     const was = lbl.textContent;
     lbl.setAttribute("aria-busy", "true");
-    lbl.textContent = /\.tiff?$/i.test(f.name) ? "segmenting…" : "measuring…";
-    const fd = new FormData();
-    fd.append("file", f);
-    try {
-      const r = await fetch("/api/upload", { method: "POST", body: fd });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.detail || r.status);
-      state.arm = "uploads"; state.spec = "";
-      const arms = await api("/api/arms");
-      $("#arm").innerHTML = arms.map((a) =>
-        `<option value="${a.arm}"${a.arm === "uploads" ? " selected" : ""}>${a.arm} — ${a.n_frames} frames, ${a.n_cracks.toLocaleString()} cracks</option>`).join("");
-      await loadArm();
-      selectFrame(d.frame);
-      lbl.textContent = was;
-      $("#listcount").textContent =
-        `${d.frame}: ${d.n_cracks.toLocaleString()} cracks, ${d.n_specks.toLocaleString()} specks — ${d.note}` +
-        (d.scale_known ? "" : " · no scale, so µm is withheld");
-    } catch (err) {
-      lbl.textContent = was;
-      $("#listcount").innerHTML = `<span class="flag bad">upload failed: ${err.message}</span>`;
-    } finally {
-      lbl.removeAttribute("aria-busy");
-      e.target.value = "";
+    const done = [], failed = [];
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      lbl.textContent = files.length > 1
+        ? `${i + 1} of ${files.length}…` : (/\.tiff?$/i.test(f.name) ? "segmenting…" : "measuring…");
+      const fd = new FormData();
+      fd.append("file", f);
+      try {
+        const r = await fetch("/api/upload", { method: "POST", body: fd });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.detail || r.status);
+        done.push(d.frame);
+      } catch (err) {
+        failed.push(`${f.name}: ${err.message}`);
+      }
     }
+    lbl.removeAttribute("aria-busy");
+    lbl.textContent = was;
+    e.target.value = "";
+
+    state.arm = "uploads"; state.spec = "";
+    const arms = await api("/api/arms");
+    $("#arm").innerHTML = arms.map((a) =>
+      `<option value="${a.arm}"${a.arm === "uploads" ? " selected" : ""}>${a.arm} · ${a.n_frames} frames</option>`).join("");
+    await loadArm();
+    if (done.length) selectFrame(done[done.length - 1]);
+    // Say what failed, per file. A batch that silently drops one is worse than a batch
+    // that refuses: the count looks right and a measurement is missing.
+    $("#listcount").innerHTML = failed.length
+      ? `<span class="flag bad">${done.length} added, ${failed.length} refused</span>`
+      : "";
+    if (failed.length) console.warn("uploads refused:\n" + failed.join("\n"));
   };
-  // --- figure builder ------------------------------------------------------------------
-  // The field list comes from the server so the menu can never offer a quantity the
-  // renderer does not know, and so "needs a scale" is stated by the same code that
-  // enforces it.
-  let FIG = null;
-  window.figRenderRef = null;
-  const figRender = async () => {
-    const out = $("#figout");
-    if (!FIG || !state.arm) return;
-    const kind = $("#figkind").value, y = $("#figy").value, x = $("#figx").value;
-    $("#figxwrap").hidden = kind !== "scatter";
-    const q = new URLSearchParams({ arm: state.arm, kind, y });
-    if (kind === "scatter") q.set("x", x);
-    // Thin specimens are always included now. The checkbox asked the reader to settle a
-    // statistics question by clicking, and the two answers are not equally defensible:
-    // either those specimens are admissible, in which case show them with their n, or they
-    // are not, in which case hiding them behind an opt-in is worse than excluding them.
-    // The figure labels n per specimen, so a box built on two fields announces itself.
-    q.set("include_thin", "true");
-    out.innerHTML = `<p class="note">drawing…</p>`;
-    const r = await fetch(`/api/figure.svg?${q}`);
-    if (!r.ok) {
-      let d = {}; try { d = await r.json(); } catch (_) {}
-      out.innerHTML = `<p class="note"><span class="flag">${d.detail || "could not draw this"}</span></p>`;
-      return;
-    }
-    out.innerHTML = await r.text();
-    $("#figdl").onclick = () => {
-      q.set("download", "true");
-      download(`/api/figure.svg?${q}`,
-               `${state.arm.replace("/", "_")}_${q.get("kind")}_${q.get("y") || q.get("x")}.svg`);
-    };
-  };
-  window.figRenderRef = figRender;
-  try {
-    FIG = await api("/api/figure/fields");
-    const opts = FIG.fields.map((f) =>
-      `<option value="${f.key}">${f.label}${f.unit ? " (" + f.unit + ")" : ""}${f.needs_scale ? " ·needs scale" : ""}</option>`).join("");
-    $("#figy").innerHTML = opts;
-    $("#figx").innerHTML = opts;
-    $("#figy").value = "area_fraction";
-    $("#figx").value = "n_cracks_measured";
-    $("#figkind").innerHTML = FIG.kinds.map((k) =>
-      `<option value="${k}">${k.replace(/_/g, " ")}</option>`).join("");
-    $("#figkind").value = "box_by_specimen";
-    ["figkind", "figy", "figx"].forEach((id) => $("#" + id).onchange = figRender);
-  } catch (e) { $("#figout").innerHTML = `<p class="note">figures unavailable: ${e.message}</p>`; }
 
   wireTabs();
   $("#defsbtn").onclick = () => {
