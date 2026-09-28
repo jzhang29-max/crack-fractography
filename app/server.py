@@ -473,6 +473,120 @@ def paint_start():
 
 
 # ---------------------------------------------------------------------------------------
+# RE-MEASURE ONE FRAME. The loop the app is for is: detect, look, correct, measure again.
+# Until now the last step was a full-corpus rebuild -- 358 frames, about 17 minutes -- so
+# after correcting a single mask there was no way to see what changed short of rebuilding
+# everything. That is not a loop, it is a one-way trip with a long way back.
+#
+# It reads whatever mask is on disk NOW and reports that file's timestamp, because
+# corrections are painted into the SEM repo's paint layer and only reach a derived mask
+# after that tool re-applies and exports. The timestamp is how a user tells "my corrections
+# are in this number" from "I am re-measuring the same bytes as last time".
+def _mask_path(arm, frame):
+    derived = P.sem_derived()
+    src = {"sem/gated": (derived and os.path.join(derived, "gated_masks"), "_gated.png"),
+           "sem/machine": (derived and os.path.join(derived, "machine_masks"), "_machine.png"),
+           "uploads": (P.UPLOADS, "_gated.png")}
+    if arm in src:
+        root, suf = src[arm]
+        return os.path.join(root, frame + suf) if root else None
+    if arm == "txm":
+        tx = P.txm_export()
+        return os.path.join(tx, frame, f"{frame}_crack_mask.png") if tx else None
+    return None
+
+
+@app.post("/api/remeasure")
+def remeasure(arm: str = Query(...), frame: str = Query(...)):
+    """Re-measure a single frame from its current mask, and update only that frame."""
+    import sys as _sys
+    import time as _t
+    _sys.path.insert(0, os.path.join(RES, "analysis"))
+
+    path = _mask_path(arm, frame)
+    if not path:
+        raise HTTPException(400, f"no mask location known for arm {arm!r}")
+    if not os.path.exists(path):
+        raise HTTPException(404, f"no mask on disk at {path}")
+
+    modality = "txm" if arm == "txm" else "sem"
+    from measure import measure_path
+    try:
+        rows, summ = measure_path(path, modality, stem=frame)
+    except Exception as e:
+        raise HTTPException(500, f"measurement failed: {type(e).__name__}: {e}")
+
+    prior = next((f for f in (_load_quiet("frames") or [])
+                  if f.get("arm") == arm and f.get("frame") == frame), None)
+    summ["arm"] = arm
+    summ["specimen"] = (prior or {}).get("specimen") or "unparsed"
+    for r in rows:
+        r["frame"] = summ["frame"]
+        r["arm"] = arm
+        r["specimen"] = summ["specimen"]
+
+    # Replace exactly this frame's records. Everything else is left byte-for-byte alone:
+    # a re-measure of one frame must never be able to disturb another.
+    for fname, new_rows in (("frames", [summ]), ("cracks", rows)):
+        fp = os.path.join(OUT, f"{fname}.json")
+        cur = json.load(open(fp)) if os.path.exists(fp) else []
+        kept = [x for x in cur
+                if not (x.get("arm") == arm and x.get("frame") == summ["frame"])]
+        with open(fp, "w") as fh:
+            json.dump(kept + new_rows, fh)
+    _CACHE.clear()
+    _rebuild_specimen(arm, summ["specimen"])
+    _CACHE.clear()
+
+    # What actually moved, so the answer to "did my correction do anything" is on screen
+    # rather than something to go and look for.
+    changed = {}
+    for k in ("area_fraction", "n_cracks_measured", "largest_share_of_area",
+              "mcl_um", "total_skeleton_length_px"):
+        before, after = (prior or {}).get(k), summ.get(k)
+        if before != after:
+            changed[k] = {"before": before, "after": after}
+    return {"ok": True, "arm": arm, "frame": summ["frame"],
+            "mask_path": path,
+            "mask_modified": _t.strftime("%Y-%m-%d %H:%M:%S",
+                                         _t.localtime(os.path.getmtime(path))),
+            "seconds_since_mask_written": round(_t.time() - os.path.getmtime(path)),
+            "changed": changed,
+            "unchanged": not changed}
+
+
+def _rebuild_specimen(arm, specimen):
+    """Recompute one specimen-arm record after one of its frames changed."""
+    import sys as _sys
+    _sys.path.insert(0, os.path.join(RES, "analysis"))
+    try:
+        import specimen_stats
+    except ImportError:
+        return
+    fp, sp = os.path.join(OUT, "frames.json"), os.path.join(OUT, "specimens.json")
+    if not os.path.exists(fp):
+        return
+    frames = json.load(open(fp))
+    fs = [f for f in frames if f.get("arm") == arm and f.get("specimen") == specimen]
+    if not fs:
+        return
+    rec = specimen_stats.summarise(arm, specimen, fs)
+    by_arm = {}
+    for f in frames:
+        by_arm.setdefault(f["arm"], []).append(f)
+    rec["arm_sensitivity"] = (specimen_stats.paired_arm_ratio(by_arm, specimen)
+                              if arm.startswith("sem/") else None)
+    others = []
+    if os.path.exists(sp):
+        try:
+            others = [r for r in json.load(open(sp))
+                      if not (r.get("arm") == arm and r.get("specimen") == specimen)]
+        except Exception:
+            others = []
+    with open(sp, "w") as fh:
+        json.dump(others + [rec], fh)
+
+
 @app.get("/api/readout")
 def readout(arm: str = Query(...), specimen: str | None = None, frame: str | None = None):
     """The sentences, not the numbers. Computed server-side from the SAME dataset the tables

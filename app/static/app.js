@@ -705,7 +705,12 @@ async function renderReadout() {
     </details>` : "";
 
   el.innerHTML = (body || `<p class="ro-empty">Nothing this data supports saying yet.</p>`)
+    + (state.frame
+        ? `<div class="roact"><button id="remeasure2">Re-measure this frame</button>
+             <span class="u" id="remeasure2out"></span></div>` : "")
     + refusals;
+  const rb = $("#remeasure2");
+  if (rb) rb.onclick = () => remeasure(rb, $("#remeasure2out"));
 
   el.querySelectorAll(".ro-more").forEach((b) => {
     b.onclick = () => {
@@ -850,9 +855,53 @@ function mountMark(url) {
     <div class="markstate">
       <p class="markbig">Marking tool is running.</p>
       <a href="${url}" target="_blank" rel="noopener"><button class="upload">Open marking tool</button></a>
-      <p class="note">Red = crack, cyan = not crack. Re-measure to pick up corrections.</p>
-      <p class="note u">${url}</p>
+      <p class="note">Red = crack, cyan = not crack.</p>
+      <p class="markbig" style="margin-top:14px">When the mask looks right</p>
+      <button id="remeasure1" class="upload">Re-measure this frame</button>
+      <p class="note" id="remeasure1out"></p>
     </div>`;
+  const b = $("#remeasure1");
+  if (b) b.onclick = () => remeasure(b, $("#remeasure1out"));
+}
+
+// ---------------------------------------------------------------------------------------
+// RE-MEASURE, which is what closes the loop. Correcting a mask used to mean a full-corpus
+// rebuild -- 358 frames, about 17 minutes -- before you could see what the correction did.
+// One frame takes a few seconds, and the reply says what moved, so "did that change
+// anything" is answered on the spot rather than being something to go and check.
+async function remeasure(btn, where) {
+  if (!state.frame) return;
+  const was = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Measuring…";
+  try {
+    const q = new URLSearchParams({ arm: state.arm, frame: state.frame });
+    const r = await fetch(`/api/remeasure?${q}`, { method: "POST" });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || r.statusText);
+    const ch = Object.entries(d.changed || {});
+    const msg = ch.length
+      ? `<span class="u">mask written ${d.mask_modified} · </span>` + ch.map(([k, v]) =>
+          `<b>${k.replace(/_/g, " ")}</b> ${fmt(v.before, 4)} → ${fmt(v.after, 4)}`).join("  ·  ")
+      : `<span class="u">No change — the mask on disk is the same as last measured` +
+        ` (written ${d.mask_modified}). Corrections reach it only after the marking tool` +
+        ` re-applies and exports.</span>`;
+
+    // Refresh FIRST, then write the message. renderReadout() rebuilds the element the
+    // message lives in, so writing it before the refresh silently erased it -- the button
+    // worked, the numbers updated, and the user saw nothing happen.
+    state.frames = await api(`/api/frames?arm=${encodeURIComponent(state.arm)}` +
+      (state.spec ? `&specimen=${encodeURIComponent(state.spec)}` : ""));
+    renderFrames();
+    renderSpecimens();
+    await renderReadout();
+    const fresh = document.getElementById(where.id) || where;
+    fresh.innerHTML = msg;
+  } catch (e) {
+    where.innerHTML = `<span class="flag bad">${e.message}</span>`;
+  }
+  btn.disabled = false;
+  btn.textContent = was;
 }
 
 async function loadArm() {
