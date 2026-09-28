@@ -20,8 +20,9 @@ inventing its answers.
 
 **As an app.** [Download the latest release](https://github.com/jzhang29-max/crack-fractography/releases/latest),
 unzip, drag `Crack Fractography.app` to Applications, double-click. It is a real application
-window — the analysis runs inside it, not in a browser tab. macOS refuses unsigned apps
-downloaded from the internet, so once:
+window — the analysis runs inside it, not in a browser tab. The app is unsigned, so macOS
+refuses it and reports that it **"is damaged and can't be opened"**. That message is wrong:
+it means only that there is no developer signature. Once, in Terminal:
 
 ```bash
 xattr -dr com.apple.quarantine "/Applications/Crack Fractography.app"
@@ -42,7 +43,11 @@ says so in its log; everything else is identical.
 
 ### What works without anything else installed
 
-Drop a black-and-white mask on the page and it is measured. That needs nothing configured.
+Use **+ Add image** to give it a black-and-white mask and it is measured. That needs nothing
+configured. (There is no drag-and-drop onto the page — use the button.)
+
+To draw or correct a mask, the **Mark** tab starts the marking tool from the SEM repo, so the
+detect / correct / measure loop is reachable without leaving the app.
 
 Two things need a [sem-crack-detector](https://github.com/jzhang29-max/sem-crack-detector)
 checkout, which you point at once in **Setup**:
