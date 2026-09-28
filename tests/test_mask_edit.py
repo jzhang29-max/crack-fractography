@@ -12,14 +12,30 @@ def _fn(name, src):
     return src[i:j]
 
 
-def test_editing_is_restricted_to_uploads():
-    """The sem and txm arms read the SEM repo's derived masks and the TXM export --
-    irreplaceable research data this app has no business overwriting. It is a measurement
-    tool; the one directory it owns is its own uploads folder. Enforced server-side, not
-    only by hiding the control."""
-    src = open(os.path.join(REPO, "app", "server.py")).read()
-    fn = _fn("mask_edit", src)
-    assert 'if arm != "uploads"' in fn and "403" in fn
+def test_no_research_mask_is_ever_written():
+    """Marking works on any frame, in this window -- but the sem and txm arms read the SEM
+    repo's derived masks and the TXM export, which are irreplaceable research data this app
+    does not own. Editing one writes a COPY into uploads instead.
+
+    The invariant is not "editing is refused" -- that was the earlier, blunter version, and
+    it is what forced marking out into a separate program. It is that the destination path
+    is ALWAYS inside the app's own uploads directory, whatever the source arm."""
+    fn = _fn("mask_edit", open(os.path.join(REPO, "app", "server.py")).read())
+    import re
+    dests = re.findall(r"dest = os\.path\.join\((\w+)", fn)
+    assert dests, "no destination assignment found"
+    assert set(dests) == {"UPLOAD_DIR"}, (
+        f"an edit could be written outside the uploads directory: {set(dests)}")
+    assert "_mask_path(arm, frame)" in fn, "the source is read from the arm's own location"
+    # And the source must only ever be READ.
+    assert "open(src" not in fn and 'open(src, "w"' not in fn
+
+
+def test_a_marked_research_frame_keeps_its_scale():
+    """A marked copy is the same field at the same magnification. Losing the scale would
+    silently drop every micrometre column from the copy."""
+    fn = _fn("mask_edit", open(os.path.join(REPO, "app", "server.py")).read())
+    assert "set_user_scale(new_frame, src_scale)" in fn
 
 
 def test_a_half_written_mask_cannot_replace_a_whole_one():

@@ -550,14 +550,27 @@ async def mask_edit(arm: str = Query(...), frame: str = Query(...),
     data this app has no business overwriting -- it is a measurement tool, and the one
     directory it owns is its own uploads folder.
     """
-    if arm != "uploads":
-        raise HTTPException(
-            403, "editing is limited to uploaded masks. The sem and txm arms read from "
-                 "research data this app does not own; correct those in the marking tool, "
-                 "which writes through the pipeline that produced them.")
-    dest = os.path.join(UPLOAD_DIR, f"{frame}_gated.png")
-    if not os.path.exists(dest):
-        raise HTTPException(404, f"no uploaded mask for {frame!r}")
+    # ANY FRAME CAN BE MARKED; NO RESEARCH MASK IS OVERWRITTEN.
+    #
+    # Editing used to be refused outright outside the uploads arm, which kept the derived
+    # SEM masks and the TXM export safe and left marking as a hand-off to another program
+    # on another port. Both can be true at once: an edit to a research frame is saved as a
+    # COPY in the uploads arm, measured there, and the original file is never opened for
+    # writing. The researcher marks anything in one window; the data this app does not own
+    # is still data this app does not write.
+    into_uploads = arm == "uploads"
+    if into_uploads:
+        dest = os.path.join(UPLOAD_DIR, f"{frame}_gated.png")
+        if not os.path.exists(dest):
+            raise HTTPException(404, f"no uploaded mask for {frame!r}")
+        new_frame = frame
+    else:
+        src = _mask_path(arm, frame)
+        if not src or not os.path.exists(src):
+            raise HTTPException(404, f"no mask on disk for {frame!r} in {arm!r}")
+        new_frame = f"{frame}_marked"
+        os.makedirs(UPLOAD_DIR, exist_ok=True)
+        dest = os.path.join(UPLOAD_DIR, f"{new_frame}_gated.png")
 
     blob = await file.read()
     if not blob.startswith(b"\x89PNG"):
@@ -580,9 +593,50 @@ async def mask_edit(arm: str = Query(...), frame: str = Query(...),
         raise HTTPException(400, f"not a readable PNG: {type(e).__name__}: {e}")
     os.replace(tmp, dest)
 
-    out = remeasure(arm=arm, frame=frame)
+    if into_uploads:
+        out = remeasure(arm=arm, frame=new_frame)
+    else:
+        # A copy is a new frame, so it is measured from scratch and filed under uploads.
+        # Its scale is inherited: a marked copy of a scaled frame is the same field at the
+        # same magnification, and losing the scale would silently drop every micrometre.
+        import sys as _sys
+        _sys.path.insert(0, os.path.join(RES, "analysis"))
+        import scale as _scale
+        src_scale = _scale.nm_per_px(frame, "txm" if arm == "txm" else "sem")
+        if src_scale:
+            _scale.set_user_scale(new_frame, src_scale)
+        _measure_into_uploads(dest, new_frame, source=f"{arm}/{frame}")
+        out = remeasure(arm="uploads", frame=new_frame)
+        out["copied_from"] = f"{arm}/{frame}"
+        out["arm"] = "uploads"
     out["edited"] = True
+    out["frame"] = new_frame
     return out
+
+
+def _measure_into_uploads(mask_path, frame, source=None):
+    """Create an uploads-arm record for a mask that is already on disk."""
+    import sys as _sys
+    _sys.path.insert(0, os.path.join(RES, "analysis"))
+    from measure import measure_path
+    rows, summ = measure_path(mask_path, "sem", stem=frame)
+    summ["arm"] = "uploads"
+    summ["specimen"] = "uploaded"
+    summ["source_filename"] = f"{frame}_gated.png"
+    if source:
+        summ["copied_from"] = source
+    for r in rows:
+        r["frame"] = summ["frame"]; r["arm"] = "uploads"; r["specimen"] = "uploaded"
+    for fname, new_rows in (("frames", [summ]), ("cracks", rows)):
+        fp = os.path.join(OUT, f"{fname}.json")
+        cur = json.load(open(fp)) if os.path.exists(fp) else []
+        kept = [x for x in cur
+                if not (x.get("arm") == "uploads" and x.get("frame") == summ["frame"])]
+        with open(fp, "w") as fh:
+            json.dump(kept + new_rows, fh)
+    _CACHE.clear()
+    _rebuild_uploads_specimen()
+    _CACHE.clear()
 
 
 @app.post("/api/scale")

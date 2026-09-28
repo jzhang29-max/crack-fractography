@@ -308,6 +308,10 @@ async function selectFrame(name) {
   rose(f.orientation_hist_deg);
   renderSpecimens();      // the strip follows the frame's specimen
   renderReadout();
+  // The Mark pane is rendered once when the tab is shown, which happens BEFORE the first
+  // frame is auto-selected -- so opening the app on a loaded corpus showed "Add an image
+  // to mark" with 142 frames in the list beside it. Re-render it when the frame changes.
+  if (TAB === "mark") { ED.frame = null; renderMark(); }
   try {
     const d = await api(`/api/cracks?frame=${encodeURIComponent(name)}&arm=${encodeURIComponent(state.arm)}`);
     state.cracks = d;
@@ -567,15 +571,17 @@ async function renderSpecimens() {
 // SIX, NOT EIGHT. "Frame detail", "Orientation" and "Cracks" were three destinations for
 // one question -- everything else about the frame you have selected -- so they are one
 // scrolling pane. A tab strip is navigation only while a reader can hold it in their head.
+// FOUR TABS, MARK FIRST. Read-out, Mask and Details were three destinations all
+// answering "what about this frame?", so seeing one frame meant visiting three places.
+// They are one Analysis page now. And the order follows the work: mark a mask, then ask
+// what it measures, then compare, then export.
 const TABS = [
-  ["readout", "Read-out"],
-  ["mask", "Mask"],
   ["mark", "Mark"],
-  ["specimens", "Specimens"],
-  ["details", "Details"],
+  ["analysis", "Analysis"],
+  ["compare", "Compare"],
   ["figure", "Figure"],
 ];
-let TAB = "readout";
+let TAB = "mark";
 
 function showTab(id) {
   TAB = id;
@@ -586,7 +592,7 @@ function showTab(id) {
   // rather than on every frame change.
   if (id === "figure" && typeof window.figRenderRef === "function") window.figRenderRef();
   if (id === "mark") renderMark();
-  if (id === "details") rose(
+  if (id === "analysis") rose(
     (state.frames.find((x) => x.frame === state.frame) || {}).orientation_hist_deg);
 }
 
@@ -841,39 +847,18 @@ let MARK_URL = null;
 
 async function renderMark() {
   const el = $("#markbody");
-  // An uploaded frame is ours to edit; the research arms are not. That restriction is
-  // enforced server-side too -- this just avoids offering what would be refused.
-  if (state.arm === "uploads" && state.frame) return openEditor(state.frame);
-  if (MARK_URL) return;
-  el.innerHTML = `<p class="note">Checking…</p>`;
-  let st;
-  try { st = await api("/api/paint"); }
-  catch (e) { el.innerHTML = `<p class="note"><span class="flag bad">${e.message}</span></p>`; return; }
-
-  if (!st.available) {
-    el.innerHTML = `<p class="note">Marking needs the SEM repo — ${st.why_not}.` +
-      ` <button id="marksetup">Setup</button></p>`;
-    $("#marksetup").onclick = () => showSetup(true);
+  if (!state.frame) {
+    el.innerHTML = `<div class="markstate">
+        <p class="markbig">Add an image to mark.</p>
+        <p class="note">A black-and-white mask is measured as it is. A .tif is segmented
+           first, which needs the SEM repo — see Setup.</p>
+      </div>`;
     return;
   }
-  if (st.running && st.url) { mountMark(st.url); return; }
-  el.innerHTML = `<div class="markstate">
-      <p class="markbig">Draw or correct a crack mask.</p>
-      <button id="markstart" class="upload">Start marking tool</button>
-      <p class="note">Red = crack, cyan = not crack. Corrections feed the next measure.</p>
-    </div>`;
-  $("#markstart").onclick = async () => {
-    $("#markstart").disabled = true;
-    $("#markstart").textContent = "Starting…";
-    try {
-      const r = await fetch("/api/paint", { method: "POST" });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.detail || r.statusText);
-      mountMark(j.url);
-    } catch (e) {
-      el.innerHTML = `<p class="note"><span class="flag bad">${e.message}</span></p>`;
-    }
-  };
+  // EVERY FRAME IS MARKABLE, IN THIS WINDOW. Editing a research frame writes a COPY into
+  // uploads rather than touching the derived mask, so the loop is one app and the data the
+  // app does not own stays unwritten.
+  return openEditor(state.frame);
 }
 
 function mountMark(url) {
@@ -972,6 +957,7 @@ function editorHTML(frame) {
 }
 
 async function openEditor(frame) {
+  if (ED.frame === frame && $("#edcanvas")) return;   // already showing this one
   const host = $("#markbody");
   host.innerHTML = editorHTML(frame);
   const cv = $("#edcanvas");
@@ -994,8 +980,11 @@ async function openEditor(frame) {
     cv.getContext("2d").drawImage(ED.off, 0, 0, cv.width, cv.height);
   };
   fit();
-  $("#edout").textContent =
-    `${img.naturalWidth} × ${img.naturalHeight} px. Black is crack.`;
+  const isUpload = state.arm === "uploads";
+  $("#edout").innerHTML = `${img.naturalWidth} × ${img.naturalHeight} px. Black is crack.` +
+    (isUpload ? "" :
+     ` <span class="u">Saving writes a copy to <b>uploads</b> — ${esc(frame)} itself is` +
+     ` not modified.</span>`);
 
   // Display coordinates map back to the image's own pixels, so a stroke is the same size
   // in the saved mask whatever the window is.
@@ -1045,6 +1034,17 @@ async function openEditor(frame) {
         ? ch.map(([k, v]) => `<b>${k.replace(/_/g, " ")}</b> ${fmt(v.before, 4)} → ${fmt(v.after, 4)}`).join("  ·  ")
         : `<span class="u">Saved. No measurement changed.</span>`;
       ED.dirty = false;
+      if (d.copied_from) {
+        // The edit became a new frame in another arm. Follow it, or the user is looking at
+        // the original while reading numbers that belong to their copy.
+        out.innerHTML = `<span class="u">Saved as <b>${esc(d.frame)}</b> in uploads` +
+          ` (${esc(d.copied_from)} unchanged).</span> ` + out.innerHTML;
+        state.arm = "uploads"; state.spec = ""; state.frame = d.frame;
+        $("#arm").value = "uploads";
+        await loadArm();
+        selectFrame(d.frame);
+        return;
+      }
       state.frames = await api(`/api/frames?arm=${encodeURIComponent(state.arm)}` +
         (state.spec ? `&specimen=${encodeURIComponent(state.spec)}` : ""));
       renderFrames(); renderSpecimens(); renderReadout();

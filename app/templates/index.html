@@ -138,6 +138,9 @@ main{flex:1 1 auto;display:grid;grid-template-columns:minmax(220px,300px) minmax
 .roact .u{min-width:0}
 .roact input[type=number]{width:8ch}
 .roact #remeasure2out{flex:1}
+.more{margin-top:22px;border-top:1px solid var(--rule);padding-top:12px;max-width:100%}
+.more>summary{cursor:pointer;color:var(--text-secondary);font-size:12.5px;padding:4px 0}
+.more>summary:hover{color:var(--text-primary)}
 .refuse-all{max-width:68ch;margin-top:14px}
 .refuse-all>summary{cursor:pointer;color:var(--text-muted);font-size:12.5px;padding:6px 0}
 .refuse-all>summary:hover{color:var(--text-primary)}
@@ -280,36 +283,43 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
   <section id="detail">
     <nav class="tabs" id="tabs" role="tablist"></nav>
 
-    <div class="pane" id="pane-readout" role="tabpanel">
-      <div class="ro" id="readout"></div>
-    </div>
-
-    <div class="pane" id="pane-mark" role="tabpanel" hidden>
+    <!-- MARK IS FIRST because that is the order the work happens in: you draw or correct
+         a mask, then you ask what it measures. -->
+    <div class="pane" id="pane-mark" role="tabpanel">
       <div id="markbody"></div>
     </div>
 
-    <div class="pane" id="pane-mask" role="tabpanel" hidden>
+    <!-- ONE ANALYSIS PAGE. Read-out, the mask, the numbers and the per-crack table were
+         four tabs all answering "what about this frame?", so a reader had to visit four
+         places to see one thing. They are one scroll now, most-answering first: the
+         sentences, then the picture they are about, then the numbers behind them, then
+         the raw rows behind a disclosure. -->
+    <div class="pane" id="pane-analysis" role="tabpanel" hidden>
+      <div class="ro" id="readout"></div>
+
+      <h3 class="sect">The mask these numbers came from</h3>
       <p class="note" id="masknote">Select a frame.</p>
       <img class="mask" id="mask" alt="" hidden>
-    </div>
 
-    <div class="pane" id="pane-specimens" role="tabpanel" hidden>
-      <p class="note" id="specnote"></p>
-      <div id="specbody"></div>
-    </div>
-
-    <!-- One pane for everything else about the selected frame. Three tabs for one
-         question was three places to look for the same thing. -->
-    <div class="pane" id="pane-details" role="tabpanel" hidden>
+      <h3 class="sect">Measurements</h3>
       <p class="note" id="fsel-note">Select a frame.</p>
       <dl class="kv" id="fsel"></dl>
-      <h3 class="sect">Orientation</h3>
+
+      <h3 class="sect">Orientation and size</h3>
       <p class="note" id="rosenote">Length-weighted, 15&deg; bins.</p>
       <div id="rose"></div>
       <div id="sizes"></div>
-      <h3 class="sect">Cracks</h3>
-      <p class="note" id="cracknote">Select a frame.</p>
-      <div class="scroll"><table id="cracks"><thead></thead><tbody></tbody></table></div>
+
+      <details class="more">
+        <summary>Every crack in this frame</summary>
+        <p class="note" id="cracknote"></p>
+        <div class="scroll"><table id="cracks"><thead></thead><tbody></tbody></table></div>
+      </details>
+    </div>
+
+    <div class="pane" id="pane-compare" role="tabpanel" hidden>
+      <p class="note" id="specnote"></p>
+      <div id="specbody"></div>
     </div>
 
     <div class="pane" id="pane-figure" role="tabpanel" hidden>
