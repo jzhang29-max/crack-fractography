@@ -144,6 +144,10 @@ def measure_frame(mask, stem, modality="sem", r_l_axis_deg=0.0, grey=None):
     torts = np.array([r["Tortuosity"] for r in rows if isinstance(r.get("Tortuosity"), (int, float))], float)
     oris = np.array([r["Orientation_deg"] for r in rows if isinstance(r.get("Orientation_deg"), (int, float))], float)
     branches = np.array([r.get("BranchPointCount") or 0 for r in rows], float)
+    # NaN where the region has no tip-to-tip path at all, so a max() skips it rather than
+    # treating "no crack here" as a crack of length zero.
+    geos = np.array([(r.get("TipToTipGeodesic_px") if r.get("TipToTipGeodesic_px")
+                      is not None else np.nan) for r in rows], float)
 
     # Directional line-intercept sampling and branch-level geometry. Both are computed on
     # the WHOLE frame mask rather than per region: P10 is a property of a test line crossing
@@ -174,6 +178,21 @@ def measure_frame(mask, stem, modality="sem", r_l_axis_deg=0.0, grey=None):
         "largest_area_px": int(areas.max()) if len(areas) else 0,
         "largest_share_of_area": round(float(areas.max() / areas.sum()), 4) if areas.sum() else None,
         "top1pct_share_of_area": _top_share(areas, 0.01),
+
+        # HOW THE GEODESICS ON THIS FRAME WERE ARRIVED AT. Unconditional, next to the
+        # other region counts, and NOT inside the micrometre block below -- these describe
+        # regions, not units. Both of them lived in that block for one run, and the effect
+        # was that the counter for "regions measured approximately" was absent from all 127
+        # unscaled frames, which are the only frames the approximation has ever fired on.
+        # A diagnostic that is missing exactly where it would trigger reads as a clean zero.
+        #
+        # undefined: a closed loop has no tip, so it has no tip-to-tip path. Reported
+        # rather than left as a silent omission from a max().
+        "n_regions_geodesic_undefined": int(np.isnan(geos).sum()),
+        # sampled: too large for an exact sweep, so a lower bound. Zero on almost every
+        # frame; not zero is a thing the reader should see.
+        "n_regions_geodesic_sampled": sum(
+            1 for r in rows if r.get("geodesic_method") == "sampled_sources_lower_bound"),
 
         "total_skeleton_length_px": round(float(lengths.sum()), 1),
         # length per unit area -- the standard crack-density form
@@ -309,8 +328,6 @@ def measure_frame(mask, stem, modality="sem", r_l_axis_deg=0.0, grey=None):
         # Dropping them biases it up by removing exactly the long cracks, since a longer
         # crack is likelier to reach an edge. Here 72-74% of crack area is in
         # border-touching regions, so the gap is not a rounding detail.
-        geos = np.array([(r.get("TipToTipGeodesic_px") if r.get("TipToTipGeodesic_px")
-                          is not None else np.nan) for r in rows], float)
         summary.update(_bracket("mcl", geos, rows, um_px))
         summary["mcl_definition"] = (
             "longest tip-to-tip geodesic on one region's skeleton: over all pairs of "
@@ -322,19 +339,12 @@ def measure_frame(mask, stem, modality="sem", r_l_axis_deg=0.0, grey=None):
             "keeping censored regions biases MCL down (a crack leaving the frame is longer "
             "than measured); dropping them biases it up (long cracks reach edges more "
             "often). The pair brackets; neither is the value.")
-        # Regions the max could not consider at all: a closed loop has no tip, so it has no
-        # tip-to-tip path. Reported rather than left as a silent omission from a max().
-        summary["n_regions_geodesic_undefined"] = int(np.isnan(geos).sum())
         _arg = (int(np.nanargmax(geos)) if np.isfinite(geos).any() else None)
         # Whether the MCL-setting region has cycles, and how its value was computed.
         summary["mcl_has_cycles"] = (bool(rows[_arg].get("geodesic_has_cycles"))
                                      if _arg is not None else None)
         summary["mcl_method"] = (rows[_arg].get("geodesic_method")
                                  if _arg is not None else None)
-        # How many regions on this frame got the sampled fallback rather than an exact
-        # sweep. Zero on almost every frame; not zero is a thing the reader should see.
-        summary["n_regions_geodesic_sampled"] = sum(
-            1 for r in rows if r.get("geodesic_method") == "sampled_sources_lower_bound")
         # What fraction of its own region's network the longest crack actually is. This is
         # the gap between the two columns, on the one region where it matters most; near
         # 1.0 means the region is essentially one unbranched crack.
@@ -408,11 +418,34 @@ def _rose(oris, areas, rows):
             "weighted_by": "area"}
 
 
-def measure_path(path, modality="sem", stem=None, r_l_axis_deg=0.0):
-    stem = stem or os.path.splitext(os.path.basename(path))[0]
-    for suf in ("_gated", "_machine", "_mask", "_crack_mask"):
+#: Suffixes stripped to get a frame's identity. A mask exported by this project is named
+#: <frame>_gated.png, so the suffix is packaging, not identity.
+MASK_SUFFIXES = ("_crack_mask", "_gated", "_machine", "_mask")
+
+
+def canonical_stem(name):
+    """The frame name for a mask file. ONE definition, exported, because there were two.
+
+    The upload endpoint derived a stem from the filename and used it for the saved file and
+    the crack rows, while measure_path stripped the suffix and used the shorter name for the
+    frame record. Uploading demo_gated.png -- the shape this project's own export produces,
+    so the likeliest file a user has -- stored a frame called "demo" whose crack rows were
+    keyed "demo_gated" and whose mask was written to demo_gated_gated.png. The Cracks tab
+    returned 0 of its own rows and the Mask tab 404'd, while the read-out worked, so the
+    frame looked measured.
+
+    Longest suffix first: "_crack_mask" also ends with "_mask", and stripping the shorter
+    one leaves "_crack" behind.
+    """
+    stem = os.path.splitext(os.path.basename(name))[0]
+    for suf in MASK_SUFFIXES:
         if stem.endswith(suf):
-            stem = stem[: -len(suf)]
+            return stem[: -len(suf)]
+    return stem
+
+
+def measure_path(path, modality="sem", stem=None, r_l_axis_deg=0.0):
+    stem = canonical_stem(stem or path)
     mask, grey = load_mask(path, with_grey=True)
     return measure_frame(mask, stem, modality, r_l_axis_deg, grey=grey)
 

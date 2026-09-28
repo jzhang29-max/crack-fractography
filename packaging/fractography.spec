@@ -55,16 +55,43 @@ analysis_files = [
 # skimage ships 7.4 MB of sample photographs (astronaut, coffee, chelsea...) behind
 # skimage.data. Nothing here calls it: the imports are measure, morphology and filters. The
 # MODULE stays -- only the pictures are dropped -- so an accidental import still resolves.
+# skimage ships sample photographs and fixtures behind skimage.data. Nothing here calls it
+# -- the imports are measure, morphology and filters -- so the payload goes and the MODULE
+# stays, leaving an accidental import resolving.
+#
+# KEEP-LIST, not a block-list. Excluding known raster extensions left a 51 KB OpenCV
+# face-detection cascade (.xml) and a 4 KB joke GIF in a crack-measurement app, because a
+# block-list only stops what it was told about. Only the two .npy structuring-element
+# tables morphology actually loads are kept.
+_SKIMAGE_DATA_KEEP = ("ball.npy", "disk.npy")
+
+
+def _skimage_keep(src):
+    if os.sep + "data" + os.sep not in src:
+        return True
+    name = os.path.basename(src)
+    return name in _SKIMAGE_DATA_KEEP or name.endswith(".pyi")
+
+
 skimage_data = [(src, dst) for src, dst in collect_data_files("skimage")
-                if os.sep + "data" + os.sep not in src
-                or os.path.splitext(src)[1].lower() not in
-                (".png", ".jpg", ".jpeg", ".tif", ".tiff", ".npy", ".npz")]
+                if _skimage_keep(src)]
 
 datas = [
     (os.path.join(REPO, "app", "templates"), "app/templates"),
     (os.path.join(REPO, "app", "static"), "app/static"),
-    (os.path.join(REPO, "docs"), "docs"),
+    # docs/ is NOT bundled. PRACTICE_AND_PRIOR_ART.md is an internal research and
+    # novelty-strategy note -- withdrawn claims, which framings died, unpublished dataset
+    # statistics -- and it was the only file in the whole 686-file bundle containing the
+    # owner's absolute home path. It stays in the repo, where a reader who wants it can
+    # find it, rather than inside a public download.
     (os.path.join(REPO, "README.md"), "."),
+    # LICENCE AND ATTRIBUTION SHIP WITH THE BINARY, not just with the repo. The bundle is
+    # 118 MB of numpy, scipy, scikit-image, Pillow, FastAPI, uvicorn, pywebview and pyobjc,
+    # distributed publicly -- NOTICE exists to name them and was never in this list, so
+    # three releases went out with no attribution inside the app at all. The only LICENSE
+    # files in the bundle were the dependencies' own.
+    (os.path.join(REPO, "LICENSE"), "."),
+    (os.path.join(REPO, "NOTICE"), "."),
 ] + analysis_files + skimage_data
 
 a = Analysis(
@@ -77,8 +104,12 @@ a = Analysis(
     runtime_hooks=[],
     # Nothing here runs a model or plots server-side: the detector lives in the SEM repo and
     # the figures are hand-built SVG. Excluding these is ~300 MB off the bundle.
-    excludes=["matplotlib", "torch", "pandas", "tkinter.test", "pytest", "IPython",
-              "notebook", "sklearn", "cv2"],
+    # tkinter is excluded outright, not just its tests: the launcher used it for a control
+    # window before pywebview replaced that, and it has zero references now. It was still
+    # pulling 6.9 MB of Tcl/Tk runtime -- 5.9% of the download -- for a toolkit nothing
+    # imports.
+    excludes=["matplotlib", "torch", "pandas", "tkinter", "_tkinter", "tkinter.test",
+              "pytest", "IPython", "notebook", "sklearn", "cv2"],
     noarchive=False,
 )
 pyz = PYZ(a.pure)
@@ -97,7 +128,7 @@ if MACOS:
     app = BUNDLE(coll, name="Crack Fractography.app",
                  icon=None, bundle_identifier="edu.stanford.crack-fractography",
                  info_plist={
-                     "CFBundleShortVersionString": "1.2.0",
+                     "CFBundleShortVersionString": "1.3.0",
                      "NSHighResolutionCapable": True,
                      # It has a window, so it belongs in the Dock and quits like an app.
                      "LSBackgroundOnly": False,

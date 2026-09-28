@@ -737,7 +737,7 @@ const DEFS = [
    "It is the most detector-sensitive number here — CBS reads 2.29× ETD on the same physical field."],
   ["95% CI and ±%", "Sampling interval over fields, and its width as a share of the mean.",
    "ASTM E562-19e1: t(0.975, n−1)·s/√n on between-FIELD variance, n = fields.",
-   "It describes this specimen's surface, not the material. 0 of 22 specimen-arms here reach E562's ±10% target."],
+   "It describes this specimen's surface, not the material. Nothing in this arm reaches E562's ±10% target."],
   ["Field vs frame", "A field is one place on the specimen; a frame is one image of it.",
    "56 of 86 gated fields were imaged twice, once through CBS and once through ETD.",
    "Counting frames as fields inflates n by up to √2 and mixes two instruments into one spread."],

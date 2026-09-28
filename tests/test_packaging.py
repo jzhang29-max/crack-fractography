@@ -171,3 +171,54 @@ def test_uploading_maintains_all_three_dataset_files():
     # measured arms' records would let an upload silently alter published numbers.
     assert 'r.get("arm") != "uploads"' in reb
     assert re.search(r'summarise\(\s*"uploads"', reb)
+
+
+def test_the_licence_and_attribution_ship_with_the_binary():
+    """The bundle is 118 MB of third-party scientific and web libraries distributed
+    publicly. NOTICE names them and was missing from the spec's datas for three releases, so
+    the only LICENSE files inside the app were the dependencies' own.
+
+    THE FIRST VERSION OF THIS TEST CHECKED THE SPEC'S TEXT and nothing else, so it reported
+    green while the built bundle sitting in dist/ had neither file -- the spec had been
+    fixed three minutes after that build. A guard that measures the instruction rather than
+    the result is a guard that passes in exactly the case it exists to catch. It now asserts
+    on the BUNDLE whenever one is present, and falls back to the spec only when there is
+    nothing built to look at.
+    """
+    for f in ("LICENSE", "NOTICE"):
+        assert os.path.exists(os.path.join(REPO, f)), f"{f} missing from the repo"
+
+    app = os.path.join(REPO, "dist", "Crack Fractography.app", "Contents", "Resources")
+    if os.path.isdir(app):
+        for f in ("LICENSE", "NOTICE"):
+            assert os.path.exists(os.path.join(app, f)), (
+                f"{f} is not in the BUILT bundle at {app} -- rebuild before releasing")
+    else:
+        spec = open(os.path.join(REPO, "packaging", "fractography.spec")).read()
+        for f in ("LICENSE", "NOTICE"):
+            assert f'"{f}"' in spec, f"{f} is not in the spec's datas, so it will not ship"
+
+
+def test_the_internal_research_note_is_not_in_the_bundle():
+    """docs/PRACTICE_AND_PRIOR_ART.md records which novelty framings died, which claims were
+    withdrawn, and unpublished dataset statistics. It was the only file in the whole bundle
+    carrying the owner's absolute home path. It belongs in the repo, not inside a public
+    download."""
+    app = os.path.join(REPO, "dist", "Crack Fractography.app", "Contents", "Resources")
+    if not os.path.isdir(app):
+        pytest.skip("nothing built")
+    assert not os.path.exists(os.path.join(app, "docs", "PRACTICE_AND_PRIOR_ART.md")), (
+        "the internal research note is inside the shipped bundle")
+
+
+def test_no_owner_home_path_is_baked_into_the_bundle():
+    """An absolute /Users/<name> path in a public binary leaks the build machine's layout.
+    One file had it; this asserts none does."""
+    import subprocess
+    app = os.path.join(REPO, "dist", "Crack Fractography.app")
+    if not os.path.isdir(app):
+        pytest.skip("nothing built")
+    home = os.path.expanduser("~")
+    r = subprocess.run(["grep", "-rIl", home, app], capture_output=True, text=True)
+    hits = [x for x in r.stdout.splitlines() if x.strip()]
+    assert not hits, "owner path baked into:\n  " + "\n  ".join(hits[:6])

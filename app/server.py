@@ -210,9 +210,18 @@ async def upload(file: UploadFile = File(...)):
     import sys as _sys
     import tempfile
 
+    import sys as _sys
+    _sys.path.insert(0, os.path.join(RES, "analysis"))
+    from measure import canonical_stem
+
     name = os.path.basename(file.filename or "")
-    stem, ext = os.path.splitext(name)
+    raw_stem, ext = os.path.splitext(name)
     ext = ext.lower()
+    # ONE stem for the saved file, the crack rows, the frame record and the response.
+    # These were three different strings: the frame was stored stripped of its _gated
+    # suffix while its rows and its mask file kept it, so /api/cracks and /api/mask both
+    # missed a frame the read-out had just described.
+    stem = canonical_stem(raw_stem) or raw_stem
     if ext not in MASK_EXT | IMAGE_EXT:
         raise HTTPException(400, f"{ext or 'no extension'} is not supported. Upload a mask "
                                  f"(.png/.bmp) or a micrograph (.tif/.tiff).")
@@ -293,7 +302,9 @@ async def upload(file: UploadFile = File(...)):
     _rebuild_uploads_specimen()
     _CACHE.clear()
 
-    return {"ok": True, "frame": stem, "arm": "uploads", "segmented_here": detected,
+    return {"ok": True, "frame": summ["frame"], "arm": "uploads",
+            "renamed_from": (raw_stem if raw_stem != summ["frame"] else None),
+            "segmented_here": detected,
             "scale_known": summ["scale_known"],
             "n_cracks": summ["n_cracks_measured"], "n_specks": summ["speck_count"],
             "area_fraction": summ["area_fraction"],

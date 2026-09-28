@@ -73,10 +73,13 @@ the test knows the spread sample is doing work rather than decorating a result t
 had already found. That is evidence, not a guarantee: the two regions that actually need
 the fallback have 159,751 and 101,300 cycles, far outside the range any of this was
 checked over, and their values carry geodesic_method = "sampled_sources_lower_bound" so a
-reader can see which number they are holding. On the corpus as re-measured it is 9 regions
-of 61,154: 47,747 take the exact tree sweep, 13,188 the exact all-pairs, and 210 have no
+reader can see which number they are holding. On the corpus as re-measured it is 4 regions
+of 61,154: 47,747 take the exact tree sweep, 13,193 the exact all-pairs, and 210 have no
 tip-to-tip path at all (all tiny -- the largest is 282 px of centreline, and not one of the
-210 has a network longer than its own frame's MCL, so none of them could have set it).
+210 has a network longer than its own frame's MCL, so none of them could have set it). All
+4 approximated regions are on UNSCALED frames, so no micrometre number this app publishes
+rests on the approximation -- which is true of this budget and was not true of the one
+before it, where a 5,543-tip TXM region on a scaled frame fell to the sampled path.
 """
 import math
 

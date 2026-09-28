@@ -256,3 +256,28 @@ def test_a_looping_skeleton_is_hedged():
 
 def test_no_network_share_statement_without_an_mcl():
     assert "own network" not in texts(C.for_frame(frame(mcl_share_of_its_network=0.3)))
+
+
+# --- the ingest assertion must reach the reader ------------------------------------
+def test_an_inverted_mask_is_the_first_thing_said():
+    """measure.py detects inversion; the old layout showed it under the frame title, and
+    that element was deleted in the restructure. The warning then had no consumer at all:
+    an inverted mask measures the matrix, reports it as crack, and the read-out said "One
+    crack holds 100% of the crack area" in green."""
+    f = frame(largest_share_of_area=1.0,
+              ingest={"warnings": ["75.0% of the frame reads as crack. Crack should be "
+                                   "BLACK and the minority phase -- this looks inverted"]})
+    out = C.for_frame(f)
+    assert "inverted" in texts(out).lower()
+    assert out[0]["level"] == "bad", "it must outrank the cheerful statements"
+
+
+def test_a_greyscale_image_posing_as_a_mask_is_said():
+    f = frame(ingest={"warnings": ["not a two-valued mask (9 grey levels) -- it was "
+                                   "thresholded at 128"]})
+    assert "two-valued" in texts(C.for_frame(f))
+
+
+def test_a_clean_mask_adds_no_ingest_line():
+    assert "inverted" not in texts(C.for_frame(frame(ingest={"warnings": []})))
+    assert "inverted" not in texts(C.for_frame(frame()))

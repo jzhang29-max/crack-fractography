@@ -67,6 +67,29 @@ def for_frame(f):
         return [_s("No crack pixels in this frame.",
                    "n_cracks_measured = 0", level="warn")]
 
+    # THE INGEST ASSERTION, FIRST AND LOUDEST. measure.py detects an inverted mask, a
+    # greyscale image posing as one, and an all-crack frame, and the old layout showed those
+    # warnings under the frame title. That element is gone, so the warnings had NO CONSUMER:
+    # an inverted mask measured the matrix, reported it as crack, and the read-out said
+    # "One crack holds 100% of the crack area" in green. A warning with no reader is not a
+    # warning. Level "bad" so the severity sort puts it above every other statement.
+    for w in ((f.get("ingest") or {}).get("warnings") or []):
+        if "inverted" in w:
+            out.append(_s(
+                "This mask looks inverted: it may be measuring the matrix.",
+                w, hedge="Crack should be BLACK and the minority phase. An inverted mask "
+                         "produces entirely plausible numbers about the wrong phase.",
+                level="bad"))
+        elif "two-valued" in w:
+            out.append(_s(
+                "Not a two-valued mask: it was thresholded at 128.",
+                w, hedge="Every area statistic here depends on that threshold rather than "
+                         "on a segmentation decision anyone made.",
+                level="bad"))
+        else:
+            out.append(_s(w if len(w.split()) <= 15 else "Ingest check failed on this mask.",
+                          w, level="bad"))
+
     # --- REGIME. The only metric tested that the detector does not move. ---------------
     share = f.get("largest_share_of_area")
     if share is not None:

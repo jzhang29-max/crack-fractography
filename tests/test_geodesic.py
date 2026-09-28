@@ -395,6 +395,23 @@ def main():
             wrote = False
         check("a cached skeleton cannot be written to", not wrote)
 
+    # ---- 6c. The two region counters exist WITHOUT a physical scale. ----------------
+    # They sat inside measure_frame's micrometre block for one run. Everything looked
+    # right -- the fields were on every frame the app shows a MCL for -- but the only
+    # frames the approximation has ever fired on are unscaled, so the counter for
+    # "regions measured approximately" was absent from all 127 of them and read as a
+    # clean zero from the scaled ones. The guard is the unscaled frame, not the scaled.
+    m = np.zeros((160, 160), bool)
+    m[78:82, 10:150] = True
+    for x in range(14, 146, 12):
+        m[30:130, x:x + 3] = True
+    unscaled = measure_frame(m, "no_scale_at_all", "sem")[1]
+    check("an UNSCALED frame has no micrometre fields (the premise of this guard)",
+          not unscaled["scale_known"] and unscaled.get("mcl_um") is None)
+    for k in ("n_regions_geodesic_undefined", "n_regions_geodesic_sampled"):
+        check(f"...and still carries '{k}'",
+              isinstance(unscaled.get(k), int), f"{k}={unscaled.get(k)!r}")
+
     # ---- 7. Nothing computed here may be silently discarded. ------------------------
     # Same failure as tests/test_no_stranded_fields.py catches for segments.py: a field
     # produced on every frame of every run that no reader ever looks at. The two
