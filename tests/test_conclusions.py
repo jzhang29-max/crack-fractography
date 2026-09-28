@@ -281,3 +281,49 @@ def test_a_greyscale_image_posing_as_a_mask_is_said():
 def test_a_clean_mask_adds_no_ingest_line():
     assert "inverted" not in texts(C.for_frame(frame(ingest={"warnings": []})))
     assert "inverted" not in texts(C.for_frame(frame()))
+
+
+# --- constants must match the dataset, not a summary someone wrote ------------------
+def test_the_discordance_rate_matches_the_dataset():
+    """REGIME_DISCORDANCE shipped as 0.18 because I copied it from a research summary into a
+    constant without recomputing it. The dataset gives 4 of 56 double-imaged fields, 7.1%,
+    on both SEM arms. It appears in the hedge under every dominance verdict, so a wrong
+    value there is a wrong number in front of a researcher."""
+    import json
+    out = os.path.join(REPO, "analysis", "out", "frames.json")
+    if not os.path.exists(out):
+        pytest.skip("no dataset built")
+    sys.path.insert(0, os.path.join(REPO, "analysis"))
+    from specimen_stats import detector_of, field_key
+    fr = json.load(open(out))
+    for arm in ("sem/gated", "sem/machine"):
+        byf = {}
+        for f in fr:
+            if f["arm"] != arm:
+                continue
+            d = detector_of(f["frame"])
+            if d:
+                byf.setdefault(field_key(f["frame"]), {})[d] = f
+        pairs = [v for v in byf.values() if {"CBS", "ETD"} <= set(v)]
+        if not pairs:
+            continue
+        flips = 0
+        for v in pairs:
+            a = (v["CBS"].get("largest_share_of_area") or 0) >= C.DOMINANT_CUT
+            b = (v["ETD"].get("largest_share_of_area") or 0) >= C.DOMINANT_CUT
+            if a != b:
+                flips += 1
+        assert C.REGIME_DISCORDANCE == pytest.approx(flips / len(pairs), abs=0.005), (
+            f"{arm}: constant is {C.REGIME_DISCORDANCE:.4f}, dataset gives "
+            f"{flips}/{len(pairs)} = {flips / len(pairs):.4f}")
+
+
+def test_no_fixed_orientation_null_range_is_quoted():
+    """The null is per-frame and spans 0.04–1.00 on this corpus; only 31% of frames fall in
+    the 0.16–0.29 that was being quoted as though it were the null, and 12 frames exceed 0.29
+    while still failing their own. Quoting a fixed range invites exactly that misreading."""
+    src = open(os.path.join(REPO, "analysis", "conclusions.py")).read()
+    js = open(os.path.join(REPO, "app", "static", "app.js")).read()
+    for where, text in (("conclusions.py", src), ("app.js", js)):
+        assert "0.16-0.29" not in text and "0.16–0.29" not in text, (
+            f"{where} still quotes a fixed null range")

@@ -34,9 +34,15 @@ A statement with no condition under which it must stay silent is not ready to sh
 #: reader can apply their own.
 DOMINANT_CUT = 0.90
 
-#: Detector-discordance rate for the regime call, measured on the 56 double-imaged fields:
-#: the call flips between CBS and ETD on 10 of them at this cut point.
-REGIME_DISCORDANCE = 0.18
+#: Detector-discordance rate for the regime call, RECOMPUTED from the dataset rather than
+#: quoted: the call flips between CBS and ETD on 4 of the 56 double-imaged fields at this
+#: cut point -- 4/56 on the gated arm and 4/56 on machine, 7.1% either way.
+#:
+#: It shipped as 0.18, which would need 10 of 56. That number came from a research summary
+#: and I put it in a constant without recomputing it against analysis/out/frames.json, and
+#: it then appeared in the "when it lies" hedge under every dominance verdict in the app.
+#: tests/test_conclusions.py recomputes it from the dataset so it cannot drift again.
+REGIME_DISCORDANCE = 4 / 56
 
 #: ASTM E562's usual relative-accuracy target. Below it the answer is more fields.
 E562_RA_TARGET = 10.0
@@ -127,10 +133,11 @@ def for_frame(f):
     elif beats is False:
         out.append(_s(
             "Not resolvably oriented.",
-            f"R = {R:.3f} does not exceed its permutation null R95 = {R95:.3f}. A "
-            f"synthetic mask of straight lines at uniform random angles returns "
-            f"R = 0.16-0.29 on this pipeline, so a lopsided rose is the default "
-            f"appearance of randomness here.",
+            f"R = {R:.3f} does not exceed its permutation null R95 = {R95:.3f}. The null "
+            f"is computed for THIS frame from its own segment lengths, which is why it is "
+            f"quoted beside the value: across this corpus it runs 0.04 to 1.00, median "
+            f"0.14, because it scales with how many segments there are. A fixed threshold "
+            f"would call 12 frames strongly oriented that do not beat their own null.",
             level="warn", value=R))
 
     # --- LENGTH TRUST. Two estimators of one quantity disagreeing is self-disqualifying.
