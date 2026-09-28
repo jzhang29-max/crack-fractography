@@ -125,6 +125,9 @@ main{flex:1 1 auto;display:grid;grid-template-columns:minmax(220px,300px) minmax
 .ro-more:hover{background:none;color:var(--text-primary)}
 /* The marking tool, embedded. It is a separate Flask app in the SEM repo on its own port;
    an iframe is the honest way to reach it without reimplementing a painting canvas. */
+.edbar{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-bottom:9px}
+#edcanvas{max-width:100%;border:1px solid var(--rule);border-radius:8px;background:#fff;
+  cursor:crosshair;touch-action:none;display:block}
 .markstate{max-width:52ch;display:flex;flex-direction:column;gap:9px;align-items:flex-start}
 .markbig{font-size:15px;font-weight:600;margin:0}
 .markstate .note{margin:0}

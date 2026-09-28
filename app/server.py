@@ -534,6 +534,57 @@ def _mask_path(arm, frame):
     return None
 
 
+@app.post("/api/mask_edit")
+async def mask_edit(arm: str = Query(...), frame: str = Query(...),
+                    file: UploadFile = File(...)):
+    """Replace an UPLOADED frame's mask with an edited one, then re-measure it.
+
+    This is the correct-and-measure half of the loop, built in, so it works in a downloaded
+    copy. The detect and retrain halves cannot be: the model is pickled against the SEM
+    repo's own interpreter, so they stay behind the Mark tab's hand-off. Painting on a mask
+    needs no model, and correcting a mask is the step a researcher with their own data
+    actually needs.
+
+    UPLOADS ONLY, and this is a hard restriction rather than a default. The other arms read
+    from the SEM repo's derived masks and the TXM export, which are irreplaceable research
+    data this app has no business overwriting -- it is a measurement tool, and the one
+    directory it owns is its own uploads folder.
+    """
+    if arm != "uploads":
+        raise HTTPException(
+            403, "editing is limited to uploaded masks. The sem and txm arms read from "
+                 "research data this app does not own; correct those in the marking tool, "
+                 "which writes through the pipeline that produced them.")
+    dest = os.path.join(UPLOAD_DIR, f"{frame}_gated.png")
+    if not os.path.exists(dest):
+        raise HTTPException(404, f"no uploaded mask for {frame!r}")
+
+    blob = await file.read()
+    if not blob.startswith(b"\x89PNG"):
+        raise HTTPException(400, "the edited mask must be a PNG")
+    if len(blob) > MAX_UPLOAD_MB * 1024 * 1024:
+        raise HTTPException(413, f"{len(blob)/1e6:.0f} MB is over the limit")
+
+    # Write beside it and swap, so an interrupted save cannot leave a half-written mask
+    # where a whole one used to be.
+    tmp = dest + ".tmp"
+    with open(tmp, "wb") as fh:
+        fh.write(blob)
+    try:
+        from PIL import Image
+        Image.MAX_IMAGE_PIXELS = None
+        with Image.open(tmp) as im:
+            im.verify()
+    except Exception as e:
+        os.remove(tmp)
+        raise HTTPException(400, f"not a readable PNG: {type(e).__name__}: {e}")
+    os.replace(tmp, dest)
+
+    out = remeasure(arm=arm, frame=frame)
+    out["edited"] = True
+    return out
+
+
 @app.post("/api/scale")
 def set_scale(arm: str = Query(...), frame: str = Query(...),
               nm_per_px: float | None = None):

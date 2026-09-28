@@ -841,6 +841,9 @@ let MARK_URL = null;
 
 async function renderMark() {
   const el = $("#markbody");
+  // An uploaded frame is ours to edit; the research arms are not. That restriction is
+  // enforced server-side too -- this just avoids offering what would be refused.
+  if (state.arm === "uploads" && state.frame) return openEditor(state.frame);
   if (MARK_URL) return;
   el.innerHTML = `<p class="note">Checking…</p>`;
   let st;
@@ -936,6 +939,121 @@ async function remeasure(btn, where) {
   }
   btn.disabled = false;
   btn.textContent = was;
+}
+
+// ---------------------------------------------------------------------------------------
+// MASK EDITOR, built in, for uploaded frames.
+//
+// The detect and retrain halves of the loop need the SEM repo's model, which is pickled
+// against that repo's interpreter and cannot be bundled -- they stay behind the Mark tab's
+// hand-off. Painting on a mask needs no model, and correcting a mask is the step a
+// researcher with their own data actually needs, so it is built in and works in a
+// downloaded copy.
+//
+// EDITS ARE MADE AT NATURAL RESOLUTION. The canvas on screen is scaled to fit, but every
+// stroke is mapped back to the image's own pixels and drawn on an offscreen canvas at full
+// size. Painting on the scaled copy and uploading that would silently resample the user's
+// mask, changing every measurement by more than their correction did.
+const ED = { img: null, off: null, mode: "add", brush: 24, dirty: false, frame: null };
+
+function editorHTML(frame) {
+  return `
+    <div class="edbar">
+      <button data-ed="add" class="upload">Add crack</button>
+      <button data-ed="erase">Erase</button>
+      <label class="u" for="edbrush">Brush</label>
+      <input id="edbrush" type="range" min="2" max="120" value="${ED.brush}">
+      <span class="u" id="edbrushval">${ED.brush}</span>
+      <span class="spacer"></span>
+      <button id="edsave" class="upload" disabled>Save and re-measure</button>
+    </div>
+    <p class="note" id="edout">Black is crack. Edits apply at the image's own resolution.</p>
+    <canvas id="edcanvas"></canvas>`;
+}
+
+async function openEditor(frame) {
+  const host = $("#markbody");
+  host.innerHTML = editorHTML(frame);
+  const cv = $("#edcanvas");
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+  await new Promise((res, rej) => {
+    img.onload = res; img.onerror = () => rej(new Error("could not load the mask"));
+    img.src = `/api/mask/${state.arm}/${encodeURIComponent(frame)}?t=${Date.now()}`;
+  }).catch((e) => { $("#edout").innerHTML = `<span class="flag bad">${e.message}</span>`; });
+  if (!img.naturalWidth) return;
+
+  ED.img = img; ED.frame = frame; ED.dirty = false;
+  ED.off = document.createElement("canvas");
+  ED.off.width = img.naturalWidth; ED.off.height = img.naturalHeight;
+  ED.off.getContext("2d").drawImage(img, 0, 0);
+
+  const fit = () => {
+    const w = Math.min(host.clientWidth - 4, img.naturalWidth);
+    cv.width = w; cv.height = Math.round(w * img.naturalHeight / img.naturalWidth);
+    cv.getContext("2d").drawImage(ED.off, 0, 0, cv.width, cv.height);
+  };
+  fit();
+  $("#edout").textContent =
+    `${img.naturalWidth} × ${img.naturalHeight} px. Black is crack.`;
+
+  // Display coordinates map back to the image's own pixels, so a stroke is the same size
+  // in the saved mask whatever the window is.
+  const toNat = (e) => {
+    const r = cv.getBoundingClientRect();
+    return [(e.clientX - r.left) / r.width * ED.off.width,
+            (e.clientY - r.top) / r.height * ED.off.height];
+  };
+  let drawing = false, last = null;
+  const stroke = (a, b) => {
+    const g = ED.off.getContext("2d");
+    g.strokeStyle = ED.mode === "add" ? "#000" : "#fff";
+    g.lineWidth = ED.brush * (ED.off.width / cv.width);
+    g.lineCap = "round"; g.lineJoin = "round";
+    g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke();
+    cv.getContext("2d").drawImage(ED.off, 0, 0, cv.width, cv.height);
+    ED.dirty = true; $("#edsave").disabled = false;
+  };
+  cv.onpointerdown = (e) => { drawing = true; last = toNat(e); stroke(last, last);
+                              cv.setPointerCapture(e.pointerId); };
+  cv.onpointermove = (e) => { if (!drawing) return; const n = toNat(e); stroke(last, n); last = n; };
+  cv.onpointerup = () => { drawing = false; };
+  cv.onpointerleave = () => { drawing = false; };
+
+  host.querySelectorAll("[data-ed]").forEach((b) => {
+    b.onclick = () => {
+      ED.mode = b.dataset.ed;
+      host.querySelectorAll("[data-ed]").forEach((x) =>
+        x.classList.toggle("upload", x.dataset.ed === ED.mode));
+    };
+  });
+  $("#edbrush").oninput = (e) => { ED.brush = +e.target.value; $("#edbrushval").textContent = ED.brush; };
+
+  $("#edsave").onclick = async () => {
+    const btn = $("#edsave"), out = $("#edout");
+    btn.disabled = true; btn.textContent = "Saving…";
+    try {
+      const blob = await new Promise((r) => ED.off.toBlob(r, "image/png"));
+      const fd = new FormData();
+      fd.append("file", blob, `${frame}_gated.png`);
+      const q = new URLSearchParams({ arm: state.arm, frame });
+      const r = await fetch(`/api/mask_edit?${q}`, { method: "POST", body: fd });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || r.statusText);
+      const ch = Object.entries(d.changed || {});
+      out.innerHTML = ch.length
+        ? ch.map(([k, v]) => `<b>${k.replace(/_/g, " ")}</b> ${fmt(v.before, 4)} → ${fmt(v.after, 4)}`).join("  ·  ")
+        : `<span class="u">Saved. No measurement changed.</span>`;
+      ED.dirty = false;
+      state.frames = await api(`/api/frames?arm=${encodeURIComponent(state.arm)}` +
+        (state.spec ? `&specimen=${encodeURIComponent(state.spec)}` : ""));
+      renderFrames(); renderSpecimens(); renderReadout();
+    } catch (e) {
+      out.innerHTML = `<span class="flag bad">${e.message}</span>`;
+    }
+    btn.textContent = "Save and re-measure";
+    btn.disabled = !ED.dirty;
+  };
 }
 
 async function loadArm() {
