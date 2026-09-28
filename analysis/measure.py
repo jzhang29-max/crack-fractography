@@ -436,12 +436,22 @@ def canonical_stem(name):
 
     Longest suffix first: "_crack_mask" also ends with "_mask", and stripping the shorter
     one leaves "_crack" behind.
+
+        IT MUST BE IDEMPOTENT, because it is applied twice: the upload endpoint canonicalises
+    the filename to name the saved file, then measure_path canonicalises again to name the
+    frame. Stripping only one suffix per call made those two disagree for a double-suffixed
+    name -- "_smoke_mask_gated" became "_smoke_mask" at the endpoint and "_smoke" in the
+    record, so the crack rows and the mask file were unreachable exactly as before. Caught
+    by the release smoke check on its first run after it was taught to measure.
     """
     stem = os.path.splitext(os.path.basename(name))[0]
-    for suf in MASK_SUFFIXES:
-        if stem.endswith(suf):
-            return stem[: -len(suf)]
-    return stem
+    while True:
+        for suf in MASK_SUFFIXES:
+            if stem.endswith(suf) and len(stem) > len(suf):
+                stem = stem[: -len(suf)]
+                break
+        else:
+            return stem
 
 
 def measure_path(path, modality="sem", stem=None, r_l_axis_deg=0.0):

@@ -28,6 +28,14 @@ app = FastAPI(title="crack fractography")
 _CACHE = {}
 
 
+def _load_quiet(name):
+    """_load, but returns None instead of raising when the dataset does not exist yet."""
+    try:
+        return _load(name)
+    except HTTPException:
+        return None
+
+
 def _load(name):
     """Read one dataset file, re-reading it whenever the bytes on disk change.
 
@@ -228,6 +236,20 @@ async def upload(file: UploadFile = File(...)):
     if not stem:
         raise HTTPException(400, "the file needs a name")
 
+    # A DIFFERENT FILE THAT CANONICALISES TO THE SAME FRAME IS REFUSED, NOT OVERWRITTEN.
+    # canonical_stem strips the mask suffix, so weld.png and weld_mask.png are both frame
+    # "weld": uploading the second replaced the first, and the only sign was the crack count
+    # changing on a row the user was not looking at. Re-uploading the SAME filename still
+    # replaces, because that is how you re-measure after correcting a mask in the Mark tab
+    # -- which is the whole point of that tab, so it must not be the case that gets blocked.
+    existing = next((f for f in (_load_quiet("frames") or [])
+                     if f.get("arm") == "uploads" and f.get("frame") == stem), None)
+    if existing is not None and existing.get("source_filename") not in (None, name):
+        raise HTTPException(409,
+            f"{name!r} and {existing['source_filename']!r} are both frame {stem!r} once the "
+            f"mask suffix is stripped, and accepting this would replace the measurement "
+            f"already stored for it. Rename one of them.")
+
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     blob = await file.read()
     if len(blob) > MAX_UPLOAD_MB * 1024 * 1024:
@@ -280,6 +302,9 @@ async def upload(file: UploadFile = File(...)):
         raise HTTPException(500, f"measurement failed: {type(e).__name__}: {e}")
     summ["arm"] = "uploads"
     summ["specimen"] = "uploaded"
+    # The filename as given, so a later upload can tell "the same file again" from "a
+    # different file with a colliding name".
+    summ["source_filename"] = name
     summ["was_segmented_here"] = detected
     for r in rows:
         r["frame"] = stem
