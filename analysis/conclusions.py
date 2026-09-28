@@ -141,15 +141,24 @@ def for_frame(f):
             level="warn", value=R))
 
     # --- LENGTH TRUST. Two estimators of one quantity disagreeing is self-disqualifying.
-    sk = f.get("p21_skeleton_mm_per_mm2")
-    bf = (f.get("probe") or {}).get("p21_buffon_mm_per_mm2")
+    # Prefer the pixel-unit pair: the ratio is dimensionless and identical either way, and
+    # the pixel pair exists on every frame while the millimetre pair needs a scale. The
+    # millimetre values stay as the fallback so a frame measured before this change still
+    # produces the statement.
+    pr = f.get("probe") or {}
+    sk = f.get("p21_skeleton_per_px")
+    bf = pr.get("p21_buffon_per_px")
+    unit = "px/px\u00b2"
+    if not (sk and bf):
+        sk, bf = f.get("p21_skeleton_mm_per_mm2"), pr.get("p21_buffon_mm_per_mm2")
+        unit = "mm/mm\u00b2"
     if sk and bf and sk > 0:
         ratio = bf / sk
         if ratio and (ratio < 1 / LENGTH_TRUST_RATIO or ratio > LENGTH_TRUST_RATIO):
             out.append(_s(
                 f"Length unreliable: two estimators differ {max(ratio, 1 / ratio):.1f}×.",
                 f"skeleton P21 = {sk:.3g} against Buffon (π/2)·mean(P_L) = "
-                f"{bf:.3g} mm/mm² -- two estimators of the same centreline length per "
+                f"{bf:.3g} {unit} -- two estimators of the same centreline length per "
                 f"unit area, the second skeleton-free. Underwood, Quantitative Stereology.",
                 hedge="Treat length, MCL, TCL and characteristic length on this frame as "
                       "skeletonisation artefact rather than measurement. No literature "

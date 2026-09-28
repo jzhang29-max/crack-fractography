@@ -197,6 +197,10 @@ def measure_frame(mask, stem, modality="sem", r_l_axis_deg=0.0, grey=None):
         "total_skeleton_length_px": round(float(lengths.sum()), 1),
         # length per unit area -- the standard crack-density form
         "crack_density_px_per_Mpx": round(float(lengths.sum()) / (mask.size / 1e6), 1),
+        # The skeleton's own P21 in pixel units, so it can be compared against the Buffon
+        # estimator on EVERY frame rather than only on the scaled ones. Same quantity as
+        # p21_skeleton_mm_per_mm2 below, before the unit conversion.
+        "p21_skeleton_per_px": round(float(lengths.sum()) / mask.size, 10),
 
         "n_censored": int(sum(1 for r in rows if r["length_is_censored"])),
         # THREE WEIGHTINGS, because the count one is the least relevant and was the only one

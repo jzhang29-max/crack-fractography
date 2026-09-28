@@ -488,10 +488,22 @@ function ciLo(ci) {
   return `<span class="flag" title="${ci.ci95_lo_note || ""}">&lt;0</span>`;
 }
 
-function raBadge(ci) {
+// THE ADVICE DEPENDS ON THE SPECIMEN, so the tooltip cannot be a constant. The same
+// static string was attached to every badge, including the specimens where this app's own
+// stage.py concludes that more tiles in the same patch will NOT narrow the interval
+// because the fields are tracking a spatial gradient. The read-out already suppresses that
+// clause for those specimens; the badge went on asserting it, so the app gave a materials
+// researcher the wrong instruction in the one place it was most likely to be read.
+function raBadge(ci, rec) {
   if (!ci || ci.pct_relative_accuracy == null) return "";
   const v = ci.pct_relative_accuracy;
-  return `<span class="ra${v > 10 ? " bad" : ""}" title="ASTM E562 relative accuracy: the 95% interval as a percentage of the mean. The usual target is 10% or better; above it, the answer is more fields, not more decimals.">±${v}%</span>`;
+  const grad = rec && rec.stage_gradient && rec.stage_gradient.significant;
+  const tip = "ASTM E562 relative accuracy: the 95% interval as a percentage of the mean. "
+    + "The usual target is 10% or better. " + (grad
+      ? "These fields trend across one patch, so more tiles in the SAME patch will not "
+        + "narrow it — more patches would."
+      : "Above it, the answer is more fields, not more decimals.");
+  return `<span class="ra${v > 10 ? " bad" : ""}" title="${esc(tip)}">±${v}%</span>`;
 }
 
 function specimenCard(r) {
@@ -502,7 +514,7 @@ function specimenCard(r) {
   const dets = Object.entries(r.detectors || {}).map(([k, v]) => `${k} ${v}`).join(" · ");
   const rows = [
     ["Crack area fraction",
-     ci ? `<span class="big">${pct(ci.mean)}</span> <span class="ci">95% CI ${ciLo(ci)}–${pct(ci.ci95_hi)}, ${ci.n_fields} fields</span>${raBadge(ci)}`
+     ci ? `<span class="big">${pct(ci.mean)}</span> <span class="ci">95% CI ${ciLo(ci)}–${pct(ci.ci95_hi)}, ${ci.n_fields} fields</span>${raBadge(ci, r)}`
         : `<span class="big">${pct(r.area_fraction_median)}</span> <span class="ci">median of ${r.n_fields} field${r.n_fields > 1 ? "s" : ""} — under 3, no interval</span>`],
     ["P10", `${num(r.p10_min_per_mm)} <span class="u">/mm min</span> · ${num(r.p10_mean_per_mm)} <span class="u">/mm mean</span>`],
     ["P21 · P20", `${num(r.p21_skeleton_mm_per_mm2)} <span class="u">mm/mm²</span> · ${num(r.p20_per_mm2, 0)} <span class="u">/mm²</span>`],
@@ -540,7 +552,7 @@ function specimenTable(rows) {
       `<td>${r.n_fields}<span class="u">${r.n_frames !== r.n_fields ? ` /${r.n_frames}f` : ""}</span></td>` +
       `<td>${pct(ci ? ci.mean : r.area_fraction_median)}</td>` +
       `<td>${ci ? `${ciLo(ci)}–${pct(ci.ci95_hi)}` : "<span class='u'>n&lt;3</span>"}</td>` +
-      `<td>${ci ? raBadge(ci) : "—"}</td>` +
+      `<td>${ci ? raBadge(ci, r) : "—"}</td>` +
       `<td>${ds ? "×" + ds.cbs_over_etd_median : "—"}</td>` +
       `<td title="${as ? as.n_frames_corrected + " of " + as.n_paired_frames + " frames carry a correction" : ""}">${as ? (as.n_frames_corrected ? "×" + as.gated_over_machine_where_corrected : "<span class='u'>none</span>") : "—"}</td></tr>`;
   }).join("");
@@ -641,7 +653,7 @@ function renderStrip(rec) {
     `<span class="who">${rec.specimen}</span>`,
     ci ? `<span class="big">${pct(ci.mean)}</span>` : `<span class="big">${pct(rec.area_fraction_median)}</span>`,
     `<span class="u">crack area</span>`,
-    ci ? `<span class="ci">95% CI ${ciLo(ci)}–${pct(ci.ci95_hi)}</span>${raBadge(ci)}`
+    ci ? `<span class="ci">95% CI ${ciLo(ci)}–${pct(ci.ci95_hi)}</span>${raBadge(ci, rec)}`
        : `<span class="ci">no interval, ${rec.n_fields} field${rec.n_fields === 1 ? "" : "s"}</span>`,
     `<span class="u">${rec.n_fields} fields${rec.n_frames !== rec.n_fields ? ` / ${rec.n_frames} frames` : ""}</span>`,
   ];

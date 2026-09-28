@@ -109,6 +109,16 @@ def line_probe(mask, nm_per_px=None, n_angles=N_ANGLES):
         "n_angles": int(n_angles),
         "angles_deg": [round(float(a), 1) for a in angles],
         "p10_per_px": [round(float(v), 8) for v in pl_px],
+        # BUFFON IN PIXEL UNITS, ALWAYS. L_A = (pi/2) * mean(P_L) is a length per unit
+        # area, so in px it is px/px^2 = 1/px, and the RATIO against the skeleton estimate
+        # is dimensionless -- identical whether computed in pixels or millimetres.
+        #
+        # It was computed only inside `if um_px:`, so the app ran two independent
+        # estimators of one quantity on 63% of frames and neither on the rest, including
+        # every upload -- which is the only arm a downloaded copy has. The disagreement
+        # between them IS the skeletonisation-error readout, and it was switched off
+        # exactly where there is least other evidence about the mask.
+        "p21_buffon_per_px": round(float(np.pi / 2 * pl_px.mean()), 10),
         "lineal_fraction_mean": round(float(frac.mean()), 6),
         "scale_known": um_px is not None,
     }

@@ -327,3 +327,75 @@ def test_no_fixed_orientation_null_range_is_quoted():
     for where, text in (("conclusions.py", src), ("app.js", js)):
         assert "0.16-0.29" not in text and "0.16–0.29" not in text, (
             f"{where} still quotes a fixed null range")
+
+
+# --- the Buffon cross-check must work without a scale -------------------------------
+def test_the_length_trust_check_needs_no_scale():
+    """It was computed only inside `if um_px:`, so the app ran two independent estimators
+    of one quantity on 63% of frames and neither on the rest -- including every upload,
+    which is the only arm a downloaded copy has. The ratio is dimensionless."""
+    import numpy as np
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "analysis"))
+    from measure import measure_frame
+
+    # NEGATIVE CONTROL: a straight bar, where skeletonisation is reliable and the two
+    # estimators should agree, so nothing is said.
+    m = np.zeros((400, 400), bool); m[190:200, 20:380] = True
+    _, clean = measure_frame(m, "unscaled_probe", "sem")
+    assert clean["scale_known"] is False
+    assert clean["p21_skeleton_per_px"] and clean["probe"]["p21_buffon_per_px"], (
+        "both estimators must exist on an unscaled frame")
+    assert "unreliable" not in texts(C.for_frame(clean))
+
+    # POSITIVE CONTROL: a solid block. Its skeleton is a short spine while the intercept
+    # count is high, so the estimators must disagree and the app must say so.
+    m2 = np.zeros((400, 400), bool); m2[100:300, 100:300] = True
+    _, blob = measure_frame(m2, "unscaled_blob", "sem")
+    r = blob["probe"]["p21_buffon_per_px"] / blob["p21_skeleton_per_px"]
+    assert r > 1.5 or r < 1 / 1.5, f"expected disagreement on a solid block, got {r:.2f}"
+    assert "unreliable" in texts(C.for_frame(blob)), (
+        "a factor disagreement between two estimators of one quantity must be reported")
+
+
+def test_the_basis_names_the_unit_it_used():
+    """The basis string said mm/mm2 while the values could now be in pixel units."""
+    import numpy as np
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "analysis"))
+    from measure import measure_frame
+    m = np.zeros((400, 400), bool); m[100:300, 100:300] = True
+    _, blob = measure_frame(m, "unscaled_blob", "sem")
+    line = [x for x in C.for_frame(blob) if "unreliable" in x["text"]][0]
+    assert "px/px" in line["basis"] and "mm/mm" not in line["basis"], line["basis"]
+
+
+def test_the_accuracy_badge_is_never_rendered_without_its_record():
+    """The tooltip's advice depends on whether that specimen's fields trend across a patch.
+    Called without the record it silently falls back to the generic "more fields" line --
+    which is the wrong instruction for exactly the specimens that have a gradient, and the
+    read-out already suppresses it for them. A call site that forgets the argument loses
+    the correction without any error."""
+    import re
+    js = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                           "app", "static", "app.js")).read()
+    # Check the ARGUMENT IS IN SCOPE, not merely that one was passed. The first version of
+    # this guard only looked for a comma, so raBadge(ci, r) inside renderStrip(rec) --
+    # where r does not exist -- sailed through it. A guard that cannot see the bug in front
+    # of it is not a guard.
+    fn, bad = None, []
+    for ln in js.splitlines():
+        m = re.match(r"(?:async )?function (\w+)\(([^)]*)\)", ln)
+        if m:
+            fn, params = m.group(1), [x.strip() for x in m.group(2).split(",") if x.strip()]
+        if "raBadge(" in ln and "function raBadge" not in ln:
+            call = re.search(r"raBadge\(\s*\w+\s*,\s*(\w+)\s*\)", ln)
+            if not call:
+                bad.append(f"{fn}: no record argument")
+                continue
+            name = call.group(1)
+            # In scope if it is a parameter of the enclosing function, or bound by a map
+            # callback inside it, or a module-level name.
+            if name not in params and f"({name})" not in js and f"let {name}" not in js:
+                bad.append(f"{fn}: passes {name!r}, which is not a parameter of it")
+    assert not bad, "raBadge called with an out-of-scope record: " + "; ".join(bad)
