@@ -182,6 +182,11 @@ th:hover{color:var(--text-primary)}
 tbody tr:hover{background:var(--surface-3)}
 tbody tr[aria-selected=true]{background:color-mix(in oklab,var(--s1) 20%,transparent)}
 #frames td{font-size:12.5px;padding:3px 7px}
+/* Specimen groups. The header row is the set; its children are indented under it. */
+#frames tr.grp td{background:var(--surface-3);font-weight:620;font-size:12px;
+  cursor:pointer;position:sticky;top:26px}
+#frames tr.grp:hover td{color:var(--text-primary)}
+#frames td.ind{padding-left:20px}
 #frames td:first-child{max-width:15ch;overflow:hidden;text-overflow:ellipsis}
 .scroll{overflow:auto;max-width:100%;scrollbar-gutter:stable}
 .scroll::-webkit-scrollbar{height:9px;width:9px}

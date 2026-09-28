@@ -44,6 +44,10 @@ const FCOLS = [
 // unfiltered one may share nothing at all.
 let FRAME_PREFIX = "";
 
+//: Which specimen groups the reader has opened. Kept across re-renders so a re-measure or
+//: a sort does not collapse the group they are working in.
+const GROUPS_OPEN = new Set();
+
 function commonPrefix(names) {
   if (names.length < 2) return "";
   let p = names[0];
@@ -85,41 +89,55 @@ function renderFrames() {
     if (y === null || y === undefined) return -1;
     return (x > y ? 1 : -1) * state.sortDir;
   });
-  t.querySelector("tbody").innerHTML = rows.map((f) => {
-    // A frame with no scale cannot contribute to any physical statistic. Say so in the row
-    // rather than showing a blank cell that reads as zero.
-    // NO ECHO TOOLTIPS. There were 346 of these across 142 rows, 1,668 words -- more
-    // hidden text than the entire visible page -- and every one restated the cell it sat
-    // on: the frame stem in a title over a cell showing the frame stem, and the same
-    // specks sentence repeated 142 times. What they meant now lives once, in the
-    // definitions drawer, where it is addressable and reachable without a mouse.
+  // GROUPED BY SPECIMEN, not one flat list of 142 rows. A specimen is the set of images
+  // that belong together -- it is the unit every statistic in this app is computed over --
+  // so a flat list asked the reader to do in their head the grouping the app was already
+  // doing everywhere else. Collapsible, each header carrying its own count and median.
+  const groups = new Map();
+  for (const f of rows) {
+    const k = f.specimen || "unparsed";
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(f);
+  }
+  const one = (f) => {
     const noScale = f.scale_known ? "" : ` <span class="flag">no scale</span>`;
-    return `<tr data-f="${f.frame}" aria-selected="${state.frame === f.frame}">` +
+    return `<tr data-f="${esc(f.frame)}" aria-selected="${state.frame === f.frame}">` +
       FCOLS.map(([k]) => {
-        if (k === "frame") {
-          // DROP THE PREFIX THE ROWS SHARE. The list held 653 of the page's 840 words, and
-          // most of that was one string repeated: every row of MAR_AmbB_HIP begins with
-          // "MAR_AmbB_HIP_". The specimen is named in the selector directly above, so the
-          // prefix is redundant with it -- removing it cuts the list's text by more than
-          // half with no information lost, and the full stem is still what the row carries
-          // in data-f, what the CSV exports and what the Frame detail tab shows.
-          return `<td>${esc(shortFrame(f[k]))}${noScale}</td>`;
-        }
+        if (k === "frame") return `<td class="ind">${esc(shortFrame(f[k]))}${noScale}</td>`;
         if (k === "_cracks") {
-          // One cell, because a count without its speck count invites the fragmentation
-          // misreading this project has already made once.
-          const sp = f.speck_count ? ` <span class="muted">+${f.speck_count.toLocaleString()}</span>` : "";
+          const sp = f.speck_count
+            ? ` <span class="muted">+${f.speck_count.toLocaleString()}</span>` : "";
           return `<td>${fmt(f.n_cracks_measured)}${sp}</td>`;
         }
         return `<td>${fmt(f[k], 4)}</td>`;
       }).join("") + "</tr>";
+  };
+  t.querySelector("tbody").innerHTML = [...groups.entries()].map(([spec, fs]) => {
+    // A group holding the selected frame is always open, so re-measuring or sorting never
+    // hides the row the reader is working on.
+    const open = GROUPS_OPEN.has(spec) || groups.size === 1 ||
+                 fs.some((f) => f.frame === state.frame);
+    const af = fs.map((f) => f.area_fraction).filter((v) => v != null).sort((x, y) => x - y);
+    const med = af.length ? af[Math.floor(af.length / 2)] : null;
+    const head = `<tr class="grp" data-grp="${esc(spec)}">` +
+      `<td colspan="${FCOLS.length - 1}">${open ? "\u25be" : "\u25b8"} ${esc(spec)}` +
+      ` <span class="u">${fs.length}</span></td>` +
+      `<td class="u">${med == null ? "" : fmt(med, 4)}</td></tr>`;
+    return open ? head + fs.map(one).join("") : head;
   }).join("");
+
   t.querySelectorAll("thead th").forEach((th) => th.onclick = () => {
     const k = th.dataset.k;
     state.sortDir = state.sortKey === k ? -state.sortDir : 1;
     state.sortKey = k; renderFrames();
   });
-  t.querySelectorAll("tbody tr").forEach((tr) => tr.onclick = () => selectFrame(tr.dataset.f));
+  t.querySelectorAll("tbody tr.grp").forEach((tr) => tr.onclick = () => {
+    const k = tr.dataset.grp;
+    if (GROUPS_OPEN.has(k)) GROUPS_OPEN.delete(k); else GROUPS_OPEN.add(k);
+    renderFrames();
+  });
+  t.querySelectorAll("tbody tr:not(.grp)").forEach((tr) =>
+    tr.onclick = () => selectFrame(tr.dataset.f));
 }
 
 /* ---------------------------------------------------------------- rose */
@@ -610,7 +628,10 @@ function wireTabs() {
 // scrolled off at the first flick, and its caveats were in hover text — but they are
 // assertions about the data currently loaded, not stable definitions, so they must not be
 // behind any click at all.
+let STRIP_REC = null;
+
 function renderStrip(rec) {
+  STRIP_REC = rec;
   const el = $("#strip");
   if (!rec) { el.innerHTML = `<span class="who">Select a specimen.</span>`; return; }
   const ci = rec.area_fraction_ci;
@@ -629,6 +650,15 @@ function renderStrip(rec) {
   }
   if (a && !a.n_frames_corrected) {
     bits.push(`<span class="banner" title="The gated and machine arms are identical on all ${a.n_paired_frames} frames of this specimen.">no human review</span>`);
+  }
+  // THE TOP CONCLUSION, IN THE STRIP. Making Mark the default tab put the read-out behind
+  // a click, and the first thing asked afterwards was where the conclusions had gone. The
+  // most severe statement now sits with the headline number, always visible, and says how
+  // many more there are.
+  if (RO_TOP.text) {
+    bits.push(`<span class="banner ${RO_TOP.level === "bad" ? "bad" : ""}" ` +
+      `id="striptop" title="${esc(RO_TOP.basis || "")}">${MARK[RO_TOP.level] || ""} ` +
+      `${esc(RO_TOP.text)}${RO_TOP.more ? ` <span class="u">+${RO_TOP.more}</span>` : ""}</span>`);
   }
   if (rec.scale_known_frames === 0) {
     bits.push(`<span class="banner" title="No frame in this specimen has a recoverable nm/px, and the corpus spans a 249x magnification range, so there is no defensible default.">no scale</span>`);
@@ -675,6 +705,10 @@ function roRender(groups) {
 
 let RO = {};
 
+//: The single most severe statement, mirrored into the strip so a conclusion is never
+//: behind a tab. Set by renderReadout, read by renderStrip.
+let RO_TOP = {};
+
 async function renderReadout() {
   const el = $("#readout");
   const f = state.frames.find((x) => x.frame === state.frame);
@@ -687,6 +721,13 @@ async function renderReadout() {
   RO = { specimen: d.specimen || [], frame: d.frame || [] };
 
   const body = roRender(RO);
+  // Severity order is the same rule the list uses, so the strip and the list agree about
+  // which statement matters most.
+  const all = [...(RO.specimen || []), ...(RO.frame || [])]
+    .sort((a, b) => (SEV[a.level] ?? 9) - (SEV[b.level] ?? 9));
+  RO_TOP = all.length
+    ? { text: all[0].text, level: all[0].level, basis: all[0].basis, more: all.length - 1 }
+    : {};
   // ONE LINE, NOT THREE BLOCKS. The refusals were 51 words permanently on screen -- more
   // than the read-out they sit under -- restating three questions the reader may not have
   // asked. They still must be STATED rather than silently omitted, because the mode
@@ -751,6 +792,11 @@ async function renderReadout() {
       sa.disabled = false; sa.textContent = "Set scale";
     }
   };
+
+  // The strip is drawn before the read-out exists on first load, so it is redrawn here
+  // once the top statement is known -- otherwise the banner is missing until the next
+  // frame change.
+  if (typeof STRIP_REC !== "undefined" && STRIP_REC) renderStrip(STRIP_REC);
 
   el.querySelectorAll(".ro-more").forEach((b) => {
     b.onclick = () => {
@@ -1194,6 +1240,7 @@ async function loadArm() {
     const q = e.target.value.trim().toLowerCase();
     let n = 0;
     $("#frames").querySelectorAll("tbody tr").forEach((tr) => {
+      if (tr.classList.contains("grp")) return;      // handled after, by child count
       const hit = !q || tr.dataset.f?.toLowerCase().includes(q);
       tr.hidden = !hit;
       if (hit) n++;
