@@ -54,11 +54,11 @@ def _measure_check(port):
     import uuid
 
     base = f"http://127.0.0.1:{port}"
-    src = os.path.abspath("_smoke_mask_gated.png")
+    src = os.path.abspath("_smokeprobe_gated.png")
     _png_bars(src)
     boundary = uuid.uuid4().hex
     body = (f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; "
-            f"filename=\"_smoke_mask_gated.png\"\r\nContent-Type: image/png\r\n\r\n"
+            f"filename=\"_smokeprobe_gated.png\"\r\nContent-Type: image/png\r\n\r\n"
             ).encode() + open(src, "rb").read() + f"\r\n--{boundary}--\r\n".encode()
     req = urllib.request.Request(
         base + "/api/upload", data=body, method="POST",
@@ -74,7 +74,7 @@ def _measure_check(port):
 
     bad = []
     frame = up.get("frame")
-    if frame != "_smoke_mask":
+    if frame != "_smokeprobe":
         bad.append(f"the _gated suffix was not stripped: frame is {frame!r}")
     if up.get("n_cracks") != TEST_BARS:
         bad.append(f"measured {up.get('n_cracks')} cracks in a mask drawn with {TEST_BARS}")
