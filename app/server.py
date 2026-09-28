@@ -605,7 +605,14 @@ async def mask_edit(arm: str = Query(...), frame: str = Query(...),
         src_scale = _scale.nm_per_px(frame, "txm" if arm == "txm" else "sem")
         if src_scale:
             _scale.set_user_scale(new_frame, src_scale)
-        _measure_into_uploads(dest, new_frame, source=f"{arm}/{frame}")
+        # The copy belongs to the SPECIMEN IT CAME FROM, not to the "uploaded" catch-all.
+        # A re-marked field of MAR_H_AS is still a field of MAR_H_AS -- filing it under a
+        # pseudo-specimen threw away the grouping that makes an E562 interval mean
+        # anything, and put it in a bucket with unrelated images.
+        src_rec = next((f for f in (_load_quiet("frames") or [])
+                        if f.get("arm") == arm and f.get("frame") == frame), None)
+        _measure_into_uploads(dest, new_frame, source=f"{arm}/{frame}",
+                              specimen=(src_rec or {}).get("specimen"))
         out = remeasure(arm="uploads", frame=new_frame)
         out["copied_from"] = f"{arm}/{frame}"
         out["arm"] = "uploads"
@@ -614,19 +621,20 @@ async def mask_edit(arm: str = Query(...), frame: str = Query(...),
     return out
 
 
-def _measure_into_uploads(mask_path, frame, source=None):
+def _measure_into_uploads(mask_path, frame, source=None, specimen=None):
     """Create an uploads-arm record for a mask that is already on disk."""
     import sys as _sys
     _sys.path.insert(0, os.path.join(RES, "analysis"))
     from measure import measure_path
     rows, summ = measure_path(mask_path, "sem", stem=frame)
     summ["arm"] = "uploads"
-    summ["specimen"] = "uploaded"
+    summ["specimen"] = specimen or "uploaded"
     summ["source_filename"] = f"{frame}_gated.png"
     if source:
         summ["copied_from"] = source
     for r in rows:
-        r["frame"] = summ["frame"]; r["arm"] = "uploads"; r["specimen"] = "uploaded"
+        r["frame"] = summ["frame"]; r["arm"] = "uploads"
+        r["specimen"] = summ["specimen"]
     for fname, new_rows in (("frames", [summ]), ("cracks", rows)):
         fp = os.path.join(OUT, f"{fname}.json")
         cur = json.load(open(fp)) if os.path.exists(fp) else []

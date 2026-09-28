@@ -31,6 +31,10 @@ import re
 
 import numpy as np
 
+#: Where an uploaded image goes when nothing better is known about it. Frames under this
+#: name are unrelated to each other, so no between-field statistic over them is valid.
+PSEUDO_SPECIMEN = "uploaded"
+
 #: Detector token in a frame stem. The same physical field appears once per detector.
 DETECTOR = re.compile(r"_(CBS|ETD|BSE|SE|TLD)(?=_|$)", re.I)
 
@@ -191,12 +195,15 @@ def summarise(arm, specimen, frames):
         # not the author ever takes -- so the app's loudest statistic was fabricated for
         # everyone but its author, while the README leads with never pooling.
         #
-        # Gated on the ARM, not on the field count: the count guard cannot tell four fields
-        # of one specimen from four unrelated images.
-        "area_fraction_ci": (None if arm == "uploads" else _ci(af_fields)),
-        "no_ci_reason": ("uploaded images are not fields of one specimen, so a "
-                         "between-field interval over them would not mean anything"
-                         if arm == "uploads" else None),
+        # Gated on the PSEUDO-SPECIMEN, not on the arm and not on the field count. The
+        # count guard cannot tell four fields of one specimen from four unrelated images,
+        # and the arm guard was too blunt in the other direction: a mask marked up from a
+        # real specimen is filed in the uploads arm but IS a field of that specimen, and
+        # suppressing its interval threw away a number that does mean something.
+        "area_fraction_ci": (None if specimen == PSEUDO_SPECIMEN else _ci(af_fields)),
+        "no_ci_reason": ("these are unrelated uploaded images, not fields of one "
+                         "specimen, so a between-field interval over them would not mean "
+                         "anything" if specimen == PSEUDO_SPECIMEN else None),
 
         # Physical quantities, over SCALED fields only, and null when none are scaled.
         "p10_min_per_mm": _median([(f.get("probe") or {}).get("p10_min_per_mm")

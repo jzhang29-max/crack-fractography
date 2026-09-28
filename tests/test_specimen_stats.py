@@ -115,6 +115,20 @@ def test_additive_totals_are_summed_over_fields_not_frames():
     assert r["n_fields_scaled"] == 2
 
 
+def test_a_marked_copy_keeps_its_source_specimen_and_its_interval():
+    """A re-marked field of MAR_H_AS is still a field of MAR_H_AS. Filing marked copies
+    under the "uploaded" catch-all threw away the grouping that makes an E562 interval mean
+    anything and put them in a bucket with unrelated images."""
+    frames = [{"frame": f"MAR_H_AS_CBS_000{i}_marked", "area_fraction": v,
+               "n_cracks_measured": 5, "crack_density_px_per_Mpx": 1.0,
+               "scale_known": True}
+              for i, v in enumerate((0.03, 0.035, 0.04, 0.045), 1)]
+    r = S.summarise("uploads", "MAR_H_AS", frames)
+    assert r["area_fraction_ci"] is not None, (
+        "fields of one real specimen deserve an interval even in the uploads arm")
+    assert r["no_ci_reason"] is None
+
+
 def test_uploads_get_no_e562_interval():
     """Every uploaded frame is filed under the pseudo-specimen "uploaded", so four
     unrelated images produced a 95% CI with a method string citing between-FIELD variance.
