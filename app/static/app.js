@@ -671,6 +671,7 @@ let RO = {};
 
 async function renderReadout() {
   const el = $("#readout");
+  const f = state.frames.find((x) => x.frame === state.frame);
   const q = new URLSearchParams({ arm: state.arm });
   if (state.frame) q.set("frame", state.frame);
   if (state.spec) q.set("specimen", state.spec);
@@ -706,11 +707,44 @@ async function renderReadout() {
 
   el.innerHTML = (body || `<p class="ro-empty">Nothing this data supports saying yet.</p>`)
     + (state.frame
-        ? `<div class="roact"><button id="remeasure2">Re-measure this frame</button>
-             <span class="u" id="remeasure2out"></span></div>` : "")
+        ? `<div class="roact">
+             <button id="remeasure2">Re-measure this frame</button>
+             ${f && !f.scale_known
+               ? `<label class="u" for="scaleset">nm/px</label>
+                  <input id="scaleset" type="number" step="any" min="0" placeholder="e.g. 52">
+                  <button id="scaleapply">Set scale</button>` : ""}
+             <span class="u" id="remeasure2out"></span>
+           </div>` : "")
     + refusals;
   const rb = $("#remeasure2");
   if (rb) rb.onclick = () => remeasure(rb, $("#remeasure2out"));
+
+  // WITHOUT THIS THE APP IS CORRECT AND USELESS. It withholds micrometres when no nm/px is
+  // established, which is right, and until now it gave nobody a way to supply the thing it
+  // was withholding them for: the scale table is the author's own extracted CSV, keyed by
+  // the author's own frame stems. A mask arrives as a PNG and carries no instrument
+  // metadata, so for most uploads this control is the only route to a physical unit.
+  const sa = $("#scaleapply");
+  if (sa) sa.onclick = async () => {
+    const v = parseFloat($("#scaleset").value);
+    const out = $("#remeasure2out");
+    if (!(v > 0)) { out.innerHTML = `<span class="flag bad">nm/px must be above zero</span>`; return; }
+    sa.disabled = true; sa.textContent = "Setting…";
+    try {
+      const q = new URLSearchParams({ arm: state.arm, frame: state.frame, nm_per_px: v });
+      const r = await fetch(`/api/scale?${q}`, { method: "POST" });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || r.statusText);
+      state.frames = await api(`/api/frames?arm=${encodeURIComponent(state.arm)}` +
+        (state.spec ? `&specimen=${encodeURIComponent(state.spec)}` : ""));
+      renderFrames(); renderSpecimens(); await renderReadout();
+      const fresh = document.getElementById("remeasure2out");
+      if (fresh) fresh.innerHTML = `<span class="u">${v} nm/px — micrometre values now shown</span>`;
+    } catch (e) {
+      out.innerHTML = `<span class="flag bad">${e.message}</span>`;
+      sa.disabled = false; sa.textContent = "Set scale";
+    }
+  };
 
   el.querySelectorAll(".ro-more").forEach((b) => {
     b.onclick = () => {

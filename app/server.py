@@ -212,7 +212,7 @@ MAX_UPLOAD_MB = 200
 
 
 @app.post("/api/upload")
-async def upload(file: UploadFile = File(...)):
+async def upload(file: UploadFile = File(...), nm_per_px: float | None = None):
     import shutil
     import subprocess
     import sys as _sys
@@ -256,6 +256,17 @@ async def upload(file: UploadFile = File(...)):
         raise HTTPException(413, f"{len(blob)/1e6:.0f} MB is over the {MAX_UPLOAD_MB} MB limit")
 
     detected = False
+    _tif_scale = [None]
+
+    def _from_tiff_quiet(path):
+        import sys as _s3
+        _s3.path.insert(0, os.path.join(RES, "analysis"))
+        try:
+            import scale as _sc
+            return _sc.from_tiff(path)
+        except Exception:
+            return None
+
     if ext in MASK_EXT:
         mask_path = os.path.join(UPLOAD_DIR, f"{stem}_gated.png")
         with open(mask_path, "wb") as fh:
@@ -289,9 +300,35 @@ async def upload(file: UploadFile = File(...)):
                 raise HTTPException(500, f"segmentation failed: {why}")
             detected = True
         finally:
-            for p in (staged,):
-                if os.path.exists(p):
-                    os.remove(p)
+            # Read the scale out of the ORIGINAL tif before the staged copy is removed:
+            # the derived mask is a PNG and carries no instrument metadata.
+            if os.path.exists(staged):
+                try:
+                    _tif_scale[0] = _from_tiff_quiet(staged)
+                finally:
+                    os.remove(staged)
+
+    # SCALE, BEFORE MEASURING, because every physical column depends on it.
+    #
+    # Until now nm_per_px() could only return the TXM constant or look up the author's own
+    # extracted CSV keyed by the author's own frame stems, so P10, P20, P21, S_V, MCL, TCL,
+    # spacing and every micrometre column were permanently null for everybody else and the
+    # app quietly became a pixel-only tool the moment someone else used it.
+    import sys as _s2
+    _s2.path.insert(0, os.path.join(RES, "analysis"))
+    import scale as _scale
+    scale_note = None
+    if nm_per_px is not None:
+        try:
+            _scale.set_user_scale(stem, nm_per_px)
+            scale_note = f"scale set to {nm_per_px} nm/px"
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+    elif ext in IMAGE_EXT:
+        found = _tif_scale[0]
+        if found:
+            _scale.set_user_scale(stem, found)
+            scale_note = f"{found} nm/px read from the TIFF's FEI metadata"
 
     # Measure with the SAME code every other arm uses, so an uploaded frame is comparable.
     _sys.path.insert(0, os.path.join(RES, "analysis"))
@@ -333,6 +370,7 @@ async def upload(file: UploadFile = File(...)):
             "scale_known": summ["scale_known"],
             "n_cracks": summ["n_cracks_measured"], "n_specks": summ["speck_count"],
             "area_fraction": summ["area_fraction"],
+            "scale_note": scale_note,
             "note": ("segmented here with the SEM detector, then measured"
                      if detected else "measured as a mask, as uploaded")}
 
@@ -494,6 +532,29 @@ def _mask_path(arm, frame):
         tx = P.txm_export()
         return os.path.join(tx, frame, f"{frame}_crack_mask.png") if tx else None
     return None
+
+
+@app.post("/api/scale")
+def set_scale(arm: str = Query(...), frame: str = Query(...),
+              nm_per_px: float | None = None):
+    """Set (or clear) a frame's nm/px, then re-measure it so the physical columns appear.
+
+    A mask arrives as a PNG and carries no instrument metadata, so for most uploads this is
+    the ONLY way a physical unit can ever exist. Without it the app is correct and useless
+    to anyone but its author: it withholds micrometres, which is the right behaviour, but
+    it gave nobody a way to supply what it was withholding them for.
+    """
+    import sys as _sys
+    _sys.path.insert(0, os.path.join(RES, "analysis"))
+    import scale as _scale
+    try:
+        _scale.set_user_scale(frame, nm_per_px)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    out = remeasure(arm=arm, frame=frame)
+    out["nm_per_px"] = nm_per_px
+    out["scale_source"] = _scale.scale_source(frame, "txm" if arm == "txm" else "sem")
+    return out
 
 
 @app.post("/api/remeasure")

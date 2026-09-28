@@ -29,6 +29,90 @@ TXM_NM_PER_PX = 29.24
 
 _FEI = {}
 
+#: Where a user-supplied nm/px is kept. Per frame, in the app's own writable data
+#: directory, so it survives a re-measure and never touches the source images.
+_USER = {}
+_USER_LOADED = [False]
+
+
+def _user_path():
+    from app import paths as _P
+    return os.path.join(_P.DATA, "user_scale.json")
+
+
+def user_scales():
+    if not _USER_LOADED[0]:
+        import json
+        try:
+            _USER.update(json.load(open(_user_path())))
+        except Exception:
+            pass
+        _USER_LOADED[0] = True
+    return _USER
+
+
+def set_user_scale(stem, nm_per_px):
+    """Record nm/px for one frame, or clear it with None."""
+    import json
+    from app import paths as _P
+    user_scales()
+    if nm_per_px is None:
+        _USER.pop(stem, None)
+    else:
+        v = float(nm_per_px)
+        if not (v > 0):
+            raise ValueError("nm/px must be greater than zero")
+        _USER[stem] = v
+    _P.ensure_dirs()
+    tmp = _user_path() + ".tmp"
+    with open(tmp, "w") as fh:
+        json.dump(_USER, fh, indent=2)
+    os.replace(tmp, _user_path())
+    return _USER.get(stem)
+
+
+# ---------------------------------------------------------------------------------------
+#: The FEI/Thermo block is appended AFTER the pixel data, so it lives in the file's tail.
+#: 400 kB is far more than any block observed (~9 kB) and avoids reading 25 MB per frame.
+_FEI_TAIL = 400_000
+
+
+def from_tiff(path):
+    """nm/px from the FEI/Thermo metadata block inside a TIFF, or None.
+
+    This module's docstring has listed this as trust-source 1 since it was written and it
+    was implemented nowhere: nm_per_px() could only return the TXM constant or look up the
+    author's own extracted CSV, keyed by the author's own frame stems. So every physical
+    quantity -- P10, P20, P21, S_V, MCL, TCL, spacing, area analysed -- was permanently
+    null for every user who was not the author, and the app silently degraded to pixels.
+
+    Parsed from the raw tail with the standard library, the same way the SEM repo's
+    crack_export/tools/fei_metadata.py does it, so an uploaded .tif carries its own scale
+    without that repo being installed.
+    """
+    try:
+        size = os.path.getsize(path)
+        with open(path, "rb") as fh:
+            fh.seek(max(0, size - _FEI_TAIL))
+            txt = fh.read().decode("latin-1")
+    except OSError:
+        return None
+    start = txt.find("[User]")
+    if start < 0:
+        start = txt.find("[System]")
+    if start < 0:
+        return None
+    for line in txt[start:].splitlines():
+        line = line.strip()
+        if line.startswith("PixelWidth="):
+            try:
+                metres = float(line.split("=", 1)[1].strip())
+            except ValueError:
+                return None
+            # PixelWidth is metres per pixel; 1e9 nm in a metre.
+            return round(metres * 1e9, 4) if metres > 0 else None
+    return None
+
 
 def _load_fei():
     if _FEI:
@@ -51,8 +135,28 @@ def _load_fei():
     return _FEI
 
 
+def scale_source(stem, modality="sem"):
+    """Which source supplied this frame's scale, so the number is never anonymous."""
+    if stem in user_scales():
+        return "set by you"
+    if modality == "txm":
+        return "TXM tile geometry (constant)"
+    if _load_fei().get(stem) is not None:
+        return "FEI metadata extracted from the TIFF"
+    return None
+
+
 def nm_per_px(stem, modality="sem"):
-    """nm per pixel for this frame, or None when it is not established."""
+    """nm per pixel for this frame, or None when it is not established.
+
+    A VALUE THE USER SET WINS, including over the TXM constant. They may know the image was
+    cropped, rescaled, or came off a different instrument than its name suggests, and the
+    app cannot. scale_source() reports which source answered so the number is never
+    anonymous.
+    """
+    u = user_scales().get(stem)
+    if u:
+        return u
     if modality == "txm":
         return TXM_NM_PER_PX
     return _load_fei().get(stem)

@@ -100,3 +100,45 @@ def test_censored_share_is_reported_in_three_weightings():
     assert s["censored_share_by_area"] > 0.9, s["censored_share_by_area"]
     assert s["censored_share_by_length"] > 0.9, s["censored_share_by_length"]
     assert "regions (count)" in s["censored_share_weighting"]
+
+
+def test_a_user_supplied_scale_outranks_everything():
+    """nm_per_px() could only return the TXM constant or look up the author's own extracted
+    CSV, keyed by the author's own frame stems. Every physical column was therefore
+    permanently null for every other user, and the app silently became pixel-only."""
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "analysis"))
+    import scale
+    scale._USER.clear(); scale._USER_LOADED[0] = True
+    assert scale.nm_per_px("whatever", "sem") is None
+    scale._USER["whatever"] = 41.5
+    assert scale.nm_per_px("whatever", "sem") == 41.5
+    assert scale.scale_source("whatever", "sem") == "set by you"
+    # It must beat the TXM constant too: the user may know the image was cropped.
+    scale._USER["txmframe"] = 12.0
+    assert scale.nm_per_px("txmframe", "txm") == 12.0
+    scale._USER.clear()
+
+
+def test_a_zero_or_negative_scale_is_refused():
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "analysis"))
+    import scale
+    for bad in (0, -1, -0.001):
+        with pytest.raises(ValueError):
+            scale.set_user_scale("x", bad)
+
+
+def test_tiff_metadata_is_actually_parsed():
+    """scale.py's docstring has listed the FEI block as trust-source 1 since it was
+    written, and it was implemented nowhere."""
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "analysis"))
+    import scale
+    assert hasattr(scale, "from_tiff")
+    sem = os.path.expanduser("~/Desktop/APP/sem-crack-detector/original")
+    cand = os.path.join(sem, "MAR_H_AS_CBS_0001.tif")
+    if not os.path.exists(cand):
+        pytest.skip("no SEM corpus here")
+    got = scale.from_tiff(cand)
+    assert got and 10 < got < 1000, f"implausible nm/px from the TIFF: {got}"
