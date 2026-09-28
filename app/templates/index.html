@@ -128,7 +128,13 @@ main{flex:1 1 auto;display:grid;grid-template-columns:minmax(220px,300px) minmax
 .markstate{max-width:52ch;display:flex;flex-direction:column;gap:9px;align-items:flex-start}
 .markbig{font-size:15px;font-weight:600;margin:0}
 .markstate .note{margin:0}
-.refuse{border:1px dashed var(--rule);border-radius:9px;padding:11px 13px;max-width:68ch}
+.sect{font-size:12px;font-weight:650;text-transform:uppercase;letter-spacing:.04em;
+  color:var(--text-muted);margin:22px 0 6px;border-top:1px solid var(--rule);padding-top:14px}
+.refuse-all{max-width:68ch;margin-top:14px}
+.refuse-all>summary{cursor:pointer;color:var(--text-muted);font-size:12.5px;padding:6px 0}
+.refuse-all>summary:hover{color:var(--text-primary)}
+.refuse{border:1px dashed var(--rule);border-radius:9px;padding:11px 13px;max-width:68ch;
+  margin-top:8px}
 .refuse h4{margin:0 0 3px;font-size:13px;font-weight:650}
 .refuse .ans{color:var(--bad);font-size:12.5px}
 .refuse details{margin-top:6px}
@@ -279,23 +285,21 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
       <img class="mask" id="mask" alt="" hidden>
     </div>
 
-    <div class="pane" id="pane-specimen" role="tabpanel" hidden>
+    <div class="pane" id="pane-specimens" role="tabpanel" hidden>
       <p class="note" id="specnote"></p>
       <div id="specbody"></div>
     </div>
 
-    <div class="pane" id="pane-detail" role="tabpanel" hidden>
+    <!-- One pane for everything else about the selected frame. Three tabs for one
+         question was three places to look for the same thing. -->
+    <div class="pane" id="pane-details" role="tabpanel" hidden>
       <p class="note" id="fsel-note">Select a frame.</p>
       <dl class="kv" id="fsel"></dl>
-    </div>
-
-    <div class="pane" id="pane-orientation" role="tabpanel" hidden>
+      <h3 class="sect">Orientation</h3>
       <p class="note" id="rosenote">Length-weighted, 15&deg; bins.</p>
       <div id="rose"></div>
       <div id="sizes"></div>
-    </div>
-
-    <div class="pane" id="pane-cracks" role="tabpanel" hidden>
+      <h3 class="sect">Cracks</h3>
       <p class="note" id="cracknote">Select a frame.</p>
       <div class="scroll"><table id="cracks"><thead></thead><tbody></tbody></table></div>
     </div>

@@ -564,14 +564,15 @@ async function renderSpecimens() {
 // TABS. The selector is the navigation, so there is no nav furniture: the frame list stays
 // on the left and this changes what you are looking at. Read-out is the default because the
 // owner's request was "tell me what it says", not "give me another table".
+// SIX, NOT EIGHT. "Frame detail", "Orientation" and "Cracks" were three destinations for
+// one question -- everything else about the frame you have selected -- so they are one
+// scrolling pane. A tab strip is navigation only while a reader can hold it in their head.
 const TABS = [
   ["readout", "Read-out"],
   ["mask", "Mask"],
   ["mark", "Mark"],
-  ["specimen", "Specimen"],
-  ["detail", "Frame detail"],
-  ["orientation", "Orientation"],
-  ["cracks", "Cracks"],
+  ["specimens", "Specimens"],
+  ["details", "Details"],
   ["figure", "Figure"],
 ];
 let TAB = "readout";
@@ -585,6 +586,8 @@ function showTab(id) {
   // rather than on every frame change.
   if (id === "figure" && typeof window.figRenderRef === "function") window.figRenderRef();
   if (id === "mark") renderMark();
+  if (id === "details") rose(
+    (state.frames.find((x) => x.frame === state.frame) || {}).orientation_hist_deg);
 }
 
 function wireTabs() {
@@ -677,20 +680,32 @@ async function renderReadout() {
   RO = { specimen: d.specimen || [], frame: d.frame || [] };
 
   const body = roRender(RO);
-  const refusals = (d.refusals || []).map((r) => `
-    <div class="refuse">
-      <h4>${r.question}</h4>
-      <div class="ans">${r.answer}</div>
-      <details><summary>Why, and what would answer it</summary>
-        <p>${r.why}</p>
-        ${r.would_need && r.would_need.length
-          ? `<ul>${r.would_need.map((w) => `<li>${w}</li>`).join("")}</ul>` : ""}
-        ${r.not_this ? `<p><strong>Not this:</strong> ${r.not_this}</p>` : ""}
-      </details>
-    </div>`).join("");
+  // ONE LINE, NOT THREE BLOCKS. The refusals were 51 words permanently on screen -- more
+  // than the read-out they sit under -- restating three questions the reader may not have
+  // asked. They still must be STATED rather than silently omitted, because the mode
+  // question recurs precisely when nothing addresses it; they just do not need to be the
+  // largest thing on the page. One summary line, expanding to the same content.
+  const refusals = (d.refusals || []).length ? `
+    <details class="refuse-all">
+      <summary>Not determinable here: ${(d.refusals || []).map((r) =>
+        r.question.replace(/\?.*$/, "").replace(/^(Transgranular or intergranular)$/, "crack mode")
+         .replace(/^Ductile or brittle.*$/, "fracture mode").replace(/^Crack depth.*$/, "depth")
+         .toLowerCase()).join(" · ")}</summary>
+      ${(d.refusals || []).map((r) => `
+        <div class="refuse">
+          <h4>${r.question}</h4>
+          <div class="ans">${r.answer}</div>
+          <details><summary>Why, and what would answer it</summary>
+            <p>${r.why}</p>
+            ${r.would_need && r.would_need.length
+              ? `<ul>${r.would_need.map((x) => `<li>${x}</li>`).join("")}</ul>` : ""}
+            ${r.not_this ? `<p><strong>Not this:</strong> ${r.not_this}</p>` : ""}
+          </details>
+        </div>`).join("")}
+    </details>` : "";
 
-  el.innerHTML = (body || `<p class="ro-empty">Nothing this data supports saying yet.</p>`) +
-    `<p class="ro-sec">Not determinable</p>` + refusals;
+  el.innerHTML = (body || `<p class="ro-empty">Nothing this data supports saying yet.</p>`)
+    + refusals;
 
   el.querySelectorAll(".ro-more").forEach((b) => {
     b.onclick = () => {
