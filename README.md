@@ -43,13 +43,35 @@ silence. The measured results it does assert — the detector changes crack leng
 width; crack area survives a 6× coarser pixel — each survived an adversarial attempt to kill
 them, and the ones that did not survive are recorded as killed.
 
-**The one framing that has not been refuted is procedural**, and it is conditional: no ASTM
-or ISO test method exists for quantifying cracks in micrographs by image analysis, and the
-coatings literature says so directly. A documented, sampled, interference-listed,
+**The one framing that has not been refuted is procedural**, and it remains conditional: no
+ASTM or ISO test method exists for quantifying cracks in micrographs by image analysis, and
+the coatings literature says so directly. A documented, sampled, interference-listed,
 Pij-labelled, CI-bearing procedure with quantified threshold sensitivity would be a modest
-standards-shaped contribution. **Treat that as unclaimed until someone checks the ASTM E04
-and E08 and the IIW work-item lists** — that check has not been done, and a live work item
-kills it.
+standards-shaped contribution.
+
+**Status of the work-item check, 2026-09-29 — partially done, and it cannot be closed from
+outside ASTM.** What a public search establishes:
+
+* No live ASTM E04 or E08 work item on quantifying cracks in micrographs by image analysis
+  surfaced. E04.14 is the relevant subcommittee (Quantitative Metallography).
+* The existing ASTM crack standards are **mechanical, not image-analysis**: E647 (fatigue
+  crack growth rates), E1820 (fracture toughness). Their live work items — WK93300, WK95201
+  — are revisions of E1820, not new image-analysis methods.
+* One adjacent live item exists and does **not** collide: ASTM **D04** is developing a
+  proposed method for load-induced cracking in asphalt mixtures (announced August 2026).
+  That is mechanical testing of asphalt, not micrograph measurement.
+* **Supporting evidence for the gap:** ASTM **D661** does rate coating cracking — by
+  comparison against *photographic standards*, i.e. subjective visual matching rather than
+  measurement. An existing standard that ranks cracking by eye is consistent with there
+  being no method that measures it.
+* IIW Commission V covers NDT and quality assurance of welded products; nothing on
+  metallographic crack quantification surfaced.
+
+**What would actually close it:** a member search of ASTM's work-item database for E04 and
+E08 (it is not publicly searchable — `astm.org` returns 403 to automated fetches and part of
+it is members-only), or an email to the E04.14 staff manager. Until then treat the framing as
+*not yet refuted* rather than *established* — absence from a public search is not absence
+from the register.
 
 Use this as *fitness for purpose*: an app that reports what materials papers report, in
 units they can compare, with the uncertainty attached and the limits named.
