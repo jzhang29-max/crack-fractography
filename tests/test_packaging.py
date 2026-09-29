@@ -222,3 +222,44 @@ def test_no_owner_home_path_is_baked_into_the_bundle():
     r = subprocess.run(["grep", "-rIl", home, app], capture_output=True, text=True)
     hits = [x for x in r.stdout.splitlines() if x.strip()]
     assert not hits, "owner path baked into:\n  " + "\n  ".join(hits[:6])
+
+
+def test_the_app_ships_its_own_icon_and_not_pyinstaller_s():
+    """Three releases went out wearing PyInstaller's stock Python-on-a-floppy, which tells a
+    materials researcher that this is a Python script rather than what it is.
+
+    Asserts on the BUNDLE when one exists, for the same reason the licence test does: the
+    first version of that guard read the spec's text and reported green while the bundle in
+    dist/ had neither file. Here the equivalent trap is real -- `icon=` can name a path that
+    does not exist and PyInstaller falls back to its own default with a warning, so the
+    spec mentioning the file proves nothing about what shipped.
+    """
+    icns = os.path.join(REPO, "packaging", "AppIcon.icns")
+    assert os.path.exists(icns), "packaging/AppIcon.icns is missing, so the build has no icon"
+    assert os.path.getsize(icns) > 50_000, "an .icns this small is missing its retina entries"
+    with open(icns, "rb") as fh:
+        assert fh.read(4) == b"icns", "not an .icns file"
+
+    spec_path = os.path.join(REPO, "packaging", "fractography.spec")
+    assert "AppIcon.icns" in open(spec_path).read(), "the spec does not point at an icon"
+
+    app = os.path.join(REPO, "dist", "Crack Fractography.app", "Contents")
+    if not os.path.isdir(app):
+        return
+    # A BUNDLE OLDER THAN THE ICON IS STALE, NOT WRONG, and the difference matters because
+    # build.sh runs the suite BEFORE it rebuilds. The first version of this test asserted
+    # on any bundle it found, so a stale bundle failed the gate that guards the rebuild
+    # that would have fixed it -- the build refused to run at all. build.sh re-runs this
+    # file after a successful build, which is where the assertions below actually bite.
+    if os.path.getmtime(app) < os.path.getmtime(icns):
+        return
+
+    res = os.path.join(app, "Resources")
+    shipped = [f for f in os.listdir(res) if f.endswith(".icns")]
+    assert shipped, f"no .icns in the BUILT bundle at {res} -- rebuild before releasing"
+    # And it must be OURS. PyInstaller's placeholder is a different file; comparing bytes is
+    # the only check that distinguishes "an icon shipped" from "the icon we drew shipped".
+    ours = open(icns, "rb").read()
+    assert any(open(os.path.join(res, f), "rb").read() == ours for f in shipped), (
+        f"the bundle's icon ({shipped}) is not packaging/AppIcon.icns -- PyInstaller fell "
+        f"back to its own default, which it does silently when icon= cannot be read")

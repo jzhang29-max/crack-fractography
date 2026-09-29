@@ -39,6 +39,15 @@ if [ -d "$APP" ]; then
   echo "    This build is UNSIGNED. On another Mac, macOS will refuse to open it until:"
   echo "      xattr -dr com.apple.quarantine \"/Applications/Crack Fractography.app\""
   echo "    That is expected for an unsigned app and is documented in the README."
+  echo
+  # THE BUNDLE CHECKS RUN AGAIN, NOW THAT THERE IS A BUNDLE. The suite above ran before
+  # `rm -rf dist`, so every test that asserts on what actually shipped -- the licence and
+  # attribution files, the icon, the files loaded by path -- was either looking at the
+  # PREVIOUS build or skipping. That is how three releases went out with no NOTICE inside
+  # them while the guard reported green.
+  echo "==> verifying the bundle that was just built"
+  "$PY" -m pytest -q tests/test_packaging.py || {
+    echo "  the BUILT BUNDLE failed its checks -- do not release this"; exit 1; }
 else
   echo "==> dist/Crack Fractography/"
 fi
