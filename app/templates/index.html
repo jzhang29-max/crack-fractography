@@ -131,6 +131,13 @@ main{flex:1 1 auto;display:grid;grid-template-columns:minmax(220px,300px) minmax
 .markstate{max-width:52ch;display:flex;flex-direction:column;gap:9px;align-items:flex-start}
 .markbig{font-size:15px;font-weight:600;margin:0}
 .markstate .note{margin:0}
+/* THE CHARTS ARE CAPPED. Both SVGs are width:100%, which was harmless while the rose was a
+   300x150 semicircle: at a 930 px panel it drew 930x465. Mirroring it into a full circle
+   made the box near-square, so the same rule drew it 933x908 -- taller than the viewport,
+   pushing the size distribution off the bottom of the pane. Nothing revealed this in a
+   narrow window, where 100% is about 300 px and the difference does not show. */
+#rose,#sizes{max-width:340px}
+#rose svg,#sizes svg{display:block}
 /* The two marking tools. A segmented pair, not a dropdown: there are exactly two and the
    choice is which set of images you are working on, so both should be readable at once. */
 .markmodes{display:flex;gap:6px;align-items:center;margin:0 0 10px;flex-wrap:wrap}

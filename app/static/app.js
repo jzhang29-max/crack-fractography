@@ -141,46 +141,122 @@ function renderFrames() {
 }
 
 /* ---------------------------------------------------------------- rose */
-function rose(hist) {
+// A FULL ROSE, MIRRORED, WITH ITS NULL DRAWN ON IT.
+//
+// Three things were wrong with the half-disc this replaces, and only the first is cosmetic.
+//
+// 1. A crack has an AXIS, not a direction: 10° and 170° are nearly the same orientation.
+//    The measurement already knows this (the resultant is computed on doubled angles), and
+//    the convention in this literature -- FracPaQ, fractopo -- is to draw axial data as a
+//    full bidirectional rose. Half a disc was the arithmetic showing through the chart.
+// 2. THE NULL WAS COMPUTED AND NEVER SHOWN. rose_R_null95 is on every frame record and no
+//    pixel of this chart used it, so a reader saw a lopsided rose and concluded
+//    "preferentially oriented" every time -- which is exactly the failure the null exists
+//    to prevent. A synthetic mask of straight lines at UNIFORM RANDOM angles returns
+//    R = 0.267-0.285, at or above this corpus's median R of 0.257. The verdict now sits on
+//    the chart, and when the rose does not beat its null the wedges are drawn muted.
+// 3. There was no reference for the wedge lengths. The dashed ring is the EVEN SPLIT, 1/n
+//    of the length in every bin, which is the right null for the quantity actually drawn.
+//
+// The ring and the verdict are deliberately different objects, because they are nulls for
+// different statistics: the ring is the expected per-bin share, the verdict is the axial
+// resultant against its permutation null. Drawing the resultant's threshold as a ring on
+// the per-bin axis would be a number attached to the wrong object. The resultant appears as
+// an ORIENTATION only -- a line through the centre at rose_theta_deg, no length claim --
+// because an angle is the one thing this chart's angular axis can carry honestly.
+function rose(hist, f) {
   const el = $("#rose");
   if (!hist || !hist.area_share) { el.innerHTML = `<p class="note">No orientation data.</p>`; return; }
-  const R = 108, cx = 150, cy = 130, share = hist.area_share, n = share.length;
+  // cy leaves room above for the 0° label, which sat at y=6 and was clipped by the viewBox.
+  const R = 104, cx = 150, cy = 132, share = hist.area_share, n = share.length;
   const max = Math.max(...share) || 1;
-  // Wedges, 2px gap between neighbours so adjacent fills never touch.
+  const even = 1 / n;                      // uniform expectation for the drawn quantity
+  const rAt = (v) => 10 + (R - 10) * (v / max);
+  const beats = f && f.rose_beats_null === true;
+  const known = f && f.rose_R != null && f.rose_R_null95 != null;
+  // Muted when the rose does not beat chance: the shape is still worth seeing, it just is
+  // not evidence, and colour is the only channel that says so before you read anything.
+  const op = (v) => ((beats ? 0.34 : 0.14) + (beats ? 0.62 : 0.2) * v / max).toFixed(2);
+
+  // Wedges, mirrored into the opposite half. 2px gap so adjacent fills never touch.
   let p = "";
   share.forEach((v, i) => {
-    const a0 = (i * 180 / n - 90) * Math.PI / 180 + 0.012;
-    const a1 = ((i + 1) * 180 / n - 90) * Math.PI / 180 - 0.012;
-    const r = 14 + (R - 14) * (v / max);
-    const x0 = cx + r * Math.cos(a0), y0 = cy + r * Math.sin(a0);
-    const x1 = cx + r * Math.cos(a1), y1 = cy + r * Math.sin(a1);
-    p += `<path d="M${cx},${cy} L${x0.toFixed(1)},${y0.toFixed(1)} A${r.toFixed(1)},${r.toFixed(1)} 0 0 1 ${x1.toFixed(1)},${y1.toFixed(1)} Z"
-      fill="var(--s1)" fill-opacity="${(0.32 + 0.68 * v / max).toFixed(2)}"
-      stroke="var(--surface-2)" stroke-width="2"
-      data-tip="${hist.bin_deg[i]}–${hist.bin_deg[i] + 15}°: ${(v * 100).toFixed(1)}% of area"></path>`;
+    const r = rAt(v);
+    [0, Math.PI].forEach((flip) => {
+      const a0 = (i * 180 / n - 90) * Math.PI / 180 + 0.012 + flip;
+      const a1 = ((i + 1) * 180 / n - 90) * Math.PI / 180 - 0.012 + flip;
+      const x0 = cx + r * Math.cos(a0), y0 = cy + r * Math.sin(a0);
+      const x1 = cx + r * Math.cos(a1), y1 = cy + r * Math.sin(a1);
+      p += `<path d="M${cx},${cy} L${x0.toFixed(1)},${y0.toFixed(1)} A${r.toFixed(1)},${r.toFixed(1)} 0 0 1 ${x1.toFixed(1)},${y1.toFixed(1)} Z"
+        fill="var(--s1)" fill-opacity="${op(v)}"
+        stroke="var(--surface-2)" stroke-width="2"
+        data-tip="${hist.bin_deg[i]}–${hist.bin_deg[i] + 15}°: ${(v * 100).toFixed(1)}% of length${
+          v > even ? ` · above the ${(even * 100).toFixed(1)}% even split` : ""}"></path>`;
+    });
   });
+
+  // The even-split ring. Labelled "even", NOT as a significance threshold: with a finite
+  // number of segments the bins scatter around it, so one bin crossing it means nothing on
+  // its own. The verdict below is the test.
+  const ringR = rAt(even);
+  const ring = `<circle cx="${cx}" cy="${cy}" r="${ringR.toFixed(1)}" fill="none"
+      stroke="var(--text-muted)" stroke-width="1" stroke-dasharray="3 3" opacity="0.8"
+      data-tip="Even split: ${(even * 100).toFixed(1)}% of length in every bin, which is what uniform orientation would give"></circle>
+    <text x="${cx}" y="${(cy - ringR - 3).toFixed(0)}" fill="var(--text-muted)" font-size="9.5"
+      text-anchor="middle">even</text>`;
+
+  // Labelled at BOTH ends of each axis. Not a duplicate: for axial data 0° and the point
+  // opposite it are the same orientation, so both ends genuinely carry that label -- and a
+  // full circle labelled on one side only reads as a chart that did not finish drawing.
+  // 0° is vertical in the image, 90° horizontal, matching the angle the measurement reports.
   let ticks = "";
   [0, 45, 90, 135].forEach((d) => {
     const a = (d - 90) * Math.PI / 180;
-    ticks += `<text x="${(cx + (R + 14) * Math.cos(a)).toFixed(0)}" y="${(cy + (R + 14) * Math.sin(a)).toFixed(0)}"
-      fill="var(--text-muted)" font-size="11" text-anchor="middle" dominant-baseline="middle">${d}°</text>`;
+    [0, Math.PI].forEach((flip) => {
+      ticks += `<text x="${(cx + (R + 14) * Math.cos(a + flip)).toFixed(0)}" y="${(cy + (R + 14) * Math.sin(a + flip)).toFixed(0)}"
+        fill="var(--text-muted)" font-size="9.5" text-anchor="middle" dominant-baseline="middle">${d}°</text>`;
+    });
   });
-  // Direct-label the dominant bin: selective labels, never one per wedge.
+
+  // The resultant ORIENTATION, drawn only when it beats its null. An angle on an angular
+  // axis is honest; its magnitude is not on this chart's scale, so it stays in the caption.
+  let axis = "";
+  if (beats && f.rose_theta_deg != null) {
+    const a = (f.rose_theta_deg - 90) * Math.PI / 180;
+    axis = `<line x1="${(cx - (R + 6) * Math.cos(a)).toFixed(1)}" y1="${(cy - (R + 6) * Math.sin(a)).toFixed(1)}"
+      x2="${(cx + (R + 6) * Math.cos(a)).toFixed(1)}" y2="${(cy + (R + 6) * Math.sin(a)).toFixed(1)}"
+      stroke="var(--s2)" stroke-width="2" stroke-linecap="round"
+      data-tip="Mean orientation ${f.rose_theta_deg}°, the axial resultant direction"></line>`;
+  }
+
+  // Direct-label the dominant bin only: selective labels, never one per wedge.
   const top = share.indexOf(max);
   const ta = ((top + 0.5) * 180 / n - 90) * Math.PI / 180;
-  const tl = `<text x="${(cx + (R * 0.62) * Math.cos(ta)).toFixed(0)}" y="${(cy + (R * 0.62) * Math.sin(ta)).toFixed(0)}"
-    fill="var(--text-primary)" font-size="12" font-weight="600" text-anchor="middle">${(max * 100).toFixed(0)}%</text>`;
+  const tl = `<text x="${(cx + (R * 0.58) * Math.cos(ta)).toFixed(0)}" y="${(cy + (R * 0.58) * Math.sin(ta)).toFixed(0)}"
+    fill="var(--text-primary)" font-size="12" font-weight="600" text-anchor="middle"
+    dominant-baseline="middle">${(max * 100).toFixed(0)}%</text>`;
+
+  // The verdict, on the chart. Identity is never colour alone: the word is here too.
+  const verdict = !known ? "" : `<g>
+    <text x="${cx}" y="${cy + R + 34}" text-anchor="middle" font-size="11.5" font-weight="600"
+      fill="${beats ? "var(--text-primary)" : "var(--text-muted)"}">${
+        beats ? `Oriented near ${f.rose_theta_deg}°` : "Not distinguishable from random"}</text>
+    <text x="${cx}" y="${cy + R + 48}" text-anchor="middle" font-size="10" fill="var(--text-muted)"
+      data-tip="${esc(f.rose_null || "")}">R = ${f.rose_R} · chance reaches ${f.rose_R_null95}</text></g>`;
+
   const note = document.querySelector("#rosenote");
   if (note) {
     // Read the weighting off the payload rather than hardcoding it. The caption said
     // "Area-weighted" for a while after the rose became length-weighted, because the word
     // lived in the HTML and the behaviour lived in Python.
-    note.textContent = `${hist.weighted_by === "segment length" ? "Length" : hist.weighted_by}-weighted, 15° bins.`;
+    note.textContent = `${hist.weighted_by === "segment length" ? "Length" : hist.weighted_by}`
+      + `-weighted, 15° bins, mirrored — a crack has an axis, not a direction.`;
   }
-  el.innerHTML = `<svg viewBox="0 0 300 150" width="100%" role="img"
-    aria-label="Length-weighted crack orientation by skeleton branch, 15 degree bins">
-    <line x1="${cx - R - 8}" y1="${cy}" x2="${cx + R + 8}" y2="${cy}" stroke="var(--rule)"/>
-    ${p}${ticks}${tl}</svg>`;
+  el.innerHTML = `<svg viewBox="0 0 300 ${cy + R + 56}" width="100%" role="img"
+    aria-label="${hist.weighted_by}-weighted crack orientation by skeleton branch, 15 degree bins, mirrored about the centre. ${
+      known ? (beats ? `Oriented near ${f.rose_theta_deg} degrees; resultant ${f.rose_R} against a chance level of ${f.rose_R_null95}.`
+                     : `Not distinguishable from random: resultant ${f.rose_R} against a chance level of ${f.rose_R_null95}.`) : ""}">
+    ${ring}${p}${axis}${ticks}${tl}${verdict}</svg>`;
   wire(el);
 }
 
@@ -322,7 +398,7 @@ async function selectFrame(name) {
   $("#mask").alt = `Crack mask for ${name}`;
   $("#masknote").textContent = `${state.arm} — black is crack.`;
 
-  rose(f.orientation_hist_deg);
+  rose(f.orientation_hist_deg, f);
   renderSpecimens();      // the strip follows the frame's specimen
   renderReadout();
   // The Mark pane is rendered once when the tab is shown, which happens BEFORE the first
@@ -685,8 +761,10 @@ function showTab(id) {
   // rather than on every frame change.
   if (id === "figure" && typeof window.figRenderRef === "function") window.figRenderRef();
   if (id === "mark") renderMark();
-  if (id === "analysis") rose(
-    (state.frames.find((x) => x.frame === state.frame) || {}).orientation_hist_deg);
+  if (id === "analysis") {
+    const rf = state.frames.find((x) => x.frame === state.frame) || {};
+    rose(rf.orientation_hist_deg, rf);
+  }
 }
 
 function wireTabs() {

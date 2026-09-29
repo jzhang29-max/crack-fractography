@@ -73,3 +73,49 @@ def test_the_null_is_described_with_its_draw_count():
 def test_an_empty_mask_reports_no_verdict_rather_than_a_false_one():
     _, s = skeleton_segments(np.zeros((100, 100), bool))
     assert s["rose_R"] is None and s["rose_beats_null"] is None
+
+
+# --- the rose CHART must carry the null, not just the read-out -----------------------
+def _appjs():
+    import os
+    return open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                             "app", "static", "app.js")).read()
+
+
+def test_the_rose_chart_draws_its_own_null():
+    """rose_R_null95 was computed on every frame and no pixel of the chart used it, so a
+    reader saw a lopsided rose and concluded "preferentially oriented" every time -- which
+    is the exact failure the null exists to prevent. A synthetic mask of straight lines at
+    uniform random angles returns R = 0.267-0.285, at or above this corpus's median R."""
+    js = _appjs()
+    i = js.index("function rose(")
+    body = js[i:js.index("/* -----", i)]
+    for needed in ("rose_beats_null", "rose_R_null95", "rose_R"):
+        assert needed in body, f"the rose chart never reads {needed}"
+    assert "Not distinguishable from random" in body, "no on-chart verdict when it fails"
+    # Identity is never colour alone: the muting must be accompanied by the words.
+    assert "stroke-dasharray" in body, "no reference ring for the wedge lengths"
+
+
+def test_every_rose_call_passes_a_frame_record_that_is_in_scope():
+    """rose(hist) with no second argument loses the verdict and the null with no error --
+    the chart still draws, and it draws the thing the null exists to prevent. This is the
+    same failure raBadge had, so it gets the same guard: the argument must be resolvable in
+    the enclosing function, not merely present."""
+    import re
+    js = _appjs()
+    fn, params, bad = None, [], []
+    for ln in js.splitlines():
+        m = re.match(r"(?:async )?function (\w+)\(([^)]*)\)", ln)
+        if m:
+            fn, params = m.group(1), [x.strip().split(" =")[0]
+                                      for x in m.group(2).split(",") if x.strip()]
+        if re.search(r"(?<![\w.])rose\(", ln) and "function rose(" not in ln:
+            call = re.search(r"rose\(\s*[\w.]+\s*,\s*(\w+)\s*\)", ln)
+            if not call:
+                bad.append(f"{fn}: rose() called with no frame record")
+                continue
+            name = call.group(1)
+            if name not in params and f"const {name}" not in js and f"let {name}" not in js:
+                bad.append(f"{fn}: passes {name!r}, which is not in scope there")
+    assert not bad, "rose called without a usable frame record: " + "; ".join(bad)

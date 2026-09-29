@@ -100,6 +100,42 @@ Tortuosity is left undefined unless a region has exactly two skeleton endpoints 
 points, the only topology for which path ÷ chord means anything. On a typical frame that is
 188 of 457 cracks.
 
+## The orientation rose carries its own null
+
+`rose_R_null95` was computed on every frame and no pixel of the chart used it, so a reader
+saw a lopsided rose and concluded "preferentially oriented" every time — the exact failure
+the null exists to prevent. A synthetic mask of straight lines at **uniform random** angles
+returns R = 0.267–0.285, at or above this corpus's median R of 0.257, so the observed R
+alone cannot tell "oriented" from "random".
+
+The chart now says which it is. On this corpus 104 of 142 gated frames beat their null and
+38 do not; the 38 are drawn muted **and** labelled `Not distinguishable from random`,
+because identity is never colour alone. The resultant orientation line is drawn only when
+the frame beats its null.
+
+Two references, deliberately different objects:
+
+* The dashed **even-split ring** is 1/12 of the length in every bin — the uniform
+  expectation for the quantity the wedges actually encode. Labelled "even", *not* as a
+  significance threshold: with finitely many segments the bins scatter around it, so one bin
+  crossing it means nothing on its own.
+* The **verdict** is the axial resultant against its 1000-draw permutation null.
+
+Drawing the resultant's threshold as a ring on the per-bin axis would be a number attached
+to the wrong object, so the resultant appears as an *orientation only* — a line through the
+centre at `rose_theta_deg`, no length claim — because an angle is the one thing an angular
+axis can carry honestly.
+
+The rose is also **mirrored** now. A crack has an axis, not a direction: 10° and 170° are
+nearly the same orientation, the resultant is already computed on doubled angles, and the
+convention in this literature (FracPaQ, fractopo) is a full bidirectional rose. Half a disc
+was the arithmetic showing through the chart.
+
+Mirroring it made the box near-square, which surfaced a layout bug that a narrow window had
+been hiding: both chart SVGs are `width:100%`, harmless at 300×150 but 933×908 at a 930 px
+panel — taller than the viewport, pushing the size distribution off the bottom. Both are
+capped at 340 px now.
+
 ## Marking happens in this window
 
 The Mark tab offers two tools, because they cover different images:
