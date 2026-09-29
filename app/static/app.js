@@ -1135,7 +1135,17 @@ function defsAll() {
 // before and abandoned because a cross-origin iframe rendered blank with no way to see
 // inside it; same-origin removes both the blankness and the blindness -- the check below
 // reads the tool's own DOM through the frame and says so if it is empty.
-let MARK_MODE = "edit";
+//: "full" FIRST, because the first thing a researcher should see is the micrograph with
+//: the crack drawn on it -- not the black-and-white mask. The mask is the app's internal
+//: representation: an abstraction of the answer, with the specimen it came from thrown
+//: away. Opening on it asks the reader to recognise a shape they have not been shown the
+//: original of. The full tool opens on the image itself with the crack painted over it,
+//: which is the thing being judged.
+//:
+//: Falls back to "edit" when the full tool cannot run -- no SEM repo, or a frame it does
+//: not have -- resolved in renderMark, not here, because availability is not known until
+//: /api/paint answers.
+let MARK_MODE = "full";
 
 async function renderMark() {
   const el = $("#markbody");
@@ -1146,6 +1156,11 @@ async function renderMark() {
         ${paint.available ? "" : `disabled title="${esc(paint.why_not || "")}"`}>Full tool</button>
       ${MARK_MODE === "full" ? `<span class="u">whole-region flip · undo · reapply · retrain · export</span>` : ""}
     </div>`;
+
+  // FALL BACK RATHER THAN SHOW A DEAD PANE. "full" is the default, and a downloaded copy
+  // with no SEM repo cannot run it; landing such a user on a Start button they have no
+  // way to satisfy is worse than opening the editor that does work for them.
+  if (MARK_MODE === "full" && !paint.available) MARK_MODE = "edit";
 
   if (MARK_MODE === "full") {
     // DO NOT RE-MOUNT A LIVE TOOL. renderMark runs on every frame pick, and rewriting
