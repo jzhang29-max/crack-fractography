@@ -39,7 +39,17 @@ FIELDS = {
     "tcl_um":                   ("Total crack length (TCL)", "µm", 1.0, ""),
     "mean_width_px_median":     ("Median mean-width", "px", 1.0, ""),
     "n_junctions":              ("Junctions", "", 1.0, ""),
-    "censored_share":           ("Area touching frame edge", "", 100.0, "%"),
+    # NAMED FOR THE WEIGHTING, all three of them. This was one field called "Area touching
+    # frame edge" plotting censored_share, which is the share of REGIONS -- the dataset
+    # says so in its own censored_share_weighting column, and the frame table on screen
+    # already shows the three separately. On sem/gated 260622_316_H_b2 the figure read
+    # 2.4% while the area-weighted share is 84.1%: a 35x understatement, on the app's own
+    # headline caveat about MCL, exported as a standalone figure that contradicted the
+    # screen it came from. Offering all three is the honest option because all three are
+    # already computed on every frame.
+    "censored_share":           ("Regions touching frame edge", "", 100.0, "%"),
+    "censored_share_by_area":   ("Crack AREA touching frame edge", "", 100.0, "%"),
+    "censored_share_by_length": ("Crack LENGTH touching frame edge", "", 100.0, "%"),
     "area_analysed_mm2":        ("Area analysed", "mm²", 1.0, ""),
     "crack_area_px":            ("Crack area", "px", 1.0, ""),
 }
@@ -211,11 +221,27 @@ def _cap(arm, n, dropped, extra=""):
     return "  ·  ".join(bits)
 
 
+def axis_label(key):
+    """The label a reader can check the numbers against: name plus the unit they are in.
+
+    THE FOURTH SLOT WAS BOUND TO `_` AT EVERY RENDER PATH. FIELDS carries (label, unit,
+    scale, suffix), and the three percent fields put their scale in slot 2 and their "%" in
+    slot 4 -- so a histogram of area_fraction was drawn with its values multiplied by 100
+    and an axis reading "Crack area fraction" with ticks 0..50. That axis is wrong by a
+    factor of 100 unless the reader guesses percent, on a figure whose whole purpose is to
+    stand alone. Fields with a real unit (mcl_um -> "Longest crack (MCL) µm") were fine,
+    which is why it survived: the defect is invisible unless you look at a percent field.
+    """
+    lab, unit, _scale, suffix = FIELDS[key]
+    tail = unit or suffix
+    return f"{lab} ({tail})" if tail == "%" else (f"{lab} {tail}" if tail else lab)
+
+
 def _scatter(rows, arm, x, y, dropped):
     W, H = 640, 420
     x0, y0, x1, y1 = 64, 40, W - 20, H - 52
-    lx, ux, sx, _ = FIELDS[x]
-    ly, uy, sy, _ = FIELDS[y]
+    lx, _ux, sx, _px = FIELDS[x]
+    ly, _uy, sy, _py = FIELDS[y]
     xs = [r[x] * sx for r in rows]
     ys = [r[y] * sy for r in rows]
     xlo, xhi, xst = _nice(min(xs), max(xs))
@@ -232,14 +258,14 @@ def _scatter(rows, arm, x, y, dropped):
             + f'<line x1="{x0}" y1="{y1}" x2="{x1}" y2="{y1}" stroke="var(--rule,#dedbd6)"/>'
             + "".join(pts))
     return {"svg": _frame(W, H, f"{ly} vs {lx}", _cap(arm, len(rows), dropped), body,
-                          f"{ly}{(' ' + uy) if uy else ''}", f"{lx}{(' ' + ux) if ux else ''}"),
+                          axis_label(y), axis_label(x)),
             "caption": _cap(arm, len(rows), dropped), "n": len(rows), "dropped": dropped}
 
 
 def _hist(rows, arm, field, dropped):
     W, H = 640, 400
     x0, y0, x1, y1 = 64, 40, W - 20, H - 52
-    lab, unit, sc, _ = FIELDS[field]
+    lab, unit, sc, _pct = FIELDS[field]
     vals = sorted(r[field] * sc for r in rows)
     lo, hi, st = _nice(vals[0], vals[-1])
     nb = 14
@@ -264,13 +290,13 @@ def _hist(rows, arm, field, dropped):
             + f'<line x1="{x0}" y1="{y1}" x2="{x1}" y2="{y1}" stroke="var(--rule,#dedbd6)"/>'
             + "".join(bars))
     return {"svg": _frame(W, H, f"Distribution of {lab}", _cap(arm, len(rows), dropped), body,
-                          "frames", f"{lab}{(' ' + unit) if unit else ''}"),
+                          "frames", axis_label(field)),
             "caption": _cap(arm, len(rows), dropped), "n": len(rows), "dropped": dropped}
 
 
 def _by_specimen(rows, arm, field, kind, min_frames, include_thin, dropped):
     from collections import defaultdict
-    lab, unit, sc, _ = FIELDS[field]
+    lab, unit, sc, _pct = FIELDS[field]
     g = defaultdict(list)
     for r in rows:
         g[r.get("specimen", "unparsed")].append(r[field] * sc)
@@ -325,5 +351,5 @@ def _by_specimen(rows, arm, field, kind, min_frames, include_thin, dropped):
     what = "mean" if kind == "bar_by_specimen" else "median, IQR, range"
     return {"svg": _frame(W, H, f"{lab} by specimen ({what})",
                           _cap(arm, len(rows), dropped, "specimen is the inferential unit"),
-                          body, f"{lab}{(' ' + unit) if unit else ''}", ""),
+                          body, axis_label(field), ""),
             "caption": _cap(arm, len(rows), dropped), "n": len(rows), "dropped": dropped}

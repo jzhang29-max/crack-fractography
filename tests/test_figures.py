@@ -70,3 +70,88 @@ def test_figure_and_specimen_card_cannot_disagree_about_a_field():
     assert "from specimen_stats import" in src, (
         "figures.py must reuse specimen_stats.field_key, not define its own")
     assert specimen_stats.field_key("S1_CBS_0001") == specimen_stats.field_key("S1_ETD_0001")
+
+
+# --- dead-UI guards. Both of these were silent for several releases. -----------------
+def _src(rel):
+    import os
+    return open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                             *rel.split("/"))).read()
+
+
+def test_every_control_in_the_markup_is_wired_to_something():
+    """A <select> or <button> that no JavaScript ever names is dead UI, and it does not
+    look dead: it renders, it is clickable, and it does nothing.
+
+    This is the guard for a real regression. Commit 977e28c -- about crack pins and batch
+    upload, whose message never mentions figures -- spliced into the upload handler and
+    took the adjacent figure-builder block with it. #figkind, #figy, #figx and #figdl kept
+    rendering from index.html while nothing populated or wired them, so the Figure tab
+    shipped as two empty dropdowns and a download button that did nothing, for several
+    releases, with app/figures.py and /api/figure.svg fully alive behind it. Nothing in the
+    suite referred to those ids, which is why it survived: tests/test_figures.py exercised
+    the renderer and never asked whether anyone could reach it.
+    """
+    import re
+    html, js = _src("app/templates/index.html"), _src("app/static/app.js")
+    controls = re.findall(r'<(select|button|input|textarea)\b[^>]*\bid="([^"]+)"', html)
+    assert controls, "no id'd controls found -- this guard has stopped measuring anything"
+    dead = sorted(f"<{t} id={i}>" for t, i in controls if i not in js)
+    assert not dead, ("declared in index.html and named by no JavaScript, so it renders "
+                      "and does nothing:\n  " + "\n  ".join(dead))
+
+
+def test_no_function_reference_is_called_without_ever_being_assigned():
+    """`window.figRenderRef` survived the deletion as two guarded call sites against a name
+    nothing assigned -- `if (typeof window.figRenderRef === "function")`, which is exactly
+    the shape that makes a dead reference invisible. A read with no writer, again."""
+    import re
+    js = _src("app/static/app.js")
+    # Injected by the host, not by this file. An allowlist rather than a looser pattern,
+    # because the whole value of this guard is that it has no way to shrug.
+    EXTERNAL = {"pywebview"}   # the native shell's js_api bridge (packaging/launcher.py)
+    # `=(?!=)` IS THE WHOLE GUARD. The first version matched `\s*=`, which also matches the
+    # `===` in `typeof window.figRenderRef === "function"` -- so it counted the dead
+    # comparison as an assignment and could never fire on the exact pattern it was written
+    # for. Caught by deleting the block and watching the test pass. A guard that cannot see
+    # the bug in front of it is not a guard.
+    for name in sorted(set(re.findall(r"window\.(\w+)", js)) - EXTERNAL):
+        reads = len(re.findall(rf"window\.{name}\b(?!\s*=(?!=))", js))
+        writes = len(re.findall(rf"window\.{name}\s*=(?!=)", js))
+        if reads:
+            assert writes, (f"window.{name} is read {reads}x and assigned nowhere -- "
+                            f"either wire it or delete the call sites")
+
+
+def test_the_percent_fields_carry_their_unit_onto_the_axis():
+    """FIELDS is (label, unit, scale, suffix) and every render path bound the fourth slot
+    to `_`. The three percent fields put their scale in slot 2 and their "%" in slot 4, so
+    a histogram of area_fraction drew values multiplied by 100 under an axis reading
+    "Crack area fraction" with ticks 0..50 -- wrong by 100x unless the reader guesses."""
+    import sys, os
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from app.figures import FIELDS, axis_label
+    for key, (lab, unit, scale, suffix) in FIELDS.items():
+        got = axis_label(key)
+        if suffix:
+            assert suffix in got, f"{key}: axis label {got!r} drops its {suffix!r}"
+        if unit:
+            assert unit in got, f"{key}: axis label {got!r} drops its unit {unit!r}"
+        if scale != 1.0:
+            assert unit or suffix, (
+                f"{key} is scaled by {scale} and declares no unit at all, so the axis "
+                f"numbers cannot be interpreted")
+
+
+def test_the_censored_share_axes_name_their_weighting():
+    """One field called "Area touching frame edge" plotted censored_share, which is the
+    share of REGIONS -- the dataset says so in its own censored_share_weighting column.
+    On sem/gated 260622_316_H_b2 that read 2.4% against an area-weighted 84.1%."""
+    import sys, os
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from app.figures import FIELDS, axis_label
+    assert "AREA" in axis_label("censored_share_by_area")
+    assert "LENGTH" in axis_label("censored_share_by_length")
+    assert "Regions" in axis_label("censored_share")
+    assert "Area touching" not in FIELDS["censored_share"][0], (
+        "censored_share is a count share and must not be labelled as an area share")

@@ -1375,6 +1375,62 @@ async function loadArm() {
     if (failed.length) console.warn("uploads refused:\n" + failed.join("\n"));
   };
 
+  // RESTORED. This whole block was deleted as collateral by 977e28c, a commit about crack
+  // pins and batch upload whose message never mentions figures: the batch-upload rewrite
+  // spliced into the handler immediately above and its anchors swallowed the figure
+  // builder that followed it. The markup kept rendering, so the Figure tab shipped for
+  // several releases as two empty dropdowns and a download button that did nothing, while
+  // app/figures.py and /api/figure.svg stayed fully alive behind it. Five of six audit
+  // dimensions found it independently. See tests/test_figures.py for the guard that now
+  // fails when an id declared in the Figure pane is referenced by no JavaScript.
+  // --- figure builder ------------------------------------------------------------------
+  // The field list comes from the server so the menu can never offer a quantity the
+  // renderer does not know, and so "needs a scale" is stated by the same code that
+  // enforces it.
+  let FIG = null;
+  window.figRenderRef = null;
+  const figRender = async () => {
+    const out = $("#figout");
+    if (!FIG || !state.arm) return;
+    const kind = $("#figkind").value, y = $("#figy").value, x = $("#figx").value;
+    $("#figxwrap").hidden = kind !== "scatter";
+    const q = new URLSearchParams({ arm: state.arm, kind, y });
+    if (kind === "scatter") q.set("x", x);
+    // Thin specimens are always included now. The checkbox asked the reader to settle a
+    // statistics question by clicking, and the two answers are not equally defensible:
+    // either those specimens are admissible, in which case show them with their n, or they
+    // are not, in which case hiding them behind an opt-in is worse than excluding them.
+    // The figure labels n per specimen, so a box built on two fields announces itself.
+    q.set("include_thin", "true");
+    out.innerHTML = `<p class="note">drawing…</p>`;
+    const r = await fetch(`/api/figure.svg?${q}`);
+    if (!r.ok) {
+      let d = {}; try { d = await r.json(); } catch (_) {}
+      out.innerHTML = `<p class="note"><span class="flag">${d.detail || "could not draw this"}</span></p>`;
+      return;
+    }
+    out.innerHTML = await r.text();
+    $("#figdl").onclick = () => {
+      q.set("download", "true");
+      download(`/api/figure.svg?${q}`,
+               `${state.arm.replace("/", "_")}_${q.get("kind")}_${q.get("y") || q.get("x")}.svg`);
+    };
+  };
+  window.figRenderRef = figRender;
+  try {
+    FIG = await api("/api/figure/fields");
+    const opts = FIG.fields.map((f) =>
+      `<option value="${f.key}">${f.label}${f.unit ? " (" + f.unit + ")" : ""}${f.needs_scale ? " ·needs scale" : ""}</option>`).join("");
+    $("#figy").innerHTML = opts;
+    $("#figx").innerHTML = opts;
+    $("#figy").value = "area_fraction";
+    $("#figx").value = "n_cracks_measured";
+    $("#figkind").innerHTML = FIG.kinds.map((k) =>
+      `<option value="${k}">${k.replace(/_/g, " ")}</option>`).join("");
+    $("#figkind").value = "box_by_specimen";
+    ["figkind", "figy", "figx"].forEach((id) => $("#" + id).onchange = figRender);
+  } catch (e) { $("#figout").innerHTML = `<p class="note">figures unavailable: ${e.message}</p>`; }
+
   wireTabs();
   $("#defsbtn").onclick = () => {
     const d = $("#defs");

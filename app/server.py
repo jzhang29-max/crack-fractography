@@ -843,7 +843,11 @@ def readout(arm: str = Query(...), specimen: str | None = None, frame: str | Non
 def figure_fields():
     """What can go on an axis, and which choices need a physical scale."""
     from . import figures as F
-    return {"fields": [{"key": k, "label": v[0], "unit": v[1], "needs_scale": k in F.NEEDS_SCALE}
+    # `v[1] or v[3]`: the percent fields carry their scale in slot 2 and their "%" in slot
+    # 4, so reporting only v[1] told the picker those fields were unitless while the figure
+    # drew them multiplied by 100. The picker and the figure now name the same unit.
+    return {"fields": [{"key": k, "label": v[0], "unit": v[1] or v[3],
+                        "needs_scale": k in F.NEEDS_SCALE}
                        for k, v in F.FIELDS.items()],
             "kinds": list(F.KINDS)}
 
