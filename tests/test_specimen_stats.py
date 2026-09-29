@@ -320,7 +320,10 @@ def test_n_fields_scaled_never_exceeds_the_interval_it_sits_beside():
     import json, os
     from collections import defaultdict
     repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    fr = json.load(open(os.path.join(repo, "analysis", "out", "frames.json")))
+    out = os.path.join(repo, "analysis", "out", "frames.json")
+    if not os.path.exists(out):
+        pytest.skip("no dataset built")     # CI has no corpus; the synthetic case below covers the rule
+    fr = json.load(open(out))
     rows = fr["records"] if isinstance(fr, dict) else fr
     g = defaultdict(list)
     for f in rows:
