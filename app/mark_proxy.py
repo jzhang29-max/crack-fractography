@@ -45,6 +45,32 @@ DROP = {"content-length", "transfer-encoding", "connection", "keep-alive",
 NEEDLE = "'/api/"
 REPLACEMENT = "'/mark/api/"
 
+#: Where the injected stylesheet goes. Matched case-insensitively; every HTML document the
+#: tool serves has one.
+HEAD_CLOSE = "</head>"
+
+#: ONE SIDEBAR, NOT TWO. The tool is a whole application with its own left rail -- brand,
+#: drop target, a filterable list of all 154 SEM originals, and a model card -- and
+#: embedding it whole put that rail directly beside this app's own frame list. Two image
+#: lists, side by side, showing DIFFERENT corpora: the app's was on the txm arm's 71
+#: frames while the tool's listed 154 SEM images, and picking in one did nothing to the
+#: other. That is not an integration, it is two applications sharing a window.
+#:
+#: So the tool's rail is hidden and its canvas takes the full width. The app's sidebar
+#: becomes the only place an image is chosen, and app.js drives the tool's own
+#: loadImage() to follow it -- see syncMarkFrame there. Hidden rather than deleted because
+#: the tool's own code still reads #imageList and #imageSelect to track state; removing
+#: the nodes would break it, and display:none leaves every one of them addressable.
+INJECT = """
+<style id="fracto-embed">
+  /* The tool's own left rail: this app's sidebar replaces it. */
+  #side { display: none !important; }
+  /* Its main column was sized against that rail. */
+  #main { width: 100% !important; max-width: none !important; margin-left: 0 !important; }
+  body { overflow-x: hidden; }
+</style>
+"""
+
 
 def port_override():
     """A paint-tool port set by the environment, or None.
@@ -77,10 +103,11 @@ def is_ui_page(status, body):
 
 
 def rewrite(html):
-    """Point the tool's root-relative API calls back through /mark/.
+    """Point the tool's root-relative API calls back through /mark/, and hide its own rail.
 
-    Raises if nothing matched. A rewrite that silently does nothing ships a page whose every
-    control talks to the wrong server, and it looks identical to a working one.
+    Raises if either step finds nothing to do. A rewrite that silently does nothing ships a
+    page whose every control talks to the wrong server, and it looks identical to a working
+    one; an injection that silently does nothing ships two sidebars.
     """
     n = html.count(NEEDLE)
     if not n:
@@ -88,7 +115,15 @@ def rewrite(html):
             f"the marking tool's page contains no {NEEDLE!r}, so its API calls cannot be "
             "pointed at /mark/. Its HTML has changed shape; this proxy needs updating "
             "rather than bypassing.")
-    return html.replace(NEEDLE, REPLACEMENT), n
+    out = html.replace(NEEDLE, REPLACEMENT)
+
+    i = out.lower().rfind(HEAD_CLOSE)
+    if i < 0:
+        raise ValueError(
+            "the marking tool's page has no </head>, so the embed stylesheet cannot be "
+            "injected and its sidebar would appear beside this app's own.")
+    out = out[:i] + INJECT + out[i:]
+    return out, n
 
 
 def forward(port, path, method="GET", body=None, headers=None, query=""):

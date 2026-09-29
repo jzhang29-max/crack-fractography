@@ -1140,12 +1140,23 @@ async function renderMark() {
     </div>`;
 
   if (MARK_MODE === "full") {
+    // DO NOT RE-MOUNT A LIVE TOOL. renderMark runs on every frame pick, and rewriting
+    // innerHTML would tear down the iframe and reload the whole application inside it --
+    // discarding unsaved strokes and re-fetching a 23 MB template every time the reader
+    // clicks a different row. If it is already up, just point it at the new image.
+    if (paint.running && $("#markframe")) { wireModes(); syncMarkFrame(); return; }
     el.innerHTML = head + (paint.running
-      ? `<iframe id="markframe" src="/mark/" title="Marking tool"></iframe>`
+      ? `<p class="note" id="marksync"></p>
+         <iframe id="markframe" src="/mark/" title="Marking tool"></iframe>`
       : `<div class="markstate"><p class="markbig">Start the marking tool.</p>
            <button id="markstart" class="upload">Start</button>
            <p class="note" id="markstartout"></p></div>`);
     wireModes();
+    const fr = $("#markframe");
+    // Follow the app's sidebar, both now and on every later pick. The tool auto-loads
+    // its own images[0] as it boots, so this also corrects that first choice.
+    if (fr) fr.onload = () => { MARK_LOADED = null; syncMarkFrame(); };
+    syncMarkFrame();
     const b = $("#markstart");
     if (b) b.onclick = async () => {
       b.disabled = true; b.textContent = "Starting…";
@@ -1172,6 +1183,55 @@ async function renderMark() {
   // app does not own stays unwritten.
   await openEditor(state.frame, head);
   wireModes();
+}
+
+//: The tool's own image names, fetched once. It knows only the SEM originals it was
+//: pointed at -- not this app's TXM frames, and not anything uploaded here -- so the app
+//: has to be able to say "that one is not in the tool" rather than silently showing a
+//: different image than the sidebar says.
+let MARK_IMAGES = null;
+//: The frame this side last asked the tool to open, so a re-sync is not a re-load.
+let MARK_LOADED = null;
+
+async function syncMarkFrame() {
+  const fr = $("#markframe");
+  const note = $("#marksync");
+  if (!fr || !note) return;
+  if (MARK_IMAGES === null) {
+    try { MARK_IMAGES = new Set((await api("/mark/api/images")).map((i) => i.name)); }
+    catch (e) { MARK_IMAGES = new Set(); }
+  }
+  if (!state.frame) {
+    note.innerHTML = `<span class="u">Pick an image on the left to mark it.</span>`;
+    return;
+  }
+  // BE HONEST ABOUT WHAT THE TOOL CAN OPEN. Showing its canvas on some other image while
+  // the sidebar highlights this one is the two-lists problem in a subtler form: one
+  // sidebar, still disagreeing with what is under the brush.
+  if (!MARK_IMAGES.has(state.frame)) {
+    note.innerHTML = `<span class="flag">${esc(shortFrame(state.frame))}</span> `
+      + `<span class="u">is not one of the ${MARK_IMAGES.size} images the full tool was `
+      + `pointed at — it reads the SEM originals only. Use <b>Edit mask</b> for this one, `
+      + `which works on any frame here.</span>`;
+    fr.style.opacity = "0.35";
+    return;
+  }
+  fr.style.opacity = "";
+  note.innerHTML = `<span class="u">Marking <b>${esc(shortFrame(state.frame))}</b> — `
+    + `chosen on the left. Corrections are written into the SEM repo.</span>`;
+  // Same-origin, so the tool's own loader is callable. Calling loadImage rather than
+  // clicking its (now hidden) list item means this does not depend on that list's markup.
+  // NOT `w.currentImage`: the tool declares it with `let` at the top level of a classic
+  // script, which creates a global BINDING and not a property of window, so reading it
+  // from here is always undefined and every sync would reload. `function loadImage` is a
+  // declaration, so that one IS on window. Track the request on this side.
+  try {
+    const w = fr.contentWindow;
+    if (w && typeof w.loadImage === "function" && MARK_LOADED !== state.frame) {
+      MARK_LOADED = state.frame;
+      w.loadImage(state.frame);
+    }
+  } catch (e) { /* not loaded yet; the onload handler calls again */ }
 }
 
 function wireModes() {

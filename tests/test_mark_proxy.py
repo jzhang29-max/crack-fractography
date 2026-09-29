@@ -125,7 +125,8 @@ def test_content_length_is_not_forwarded_because_the_body_grew():
     srv, port = _serve()
     try:
         _, headers, body, n = MP.forward(port, "/")
-        assert len(body) == len(PAGE) + 5 * n
+        # The body grows twice: 5 bytes per rewrite, plus the embed stylesheet.
+        assert len(body) == len(PAGE) + 5 * n + len(MP.INJECT)
         assert not [k for k in headers if k.lower() == "content-length"]
         assert headers.get("X-Upstream-Marker") == "kept", "other headers must survive"
     finally:
@@ -233,3 +234,36 @@ def test_the_override_is_preferred_over_the_default_port():
             os.environ.pop("MARK_PORT", None)
         else:
             os.environ["MARK_PORT"] = was
+
+
+# --- one sidebar, not two ------------------------------------------------------------
+def test_the_tools_own_sidebar_is_hidden_so_there_is_only_one():
+    """The tool is a whole application with its own left rail -- brand, drop target, a
+    filterable list of all 154 SEM originals, a model card. Embedded whole, that rail sat
+    directly beside this app's frame list: two image lists side by side showing DIFFERENT
+    corpora (the app on the txm arm's 71 frames, the tool listing 154 SEM images), and
+    picking in one did nothing to the other."""
+    out, _ = MP.rewrite(PAGE.decode())
+    assert "fracto-embed" in out, "the embed stylesheet was not injected"
+    assert "#side { display: none !important; }" in out
+    # Injected INSIDE the document head, not appended after </html> where it still works
+    # by browser leniency but is invisible to anyone reading the source.
+    assert out.index("fracto-embed") < out.lower().index("</head>")
+
+
+def test_a_page_with_no_head_is_an_error_not_a_silent_two_sidebar_ship():
+    """The rewrite asserts its count for the same reason: an injection that quietly does
+    nothing looks exactly like one that worked, until you open the tab."""
+    import pytest
+    with pytest.raises(ValueError) as e:
+        MP.rewrite("<html><body><script>fetch('/api/images')</script></body></html>")
+    assert "head" in str(e.value).lower()
+
+
+def test_hidden_not_deleted():
+    """display:none rather than removing the nodes, because the tool's own code still
+    reads #imageList and #imageSelect to track state -- deleting them would break the
+    application we are embedding."""
+    assert "display: none" in MP.INJECT
+    for gone in ("<!-- removed", "imageList { content", "remove()"):
+        assert gone not in MP.INJECT
