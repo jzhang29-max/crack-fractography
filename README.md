@@ -209,13 +209,29 @@ three fields.
 that is a single overview at 337.2396 nm/px beside the raster's nine at 51.883. A 6.5×
 coarser pixel is a 6.5× coarser minimum resolvable width, and the overview's field of view is
 10.6× a fine field's while taking 1/10 of the weight in a ten-field mean, so it is not a
-replicate of the nine. The interval and the stage gradient are computed over the modal
-magnification group only and refuse when no group reaches three fields; every scale is listed
-in `magnification_groups` on the record, and the excluded field is still measured on its own
-and still counted in the area analysed. This moved the reported relative accuracy 53.0→62.0,
-117.9→84.2, 42.4→49.1 and 81.7→93.0 percent — three of four **worse**, which is why it was
-not a cleanup. The app's worst SEM relative accuracy is `MAR_Amb_AS` at 138.0%, which has no
-recoverable scale at all and is untouched by this.
+replicate of the nine. **Every** physical aggregate on the record — the interval, the stage
+gradient, the P10/P21/P20/MCL medians and the additive totals alike — is computed over the
+modal magnification group's *fields*, and refuses when no group reaches three fields. Every
+scale is listed in `magnification_groups`; the excluded field is still measured on its own,
+and the material it covered is reported as `area_off_determination_mm2` /
+`tcl_um_off_determination`, which are never rendered.
+
+This moved the reported relative accuracy 53.0→62.0, 117.9→84.2, 42.4→49.1 and 81.7→93.0
+percent — three of four **worse**, which is why it was not a cleanup.
+
+It took two passes. The first moved the interval and the gradient but left the additive
+totals and six physical medians summing or pooling every scale, so the card printed
+`1.325218 mm² over 10 fields` two rows above `95% CI …, 9 fields at 51.883 nm/px`. The
+exemption was written down as a defence — a coarse field really did cover that material, so
+summing it "double-counts nothing" — and it is false: against the stage coordinates the
+overview overlaps the fine nine by 45.2% and 50.2% on the AmbB pair. Area-weighting instead
+of excluding is worse, since it weights *up* the field that overlaps the others by half.
+Corrected, `MAR_AmbB_HIP` reads 0.609687 mm² over 9 fields, P20 1815.7 /mm² (was 2627.6),
+MCL 26.5 µm (was 15.2 — the pool had included two overview frames whose MCL are 1181 µm and
+930 µm). `n_fields_scaled ≤ area_fraction_ci.n_fields` is now asserted on every record.
+
+The app's worst SEM relative accuracy is `MAR_Amb_AS` at 138.0%, which has no recoverable
+scale at all and is untouched by this.
 
 **Specimens are not ranked, and the app says so.** One site per specimen makes the
 between-field and the between-specimen variance the same component, so no ordering of these

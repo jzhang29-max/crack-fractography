@@ -214,14 +214,21 @@ def _median(vals):
     return round(float(np.median(v)), 4) if v else None
 
 
-def collapse_to_fields(frames, key):
-    """One value per physical field, averaging detector replicates of the same field."""
+def collapse_to_fields(frames, key, get=None):
+    """One value per physical field, averaging detector replicates of the same field.
+
+    `get` reaches values that do not sit at the top level -- the P10 pair live under
+    frame["probe"]. Without it those two were the only physical quantities that could not
+    be field-collapsed, which is how they stayed frame-medians while everything around
+    them was corrected.
+    """
+    getter = get or (lambda f: f.get(key))
     groups = {}
     for f in frames:
         groups.setdefault(field_key(f["frame"]), []).append(f)
     out = []
     for _, fs in sorted(groups.items()):
-        vals = [f.get(key) for f in fs if f.get(key) is not None]
+        vals = [getter(f) for f in fs if getter(f) is not None]
         if vals:
             out.append(float(np.mean(vals)))
     return out
@@ -328,12 +335,18 @@ def _no_ci_reason(specimen, af_fields, groups):
 
 def summarise(arm, specimen, frames):
     """One specimen-arm record."""
-    # THE DETERMINATION: the fields acquired at the modal magnification. Everything that
-    # averages area fraction across fields is computed over these, because a field at a
-    # 6.5x coarser pixel is measuring a different population (see the module docstring).
-    # Everything ADDITIVE -- area analysed, total crack length -- still uses every field,
-    # since a coarse field really did cover that material and summing it double-counts
-    # nothing.
+    # THE DETERMINATION: the fields acquired at the modal magnification. EVERY physical
+    # aggregate in this record is computed over these -- averages, medians and totals
+    # alike -- because a field at a 6.5x coarser pixel is measuring a different population
+    # (see the module docstring).
+    #
+    # This comment used to exempt the additive quantities, on the grounds that a coarse
+    # field really did cover that material so summing it "double-counts nothing". That is
+    # false, and measurably so: against the stage coordinates the 337.2396 nm/px overview
+    # overlaps the nine fine fields by 45.2% and 50.2% on the AmbB pair. Area-weighting
+    # instead of excluding is worse, not better -- it weights UP the field that overlaps
+    # the others by half. The excluded material is reported separately, under
+    # area_off_determination_mm2 and tcl_um_off_determination, and never rendered.
     groups = _partition_by_magnification(frames)
     determination = groups[0][1] if groups else []
     off_mag_fields = (len({field_key(f["frame"]) for f in frames})
@@ -341,6 +354,12 @@ def summarise(arm, specimen, frames):
 
     af_fields = collapse_to_fields(determination, "area_fraction")
     scaled = [f for f in frames if f.get("scale_known")]
+    # The determination's own scaled frames, and everything scaled that is NOT in it. Every
+    # physical aggregate below is over the first; the second is reported separately so the
+    # excluded material is stated rather than silently dropped.
+    det_scaled = [f for f in determination if f.get("scale_known")]
+    _det_ids = {id(f) for f in determination}
+    off_scaled = [f for f in scaled if id(f) not in _det_ids]
 
     rec = {
         "arm": arm,
@@ -385,36 +404,61 @@ def summarise(arm, specimen, frames):
         "magnification_groups": magnification_span(frames),
         "n_fields_off_determination": off_mag_fields,
 
-        # Physical quantities, over SCALED fields only, and null when none are scaled.
-        "p10_min_per_mm": _median([(f.get("probe") or {}).get("p10_min_per_mm")
-                                   for f in scaled]),
-        "p10_mean_per_mm": _median([(f.get("probe") or {}).get("p10_mean_per_mm")
-                                    for f in scaled]),
-        "p21_skeleton_mm_per_mm2": _median([f.get("p21_skeleton_mm_per_mm2")
-                                            for f in scaled]),
-        "p21_buffon_mm_per_mm2": _median([(f.get("probe") or {}).get("p21_buffon_mm_per_mm2")
-                                          for f in scaled]),
-        "p20_per_mm2": _median([f.get("p20_per_mm2") for f in scaled]),
+        # Physical quantities, over the DETERMINATION's scaled FIELDS. Both halves of that
+        # were wrong and they compound. These six were medians over FRAMES, so a field
+        # imaged through two detectors voted twice -- and CBS reads 2.29x ETD, so the vote
+        # is not a tie. And they pooled every magnification, so the 337.2396 nm/px overview
+        # sat in the same median as the nine fine fields at 51.883, at a 6.5x coarser
+        # detection limit and 10.6x the field of view. On MAR_AmbB_HIP that put P20 at
+        # 2627.6 /mm2 against 1815.7 corrected (1.45x), P10 min at 3.57 against 2.77, and
+        # MCL at 15.2 um against 26.5 -- while the card printed them directly under an
+        # interval correctly computed over nine fields at one scale. The file's own
+        # docstring opens with "A FRAME IS NOT A FIELD" and "ONE MAGNIFICATION PER
+        # DETERMINATION"; this block was the third place that rule had been missed.
+        "p10_min_per_mm": _median(collapse_to_fields(
+            det_scaled, "", get=lambda f: (f.get("probe") or {}).get("p10_min_per_mm"))),
+        "p10_mean_per_mm": _median(collapse_to_fields(
+            det_scaled, "", get=lambda f: (f.get("probe") or {}).get("p10_mean_per_mm"))),
+        "p21_skeleton_mm_per_mm2": _median(collapse_to_fields(
+            det_scaled, "p21_skeleton_mm_per_mm2")),
+        "p21_buffon_mm_per_mm2": _median(collapse_to_fields(
+            det_scaled, "", get=lambda f: (f.get("probe") or {}).get("p21_buffon_mm_per_mm2"))),
+        "p20_per_mm2": _median(collapse_to_fields(det_scaled, "p20_per_mm2")),
         # The longest single crack, tip to tip on one region's skeleton -- NOT
         # max(SkeletonLength_px), which is the whole network's centreline and was what this
         # field held while being labelled "the longest crack". The network quantity is kept
         # beside it under its own name. Measured over the 143 scaled frames, the network
         # figure is 3.70x the MCL at the median, and the old value exceeded the short side
         # of its own field on 89 of them against 48 now.
-        "mcl_um": _median([f.get("mcl_um") for f in scaled]),
-        "largest_network_centreline_um": _median([f.get("largest_network_centreline_um")
-                                                  for f in scaled]),
+        "mcl_um": _median(collapse_to_fields(det_scaled, "mcl_um")),
+        "largest_network_centreline_um": _median(collapse_to_fields(
+            det_scaled, "largest_network_centreline_um")),
         # ADDITIVE quantities are summed over FIELDS, not over frames. Summing over frames
         # double-counts every field that was imaged through two detectors: it reported
         # 2.650 mm2 analysed for a specimen holding 10 fields of ~0.13 mm2, and a total
         # crack length of 67 mm for 33 mm of crack. Collapsing the mean handled this and
         # the totals did not, which is the same error one line lower down.
-        "tcl_um_total": (round(float(sum(collapse_to_fields(scaled, "tcl_um"))), 1)
-                         if scaled else None),
-        "area_analysed_mm2": (round(float(sum(collapse_to_fields(scaled,
-                                                                 "area_analysed_mm2"))), 6)
-                              if scaled else None),
-        "n_fields_scaled": len({field_key(f["frame"]) for f in scaled}),
+        # ...AND OVER THE DETERMINATION TOO, which was the half of the magnification rule
+        # that never landed. The card printed "1.325218 mm2 over 10 fields" two rows under
+        # "95% CI ..., 9 fields at 51.883 nm/px", because these three still summed every
+        # scale. The defence written for it -- that a coarse field really did cover that
+        # material, so summing double-counts nothing -- is false on half the records:
+        # measured against the stage coordinates, the overview overlaps the fine nine by
+        # 45.2% and 50.2% on the AmbB pair. Excluding is right and area-weighting is not,
+        # because weighting UP a field that overlaps the others by half is the same
+        # double-count with a bigger coefficient. The excluded material is still reported,
+        # under its own name, in the JSON only.
+        "tcl_um_total": (round(float(sum(collapse_to_fields(det_scaled, "tcl_um"))), 1)
+                         if det_scaled else None),
+        "area_analysed_mm2": (round(float(sum(collapse_to_fields(
+            det_scaled, "area_analysed_mm2"))), 6) if det_scaled else None),
+        "n_fields_scaled": len({field_key(f["frame"]) for f in det_scaled}),
+        # NOT RENDERED. It needs the stage coordinates to say whether it overlaps what is
+        # already counted, and stage.py will not assert the unit those are in.
+        "area_off_determination_mm2": (round(float(sum(collapse_to_fields(
+            off_scaled, "area_analysed_mm2"))), 6) if off_scaled else None),
+        "tcl_um_off_determination": (round(float(sum(collapse_to_fields(
+            off_scaled, "tcl_um"))), 1) if off_scaled else None),
 
         # Are these fields a sample of a surface, or a raster across one patch? E562
         # presumes the former and the 2026-09-15 batch is the latter.

@@ -305,3 +305,101 @@ def test_the_corpus_values_this_rule_was_written_for():
             # The overview is still on the record, with its own value.
             off = [g for g in r["magnification_groups"] if not g["in_determination"]]
             assert len(off) == 1 and off[0]["nm_per_px"] == pytest.approx(337.2396)
+
+
+# --- every physical aggregate is over the determination's FIELDS --------------------
+#: The six the specimen card renders, plus the three additive/count ones beside them.
+PHYSICAL = ("p10_min_per_mm", "p10_mean_per_mm", "p21_skeleton_mm_per_mm2",
+            "p21_buffon_mm_per_mm2", "p20_per_mm2", "mcl_um",
+            "largest_network_centreline_um", "tcl_um_total", "area_analysed_mm2")
+
+
+def test_n_fields_scaled_never_exceeds_the_interval_it_sits_beside():
+    """The card printed "1.325218 mm² over 10 fields" two rows above "95% CI …, 9 fields at
+    51.883 nm/px". Violated on exactly 8 of 34 shipped records before this."""
+    import json, os
+    from collections import defaultdict
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    fr = json.load(open(os.path.join(repo, "analysis", "out", "frames.json")))
+    rows = fr["records"] if isinstance(fr, dict) else fr
+    g = defaultdict(list)
+    for f in rows:
+        g[(f.get("specimen"), f.get("arm"))].append(f)
+    bad = []
+    for (sp, arm), fs in g.items():
+        r = S.summarise(arm, sp, fs)
+        ci = r.get("area_fraction_ci")
+        if ci and r.get("n_fields_scaled", 0) > ci["n_fields"]:
+            bad.append(f"{sp}/{arm}: {r['n_fields_scaled']} scaled fields vs {ci['n_fields']} in the interval")
+    assert not bad, "\n  ".join([""] + bad)
+
+
+def test_the_physical_aggregates_use_determination_fields_not_frames():
+    """Two errors that compound: a median over FRAMES lets a field imaged through two
+    detectors vote twice (and CBS reads 2.29x ETD, so it is not a tie), and pooling every
+    magnification puts a 337.2396 nm/px overview in the same median as nine fields at
+    51.883. Recomputed independently here rather than trusting the record."""
+    import numpy as np
+    det = [
+        {"frame": "MAR_X_AS_CBS_0001", "scale_known": True, "n_cracks_measured": 5, "area_fraction": 0.01,
+         "crack_density_px_per_Mpx": 1.0, "nm_per_px": 50.0,
+         "p20_per_mm2": 100.0, "mcl_um": 10.0, "area_analysed_mm2": 0.1, "tcl_um": 500.0,
+         "p21_skeleton_mm_per_mm2": 1.0, "largest_network_centreline_um": 20.0,
+         "probe": {"p10_min_per_mm": 1.0, "p10_mean_per_mm": 2.0, "p21_buffon_mm_per_mm2": 1.0}},
+        # SAME physical field, other detector. Must not count twice.
+        {"frame": "MAR_X_AS_ETD_0001", "scale_known": True, "n_cracks_measured": 5, "area_fraction": 0.01,
+         "crack_density_px_per_Mpx": 1.0, "nm_per_px": 50.0,
+         "p20_per_mm2": 200.0, "mcl_um": 20.0, "area_analysed_mm2": 0.1, "tcl_um": 700.0,
+         "p21_skeleton_mm_per_mm2": 3.0, "largest_network_centreline_um": 40.0,
+         "probe": {"p10_min_per_mm": 3.0, "p10_mean_per_mm": 4.0, "p21_buffon_mm_per_mm2": 3.0}},
+        {"frame": "MAR_X_AS_CBS_0002", "scale_known": True, "n_cracks_measured": 5, "area_fraction": 0.01,
+         "crack_density_px_per_Mpx": 1.0, "nm_per_px": 50.0,
+         "p20_per_mm2": 300.0, "mcl_um": 30.0, "area_analysed_mm2": 0.1, "tcl_um": 900.0,
+         "p21_skeleton_mm_per_mm2": 5.0, "largest_network_centreline_um": 60.0,
+         "probe": {"p10_min_per_mm": 5.0, "p10_mean_per_mm": 6.0, "p21_buffon_mm_per_mm2": 5.0}},
+        {"frame": "MAR_X_AS_CBS_0003", "scale_known": True, "n_cracks_measured": 5, "area_fraction": 0.01,
+         "crack_density_px_per_Mpx": 1.0, "nm_per_px": 50.0,
+         "p20_per_mm2": 400.0, "mcl_um": 40.0, "area_analysed_mm2": 0.1, "tcl_um": 1100.0,
+         "p21_skeleton_mm_per_mm2": 7.0, "largest_network_centreline_um": 80.0,
+         "probe": {"p10_min_per_mm": 7.0, "p10_mean_per_mm": 8.0, "p21_buffon_mm_per_mm2": 7.0}},
+    ]
+    # A WILDLY DIFFERENT OVERVIEW at a 10x coarser pixel. Off the determination, so it must
+    # not reach any of the nine fields above.
+    overview = {"frame": "MAR_X_AS_CBS_0010", "scale_known": True, "n_cracks_measured": 5, "area_fraction": 0.01,
+         "crack_density_px_per_Mpx": 1.0, "nm_per_px": 500.0,
+                "p20_per_mm2": 99999.0, "mcl_um": 9999.0, "area_analysed_mm2": 9.9,
+                "tcl_um": 99999.0, "p21_skeleton_mm_per_mm2": 999.0,
+                "largest_network_centreline_um": 9999.0,
+                "probe": {"p10_min_per_mm": 999.0, "p10_mean_per_mm": 999.0,
+                          "p21_buffon_mm_per_mm2": 999.0}}
+
+    with_ov = S.summarise("sem/gated", "MAR_X_AS", det + [overview])
+    without = S.summarise("sem/gated", "MAR_X_AS", det)
+    for k in PHYSICAL:
+        assert with_ov[k] == without[k], (
+            f"{k} moved when a 10x-coarser overview was added: "
+            f"{without[k]} -> {with_ov[k]}. It is pooling magnifications.")
+
+    # And the detector replicate is averaged, not counted twice: field 0001 contributes
+    # (100+200)/2 = 150, so the three field values are 150, 300, 400 -> median 300.
+    assert with_ov["p20_per_mm2"] == 300.0, with_ov["p20_per_mm2"]
+    assert with_ov["p10_min_per_mm"] == 5.0, with_ov["p10_min_per_mm"]   # (1+3)/2, 5, 7
+    assert with_ov["n_fields_scaled"] == 3
+    # Three fields of 0.1 mm2, NOT four frames and NOT the 9.9 overview.
+    assert abs(with_ov["area_analysed_mm2"] - 0.3) < 1e-9, with_ov["area_analysed_mm2"]
+    # The excluded material is stated, not silently dropped -- and never rendered.
+    assert abs(with_ov["area_off_determination_mm2"] - 9.9) < 1e-9
+
+
+def test_no_physical_aggregate_is_written_as_a_median_over_raw_frames():
+    """A source guard, because the defect recurred three times in this one function and
+    each time the new field simply copied the shape of the one above it."""
+    import os, re
+    src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                            "analysis", "specimen_stats.py")).read()
+    body = src[src.index("def summarise("):]
+    offenders = re.findall(r'"([a-z0-9_]+)":\s*_median\(\[[^\]]*for f in (?:scaled|frames)\]',
+                           body, re.S)
+    assert not offenders, (
+        "computed as a median over frames rather than over determination fields: "
+        + ", ".join(offenders) + " -- use collapse_to_fields(det_scaled, ...)")
