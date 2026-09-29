@@ -26,6 +26,25 @@ tool, which owns the paint layer. Developed against a COPY of that layer via the
 SEMCRACK_PAINT_DIR / SEMCRACK_ORIGINAL_DIR overrides, and MARK_PORT below exists so a dev
 instance can be pointed at a sandbox without editing code. The paint layer is hand-labelled
 research data and this file is not the place to find out whether a proxy corrupts a PNG.
+
+NOTE, IF THAT SANDBOX IS EVER RELIED ON AGAIN: those two variables cover two of the five
+directories common.py builds. LABELS_DIR, CANDIDATES_DIR and MODELS_DIR have no override,
+and a whole-region flip driven through a "sandboxed" tool still appended a row to the real
+labels ledger. Verify containment with `git status` on the tool's own repository, not by
+hashing the directory you pointed away from.
+
+WHAT IS REACHABLE ACROSS THE SAME-ORIGIN BOUNDARY, since the answer is not "everything the
+tool defines" and the rule is easy to get backwards. app/static/app.js drives the embedded
+tool by calling `iframe.contentWindow.loadImage(name)`. That resolves. In the SAME file, in
+the SAME scope, `iframe.contentWindow.currentImage` is permanently undefined -- and the only
+difference is the declaration keyword. In a classic script (the tool's page is one; no
+type=module anywhere in it), a top-level `function` declaration creates a property on the
+global object, while a top-level `let`, `const` or `class` creates a binding in the global
+DECLARATIVE record, which is not a property of globalThis and cannot be read from another
+realm. `function loadImage` is therefore callable from the parent; `let currentImage` is not
+readable from it. A sync guarded on reading that variable back would see undefined every
+time and reload the tool on every call, which is exactly the bug that shipped for one
+iteration. Track state on the parent's side instead.
 """
 import os
 import urllib.error
