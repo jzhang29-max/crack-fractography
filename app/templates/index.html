@@ -31,6 +31,19 @@
 }
 *{box-sizing:border-box}
 html,body{height:100%}
+/* ONE RULE FOR THE WHOLE CLASS, and it needs !important.
+   The UA stylesheet's [hidden]{display:none} is specificity (0,1,0), so ANY author rule
+   that sets a display beats it -- and this sheet sets display on about twenty selectors.
+   The result is an element the JavaScript has hidden that is still on screen, which is
+   silent by construction: the DOM reports hidden=true, getComputedStyle reports flex, and
+   the only way to notice is to look.
+   This was patched five separate times, once per element, as each instance was found --
+   .pane, .ro-line, #defs, #crackpin, #setup -- and the sixth (#setup .row, the corpus
+   button on the first-run screen) was missed, which is how a dead-end control ended up on
+   the first screen a stranger sees. Whack-a-mole on a class of bug is not a fix; this is.
+   The per-element rules below are now redundant and kept only for their comments. */
+[hidden]{display:none !important}
+
 body{margin:0;background:var(--surface-1);color:var(--text-primary);
   font:14px/1.5 ui-sans-serif,-apple-system,"Segoe UI",system-ui,sans-serif;
   display:flex;flex-direction:column;overflow:hidden}

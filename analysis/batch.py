@@ -141,6 +141,21 @@ def main():
     # records for arms that WERE re-run are replaced wholesale, so a frame deleted upstream
     # does not linger.
     ran = set(arms)
+
+    # MEASURING NOTHING IS NOT A RESULT, and writing it as one is destructive. When every
+    # arm is skipped -- which is what a fresh clone of the SEM repo gives you, since the
+    # derived mask directories are generated and not committed -- `frames` is empty, and
+    # the merge below then wrote frames.json, cracks.json and specimens.json as literal
+    # `[]`. The log was honest about it ("no masks under ... -- skipped", four times);
+    # only the exit status lied. Downstream, /api/arms stopped 503ing and started
+    # returning [] with a 200, which walked straight past the app's first-run branch.
+    # Refuse instead, and say where it looked.
+    if not frames:
+        where = "\n    ".join(sorted({d for d, _, _ in (ARMS[a] for a in arms)}))
+        print(f"\n  MEASURED NOTHING. No masks were found under:\n    {where}\n"
+              f"  Nothing was written -- the existing dataset is left as it was.")
+        return 1
+
     for name, obj in (("frames.json", frames), ("cracks.json", cracks),
                       ("specimens.json", specimens)):
         path = os.path.join(OUT, name)
@@ -167,4 +182,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # sys.exit(main()), not main(). The return value was discarded, so a run that refused
+    # to write still exited 0 and /api/measure_corpus reported it as "done" -- which is
+    # what made the empty-dataset case look like a successful measurement to the UI.
+    sys.exit(main() or 0)

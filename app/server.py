@@ -699,6 +699,30 @@ async def mask_edit(arm: str = Query(...), frame: str = Query(...),
         out = remeasure(arm="uploads", frame=new_frame)
         out["copied_from"] = f"{arm}/{frame}"
         out["arm"] = "uploads"
+        # DIFF AGAINST THE SOURCE, not against the row written one line above.
+        #
+        # _measure_into_uploads has just written the new frame's record FROM THIS SAME
+        # MASK, so remeasure's `prior` is that row and its diff is empty by construction.
+        # The result: the first edit of any research frame reported "No measurement
+        # changed" however large the correction was, and only the first -- a second edit
+        # of the same copy diffed correctly, which is what made it look like a quirk
+        # rather than a bug. Measured: painting a 40 px band across the full 6144 px width
+        # of MAR_H_AS_CBS_0001 moved area_fraction 0.053548 -> 0.062242 and skeleton
+        # length 111932.5 -> 117208.7 px, and the reply said {"changed": {}}.
+        #
+        # The honest comparison is against the frame the copy was made from, and the reply
+        # now names it so the reader knows what the "before" column is.
+        if src_rec:
+            fresh = next((f for f in (_load_quiet("frames") or [])
+                          if f.get("arm") == "uploads" and f.get("frame") == new_frame), {})
+            changed = {k: {"before": src_rec.get(k), "after": fresh.get(k)}
+                       for k in ("area_fraction", "n_cracks_measured",
+                                 "largest_share_of_area", "mcl_um",
+                                 "total_skeleton_length_px")
+                       if src_rec.get(k) != fresh.get(k)}
+            out["changed"] = changed
+            out["unchanged"] = not changed
+            out["changed_against"] = f"{arm}/{frame}"
     out["edited"] = True
     out["frame"] = new_frame
     return out

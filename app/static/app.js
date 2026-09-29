@@ -21,8 +21,16 @@ const fmt = (v, d = 2) =>
 async function api(path) {
   const r = await fetch(path);
   if (!r.ok) {
-    let msg = `${r.status}`;
-    try { msg = (await r.json()).detail || msg; } catch (_) {}
+    // A bare "500" is not a message. FastAPI returns a JSON {detail} for its own
+    // HTTPExceptions but a plain-text "Internal Server Error" body for an unhandled one,
+    // so the only thing on screen for the case that most needs explaining was the number.
+    let msg = `server error ${r.status}`;
+    try {
+      const d = await r.json();
+      if (d && d.detail) msg = typeof d.detail === "string" ? d.detail : JSON.stringify(d.detail);
+    } catch (_) {
+      if (r.status >= 500) msg = `server error ${r.status} — see the app's log for the cause`;
+    }
     throw new Error(msg);
   }
   return r.json();
@@ -63,10 +71,18 @@ function commonPrefix(names) {
   return cut > 0 ? p.slice(0, cut + 1) : "";
 }
 
-function shortFrame(name) {
-  return (FRAME_PREFIX && name.startsWith(FRAME_PREFIX) &&
-          name.length > FRAME_PREFIX.length + 2)
-    ? name.slice(FRAME_PREFIX.length) : name;
+function shortFrame(name, prefix) {
+  // The prefix is now the GROUP's, falling back to the arm's. Rows are grouped by
+  // specimen and the group header already prints the specimen name, so inside a group
+  // that part of every name is both redundant and the part that survives truncation:
+  // all five frames of 260622_316_H_b2 rendered as the identical string
+  // "260622_316_H_..." at 15ch, clipping exactly the discriminating tail
+  // (back_CBS_01, front_CBS_01 ... front_CBS_04) -- and front vs back is a real
+  // distinction in this corpus. 142 of 142 gated cells clipped; 139 were non-unique
+  // within their own open group. Measured at 285 px of content in a 139 px cell.
+  const pre = prefix || FRAME_PREFIX;
+  return (pre && name.startsWith(pre) && name.length > pre.length + 2)
+    ? name.slice(pre.length) : name;
 }
 
 function renderFrames() {
@@ -99,11 +115,14 @@ function renderFrames() {
     if (!groups.has(k)) groups.set(k, []);
     groups.get(k).push(f);
   }
-  const one = (f) => {
+  const one = (f, groupPrefix) => {
     const noScale = f.scale_known ? "" : ` <span class="flag">no scale</span>`;
     return `<tr data-f="${esc(f.frame)}" aria-selected="${state.frame === f.frame}">` +
       FCOLS.map(([k]) => {
-        if (k === "frame") return `<td class="ind">${esc(shortFrame(f[k]))}${noScale}</td>`;
+        // title= carries the WHOLE name, so the cell is still identifiable on hover and
+        // to a screen reader even if the shortened form is itself clipped.
+        if (k === "frame") return `<td class="ind" title="${esc(f[k])}">` +
+          `${esc(shortFrame(f[k], groupPrefix))}${noScale}</td>`;
         if (k === "_cracks") {
           const sp = f.speck_count
             ? ` <span class="muted">+${f.speck_count.toLocaleString()}</span>` : "";
@@ -123,7 +142,9 @@ function renderFrames() {
       `<td colspan="${FCOLS.length - 1}">${open ? "\u25be" : "\u25b8"} ${esc(spec)}` +
       ` <span class="u">${fs.length}</span></td>` +
       `<td class="u">${med == null ? "" : fmt(med, 4)}</td></tr>`;
-    return open ? head + fs.map(one).join("") : head;
+    // The prefix every frame in THIS group shares, which the header above already names.
+    const gp = commonPrefix(fs.map((f) => f.frame));
+    return open ? head + fs.map((f) => one(f, gp)).join("") : head;
   }).join("");
 
   t.querySelectorAll("thead th").forEach((th) => th.onclick = () => {
@@ -794,13 +815,27 @@ function renderStrip(rec) {
     `<span class="who">${rec.specimen}</span>`,
     ci ? `<span class="big">${pct(ci.mean)}</span>` : `<span class="big">${pct(rec.area_fraction_median)}</span>`,
     `<span class="u">crack area</span>`,
-    ci ? `<span class="ci">95% CI ${ciLo(ci)}–${pct(ci.ci95_hi)}</span>${raBadge(ci, rec)}`
+    // THE BADGE IS SUPPRESSED WHEN THE READ-OUT LINE BELOW ALREADY CARRIES THE SAME
+    // NUMBER. Both render on this one line, 70 px apart, and at different roundings: the
+    // badge prints pct_relative_accuracy raw (±30.7%) and the statement prints it at
+    // :.0f (±31%). One quantity shown twice at two values reads as two quantities, which
+    // is a poor trade in an app whose pitch is that its numbers are careful. The badge
+    // loses rather than the sentence: the sentence says what the number MEANS and carries
+    // the E562 target beside it, and its tooltip keeps the per-specimen remedy.
+    ci ? `<span class="ci">95% CI ${ciLo(ci)}–${pct(ci.ci95_hi)}</span>${
+           /precision target/.test(RO_TOP.text || "") ? "" : raBadge(ci, rec)}`
        : `<span class="ci">no interval, ${rec.n_fields} field${rec.n_fields === 1 ? "" : "s"}</span>`,
     `<span class="u">${rec.n_fields} fields${rec.n_frames !== rec.n_fields ? ` / ${rec.n_frames} frames` : ""}</span>`,
   ];
   // The strip prints the specimen's field count next to an interval computed over fewer
   // of them. Unexplained, that is the app contradicting itself in its own headline.
-  if (rec.n_fields_off_determination) {
+  // ...and only when there IS one. Gated on n_fields_off_determination alone, the banner
+  // read "interval over 3 of 4 fields · one magnification" beside "no interval, 4 fields"
+  // on the same line of the uploads strip, where area_fraction_ci is null by design. The
+  // strip is the one element that must never be behind a click because it carries
+  // assertions about the data currently loaded; here it contradicted itself in a single
+  // line, and the false half was the half that sounded authoritative.
+  if (ci && rec.n_fields_off_determination) {
     const g = (rec.magnification_groups || [])[0] || {};
     bits.push(`<span class="banner" title="${esc((ci && ci.magnification_note) || "")} ASTM E562 fixes the magnification before the fields are counted, and this repo's own rule is that pooling frames of unequal physical area is the error the standards exist to prevent.">interval over ${g.n_fields} of ${rec.n_fields} fields · one magnification</span>`);
   }
@@ -1291,7 +1326,21 @@ async function loadArm() {
     state.frames = await api(`/api/frames?arm=${encodeURIComponent(state.arm)}` +
       (state.spec ? `&specimen=${encodeURIComponent(state.spec)}` : ""));
   } catch (e) {
-    $("#strip").innerHTML = `<span class="flag bad">${e.message}</span>`;
+    // CLEAR THE VIEW, do not leave it. This used to write the message and return, so
+    // state.frames, the frame table, the specimen dropdown and the detail pane all stayed
+    // on the PREVIOUS arm while state.arm and the visible selector had already moved --
+    // one arm's data under another arm's label, which is exactly the mixture the API
+    // refuses to produce because the arms are different instruments. Clicking a row then
+    // requested that frame's mask from the new arm and got a 404, and overwrote the one
+    // diagnostic on the page.
+    state.frames = []; state.frame = null;
+    renderFrames();
+    $("#spec").innerHTML = `<option value="">all</option>`;
+    $("#detail").querySelectorAll(".pane").forEach((el) => { el.innerHTML = ""; });
+    $("#listcount").textContent = "";
+    $("#strip").innerHTML = `<span class="flag bad">Could not load the ${esc(state.arm)} `
+      + `arm — ${esc(e.message)}. Nothing below is showing another arm's numbers; `
+      + `pick an arm again to retry.</span>`;
     return;
   }
   // The specimen list comes from the specimen table, not from the frames just fetched:
@@ -1457,16 +1506,25 @@ async function loadArm() {
   try { await health(); } catch (e) { /* the page still works without it */ }
 
   let arms;
-  try { arms = await api("/api/arms"); }
-  catch (e) {
-    // No dataset is the normal first launch of a downloaded copy, not a failure. Open Setup
-    // and say the one thing that is true: you can start by adding an image.
+  // No dataset is the normal first launch of a downloaded copy, not a failure. Open Setup
+  // and say the one thing that is true: you can start by adding an image.
+  //
+  // AN EMPTY ARRAY IS THE SAME STATE AS THE 503, and it used not to be. Once the dataset
+  // files exist but hold no records, /api/arms stops 503ing and returns [] with a 200, so
+  // this catch was skipped and `arms[0].arm` on the next line threw -- taking with it
+  // everything after it in this function, including showSetup(true) and both sentences
+  // below. The first-run screen went blank and stayed blank across restarts, and the
+  // reachable trigger was one click on a visible button (see analysis/batch.py, which no
+  // longer writes an empty dataset over a good one).
+  const firstRun = () => {
     showSetup(true);
     $("#strip").innerHTML = `<span class="who">No measurements yet.</span>`;
     $("#listcount").textContent = "Add a mask or micrograph above to measure one, " +
       "or point the app at a SEM repo in Setup.";
-    return;
-  }
+  };
+  try { arms = await api("/api/arms"); }
+  catch (e) { firstRun(); return; }
+  if (!arms || !arms.length) { firstRun(); return; }
   $("#arm").innerHTML = arms.map((a) =>
     `<option value="${a.arm}">${a.arm} · ${a.n_frames} frames</option>`).join("");
   state.arm = arms[0].arm;

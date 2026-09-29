@@ -166,3 +166,62 @@ def test_no_caller_mutates_the_cached_records(out):
 
     assert json.dumps(S._load("frames"), sort_keys=True) == before, "an endpoint wrote back"
     assert [id(r) for r in S._load("frames")] == ids, "records were reordered in place"
+
+
+# --- an empty measurement must not be written, and must not brick the first screen ---
+def test_a_run_that_measures_nothing_writes_nothing_and_exits_nonzero(tmp_path):
+    """A fresh clone of the SEM repo has no derived mask directories -- they are generated,
+    not committed -- so every arm is skipped and `frames` comes back empty. The merge then
+    wrote frames.json, cracks.json and specimens.json as literal `[]` over whatever was
+    there. The log was honest ("no masks under ... -- skipped"); only the exit status lied,
+    because main()'s return value was discarded and the process exited 0 regardless, so
+    /api/measure_corpus reported it as done."""
+    import json, os, subprocess, sys
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    data = tmp_path / "out"
+    data.mkdir()
+    keep = [{"arm": "sem/gated", "frame": "keepme", "area_fraction": 0.1}]
+    (data / "frames.json").write_text(json.dumps(keep))
+
+    r = subprocess.run([os.path.join(repo, ".venv", "bin", "python3"),
+                        os.path.join(repo, "analysis", "batch.py"), "--arm", "uploads"],
+                       cwd=repo, capture_output=True, text=True,
+                       env={**os.environ, "FRACTOGRAPHY_DATA": str(data)})
+    assert r.returncode != 0, (
+        "a run that measured nothing exited 0, so the caller reads it as a success:\n"
+        + r.stdout[-800:])
+    assert "MEASURED NOTHING" in r.stdout, r.stdout[-800:]
+    assert json.loads((data / "frames.json").read_text()) == keep, (
+        "the existing dataset was overwritten by a run that measured nothing")
+
+
+def test_the_boot_treats_an_empty_arms_list_like_no_dataset_at_all():
+    """Once the dataset files exist but hold no records, /api/arms stops 503ing and returns
+    [] with a 200 -- so the catch branch was skipped and `arms[0].arm` threw, taking with
+    it everything after it in the boot function: showSetup(true) and both sentences that
+    tell a newcomer what to do. The first-run screen went blank and stayed blank."""
+    import os, re
+    js = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                           "app", "static", "app.js")).read()
+    boot = js[js.index("let arms;"):js.index("loadArm();", js.index("let arms;"))]
+    # STRIP THE COMMENTS FIRST. The comment explaining this defect says "arms[0].arm" in
+    # prose, so an ordering check on the raw text found the explanation before the code and
+    # failed against a correct file -- a scanner fooled by the words describing the bug.
+    code = re.sub(r"//[^\n]*", "", boot)
+    assert "arms.length" in code, (
+        "the boot path does not check for an empty arms array before indexing it")
+    assert code.index("arms.length") < code.index("arms[0]"), (
+        "the emptiness check must come before arms[0]")
+
+
+def test_every_hidden_element_is_actually_hidden_by_the_stylesheet():
+    """The UA rule [hidden]{display:none} is specificity (0,1,0), so any author rule that
+    sets a display beats it -- and this sheet sets display on about twenty selectors. It
+    was patched five times, once per element, as each instance was found; the sixth
+    (#setup .row, the corpus button on the first-run screen) was missed."""
+    import os, re
+    html = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                             "app", "templates", "index.html")).read()
+    assert re.search(r"^\[hidden\]\{display:none\s*!important\}", html, re.M), (
+        "no global [hidden] rule -- per-element overrides are whack-a-mole on a class of "
+        "bug that is silent by construction")
