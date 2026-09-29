@@ -341,12 +341,23 @@ def summarise(arm, specimen, frames):
     # (see the module docstring).
     #
     # This comment used to exempt the additive quantities, on the grounds that a coarse
-    # field really did cover that material so summing it "double-counts nothing". That is
-    # false, and measurably so: against the stage coordinates the 337.2396 nm/px overview
-    # overlaps the nine fine fields by 45.2% and 50.2% on the AmbB pair. Area-weighting
-    # instead of excluding is worse, not better -- it weights UP the field that overlaps
-    # the others by half. The excluded material is reported separately, under
-    # area_off_determination_mm2 and tcl_um_off_determination, and never rendered.
+    # field really did cover that material so summing it "double-counts nothing". Two
+    # reasons that is wrong, and they are not equally well founded:
+    #
+    #   Stands on its own: a total over fields of unequal DETECTION LIMIT is not a total
+    #   of anything. The overview resolves a 6.5x wider minimum crack, so the area it
+    #   contributes and the area the fine nine contribute are not the same quantity.
+    #
+    #   Carries a premise: the overview's field of view is 10.6x a fine field's and,
+    #   read against the stage coordinates, covers about 45% and 50% of the fine nine on
+    #   the AmbB pair -- so summing really does double-count. A second session recomputed
+    #   the same geometry independently (4.07/9 and 4.52/9). But it requires reading the
+    #   FEI stage coordinates as METRES, which stage.py deliberately declines to assert,
+    #   so it corroborates the decision rather than carrying it.
+    #
+    # Area-weighting instead of excluding is worse either way: it weights UP the field
+    # whose contribution is least comparable. The excluded material is reported under
+    # area_off_determination_mm2 and tcl_um_off_determination.
     groups = _partition_by_magnification(frames)
     determination = groups[0][1] if groups else []
     off_mag_fields = (len({field_key(f["frame"]) for f in frames})
@@ -442,12 +453,14 @@ def summarise(arm, specimen, frames):
         # that never landed. The card printed "1.325218 mm2 over 10 fields" two rows under
         # "95% CI ..., 9 fields at 51.883 nm/px", because these three still summed every
         # scale. The defence written for it -- that a coarse field really did cover that
-        # material, so summing double-counts nothing -- is false on half the records:
-        # measured against the stage coordinates, the overview overlaps the fine nine by
-        # 45.2% and 50.2% on the AmbB pair. Excluding is right and area-weighting is not,
-        # because weighting UP a field that overlaps the others by half is the same
-        # double-count with a bigger coefficient. The excluded material is still reported,
-        # under its own name, in the JSON only.
+        # material, so summing double-counts nothing -- is false, and the reason that
+        # needs no premise is that a total over fields whose detection limits differ 6.5x
+        # is not a total of anything. (It is also a double-count: the overview's field of
+        # view is 10.6x a fine field's and covers roughly 45% and 50% of the fine nine on
+        # the AmbB pair -- but that reads the stage coordinates as metres, which stage.py
+        # declines to assert, so it corroborates rather than carries.) Area-weighting is
+        # worse than excluding either way: it weights UP the least comparable field. The
+        # excluded material is reported under its own name and shown on the card.
         "tcl_um_total": (round(float(sum(collapse_to_fields(det_scaled, "tcl_um"))), 1)
                          if det_scaled else None),
         "area_analysed_mm2": (round(float(sum(collapse_to_fields(

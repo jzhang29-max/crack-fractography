@@ -223,9 +223,16 @@ It took two passes. The first moved the interval and the gradient but left the a
 totals and six physical medians summing or pooling every scale, so the card printed
 `1.325218 mm² over 10 fields` two rows above `95% CI …, 9 fields at 51.883 nm/px`. The
 exemption was written down as a defence — a coarse field really did cover that material, so
-summing it "double-counts nothing" — and it is false: against the stage coordinates the
-overview overlaps the fine nine by 45.2% and 50.2% on the AmbB pair. Area-weighting instead
-of excluding is worse, since it weights *up* the field that overlaps the others by half.
+summing it "double-counts nothing" — and it is false. The reason that stands on its own is
+that a total over fields whose **detection limits differ 6.5×** is not a total of anything:
+the overview resolves a 6.5× wider minimum crack, so its area and the fine nine's are not
+the same quantity. It is *also* a double-count — the overview's field of view is 10.6× a
+fine field's and covers roughly 45% and 50% of the fine nine on the AmbB pair — but that
+figure requires reading the FEI stage coordinates as **metres**, which `analysis/stage.py`
+deliberately declines to assert, so it corroborates the decision rather than carrying it.
+(A second session recomputed the same geometry independently: 4.07/9 and 4.52/9.)
+Area-weighting instead of excluding is worse either way, since it weights *up* the field
+whose contribution is least comparable.
 Corrected, `MAR_AmbB_HIP` reads 0.609687 mm² over 9 fields, P20 1815.7 /mm² (was 2627.6),
 MCL 26.5 µm (was 15.2 — the pool had included two overview frames whose MCL are 1181 µm and
 930 µm). `n_fields_scaled ≤ area_fraction_ci.n_fields` is now asserted on every record.

@@ -645,13 +645,27 @@ function magRow(r) {
   if (!off.length) {
     return ["Magnification", `${one(det)} <span class="u">· one scale</span>`];
   }
+  // The tooltip used to end "and still counted in the area analysed". That stopped being
+  // true when the additive totals moved onto the determination, and a caveat that
+  // describes the previous behaviour is worse than none.
   const tip = "ASTM E562 fixes the magnification before the fields are counted: a coarser "
     + "pixel is a coarser minimum resolvable width, so these estimate different "
     + "populations and their mean is not a measurement of either. The excluded fields are "
-    + "still measured individually and still counted in the area analysed.";
+    + "still measured individually, on their own cards; they are left out of every total "
+    + "and every median on THIS card.";
+  // AND SAY HOW MUCH WAS LEFT OUT. It was computed, stored and rendered nowhere. On
+  // MAR_AmbB_HIP the excluded 0.716 mm² is LARGER than the 0.610 mm² that remains, which
+  // is the 10.6x field-of-view point made concrete and the most persuasive single number
+  // for why the overview was never a replicate of the nine. "Not added" is said out loud
+  // because two areas side by side otherwise invite exactly the sum this rule forbids.
+  const nOff = off.reduce((n, x) => n + x.n_fields, 0);
+  const off_area = r.area_off_determination_mm2 == null ? "" :
+    `<br><span class="u">${num(r.area_off_determination_mm2, 3)} mm² of material sits in `
+    + `${nOff === 1 ? "that field" : `those ${nOff} fields`} and is not added to the `
+    + `${num(r.area_analysed_mm2, 3)} mm² above</span>`;
   return ["Magnification",
     `${one(det)}<br><span class="flag" title="${esc(tip)}">not in the interval:</span> `
-    + off.map((x) => `${one(x)}, mean ${pct(x.area_fraction_mean)}`).join(" · ")];
+    + off.map((x) => `${one(x)}, mean ${pct(x.area_fraction_mean)}`).join(" · ") + off_area];
 }
 
 function specimenCard(r) {
@@ -773,9 +787,29 @@ const TABS = [
 ];
 let TAB = "mark";
 
+//: Tabs that are about the NUMBERS. The statistics strip belongs to these and not to
+//: Mark: drawing needs to know which image is open, not what its 95% CI is.
+const ANALYSIS_TABS = new Set(["analysis", "compare", "figure"]);
+
 function showTab(id) {
   TAB = id;
   TABS.forEach(([k]) => { $("#pane-" + k).hidden = k !== id; });
+  // THE DRAWING PAGE IS A DRAWING PAGE. Opening the editor used to put two bars naming
+  // the same image above the canvas -- the picker in the header, and the statistics strip
+  // ("9.65% crack area, 95% CI 6.68%-12.61%, +/-31%: wider than E562's precision target")
+  // -- which is 160 px of numbers you cannot act on while holding a brush, and the second
+  // of two answers to "which image is this". The strip is an assertion about the data
+  // currently loaded, so it must never be behind a click ON THE PAGES THAT READ DATA; on
+  // the page where you CHANGE the data it is noise, and it is stale the moment you paint.
+  // It comes back, with the new numbers, the moment you switch to Analysis.
+  $("#strip").hidden = !ANALYSIS_TABS.has(id);
+  // Same reasoning for the two header buttons that only make sense once there ARE numbers.
+  // The drawing page keeps what drawing needs -- the image picker, + Add image -- and
+  // Setup, because a first-run user has to be able to reach it. Definitions and CSV come
+  // back on the analysis tabs, where the numbers they describe are on screen.
+  $("#defsbtn").hidden = !ANALYSIS_TABS.has(id);
+  $("#csv").hidden = !ANALYSIS_TABS.has(id);
+  if (!ANALYSIS_TABS.has(id)) $("#defs").hidden = true;   // and close the drawer
   $("#tabs").querySelectorAll("button").forEach((b) =>
     b.setAttribute("aria-selected", String(b.dataset.tab === id)));
   // The figure is expensive and the rose needs a laid-out box, so both render on reveal
