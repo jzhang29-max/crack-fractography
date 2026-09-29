@@ -128,15 +128,22 @@ def gradient(frames, field="area_fraction"):
     out.update(axis=best[0], spearman_rho=round(best[1], 3),
                p_value=round(best[2], 6))
 
-    # Row-to-row ratio, grouped on the axis that trends. Reported because a rho says
+    # HOW BIG THE SPREAD IS, grouped on the axis that trends. Reported because a rho says
     # "monotonic" and this says "by how much", and only the second is actionable.
+    #
+    # NOT a row-to-row ratio, whatever it may once have been called. Grouping is on the raw
+    # coordinate rounded to six places and the nine fields of a 3x3 raster differ in the
+    # sixth, so each lands in its own group: these are DISTINCT COORDINATES, nine of them,
+    # and the ratio is max field over min field. The docstring above explains why the old
+    # names were wrong; this was the last comment in the file still making the old claim,
+    # and the local was still called `rows`.
     coord = y if best[0] == "stage_y" else x
-    rows = {}
+    at_coord = {}
     for c, val in zip(coord.tolist(), v.tolist()):
-        rows.setdefault(round(c, 6), []).append(val)
-    means = np.array([float(np.mean(r)) for r in rows.values()])
+        at_coord.setdefault(round(c, 6), []).append(val)
+    means = np.array([float(np.mean(g)) for g in at_coord.values()])
     lo = float(means.min())
-    out["n_distinct_stage_coords"] = len(rows)
+    out["n_distinct_stage_coords"] = len(at_coord)
     out["field_max_min_ratio"] = (round(float(means.max()) / lo, 1) if lo > 0 else None)
     out["significant"] = bool(best[2] < 0.05)
     out["note"] = ("ASTM E562 presumes fields placed over a surface. A gradient means the "

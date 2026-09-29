@@ -466,8 +466,14 @@ def summarise(arm, specimen, frames):
         "area_analysed_mm2": (round(float(sum(collapse_to_fields(
             det_scaled, "area_analysed_mm2"))), 6) if det_scaled else None),
         "n_fields_scaled": len({field_key(f["frame"]) for f in det_scaled}),
-        # NOT RENDERED. It needs the stage coordinates to say whether it overlaps what is
-        # already counted, and stage.py will not assert the unit those are in.
+        # SHOWN ON THE CARD, under the Magnification row. It was briefly marked "not
+        # rendered" on the grounds that it needs the stage coordinates to say whether it
+        # overlaps what is already counted -- but that is true of the OVERLAP PERCENTAGE,
+        # which is not shown and needs the metre premise stage.py declines to assert.
+        # This is a sum of area_analysed_mm2, which needs only nm/px. And it is worth
+        # showing: on MAR_AmbB_HIP the excluded 0.716 mm2 is larger than the 0.610 mm2
+        # that remains, which is the clearest statement of why the overview was never a
+        # replicate. Rendered with "is not added to", so it cannot read as additive.
         "area_off_determination_mm2": (round(float(sum(collapse_to_fields(
             off_scaled, "area_analysed_mm2"))), 6) if off_scaled else None),
         "tcl_um_off_determination": (round(float(sum(collapse_to_fields(

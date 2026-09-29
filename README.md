@@ -213,8 +213,12 @@ replicate of the nine. **Every** physical aggregate on the record — the interv
 gradient, the P10/P21/P20/MCL medians and the additive totals alike — is computed over the
 modal magnification group's *fields*, and refuses when no group reaches three fields. Every
 scale is listed in `magnification_groups`; the excluded field is still measured on its own,
-and the material it covered is reported as `area_off_determination_mm2` /
-`tcl_um_off_determination`, which are never rendered.
+and the material it covered is stated on the card — on `MAR_AmbB_HIP`, *"0.716 mm² of
+material sits in that field and is not added to the 0.610 mm² above"*. That excluded figure
+is **larger than the determination it was excluded from**, which is the 10.6× field-of-view
+difference made concrete and the clearest single reason the overview was never a replicate
+of the nine. It is worded so it cannot read as additive, because two areas side by side
+otherwise invite exactly the sum this rule exists to forbid.
 
 This moved the reported relative accuracy 53.0→62.0, 117.9→84.2, 42.4→49.1 and 81.7→93.0
 percent — three of four **worse**, which is why it was not a cleanup.

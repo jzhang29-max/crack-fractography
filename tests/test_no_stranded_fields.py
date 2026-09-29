@@ -93,3 +93,50 @@ def test_the_readout_can_actually_see_the_anisotropy_verdict():
     assert rec.get("rose_beats_null") in (True, False), rec.get("rose_beats_null")
     said = " ".join(s["text"] for s in conclusions.for_frame(rec))
     assert "orient" in said.lower(), f"read-out said nothing about orientation: {said!r}"
+
+
+# --- a claim that a field is not shown must stay true -------------------------------
+def test_nothing_is_described_as_unrendered_while_the_ui_renders_it():
+    """Three times in one day a description outlived the change it described:
+
+      - the magnification tooltip ended "and still counted in the area analysed" after
+        the totals had moved off those fields;
+      - the README said area_off_determination_mm2 / tcl_um_off_determination "are never
+        rendered" one commit after they were put on the card;
+      - stage.py still called field_max_min_ratio a "row-to-row ratio" under a docstring
+        explaining at length why that name was wrong.
+
+    The second is mechanically checkable, and it is the dangerous one: a reader who trusts
+    "never rendered" will not go looking for the thing that is one pane away. So no comment
+    or document may say a record field is unrendered while app.js names it.
+    """
+    import os
+    import re
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    js = open(os.path.join(repo, "app", "static", "app.js")).read()
+
+    sources = [os.path.join(repo, "README.md")]
+    for d in ("analysis", "app"):
+        for f in sorted(os.listdir(os.path.join(repo, d))):
+            if f.endswith(".py"):
+                sources.append(os.path.join(repo, d, f))
+
+    CLAIM = re.compile(r"never (?:rendered|shown|displayed)|rendered nowhere|not rendered"
+                       r"|never displayed|shown nowhere", re.I)
+    offenders = []
+    for path in sources:
+        lines = open(path).read().splitlines()
+        for i, line in enumerate(lines):
+            if not CLAIM.search(line):
+                continue
+            # A window either side: a comment usually sits ABOVE the field it describes,
+            # a prose sentence usually names it on the same line or just before. Wide
+            # enough to catch both, at the cost of occasionally naming a neighbouring
+            # field -- which still points at the right line.
+            window = " ".join(lines[max(0, i - 1):i + 4])
+            for ident in set(re.findall(r"\b([a-z][a-z0-9]*(?:_[a-z0-9]+){2,})\b", window)):
+                if re.search(rf"\b{re.escape(ident)}\b", js):
+                    offenders.append(
+                        f"{os.path.relpath(path, repo)}:{i + 1} says {ident!r} is not "
+                        f"rendered, but app/static/app.js references it")
+    assert not offenders, "\n  ".join([""] + sorted(set(offenders)))
