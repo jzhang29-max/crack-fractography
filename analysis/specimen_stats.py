@@ -20,6 +20,48 @@ TWO THINGS ABOUT n THAT ARE EASY TO GET WRONG HERE, and both inflate confidence:
   it is a sampling interval for that specimen's surface, not a confidence interval for the
   material. Comparing two specimens needs the specimen to be the unit, not these intervals.
 
+AND ONE MAGNIFICATION PER DETERMINATION. E562 fixes the magnification before the fields
+are counted: the estimate is of the features that magnification RESOLVES, so fields taken
+at different nm/px estimate different populations and their mean is not a measurement of
+either. This repo already states the same rule in its own words -- docs/
+PRACTICE_AND_PRIOR_ART.md: "this corpus spans a 249x magnification range, so pooling frames
+of unequal physical area is the error the standards exist to prevent" -- and the interval
+was the one place that broke it.
+
+Eight specimen-arms did: MAR_AmbB_AS, MAR_AmbB_HIP, MAR_H_AS and MAR_H_HIP, identically in
+sem/gated and sem/machine. Each holds nine fields at 51.883 nm/px plus ONE overview at
+337.2396 -- a 6.5x coarser pixel, so a 6.5x coarser minimum resolvable width and a speck
+cutoff of 2.84 um2 against 0.067. It is also 3072x2048 against 6144x4096, so its field of
+view is 10.6x the area of a fine field while taking 1/10 of the weight in a mean over ten
+fields; E562's fields are equal-area by construction, and that objection stands even if
+the detection limits had matched.
+
+So the interval is computed over the MODAL magnification group only -- the scale the most
+fields were taken at -- and refuses when no group reaches three fields. What it moves:
+
+    MAR_AmbB_AS    53.0% -> 62.0%    overview area fraction 0.03235, 1.5x the fine mean
+    MAR_AmbB_HIP  117.9% -> 84.2%                           0.06513, 10.8x
+    MAR_H_AS       42.4% -> 49.1%                           0.03576, 1.2x
+    MAR_H_HIP      81.7% -> 93.0%                           0.03525, 1.0x
+
+Three of the four get WORSE, which is why this is not a cleanup. On AmbB_HIP the overview
+is a 10.8x outlier and was inflating the interval; on the other three it sits near the fine
+mean and was diluting it. Both directions are the same error, and 117.9% was substantially
+that one frame. It was NOT the app's worst SEM number -- MAR_Amb_AS reports 138.0% gated
+and 125.8% machine, has no recoverable nm/px at all, and is untouched by any of this. None
+of the four meets E562's +/-10% either way; nothing in either SEM arm does.
+
+Removing the overview also un-clamps MAR_AmbB_HIP: its lower bound was reaching below zero
+only because that one frame was widening the interval faster than it moved the mean.
+
+The dropped fields are not hidden: magnification_groups is on every record, including the
+single-magnification ones, because "all ten fields at one scale" is part of what the
+interval asserts and should be checkable rather than assumed. The stage gradient is
+computed over the same determination, for the same reason plus a second one -- the
+overview's field of view spans much of the raster, so it has no position comparable to a
+fine field's. It gets STRONGER without it: rho +0.648..+0.830 over ten fields against
++0.750..+0.867 over nine.
+
 AND THE DETECTOR IS NOT A NUISANCE HERE. On the 56 fields imaged both ways, CBS reports 2.29x
 the crack area of ETD (median; CBS higher in 50 of 56; paired Wilcoxon p = 8e-9). Detector is
 also confounded with specimen -- four specimens are CBS-only, seven are CBS+ETD mixes -- so a
@@ -38,6 +80,14 @@ PSEUDO_SPECIMEN = "uploaded"
 #: Detector token in a frame stem. The same physical field appears once per detector.
 DETECTOR = re.compile(r"_(CBS|ETD|BSE|SE|TLD)(?=_|$)", re.I)
 
+#: Two fields belong to the same E562 determination when their nm/px agree within this
+#: FACTOR. Not tuned: the only specimens that split are 6.5x apart with zero spread inside
+#: each group (exactly 51.883 and exactly 337.2396), so every factor from 1.0 to 6.5 gives
+#: the identical partition and this constant is not doing hidden work. It is set at 1.2 so
+#: that a nominally-equal scale recorded slightly differently -- the corpus holds both
+#: 51.883 and 52.0 -- is one determination, while a deliberate magnification change is not.
+SAME_MAGNIFICATION = 1.2
+
 
 def detector_of(stem):
     m = DETECTOR.search(stem)
@@ -47,6 +97,67 @@ def detector_of(stem):
 def field_key(stem):
     """The physical field a frame images -- its stem with the detector token removed."""
     return DETECTOR.sub("", stem)
+
+
+def magnification_of(frame):
+    """The nm/px a frame was acquired at, or None when the scale was never recovered.
+
+    None is a real answer, not a missing one: every 316 frame has it, and those specimens
+    form a single group so nothing below changes for them.
+    """
+    v = frame.get("nm_per_px")
+    return float(v) if v else None
+
+
+def _partition_by_magnification(frames):
+    """[(nm_per_px, [frames]), ...] -- the E562 determination first.
+
+    The determination is the scale the most FIELDS were taken at, ties going to the finer
+    scale because it resolves more. Assignment is greedy against each bucket's first
+    member, which is exact for well-separated scales and is all this corpus has; a corpus
+    with a continuum of magnifications would need a real clustering and should not be
+    getting one pooled interval anyway.
+    """
+    scales, buckets = [], []
+    for f in sorted(frames, key=lambda x: x.get("frame", "")):
+        m = magnification_of(f)
+        for i, s in enumerate(scales):
+            if s is None and m is None:
+                buckets[i].append(f)
+                break
+            if s is not None and m is not None and max(s / m, m / s) <= SAME_MAGNIFICATION:
+                buckets[i].append(f)
+                break
+        else:
+            scales.append(m)
+            buckets.append([f])
+    out = list(zip(scales, buckets))
+    out.sort(key=lambda sb: (-len({field_key(f["frame"]) for f in sb[1]}),
+                             float("inf") if sb[0] is None else sb[0]))
+    return out
+
+
+def magnification_span(frames):
+    """Every scale this specimen's fields were acquired at, determination first.
+
+    Reported on single-magnification specimens too. "All ten fields at one scale" is part
+    of what the interval asserts, and an assertion that is only recorded when it fails is
+    not checkable -- the reader cannot tell a clean specimen from an unexamined one.
+    """
+    out = []
+    for i, (s, g) in enumerate(_partition_by_magnification(frames)):
+        vals = collapse_to_fields(g, "area_fraction")
+        out.append({
+            "nm_per_px": (round(s, 4) if s is not None else None),
+            "n_fields": len({field_key(f["frame"]) for f in g}),
+            "area_fraction_mean": (round(float(np.mean(vals)), 6) if vals else None),
+            # The detection limit is what actually differs, so it is spelled out rather
+            # than left for the reader to divide: a crack narrower than one pixel is
+            # unresolved, not absent, and that threshold moves with the scale.
+            "min_resolvable_width_um": (round(s / 1000.0, 4) if s is not None else None),
+            "in_determination": i == 0,
+        })
+    return out
 
 
 def _t95(n):
@@ -74,7 +185,8 @@ def _ci(values):
     # A normal-theory interval on a small, skewed, non-negative quantity can reach below
     # zero. Clamping it to 0.0 and printing "0.00%" states a measured lower bound of exactly
     # zero, which is a claim the data does not make -- it is the method running out of
-    # validity, not a finding. Two of nine gated specimen-arms hit this. Clamped, because an
+    # validity, not a finding. One of nine gated specimen-arms hits this (MAR_Amb_AS); it
+    # was two until the interval stopped pooling magnifications. Clamped, because an
     # area fraction cannot be negative, but FLAGGED so the UI can say which it is.
     raw_lo = mean - half
     return {
@@ -165,9 +277,69 @@ def _gradient(frames):
         return None
 
 
+def _n_patches(frames):
+    # Same local-import guard as _gradient: without the SEM repo's metadata there are no
+    # coordinates. Falling to None is the safe direction -- None leaves the ranking
+    # refusal switched ON, so a missing stage table cannot silently license a comparison.
+    try:
+        import stage
+        return stage.n_patches(frames)
+    except Exception:
+        return None
+
+
+def _ci_over_determination(af_fields, groups):
+    """The E562 interval, stamped with the scale it was measured at and what it left out."""
+    ci = _ci(af_fields)
+    if ci is None:
+        return None
+    s = groups[0][0] if groups else None
+    ci["nm_per_px"] = round(s, 4) if s is not None else None
+    ci["n_fields_off_determination"] = sum(
+        len({field_key(f["frame"]) for f in g}) for _, g in groups[1:])
+    if ci["n_fields_off_determination"]:
+        others = ", ".join(str(round(o, 4)) for o, _ in groups[1:] if o is not None)
+        ci["magnification_note"] = (
+            f"over the {ci['n_fields']} fields at {ci['nm_per_px']} nm/px only; "
+            f"{ci['n_fields_off_determination']} field(s) at {others} nm/px are a "
+            f"different detection limit and are not averaged in")
+        ci["method"] += "; one magnification per determination"
+    return ci
+
+
+def _no_ci_reason(specimen, af_fields, groups):
+    """Why there is no interval -- and the three reasons are not interchangeable."""
+    if specimen == PSEUDO_SPECIMEN:
+        return ("these are unrelated uploaded images, not fields of one specimen, so a "
+                "between-field interval over them would not mean anything")
+    if len(af_fields) >= 3:
+        return None
+    if len(groups) > 1:
+        # "Only 2 fields" would be a lie on a specimen holding five images: the fields
+        # exist, they are just split across magnifications that cannot be pooled.
+        n = sum(len({field_key(f["frame"]) for f in g}) for _, g in groups)
+        scales = ", ".join(str(round(s, 4)) if s is not None else "unknown"
+                           for s, _ in groups)
+        return (f"this specimen's {n} fields are split across magnifications ({scales} "
+                f"nm/px) and no single magnification has the three fields E562 needs; "
+                f"pooling them would average different detection limits")
+    return None
+
+
 def summarise(arm, specimen, frames):
     """One specimen-arm record."""
-    af_fields = collapse_to_fields(frames, "area_fraction")
+    # THE DETERMINATION: the fields acquired at the modal magnification. Everything that
+    # averages area fraction across fields is computed over these, because a field at a
+    # 6.5x coarser pixel is measuring a different population (see the module docstring).
+    # Everything ADDITIVE -- area analysed, total crack length -- still uses every field,
+    # since a coarse field really did cover that material and summing it double-counts
+    # nothing.
+    groups = _partition_by_magnification(frames)
+    determination = groups[0][1] if groups else []
+    off_mag_fields = (len({field_key(f["frame"]) for f in frames})
+                      - len({field_key(f["frame"]) for f in determination}))
+
+    af_fields = collapse_to_fields(determination, "area_fraction")
     scaled = [f for f in frames if f.get("scale_known")]
 
     rec = {
@@ -200,10 +372,18 @@ def summarise(arm, specimen, frames):
         # and the arm guard was too blunt in the other direction: a mask marked up from a
         # real specimen is filed in the uploads arm but IS a field of that specimen, and
         # suppressing its interval threw away a number that does mean something.
-        "area_fraction_ci": (None if specimen == PSEUDO_SPECIMEN else _ci(af_fields)),
-        "no_ci_reason": ("these are unrelated uploaded images, not fields of one "
-                         "specimen, so a between-field interval over them would not mean "
-                         "anything" if specimen == PSEUDO_SPECIMEN else None),
+        #
+        # AND NOT ACROSS MAGNIFICATIONS. Computed over the determination only; a specimen
+        # whose modal group is under three fields gets None with a reason that names the
+        # split, so "no interval" is never confused with "too few images".
+        "area_fraction_ci": (None if specimen == PSEUDO_SPECIMEN
+                             else _ci_over_determination(af_fields, groups)),
+        "no_ci_reason": _no_ci_reason(specimen, af_fields, groups),
+
+        # Every acquisition scale in this specimen, determination first. Present even when
+        # there is only one, so the card can state the span rather than stay silent.
+        "magnification_groups": magnification_span(frames),
+        "n_fields_off_determination": off_mag_fields,
 
         # Physical quantities, over SCALED fields only, and null when none are scaled.
         "p10_min_per_mm": _median([(f.get("probe") or {}).get("p10_min_per_mm")
@@ -242,9 +422,24 @@ def summarise(arm, specimen, frames):
         # the one that skipped it: CBS and ETD sit at byte-identical stage coordinates, so
         # all eight shipped records read n=20 for 10 physical fields and every p-value was
         # computed on doubled data -- up to 27x too small. Corrected, the effect is
-        # STRONGER and the significance weaker: rho +0.745..+0.842 at p 0.0022..0.0133,
-        # against the shipped +0.537..+0.782 at p 0.00005..0.0145.
-        "stage_gradient": _gradient(_one_frame_per_field(frames)),
+        # STRONGER and the significance weaker: rho +0.648..+0.830 at p 0.0029..0.0425,
+        # against the shipped +0.537..+0.782 at p 0.00005..0.0145. (Those corrected
+        # figures are the ten-field ones, which is what the next paragraph then narrows;
+        # this line used to quote a third pair that matched neither and no output file.)
+        # AND OVER THE DETERMINATION, for the same reason as the interval plus a second
+        # one: the 337 nm/px overview's field of view is 10.6x a fine field's and spans
+        # much of the raster, so it has no stage position comparable to theirs. Dropping
+        # it STRENGTHENS every gradient (rho +0.648..+0.830 -> +0.750..+0.867), so this is
+        # not a finding manufactured by removing an inconvenient point.
+        "stage_gradient": _gradient(_one_frame_per_field(determination)),
+
+        # HOW MANY SEPARATED SITES, which is the question the gradient above cannot ask.
+        # One site per specimen makes the site and the specimen the same variance
+        # component, so no ordering of specimens is estimable; this is the field the
+        # ranking refusal reads. 1 everywhere it is answerable today, None elsewhere --
+        # and None does not switch the refusal off. Over ALL fields, not the
+        # determination: a coarse overview still tells you where the microscope was.
+        "n_patches": _n_patches(_one_frame_per_field(frames)),
 
         # The detector, because it is confounded with the specimen and moves the answer.
         "detectors": {},

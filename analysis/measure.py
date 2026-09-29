@@ -73,7 +73,7 @@ def load_mask(path, with_grey=False):
     return (m, a) if with_grey else m
 
 
-def measure_frame(mask, stem, modality="sem", r_l_axis_deg=0.0, grey=None):
+def measure_frame(mask, stem, modality="sem", grey=None):
     """Per-crack rows plus a frame summary. mask: bool array, True = crack."""
     lab = skmeasure.label(mask, connectivity=cleaning.CONNECTIVITY)
     n = int(lab.max())
@@ -154,7 +154,7 @@ def measure_frame(mask, stem, modality="sem", r_l_axis_deg=0.0, grey=None):
     # the field, and a segment rose weighted per-component would re-introduce the
     # component-level weighting these replace.
     probe = line_probe(mask, nm)
-    segs, segsum = skeleton_segments(mask, axis_deg=r_l_axis_deg)
+    segs, segsum = skeleton_segments(mask)
 
     _cen = sum(1 for r in rows if r["length_is_censored"])
     summary = {
@@ -244,14 +244,11 @@ def measure_frame(mask, stem, modality="sem", r_l_axis_deg=0.0, grey=None):
         "width_below_validated_envelope_share":
             (round(float((widths < 10).mean()), 4) if len(widths) else None),
 
-        # R_L replaces tortuosity. The old path/chord gate (exactly 2 skeleton endpoints, 0
-        # branch points) admitted 43.7% of regions holding 2.6% of the crack area here, and
-        # 0 of 285 TXM regions -- a headline number describing almost nothing. R_L is
-        # defined for every branch, against a DECLARED axis that travels with the value.
-        "R_L_median": segsum.get("R_L_median"),
-        "R_L_n_segments": segsum.get("R_L_n"),
-        "R_L_axis_deg": segsum.get("R_L_axis_deg"),
-        "R_L_below_one": segsum.get("R_L_below_one"),
+        # NO PATH-ROUGHNESS FIELD. Tortuosity left because its 2-endpoint/0-branch gate
+        # described 2.6% of the crack area here and 0 of 285 TXM regions; R_L replaced it
+        # and then left too, because it needs a declared axis and this app has nowhere to
+        # declare one -- see analysis/segments.py and conclusions.REFUSALS. Nothing is
+        # emitted in their place: an em-dash in a metric row reads as "measured, empty".
 
         "n_segments": segsum.get("n_segments"),
         "n_junctions": segsum.get("n_junctions"),
@@ -458,10 +455,10 @@ def canonical_stem(name):
             return stem
 
 
-def measure_path(path, modality="sem", stem=None, r_l_axis_deg=0.0):
+def measure_path(path, modality="sem", stem=None):
     stem = canonical_stem(stem or path)
     mask, grey = load_mask(path, with_grey=True)
-    return measure_frame(mask, stem, modality, r_l_axis_deg, grey=grey)
+    return measure_frame(mask, stem, modality, grey=grey)
 
 
 if __name__ == "__main__":

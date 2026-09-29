@@ -13,30 +13,48 @@ reported were computed on whole connected components, and all three are wrong at
     branch points. Measured on this corpus that gate admits 43.7% of regions holding 2.6% of
     the crack area, and 0 of 285 TXM regions. It describes almost nothing.
 
-R_L REPLACES TORTUOSITY, and it is a different quantity, not a rename. Quantitative
-fractography's roughness parameter (Underwood & Banerji) is true length / length PROJECTED ON
-A DECLARED AXIS. Projecting on the crack's own chord -- what path/chord does -- measures how
-bent a crack is relative to itself, which is undefined for a branched one. Projecting on a
-stated specimen axis is defined for every profile and is what the fatigue literature reports.
-The axis is an input, defaulting to image x, and it is recorded in the output so a reader
-knows what the number is relative to.
+THERE IS NO PATH-ROUGHNESS READ-OUT HERE, AND THAT IS DELIBERATE. R_L (Underwood &
+Banerji) is true length over length projected on a DECLARED specimen axis, so it needs an
+axis someone declared. This app has nowhere to declare one. It shipped R_L anyway with the
+axis defaulted to image x, and the default was never once overridden: R_L_axis_deg was 0.0
+on all 356 frames. Against a fixed image axis the projection is chord * |cos(theta)|, so
 
-R_L >= 1 by construction and that is asserted, not hoped: this project has already published
-impossible sub-1 tortuosities from a pixel-count numerator.
+    R_L  ==  (length / chord) * sec(theta)
+
+identically -- algebra, not a measurement. The shipped column was median sec(chord angle)
+times a small digitisation factor, and its corpus median AND 75th percentile were both
+exactly 1.4142: sec(45 deg), which is at once a lattice diagonal, a straight 45-degree
+crack and the isotropy expectation, three things the number cannot tell apart. It also
+ran -0.78 (gated) / -0.83 (machine) / -0.45 (txm) against rose_R, which answers the same
+orientation question and, unlike R_L, carries a per-frame permutation null.
+
+So the metric is gone rather than fixed, and the app states the removal (see
+conclusions.REFUSALS) instead of printing an em-dash. If a declared axis is ever available
+it belongs on the rose, which already has the null: re-expressing rose_theta_deg in a
+declared frame re-expresses a tested number instead of creating an untested one.
 """
 import numpy as np
 from scipy import ndimage as ndi
 from skimage import morphology
 
 #: A short skeleton branch cannot point anywhere except along the pixel lattice, so its
-#: angle and its R_L are digitisation, not geometry. Measured on MAR_H_AS_CBS_0001: the
-#: median branch is 5.24 px, 24.6% of branches have R_L within 0.001 of sqrt(2) and 10.6%
-#: sit at exactly 1.0 -- 35% on two lattice values -- and the chord-angle histogram spikes
-#: at 0/45/90/135 deg. For a chord of n px the angular quantisation is about atan(1/n), so
+#: angle is digitisation, not geometry. Measured on MAR_H_AS_CBS_0001: the median branch is
+#: 22.7 px, the chord-angle histogram spikes hard at 0/45/90/135 deg, and 63.6% of all
+#: branches have a chord indistinguishable from a lattice direction -- 43.1% even among
+#: those long enough to pass the gate below.
+#: For a chord of n px the angular quantisation is about atan(1/n), so
 #: 5 deg resolution needs n >= 11 and 20 px gives margin. Counts and junctions still use
 #: every branch; only DIRECTION-dependent quantities are gated, and the retained length
 #: share is reported so the gate is visible rather than silent.
 MIN_DIRECTIONAL_PX = 20
+
+#: Transverse uncertainty on a skeleton branch's end-to-end chord, in pixels. Two, not one,
+#: and not a tuned figure: the chord runs between two endpoints and skeletonisation places
+#: each to within about a pixel, so their connecting direction carries a pixel of wobble at
+#: each end. One pixel is also the wrong number arithmetically -- a chord exactly one pixel
+#: off a lattice direction subtends exactly asin(1/c), so a one-pixel threshold puts the
+#: commonest case precisely ON the boundary and lets float error decide it.
+CHORD_WOBBLE_PX = 2.0
 
 #: Permutation draws for the anisotropy null. 1000 is enough for a 95th
 #: percentile and is vectorised, so it costs a few ms per frame.
@@ -48,17 +66,17 @@ _K = np.array([[1, 1, 1], [1, 0, 1], [1, 1, 1]], np.uint8)
 
 #: The summary's field set, with every value None, so a frame with no skeleton returns the
 #: SAME SHAPE as one with cracks. Two early returns used to hand back a two-key dict, so any
-#: consumer reading a real field -- rose_beats_null, R_L_median -- raised KeyError on the 8
-#: zero-crack frames in this corpus instead of reading "no verdict".
-def _empty_summary(note, axis_deg=0.0):
+#: consumer reading a real field -- rose_beats_null -- raised KeyError on the 8 zero-crack
+#: frames in this corpus instead of reading "no verdict".
+def _empty_summary(note):
     keys = ("total_segment_length_px", "median_segment_length_px", "n_segments_directional",
-            "directional_length_share", "lattice_locked_share_all_segments", "R_L_median",
-            "R_L_n", "R_L_below_one", "n_junctions", "n_triple", "n_quadruple_plus",
+            "directional_length_share", "lattice_chord_share_all_segments",
+            "n_junctions", "n_triple", "n_quadruple_plus",
             "characteristic_length_px", "rose_bin_deg", "rose_length_share", "rose_R",
             "rose_theta_deg", "rose_R_null95", "rose_beats_null")
     out = {k: None for k in keys}
     out.update(n_segments=0, note=note, min_directional_px=MIN_DIRECTIONAL_PX,
-               R_L_axis_deg=axis_deg, rose_weighted_by="segment length",
+               rose_weighted_by="segment length",
                junction_order_counted_per="cluster (branches meeting), not per skeleton pixel",
                rose_null=None)
     return out
@@ -68,7 +86,7 @@ def _neighbours(skel):
     return ndi.convolve(skel.astype(np.uint8), _K, mode="constant", cval=0)
 
 
-def skeleton_segments(mask, axis_deg=0.0):
+def skeleton_segments(mask):
     """Branch-level measurement of one mask.
 
     Returns (segments, summary). A segment is a maximal run of skeleton pixels between
@@ -76,7 +94,7 @@ def skeleton_segments(mask, axis_deg=0.0):
     """
     skel = morphology.skeletonize(mask)
     if not skel.any():
-        return [], _empty_summary("no skeleton", axis_deg)
+        return [], _empty_summary("no skeleton")
 
     nb = _neighbours(skel)
     junction = skel & (nb >= 3)
@@ -84,9 +102,6 @@ def skeleton_segments(mask, axis_deg=0.0):
     # separately rather than assigned to a branch, so no branch borrows another's length.
     branches = skel & ~junction
     lab, n = ndi.label(branches, structure=np.ones((3, 3), np.uint8))
-
-    ax = np.deg2rad(axis_deg)
-    ux, uy = np.cos(ax), np.sin(ax)
 
     segs = []
     objs = ndi.find_objects(lab)
@@ -120,28 +135,32 @@ def skeleton_segments(mask, axis_deg=0.0):
         # Angle of the branch's end-to-end chord, folded to 0-180.
         v = p[-1] - p[0]
         ang = float(np.degrees(np.arctan2(v[1], v[0])) % 180.0)
-        # R_L: true length over length projected on the DECLARED axis.
-        proj = abs(float(v[0] * ux + v[1] * uy))
-        r_l = (length / proj) if proj > 1e-9 else None
+        # Is this chord's angle DISTINGUISHABLE from a lattice direction? Not "exactly on
+        # one" -- over a 318 px chord a single-pixel tip wobble is 0.18 deg off axis, and
+        # an equality test calls that off-lattice where no reader would. The tolerance is
+        # the angle subtended by CHORD_WOBBLE_PX of transverse deviation over this chord,
+        # asin(w/c), so it is the chord's own angular resolution rather than a fixed
+        # degree figure: a 5 px stub is locked within 24 deg (at that length every
+        # direction is within 22.5 deg of a lattice one, which is the honest answer -- it
+        # cannot point anywhere else), a 300 px branch within 0.4 deg. Relative to the
+        # PIXEL lattice, the thing being diagnosed. Nothing here is relative to a specimen
+        # axis, because this app has none to declare.
+        lat = min(abs(ang - t) for t in (0.0, 45.0, 90.0, 135.0, 180.0))
         segs.append({"n_px": npx, "length_px": round(length, 3),
                      "chord_px": round(chord, 3),
                      "angle_deg": round(ang, 2),
-                     "R_L": (round(r_l, 4) if r_l is not None else None),
-                     "R_L_axis_deg": axis_deg})
+                     "chord_on_lattice": bool(
+                         np.deg2rad(lat) <= np.arcsin(
+                             min(1.0, CHORD_WOBBLE_PX / max(chord, 1.0))))})
 
     if not segs:
-        return [], _empty_summary("skeleton had no measurable branch", axis_deg)
+        return [], _empty_summary("skeleton had no measurable branch")
 
     L_all = np.array([s["length_px"] for s in segs])
     # Direction-dependent quantities use only branches long enough to HAVE a direction.
     keep = [s for s in segs if s["length_px"] >= MIN_DIRECTIONAL_PX]
     L = np.array([s["length_px"] for s in keep]) if keep else np.zeros(0)
     A = np.array([s["angle_deg"] for s in keep]) if keep else np.zeros(0)
-    rl = np.array([s["R_L"] for s in keep if s["R_L"] is not None], float)
-
-    # R_L is >= 1 by construction. A value below it means the length or the projection is
-    # wrong; this project shipped impossible sub-1 tortuosities once and must not again.
-    bad = int((rl < 0.999).sum()) if rl.size else 0
 
     # LENGTH-weighted rose over 12 bins of 15 deg. Length, not area: a rose weighted by area
     # is a rose weighted by width.
@@ -182,11 +201,15 @@ def skeleton_segments(mask, axis_deg=0.0):
     # How much of the skeleton the directional gate kept. A rose built on 8% of the length
     # is a different claim from one built on 80%.
     kept_share = float(L.sum() / L_all.sum()) if L_all.sum() else 0.0
-    # Lattice diagnostic on ALL branches: if this is high the skeleton, not the crack, is
-    # setting the directions.
-    rl_all = np.array([s["R_L"] for s in segs if s["R_L"] is not None], float)
-    lattice = (float(((np.abs(rl_all - np.sqrt(2)) < 1e-3) | (np.abs(rl_all - 1.0) < 1e-3)).mean())
-               if rl_all.size else None)
+    # Digitisation diagnostic on ALL branches: if this is high the skeleton, not the crack,
+    # is setting the directions. The share whose chord is indistinguishable from a lattice
+    # axis or diagonal, per the CHORD_WOBBLE_PX tolerance above -- so it is relative to the
+    # pixel grid and to nothing anyone declares. The version it replaces counted R_L near
+    # 1.0 or sqrt(2), which measured the same thing only while the declared axis sat on the
+    # lattice and collapsed by ~100x otherwise.
+    # NO THRESHOLD IS ATTACHED. Nothing consumes this; it is here to be read in the JSON.
+    lattice = (round(float(np.mean([s["chord_on_lattice"] for s in segs])), 4)
+               if segs else None)
 
     # Junction ORDER is counted per cluster, not per pixel. Counting pixels reported 3,074
     # junctions alongside "10,359 triple, 5,156 quad+" -- 15,515 pixels against 3,074
@@ -221,11 +244,7 @@ def skeleton_segments(mask, axis_deg=0.0):
         "min_directional_px": MIN_DIRECTIONAL_PX,
         "n_segments_directional": len(keep),
         "directional_length_share": round(kept_share, 4),
-        "lattice_locked_share_all_segments": (round(lattice, 4) if lattice is not None else None),
-        "R_L_median": (round(float(np.median(rl)), 4) if rl.size else None),
-        "R_L_n": int(rl.size),
-        "R_L_axis_deg": axis_deg,
-        "R_L_below_one": bad,
+        "lattice_chord_share_all_segments": lattice,
         "n_junctions": njunc,
         "n_triple": n_triple,
         "n_quadruple_plus": n_quad,

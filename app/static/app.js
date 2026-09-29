@@ -288,8 +288,6 @@ async function selectFrame(name) {
           ? `<span title="${esc(f.mcl_bracket_note || "")}">censored — ${fmt(f.largest_network_centreline_um_uncensored_only, 1)} µm if edge-touching regions are dropped</span><br>` : ""}` +
       `every branch of one connected network added together — a network size, not a crack length</span>`]] : []),
     ...(f.tcl_um ? [["Total length (TCL)", fmt(f.tcl_um, 0) + " µm"]] : []),
-    ["R_L median", f.R_L_median === null || f.R_L_median === undefined ? "—"
-      : `${fmt(f.R_L_median, 3)} <span class="muted">axis ${f.R_L_axis_deg}°, ${fmt(f.R_L_n_segments)} segments</span>`],
     ["Junctions", `${fmt(f.n_junctions)} <span class="muted">${fmt(f.n_triple)} triple, ${fmt(f.n_quadruple_plus)} quad+</span>`],
     // Weighted by LENGTH, because this caveat sits beside MCL and TCL. The count share
     // was the only one reported and it understates by ~5x in SEM and ~3x in TXM: a frame
@@ -531,8 +529,32 @@ function raBadge(ci, rec) {
     + "The usual target is 10% or better. " + (grad
       ? "These fields trend across one patch, so more tiles in the SAME patch will not "
         + "narrow it — more patches would."
-      : "Above it, the answer is more fields, not more decimals.");
+      : "Above it, more fields narrow the interval on this site — they do not make it "
+        + "comparable to another specimen.");
   return `<span class="ra${v > 10 ? " bad" : ""}" title="${esc(tip)}">±${v}%</span>`;
+}
+
+// THE MAGNIFICATION SPAN, because the card otherwise shows two field counts and no reason.
+// Four specimen-arms hold nine fields at 51.883 nm/px plus one overview at 337.2396, and
+// the interval is computed over the nine (see analysis/specimen_stats.py). Without this
+// row the header reads "10 fields" and the interval beside it reads "9 fields", which
+// looks like a bug rather than the rule it is. Rendered on single-magnification specimens
+// too: "all N fields at one scale" is part of what the interval claims.
+function magRow(r) {
+  const g = r.magnification_groups || [];
+  if (!g.length || g[0].nm_per_px == null) return null;
+  const det = g[0], off = g.slice(1);
+  const one = (x) => `${x.nm_per_px} <span class="u">nm/px · ${x.n_fields} field${x.n_fields === 1 ? "" : "s"} · resolves ${x.min_resolvable_width_um} µm</span>`;
+  if (!off.length) {
+    return ["Magnification", `${one(det)} <span class="u">· one scale</span>`];
+  }
+  const tip = "ASTM E562 fixes the magnification before the fields are counted: a coarser "
+    + "pixel is a coarser minimum resolvable width, so these estimate different "
+    + "populations and their mean is not a measurement of either. The excluded fields are "
+    + "still measured individually and still counted in the area analysed.";
+  return ["Magnification",
+    `${one(det)}<br><span class="flag" title="${esc(tip)}">not in the interval:</span> `
+    + off.map((x) => `${one(x)}, mean ${pct(x.area_fraction_mean)}`).join(" · ")];
 }
 
 function specimenCard(r) {
@@ -543,8 +565,8 @@ function specimenCard(r) {
   const dets = Object.entries(r.detectors || {}).map(([k, v]) => `${k} ${v}`).join(" · ");
   const rows = [
     ["Crack area fraction",
-     ci ? `<span class="big">${pct(ci.mean)}</span> <span class="ci">95% CI ${ciLo(ci)}–${pct(ci.ci95_hi)}, ${ci.n_fields} fields</span>${raBadge(ci, r)}`
-        : `<span class="big">${pct(r.area_fraction_median)}</span> <span class="ci">median of ${r.n_fields} field${r.n_fields > 1 ? "s" : ""} — under 3, no interval</span>`],
+     ci ? `<span class="big">${pct(ci.mean)}</span> <span class="ci">95% CI ${ciLo(ci)}–${pct(ci.ci95_hi)}, ${ci.n_fields} field${ci.n_fields === 1 ? "" : "s"}${ci.n_fields_off_determination ? ` at ${ci.nm_per_px} nm/px` : ""}</span>${raBadge(ci, r)}`
+        : `<span class="big">${pct(r.area_fraction_median)}</span> <span class="ci">${r.no_ci_reason && r.no_ci_reason.indexOf("split across magnifications") >= 0 ? `median of ${r.n_fields} fields — no single magnification has three` : `median of ${r.n_fields} field${r.n_fields > 1 ? "s" : ""} — under 3, no interval`}</span>`],
     ["P10", `${num(r.p10_min_per_mm)} <span class="u">/mm min</span> · ${num(r.p10_mean_per_mm)} <span class="u">/mm mean</span>`],
     ["P21 · P20", `${num(r.p21_skeleton_mm_per_mm2)} <span class="u">mm/mm²</span> · ${num(r.p20_per_mm2, 0)} <span class="u">/mm²</span>`],
     // null / 1000 is 0 in JavaScript, so an unscaled specimen was reporting "0.00 mm" of
@@ -554,6 +576,8 @@ function specimenCard(r) {
     ["MCL · TCL", `${num(r.mcl_um)} <span class="u">µm</span> · ${num(r.tcl_um_total == null ? null : r.tcl_um_total / 1000, 2)} <span class="u">mm</span>`],
     ["Largest network", `${num(r.largest_network_centreline_um)} <span class="u">µm centreline</span>`],
   ];
+  const mag = magRow(r);
+  if (mag) rows.push(mag);
   const extra = [
     ["Detector", `${dets}${ds ? ` · CBS/ETD <b>×${ds.cbs_over_etd_median}</b> <span class="u">on ${ds.n_fields_both_detectors} field${ds.n_fields_both_detectors > 1 ? "s" : ""} imaged both ways</span>` : ""}`],
   ];
@@ -572,12 +596,22 @@ function specimenCard(r) {
 }
 
 function specimenTable(rows) {
-  // All specimens: the comparison view. Six columns, sorted by the mean it is ranking on.
+  // All specimens: the comparison view. Six columns, in NAME order.
+  //
+  // It used to sort by the area fraction, under a comment saying so out loud -- which made
+  // this render path emit a ranking of the specimens at the same time as it emitted the
+  // refusal to rank them. Worse, the 11 records with no interval got ranked on a bare
+  // median. Every specimen here is one imaged site, so the site and the specimen variance
+  // are the same parameter and no ordering of these rows carries information (Hurlbert
+  // 1984). Name order is unconditional: there is no corpus state in which a default
+  // ranking is right. A sortable table, if ever wanted, is an explicit user control with a
+  // visible active column -- never the order the page opens in.
   const body = rows.slice().sort((a, b) =>
-    ((b.area_fraction_ci || {}).mean ?? b.area_fraction_median) -
-    ((a.area_fraction_ci || {}).mean ?? a.area_fraction_median)).map((r) => {
+    (a.specimen + "\u0000" + a.arm).localeCompare(b.specimen + "\u0000" + b.arm)).map((r) => {
     const ci = r.area_fraction_ci, ds = r.detector_sensitivity, as = r.arm_sensitivity;
-    return `<tr data-spec="${r.specimen}"><td title="${r.specimen}">${r.specimen}</td>` +
+    // esc on all three: specimen names are parsed out of filenames, and an uploaded file
+    // is the one string in this table a user controls.
+    return `<tr data-spec="${esc(r.specimen)}"><td title="${esc(r.specimen)}">${esc(r.specimen)}</td>` +
       `<td>${r.n_fields}<span class="u">${r.n_frames !== r.n_fields ? ` /${r.n_frames}f` : ""}</span></td>` +
       `<td>${pct(ci ? ci.mean : r.area_fraction_median)}</td>` +
       `<td>${ci ? `${ciLo(ci)}–${pct(ci.ci95_hi)}` : "<span class='u'>n&lt;3</span>"}</td>` +
@@ -686,6 +720,12 @@ function renderStrip(rec) {
        : `<span class="ci">no interval, ${rec.n_fields} field${rec.n_fields === 1 ? "" : "s"}</span>`,
     `<span class="u">${rec.n_fields} fields${rec.n_frames !== rec.n_fields ? ` / ${rec.n_frames} frames` : ""}</span>`,
   ];
+  // The strip prints the specimen's field count next to an interval computed over fewer
+  // of them. Unexplained, that is the app contradicting itself in its own headline.
+  if (rec.n_fields_off_determination) {
+    const g = (rec.magnification_groups || [])[0] || {};
+    bits.push(`<span class="banner" title="${esc((ci && ci.magnification_note) || "")} ASTM E562 fixes the magnification before the fields are counted, and this repo's own rule is that pooling frames of unequal physical area is the error the standards exist to prevent.">interval over ${g.n_fields} of ${rec.n_fields} fields · one magnification</span>`);
+  }
   if (ds && Math.abs(ds.cbs_over_etd_median - 1) > 0.2) {
     bits.push(`<span class="banner bad" title="CBS against ETD on ${ds.n_fields_both_detectors} fields imaged both ways. Detector is confounded with specimen here.">detector ×${ds.cbs_over_etd_median}</span>`);
   }
@@ -777,9 +817,7 @@ async function renderReadout() {
   const refusals = (d.refusals || []).length ? `
     <details class="refuse-all">
       <summary>Not determinable here: ${(d.refusals || []).map((r) =>
-        r.question.replace(/\?.*$/, "").replace(/^(Transgranular or intergranular)$/, "crack mode")
-         .replace(/^Ductile or brittle.*$/, "fracture mode").replace(/^Crack depth.*$/, "depth")
-         .toLowerCase()).join(" · ")}</summary>
+        esc(r.label || r.question)).join(" · ")}</summary>
       ${(d.refusals || []).map((r) => `
         <div class="refuse">
           <h4>${r.question}</h4>

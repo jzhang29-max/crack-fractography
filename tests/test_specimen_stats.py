@@ -158,3 +158,150 @@ def test_the_stage_gradient_is_computed_over_fields_not_frames():
     kept = S._one_frame_per_field(frames)
     assert len(kept) == 8, f"16 frames are 8 fields, got {len(kept)}"
     assert len({S.field_key(f["frame"]) for f in kept}) == 8
+
+
+# --- ONE MAGNIFICATION PER DETERMINATION ------------------------------------------------
+def _raster(n=9, nm=51.883, af=0.02, start=1, spec="MAR_X"):
+    """n fields at one scale, area fractions spread a little so s is non-zero."""
+    return [{"frame": f"{spec}_CBS_{i:04d}", "area_fraction": af + 0.001 * i,
+             "n_cracks_measured": 5, "crack_density_px_per_Mpx": 1.0,
+             "scale_known": True, "nm_per_px": nm}
+            for i in range(start, start + n)]
+
+
+def test_a_coarser_field_is_not_a_replicate_of_the_fine_ones():
+    """The failure: nine fields at 51.883 nm/px plus one overview at 337.2396 were averaged
+    into one E562 mean. A 6.5x coarser pixel is a 6.5x coarser minimum resolvable width, so
+    the two measure different populations -- and the overview's field of view is 10.6x a
+    fine field's while taking 1/10 of the weight, which E562's equal-area fields forbid on
+    its own."""
+    frames = _raster() + [{"frame": "MAR_X_CBS_0010", "area_fraction": 0.09,
+                           "n_cracks_measured": 5, "crack_density_px_per_Mpx": 1.0,
+                           "scale_known": True, "nm_per_px": 337.2396}]
+    r = S.summarise("sem/gated", "MAR_X", frames)
+    ci = r["area_fraction_ci"]
+    assert r["n_fields"] == 10, "the coarse field is still a field of this specimen"
+    assert ci["n_fields"] == 9, "but it is not in the determination"
+    assert ci["nm_per_px"] == pytest.approx(51.883)
+    assert ci["n_fields_off_determination"] == 1
+    assert ci["mean"] == pytest.approx(np.mean([f["area_fraction"] for f in frames[:9]]))
+    assert "337.2396" in ci["magnification_note"]
+
+
+def test_the_excluded_field_is_reported_not_silently_dropped():
+    """Dropping it from the mean is right; dropping it from the record is how a reader
+    stops being able to audit the interval. Both scales are on the card, with the detection
+    limit each implies, and single-magnification specimens carry the list too -- an
+    assertion recorded only when it fails cannot distinguish clean from unexamined."""
+    frames = _raster() + [{"frame": "MAR_X_CBS_0010", "area_fraction": 0.09,
+                           "n_cracks_measured": 5, "crack_density_px_per_Mpx": 1.0,
+                           "scale_known": True, "nm_per_px": 337.2396}]
+    g = S.summarise("sem/gated", "MAR_X", frames)["magnification_groups"]
+    assert [x["nm_per_px"] for x in g] == [51.883, 337.2396], "determination first"
+    assert [x["n_fields"] for x in g] == [9, 1]
+    assert [x["in_determination"] for x in g] == [True, False]
+    assert g[0]["min_resolvable_width_um"] == pytest.approx(0.0519, abs=1e-4)
+    assert g[1]["min_resolvable_width_um"] == pytest.approx(0.3372, abs=1e-4)
+    assert g[1]["area_fraction_mean"] == pytest.approx(0.09), (
+        "the excluded value must still be readable, not just counted")
+    # A clean specimen still says so.
+    solo = S.summarise("sem/gated", "MAR_X", _raster())["magnification_groups"]
+    assert len(solo) == 1 and solo[0]["in_determination"]
+
+
+def test_one_magnification_and_unscaled_specimens_are_untouched():
+    """Every 316 specimen has no recoverable nm/px at all. None is a real group, not a
+    missing one, so those intervals must come out byte-identical to the old pooled code."""
+    scaled = _raster(n=5)
+    unscaled = [dict(f, nm_per_px=None, scale_known=False) for f in scaled]
+    for frames in (scaled, unscaled):
+        r = S.summarise("sem/gated", "S", frames)
+        assert r["area_fraction_ci"]["n_fields"] == 5
+        assert r["area_fraction_ci"]["n_fields_off_determination"] == 0
+        assert "magnification_note" not in r["area_fraction_ci"]
+        assert r["area_fraction_ci"]["ci95_halfwidth"] == pytest.approx(
+            S._ci([f["area_fraction"] for f in frames])["ci95_halfwidth"])
+        assert r["no_ci_reason"] is None
+
+
+def test_a_scale_recorded_slightly_differently_is_still_one_determination():
+    """The corpus holds both 51.883 and 52.0 nm/px -- a 1.002x difference that is a
+    rounding convention, not a magnification change. Splitting on exact equality would
+    refuse an interval over fields that are plainly the same determination."""
+    frames = _raster(n=3) + _raster(n=3, nm=52.0, start=4)
+    r = S.summarise("sem/gated", "S", frames)
+    assert len(r["magnification_groups"]) == 1
+    assert r["area_fraction_ci"]["n_fields"] == 6
+    assert S.SAME_MAGNIFICATION < 337.2396 / 51.883, (
+        "the tolerance must still split the real 6.5x pair")
+
+
+def test_no_interval_when_no_magnification_group_reaches_three():
+    """The refusal, and it must not read as "too few images". This specimen has five
+    fields; what it lacks is three fields at ANY ONE scale, and a card saying "only 2
+    fields" about a five-field specimen sends the reader to acquire the wrong thing."""
+    frames = _raster(n=2) + _raster(n=3, nm=337.2396, start=3)
+    r = S.summarise("sem/gated", "S", frames)
+    assert r["n_fields"] == 5
+    # The largest group is the 337 one at n=3, so THIS specimen does get an interval...
+    assert r["area_fraction_ci"]["n_fields"] == 3
+    # ...but drop it to two and nothing reaches three.
+    frames = _raster(n=2) + _raster(n=2, nm=337.2396, start=3)
+    r = S.summarise("sem/gated", "S", frames)
+    assert r["n_fields"] == 4
+    assert r["area_fraction_ci"] is None
+    assert "split across magnifications" in r["no_ci_reason"]
+    assert "51.883" in r["no_ci_reason"] and "337.2396" in r["no_ci_reason"]
+    # Genuinely-too-few is still its own, different, silence.
+    assert S.summarise("sem/gated", "S", _raster(n=2))["no_ci_reason"] is None
+
+
+def test_the_gradient_is_computed_over_the_determination_too():
+    """stage.py's rank correlation had the same defect: one of its ten points was measured
+    at a 6.5x coarser detection limit, and that field's view spans much of the raster so it
+    has no position comparable to the others'."""
+    frames = _raster(n=6) + [{"frame": "MAR_X_CBS_0007", "area_fraction": 0.09,
+                              "n_cracks_measured": 5, "crack_density_px_per_Mpx": 1.0,
+                              "scale_known": True, "nm_per_px": 337.2396}]
+    seen = {}
+
+    import stage
+    real = stage.gradient
+    stage.gradient = lambda fs, **kw: seen.setdefault("n", len(fs))
+    try:
+        S.summarise("sem/gated", "MAR_X", frames)
+    finally:
+        stage.gradient = real
+    assert seen["n"] == 6, f"the 337 nm/px field must not reach stage.gradient, got {seen}"
+
+
+def test_the_corpus_values_this_rule_was_written_for():
+    """Pinned against the real dataset, because the rule was found in it and a synthetic
+    fixture cannot catch the day the ingest starts filing the overview differently.
+
+    117.9% was not the app's worst SEM number -- MAR_Amb_AS is 138.0% and has no
+    recoverable scale at all -- but it was the worst among the specimens this rule touches,
+    and it was substantially one 337.2396 nm/px frame."""
+    import json
+    here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    out = os.path.join(here, "analysis", "out", "frames.json")
+    if not os.path.exists(out):
+        pytest.skip("no dataset built")
+    fr = json.load(open(out))
+    want = {"MAR_AmbB_AS": 62.0, "MAR_AmbB_HIP": 84.2, "MAR_H_AS": 49.1, "MAR_H_HIP": 93.0}
+    for arm in ("sem/gated", "sem/machine"):
+        for spec, ra in want.items():
+            frames = [f for f in fr if f["arm"] == arm and f["specimen"] == spec]
+            if not frames:
+                continue
+            r = S.summarise(arm, spec, frames)
+            ci = r["area_fraction_ci"]
+            assert ci["n_fields"] == 9, f"{arm} {spec}: 10 fields, 9 at the modal scale"
+            assert ci["n_fields_off_determination"] == 1
+            assert ci["nm_per_px"] == pytest.approx(51.883)
+            assert ci["pct_relative_accuracy"] == pytest.approx(ra, abs=0.05), (
+                f"{arm} {spec}: pooling the 337.2396 nm/px overview back in would give "
+                f"53.0/117.9/42.4/81.7")
+            # The overview is still on the record, with its own value.
+            off = [g for g in r["magnification_groups"] if not g["in_determination"]]
+            assert len(off) == 1 and off[0]["nm_per_px"] == pytest.approx(337.2396)

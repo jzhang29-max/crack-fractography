@@ -91,18 +91,65 @@ def test_length_trust_fires_only_on_a_real_disagreement():
 
 
 # --- specimen level ----------------------------------------------------------------
-def test_relative_accuracy_failure_is_stated_as_unrankable():
+def test_relative_accuracy_failure_is_stated_against_the_e562_target():
     r = {"area_fraction_ci": {"pct_relative_accuracy": 138.0, "n_fields": 6,
                               "ci95_lo_clamped": True}, "n_fields": 6}
     out = texts(C.for_specimen(r))
-    assert "too coarse to rank" in out
+    assert "wider than E562" in out
     assert "below zero" in out
+    # It must NOT speak about ranking. Relative accuracy is a within-patch precision
+    # statistic with no between-specimen term, and gating the word "rank" on ra > 10
+    # taught the reader that a narrower interval earns a comparison.
+    assert "rank this specimen" not in out
 
 
-def test_a_good_interval_makes_no_complaint():
+def test_a_good_interval_makes_no_precision_complaint():
     r = {"area_fraction_ci": {"pct_relative_accuracy": 6.0, "n_fields": 12,
                               "ci95_lo_clamped": False}, "n_fields": 12}
-    assert "too coarse" not in texts(C.for_specimen(r))
+    assert "precision target" not in texts(C.for_specimen(r))
+
+
+# --- ranking. Unconditional on precision, because precision is not what is missing ---
+def test_ranking_is_refused_however_narrow_the_interval():
+    tight = {"area_fraction_ci": {"pct_relative_accuracy": 6.0, "n_fields": 12,
+                                  "ci95_lo_clamped": False}, "n_fields": 12,
+             "specimen": "MAR_H_AS", "arm": "sem/gated"}
+    assert "Ranking specimens is not supported" in texts(C.for_specimen(tight))
+
+
+def test_ranking_is_refused_with_no_interval_at_all():
+    """The eleven thinnest records carry no interval and were still being ordered by their
+    bare median in the comparison table, so this is exactly where the refusal must fire."""
+    thin = {"area_fraction_median": 0.013, "n_fields": 2,
+            "specimen": "MAR_Amb_Cast", "arm": "sem/gated"}
+    assert "Ranking specimens is not supported" in texts(C.for_specimen(thin))
+
+
+def test_the_ranking_refusal_quotes_no_number_and_no_unit():
+    """Basis and hedge render on screen OUTSIDE the fifteen-word assert. A refusal to
+    compare that ships figures beside itself hands the reader the comparison back."""
+    r = {"area_fraction_median": 0.013, "n_fields": 2, "specimen": "MAR_H_HIP"}
+    st = [s for s in C.for_specimen(r) if s["text"].startswith("Ranking specimens")][0]
+    body = (st["basis"] or "") + " " + (st.get("hedge") or "")
+    assert not any(c.isdigit() for c in body), body
+    assert not any(u in body for u in ("µm", "mm", "nm/px", "%", "×")), body
+
+
+def test_a_second_imaged_site_switches_the_ranking_refusal_off():
+    """n_patches >= 2 is the off-switch, and it must be reachable without a code edit."""
+    r = {"area_fraction_median": 0.013, "n_fields": 12, "specimen": "MAR_H_AS"}
+    assert "Ranking specimens is not supported" in texts(C.for_specimen(dict(r, n_patches=1)))
+    assert "Ranking specimens is not supported" in texts(C.for_specimen(dict(r, n_patches=None)))
+    assert "Ranking specimens is not supported" not in texts(
+        C.for_specimen(dict(r, n_patches=2)))
+
+
+def test_uploads_are_not_told_they_cannot_be_ranked():
+    """They already say something stronger: they are not one specimen at all."""
+    from specimen_stats import PSEUDO_SPECIMEN
+    r = {"specimen": PSEUDO_SPECIMEN, "area_fraction_median": 0.02, "n_fields": 4,
+         "no_ci_reason": "uploaded images are unrelated"}
+    assert "Ranking specimens is not supported" not in texts(C.for_specimen(r))
 
 
 def test_the_detector_effect_is_never_a_footnote():
@@ -164,8 +211,9 @@ def test_the_field_tally_counts_fields_not_frames():
 
 # --- the spatial gradient, and what it does to the advice ---------------------------
 GRAD = {"significant": True, "spearman_rho": 0.755, "p_value": 0.00012,
-        "axis": "stage_y", "n_frames_with_position": 20, "n_stage_rows": 10,
-        "row_mean_ratio": 5.3, "note": "E562 presumes fields placed over a surface."}
+        "axis": "stage_y", "n_frames_with_position": 9,
+        "n_distinct_stage_coords": 9,
+        "field_max_min_ratio": 5.3, "note": "E562 presumes fields placed over a surface."}
 
 
 def test_a_spatial_gradient_is_stated():
@@ -174,12 +222,21 @@ def test_a_spatial_gradient_is_stated():
     assert "not independent" in out and "5×" in out
 
 
+def test_the_gradient_basis_does_not_claim_a_row_count():
+    """It said "in 9 stage rows" for a 3x3 raster: rows are grouped on the raw coordinate
+    and the nine fields differ in the sixth decimal, so each was its own row."""
+    out = C.for_specimen({"n_fields": 10, "stage_gradient": GRAD})
+    basis = [s for s in out if "not independent" in s["text"]][0]["basis"]
+    assert "stage row" not in basis, basis
+    assert "9 fields" in basis, basis
+
+
 def test_a_gradient_suppresses_the_measure_more_fields_advice():
     """More tiles in the SAME patch cannot narrow an interval that is tracking a trend, so
     the standard remedy becomes wrong advice exactly when the gradient fires."""
-    ci = {"pct_relative_accuracy": 81.7, "n_fields": 10, "ci95_lo_clamped": False}
-    flat = C.for_specimen({"n_fields": 10, "area_fraction_ci": ci})
-    grad = C.for_specimen({"n_fields": 10, "area_fraction_ci": ci, "stage_gradient": GRAD})
+    ci = {"pct_relative_accuracy": 93.0, "n_fields": 9, "ci95_lo_clamped": False}
+    flat = C.for_specimen({"n_fields": 9, "area_fraction_ci": ci})
+    grad = C.for_specimen({"n_fields": 9, "area_fraction_ci": ci, "stage_gradient": GRAD})
     hedges = lambda o: " ".join(s["hedge"] or "" for s in o)
     assert "remedy is more fields" in hedges(flat)
     assert "remedy is more fields" not in hedges(grad)
@@ -399,3 +456,31 @@ def test_the_accuracy_badge_is_never_rendered_without_its_record():
             if name not in params and f"({name})" not in js and f"let {name}" not in js:
                 bad.append(f"{fn}: passes {name!r}, which is not a parameter of it")
     assert not bad, "raBadge called with an out-of-scope record: " + "; ".join(bad)
+
+
+def test_the_basis_says_which_fields_the_interval_used():
+    """A specimen holding 10 fields whose interval covers 9 must say why, in the basis, at
+    the number. "over 9 fields" on a 10-field card reads as a miscount; the reason is that
+    E562 fixes the magnification before the fields are counted and the tenth field is an
+    overview at a 6.5x coarser pixel."""
+    ci = {"pct_relative_accuracy": 93.0, "n_fields": 9, "ci95_lo_clamped": False,
+          "nm_per_px": 51.883, "n_fields_off_determination": 1}
+    basis = " ".join(s["basis"] or "" for s in
+                     C.for_specimen({"n_fields": 10, "area_fraction_ci": ci}))
+    assert "over 9 fields at 51.883 nm/px" in basis
+    assert "excluding 1 field" in basis and "coarser pixel" in basis
+    # A single-magnification specimen says nothing extra -- the clause is not boilerplate.
+    clean = dict(ci, n_fields_off_determination=0)
+    basis = " ".join(s["basis"] or "" for s in
+                     C.for_specimen({"n_fields": 9, "area_fraction_ci": clean}))
+    assert "over 9 fields." in basis and "excluding" not in basis
+
+
+def test_every_refusal_carries_a_short_label():
+    """The summary line used to derive its labels from the questions with a chain of
+    regexes, one per refusal, so a new refusal leaked its whole question onto a line the
+    user reads before deciding to expand it. The label lives on the record instead."""
+    for r in C.REFUSALS:
+        assert r.get("label"), r["question"]
+        assert len(r["label"].split()) <= 3, r["label"]
+        assert "?" not in r["label"]

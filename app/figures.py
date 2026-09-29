@@ -37,7 +37,6 @@ FIELDS = {
     "mcl_um":                   ("Longest crack (MCL)", "µm", 1.0, ""),
     "largest_network_centreline_um": ("Largest network centreline", "µm", 1.0, ""),
     "tcl_um":                   ("Total crack length (TCL)", "µm", 1.0, ""),
-    "R_L_median":               ("R_L (median)", "", 1.0, ""),
     "mean_width_px_median":     ("Median mean-width", "px", 1.0, ""),
     "n_junctions":              ("Junctions", "", 1.0, ""),
     "censored_share":           ("Area touching frame edge", "", 100.0, "%"),

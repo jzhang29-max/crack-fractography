@@ -90,8 +90,9 @@ def main():
           r is not None and r["weighted_by"] == "segment length"
           and max(r["area_share"]) > 0.5,
           f"weighted_by={r and r['weighted_by']}")
-    check("tortuosity is gone from the frame summary, replaced by R_L on a declared axis",
-          "tortuosity_median" not in s and "R_L_median" in s and "R_L_axis_deg" in s)
+    check("no path-roughness field is in the frame summary: not tortuosity, not R_L",
+          not [k for k in s if "tortuosity" in k.lower() or k.startswith("R_L")],
+          f"{[k for k in s if 'tortuosity' in k.lower() or k.startswith('R_L')]}")
     check("Pij densities are labelled with their subscripts",
           "p21_skeleton_mm_per_mm2" in s2 and "p20_per_mm2" in s2 and "p20_edge_rule" in s2)
     check("the ISO 643 edge rule is named in the output, not just applied",

@@ -43,8 +43,9 @@ def test_every_segment_field_reaches_the_frame_record():
     seg = skeleton_segments(m)[1]
     rec = measure_frame(m, "probe", "sem")[1]
     reachable = _reachable(rec)
-    # A handful are deliberately renamed on the way out; anything else must be reachable.
-    RENAMED = {"R_L_n": "R_L_n_segments"}
+    # Nothing is renamed on the way out any more -- the one entry here was R_L_n, and R_L
+    # is deleted. Reintroducing a rename means reintroducing this map, on purpose.
+    RENAMED = {}
     stranded = sorted(k for k in seg
                       if k not in reachable and RENAMED.get(k) not in reachable)
     assert not stranded, (

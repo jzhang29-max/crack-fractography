@@ -19,9 +19,10 @@ ETD, the paired median ratio is:
     n_junctions             3.071  (p = 2.1e-6)                  <- rejected outright
 
 So junction density cannot carry a conclusion here: it moves threefold depending on which
-detector looked at the same piece of metal. Tortuosity/R_L is rejected for a different
-reason -- a mathematically straight line measures 1.048 through this pipeline and R_L's
-corpus median of 1.4142 is exactly sec(45 deg), which IS the isotropy null. Width-length
+detector looked at the same piece of metal. Tortuosity and R_L were rejected for a
+different reason and are no longer computed at all (REFUSALS below, and segments.py):
+R_L's corpus median WAS exactly 1.4142 = sec(45 deg), which is the isotropy null, a
+lattice diagonal and a straight 45-degree crack at once. Width-length
 scaling is rejected as algebra: MeanWidth is defined as Area/Length, so its slope is the
 area slope minus one.
 
@@ -227,6 +228,16 @@ def for_frame(f):
     return out
 
 
+def _mag_clause(ci):
+    """" at X nm/px, excluding N field(s) at a different scale" -- or nothing at all."""
+    n = (ci or {}).get("n_fields_off_determination") or 0
+    if not n:
+        return ""
+    return (f" at {ci.get('nm_per_px')} nm/px, excluding {n} field"
+            f"{'' if n == 1 else 's'} acquired at a coarser pixel, whose minimum "
+            f"resolvable crack width is different")
+
+
 # ---------------------------------------------------------------------------------------
 # Specimen-level read-out.
 def for_specimen(r, frames=None):
@@ -243,10 +254,19 @@ def for_specimen(r, frames=None):
         ra = ci.get("pct_relative_accuracy")
         if ra is not None and ra > E562_RA_TARGET:
             out.append(_s(
-                f"±{ra:.0f}%: too coarse to rank this specimen.",
+                # NOT "too coarse to rank this specimen". Relative accuracy is a
+                # within-patch precision statistic with no between-specimen term, so it
+                # cannot speak to ranking either way, and gating that word on ra > 10
+                # taught the reader that a narrower interval buys a comparison. It does
+                # not: see the ranking refusal below, which is unconditional on width.
+                f"±{ra:.0f}%: wider than E562's ±{E562_RA_TARGET:.0f}% precision target.",
                 f"ASTM E562-19e1 95% CI from between-field variance over {ci['n_fields']} "
-                f"fields. E562's usual target is ±{E562_RA_TARGET:.0f}%, and nothing in "
-                f"this arm reaches it.",
+                # WHICH fields, when the specimen holds more than the interval used. E562
+                # fixes the magnification before the fields are counted, so an overview at
+                # a coarser pixel is not a replicate of the fine fields; saying "over 9
+                # fields" on a 10-field specimen without saying why reads as a miscount.
+                f"fields{_mag_clause(ci)}. E562's usual target is "
+                f"±{E562_RA_TARGET:.0f}%, and nothing in this arm reaches it.",
                 # "0 of 22" pooled all four arms, which is the one thing this app refuses
                 # to do anywhere else: the arms are different instruments, or different
                 # definitions of the object. Per arm the count is 0 of 9.
@@ -276,16 +296,48 @@ def for_specimen(r, frames=None):
             "something; below three the interval is unstable enough to mislead.",
             level="warn"))
 
+    # --- RANKING. The comparison table puts these specimens in one list, so the question
+    # "which is worse" is asked by the layout whether or not any sentence invites it.
+    #
+    # It is not answerable here and no amount of measuring makes it so, which is why this
+    # is unconditional on the interval's width and on the interval existing at all. Each
+    # specimen was imaged at ONE site, so the between-field and the between-specimen
+    # variance are the same component and nothing in the data separates them. It fires on
+    # 33 of 34 records -- every specimen-arm except uploads, including the eleven thin
+    # ones that carry no interval and were, until this release, silently ordered by their
+    # bare median. n_patches >= 2 switches it off with no code edit; nothing reaches that
+    # today. NO DIGIT AND NO UNIT below the headline: the basis and hedge render outside
+    # the fifteen-word assert, and a refusal to compare that ships two numbers beside
+    # itself hands the reader the comparison back.
+    from specimen_stats import PSEUDO_SPECIMEN  # local, as everywhere else in this file
+    if (r.get("specimen") != PSEUDO_SPECIMEN
+            and (ci is not None or r.get("area_fraction_median") is not None)
+            and (r.get("n_patches") is None or r["n_patches"] < 2)):
+        out.append(_s(
+            "Ranking specimens is not supported by this sampling design.",
+            "each specimen here was imaged at a single site, so the scatter between its "
+            "fields and the difference between specimens are the same variance "
+            "component, and no test on these data can separate them -- spatial "
+            "pseudoreplication in Hurlbert's sense.",
+            hedge="A second imaged site on a specimen would make the question "
+                  "answerable. Until then a narrower interval buys precision on the one "
+                  "site, not a comparison with any other specimen.",
+            level="warn"))
+
     # --- SPATIAL GRADIENT. Are these fields a sample, or a raster across one patch? ---
     if grad_fires:
-        rr = grad.get("row_mean_ratio")
+        rr = grad.get("field_max_min_ratio")
         out.append(_s(
             (f"Cracking varies {rr:.0f}× across this patch; fields are not independent."
              if rr else
              "Cracking trends across this patch; fields are not independent."),
             f"Spearman rho = {grad['spearman_rho']:+.3f}, p = {grad['p_value']:.5f} against "
-            f"{grad['axis'].replace('_', ' ')} over {grad['n_frames_with_position']} frames "
-            f"in {grad['n_stage_rows']} stage rows. {grad['note']}",
+            # NO ROW COUNT. It used to say "in 9 stage rows" for a 3x3 raster: rows are
+            # grouped on the raw coordinate and the nine fields differ in the sixth
+            # decimal, so each was its own row. The headline is unaffected -- max field
+            # over min field IS a spread across the patch, and it never claimed rows.
+            f"{grad['axis'].replace('_', ' ')} over {grad['n_frames_with_position']} "
+            f"fields. {grad['note']}",
             hedge="The interval above is then describing a spatial trend rather than "
                   "sampling error, so more tiles in the SAME patch will not narrow it. "
                   "Stage units are the instrument's and are not asserted to be "
@@ -369,6 +421,7 @@ def for_specimen(r, frames=None):
 REFUSALS = [
     {
         "question": "Transgranular or intergranular?",
+        "label": "crack mode",
         "answer": "Not determinable from a crack mask.",
         "why": "The distinction is defined by the crack path's relationship to GRAIN "
                "BOUNDARIES, so the boundaries have to be visible and co-registered with "
@@ -408,7 +461,39 @@ REFUSALS = [
                     "austenitic stainless -- the same scale this app measures.",
     },
     {
+        "question": "How rough is the crack path? (R_L, tortuosity)",
+        "label": "path roughness",
+        "answer": "R_L needs a declared axis; against the raster it is sec(angle).",
+        "why": "Quantitative fractography's R_L is true length over length projected on a "
+               "DECLARED specimen axis -- loading, transverse, build. This app has nowhere "
+               "to declare one, and the R_L column it shipped until now had its axis "
+               "defaulted to the image x-raster on all 356 frames, never once set. Against "
+               "a fixed image axis the projection is the chord times cos(angle), so the "
+               "ratio reduces to (length/chord) x sec(angle) -- an identity, not a "
+               "measurement of the material. Its corpus median AND upper quartile were "
+               "both exactly 1.4142, and sec(45 deg) is simultaneously a pixel-lattice "
+               "diagonal, a straight 45-degree crack and the isotropic expectation, three "
+               "states the number cannot separate. The predecessor, tortuosity, was "
+               "retired for a different reason: its 2-endpoint gate described 2.6% of the "
+               "crack area here and none of the TXM regions, and it once produced "
+               "impossible sub-one values.",
+        "would_need": [
+            "A declared loading or transverse axis per specimen, recorded with the "
+            "specimen rather than defaulted to the image raster.",
+            "Then prefer the rose: it already answers the orientation question with a "
+            "per-frame permutation null, and re-expressing its angle against a declared "
+            "axis re-expresses a tested number instead of adding an untested one.",
+        ],
+        "not_this": "The image raster as a stand-in for the specimen axis. That is what "
+                    "produced the deleted column, and it also makes the number track the "
+                    "digitisation: a third of skeleton branches have a chord lying exactly "
+                    "on a lattice axis or diagonal. Nor is a per-crack path/chord ratio a "
+                    "substitute -- it measures a crack against itself and is undefined for "
+                    "a branched one, which is most of the crack area here.",
+    },
+    {
         "question": "Ductile or brittle? Dimples, cleavage, striations?",
+        "label": "fracture mode",
         "answer": "Wrong image type.",
         "why": "Those are grayscale texture on a FRACTURE surface. This corpus is "
                "polished-section plan views, and the input here is a binary mask.",
@@ -418,6 +503,7 @@ REFUSALS = [
     },
     {
         "question": "Crack depth, or aspect ratio a/c?",
+        "label": "depth",
         "answer": "Needs a section geometry this app does not have.",
         "why": "Depth needs a defined free surface and a cross-section. A 2D inertia-ellipse "
                "ratio is an unrelated number a materials reader would misread as a/c.",

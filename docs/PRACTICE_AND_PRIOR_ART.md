@@ -43,8 +43,10 @@ Falls straight out of item 2: mean spacing along θ = 1/P10(θ). Report at the �
 **7. Length-weighted, per-SEGMENT orientation rose** — *common; replaces the current rose outright.*
 Split the skeleton at junctions; one angle per segment (endpoint-to-endpoint chord), weight by segment length. Convention from Le Roux et al. (*Micron* 2013): features are measured on crack **branches**. *Naive failure:* all three are in the code today — the angle is the second-moment major axis of a whole connected component (noise for a branched network, arbitrary for a 4-way junction), the weight is **area** (so it is a width-weighted rose: one short wide crack outvotes a long thin one), and there is no Terzaghi 1/|cos θ| weighting, which you will need the moment item 2's directional sampling lands.
 
-**8. R_L = true length / projected length on a DECLARED axis** — *common; replaces tortuosity.*
+**8. R_L = true length / projected length on a DECLARED axis** — *common in the literature; **NOT SHIPPED**, see the note at the end of this item.*
 Quantitative fractography's roughness parameter (Underwood & Banerji, *Metall. Mater. Trans. A*, doi:10.1007/BF02698249 / BF02656538); fatigue usage projects the main crack on the specimen's transverse direction (Ma et al., *Materials* 8:11, 2015, doi:10.3390/ma8115388). Defined for **any** profile — no 2-endpoint gate. Per segment, and per region on its longest skeleton path. The axis must be a stated input (default: image x; the user must be able to set it per arm). *Naive failure:* the current path÷chord-between-2-endpoints definition projects on the crack's own chord, not a fixed specimen axis, and its gate throws away exactly the branched cracks that hold 97.4% of the area here. R_L ≥ 1 by construction — keep a hard assert; this project has already shipped impossible sub-1 tortuosities.
+
+**Not shipped, on purpose (2026-09-28).** This was built, shipped, and then removed. The axis input was never wired to a control, so `R_L_axis_deg` was `0.0` on all 356 frames. Against a fixed image axis the projection is `chord·cos θ`, so the column reduces to `(length/chord)·sec θ` — an identity, not a measurement — and its corpus median *and* upper quartile were both exactly 1.4142, where sec(45°) is at once a pixel-lattice diagonal, a straight 45° crack and the isotropic expectation. It also ran −0.78/−0.83/−0.45 against `rose_R`, which answers the same question *with* a per-frame permutation null. The app now states the refusal (`conclusions.REFUSALS`) instead of printing the number. A declared axis would go on the rose, not here.
 
 **9. Junction density per mm², split triple / quadruple, plus characteristic length** — *common; replaces the raw count.*
 CFL = total centreline length / junctions (DiameterJ); triple vs quadruple classification is AnalyzeSkeleton's, 2008. *Naive failure:* `branch_points_total` as a raw per-frame count is a function of field size. And skeletonisation manufactures junctions: a true 4-way crossing is usually two adjacent 3-way nodes.
@@ -71,7 +73,8 @@ Same transition table. **State the assumption on screen:** 2·P_L estimates S_V 
 
 | Now | Action | Why |
 |---|---|---|
-| `Tortuosity`, `tortuosity_median`, `tortuosity_n_defined` | **Drop.** Replaced by R_L (#8) | Describes 2.6% of gated crack area and 0.0% of TXM. Also the wrong definition. |
+| `tortuosity_median`, `tortuosity_n_defined` | **Dropped** from the frame summary. R_L replaced them and was itself removed (#8); nothing replaces either. | Described 2.6% of gated crack area and 0.0% of TXM. Also the wrong definition. |
+| `Tortuosity` (per-crack column) | **Kept.** Still ships on all 60,893 crack rows and in every crack-level CSV. | Per crack it is what the column says it is. Separate known defect: 31,838 of those values are the empty string rather than a number. |
 | Area-weighted per-component rose (`_rose`) | **Replace** with #7 | Wrong weight, wrong unit of analysis. |
 | `crack_density_px_per_Mpx` | **Demote to CSV**, headline becomes P21 mm/mm² | Magnification-dependent; comparable to nothing published. |
 | `branch_points_total` | **Replace** with junction density /mm² + triple/quad | Field-size dependent. |
@@ -128,7 +131,7 @@ Rule: the primary screen answers "how much cracking, measured over how much mate
 
 **Behind "Details" (one disclosure on the frame card, closed by default)**
 
-- Per-crack table (ID, area, length, mean width, R_L, censored) — 6 columns, was 11
+- Per-crack table (ID, area, length, mean width, censored) — no R_L: it was never a per-crack column, and it is no longer a frame one either
 - Section size distribution, relabelled
 - Junction density, triple/quad split, characteristic length
 - S_V with its isotropy assumption printed next to it

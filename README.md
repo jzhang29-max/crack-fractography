@@ -120,8 +120,62 @@ unchanged that would have collapsed all 71 TXM frames into one "specimen" and av
 materials together, so `scale.txm_specimen_key()` parses them instead.
 
 Frames within a specimen are **not independent**: on the 2026-09-15 batch the nine fields per
-cell tile a 3×3 grid over ~1.2 × 1.1 mm of one specimen. The specimen is the inferential unit;
-`estimable_dispersion` marks the 11 specimen-arms holding fewer than three frames.
+cell sit on a 3×3 stage raster on one small patch of one specimen — centre-to-centre about
+1.5 field widths across, so they do not touch. No extent in millimetres is stated here or
+on screen: `analysis/stage.py` does not assert that the instrument's stage unit is the
+metre. The specimen is the inferential unit;
+`estimable_dispersion` marks the 12 specimen-arms whose modal magnification holds fewer than
+three fields.
+
+**One magnification per E562 determination.** Four specimen-arms — `MAR_AmbB_AS`,
+`MAR_AmbB_HIP`, `MAR_H_AS`, `MAR_H_HIP`, identically in both SEM arms — hold a tenth field
+that is a single overview at 337.2396 nm/px beside the raster's nine at 51.883. A 6.5×
+coarser pixel is a 6.5× coarser minimum resolvable width, and the overview's field of view is
+10.6× a fine field's while taking 1/10 of the weight in a ten-field mean, so it is not a
+replicate of the nine. The interval and the stage gradient are computed over the modal
+magnification group only and refuse when no group reaches three fields; every scale is listed
+in `magnification_groups` on the record, and the excluded field is still measured on its own
+and still counted in the area analysed. This moved the reported relative accuracy 53.0→62.0,
+117.9→84.2, 42.4→49.1 and 81.7→93.0 percent — three of four **worse**, which is why it was
+not a cleanup. The app's worst SEM relative accuracy is `MAR_Amb_AS` at 138.0%, which has no
+recoverable scale at all and is untouched by this.
+
+**Specimens are not ranked, and the app says so.** One site per specimen makes the
+between-field and the between-specimen variance the same component, so no ordering of these
+specimens is estimable at all — spatial pseudoreplication in Hurlbert's sense (1984). Three
+consequences, shipped together:
+
+* The comparison table is sorted by **name**. It used to sort by area fraction, under a
+  comment saying so, which made one render path emit a ranking and the refusal to rank in
+  the same paint; the 11 records with no interval were ordered on a bare median. Name order
+  is unconditional — a sortable table would need to be an explicit control with a visible
+  active column, never the order the page opens in.
+* A standing statement, `Ranking specimens is not supported by this sampling design.`, on
+  33 of 34 specimen-arms. Not gated on relative accuracy and not on the interval existing:
+  a specimen at ±6% from one site is exactly as unrankable as one at ±138%. It switches off
+  when `n_patches ≥ 2`, which nothing reaches today and no code edit is needed to reach.
+* Relative accuracy no longer says "too coarse to rank this specimen" — it says
+  `wider than E562's ±10% precision target`, which is what it measures. The old wording
+  taught the reader that driving RA under 10% would earn a comparison.
+
+**No path-roughness read-out.** `R_L` shipped for several releases and is now deleted, not
+fixed. It is true length over length projected on a **declared** specimen axis, and this app
+has nowhere to declare one: `R_L_axis_deg` was `0.0` on all 356 frames. Against a fixed image
+axis the projection is `chord·cos θ`, so the column reduced to `(length/chord)·sec θ` — an
+identity rather than a measurement — and its corpus median *and* upper quartile were both
+exactly 1.4142, where `sec(45°)` is simultaneously a pixel-lattice diagonal, a straight 45°
+crack and the isotropic expectation. It also ran −0.78 / −0.83 / −0.45 against `rose_R`,
+which answers the same question and carries a per-frame permutation null. The frame row, the
+figure axis and the CSV columns are gone; `conclusions.REFUSALS` states the removal rather
+than printing an em-dash. Its predecessor, tortuosity, left the frame summary earlier for a
+different reason (a 2-endpoint gate describing 2.6% of gated crack area and none of TXM) —
+but `Tortuosity` **remains** a per-crack column on all 60,893 rows.
+
+The axis-dependent lattice diagnostic went with it, replaced by
+`lattice_chord_share_all_segments`: the share of skeleton branches whose end-to-end chord is
+indistinguishable from a lattice axis or diagonal, within the angle two pixels of endpoint
+wobble subtend over that chord. 0.37–0.67 on real frames, 1.0 on a field of 5 px stubs. No
+threshold is attached to it and nothing consumes it; it is there to be read.
 
 ## Layout
 

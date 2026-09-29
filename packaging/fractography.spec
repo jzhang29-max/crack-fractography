@@ -128,7 +128,7 @@ if MACOS:
     app = BUNDLE(coll, name="Crack Fractography.app",
                  icon=None, bundle_identifier="edu.stanford.crack-fractography",
                  info_plist={
-                     "CFBundleShortVersionString": "1.4.0",
+                     "CFBundleShortVersionString": "1.5.1",
                      "NSHighResolutionCapable": True,
                      # It has a window, so it belongs in the Dock and quits like an app.
                      "LSBackgroundOnly": False,

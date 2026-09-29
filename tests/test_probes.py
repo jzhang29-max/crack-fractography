@@ -52,22 +52,43 @@ def main():
     check("an empty mask does not raise and says so",
           line_probe(np.zeros((50, 50), bool)).get("note") is not None)
 
-    # --- segments: R_L geometry and the lattice gate -----------------------------------
+    # --- segments: the digitisation diagnostic, and the metric that is NOT here --------
     sys.path.insert(0, os.path.join(os.path.dirname(_H), "analysis"))
     from segments import skeleton_segments, MIN_DIRECTIONAL_PX
 
     bar = np.zeros((200, 400), bool); bar[100:103, 40:360] = True
-    _, sb = skeleton_segments(bar, axis_deg=0.0)
-    check("R_L of a straight on-axis bar is 1", abs(sb["R_L_median"] - 1.0) < 0.01,
-          f"{sb['R_L_median']}")
+    _, sb = skeleton_segments(bar)
 
     dia = np.zeros((300, 300), bool)
     for i in range(30, 270): dia[i - 1:i + 2, i - 1:i + 2] = True
-    _, sd = skeleton_segments(dia, axis_deg=0.0)
-    check("R_L of a 45-degree bar is sqrt(2)", abs(sd["R_L_median"] - 2 ** 0.5) < 0.02,
-          f"{sd['R_L_median']}")
-    check("R_L is never below 1, which a pixel-count numerator once made possible",
-          sb["R_L_below_one"] == 0 and sd["R_L_below_one"] == 0)
+    _, sd = skeleton_segments(dia)
+
+    # R_L is gone, not renamed. It needed a declared axis, this app has none, and against
+    # the image raster it was the identity (length/chord) x sec(angle) -- median AND upper
+    # quartile both exactly sec(45 deg) over the corpus. The keys must not come back.
+    GONE = ("R_L_median", "R_L_n", "R_L_axis_deg", "R_L_below_one",
+            "lattice_locked_share_all_segments")
+    check("no R_L field survives anywhere in a segment summary",
+          not [k for k in GONE if k in sb or k in sd],
+          f"{[k for k in GONE if k in sb or k in sd]}")
+
+    # The replacement is axis-invariant: an exact integer test on the chord endpoints.
+    # Both lattice controls read 1.0 -- and the DECOY is what makes that mean anything,
+    # since a function returning 1.0 unconditionally would pass the first two.
+    check("a horizontal bar's chords are all on the lattice",
+          sb["lattice_chord_share_all_segments"] == 1.0,
+          f"{sb['lattice_chord_share_all_segments']}")
+    check("a 45-degree bar's chords are all on the lattice",
+          sd["lattice_chord_share_all_segments"] == 1.0,
+          f"{sd['lattice_chord_share_all_segments']}")
+    off = np.zeros((320, 320), bool)
+    for x in range(20, 300):                      # slope 1/3: neither axis nor diagonal
+        y = 20 + (x - 20) // 3
+        off[y - 1:y + 2, x - 1:x + 2] = True
+    _, so = skeleton_segments(off)
+    check("an off-lattice line does NOT count as lattice-locked",
+          so["lattice_chord_share_all_segments"] < 0.5,
+          f"{so['lattice_chord_share_all_segments']}")
 
     check("the rose is weighted by segment length, not component area",
           sb["rose_weighted_by"] == "segment length")
@@ -78,15 +99,20 @@ def main():
     for _ in range(300):
         y, x = rng2.integers(10, 390, 2)
         stubs[y:y + 1, x:x + 5] = True
-    _, ss = skeleton_segments(stubs, axis_deg=0.0)
+    _, ss = skeleton_segments(stubs)
     check("short stubs are excluded from direction-dependent statistics",
           ss["n_segments_directional"] == 0 or ss["directional_length_share"] < 0.2,
           f"{ss['n_segments_directional']} of {ss['n_segments']} kept")
     check("the gate threshold and retained length share are both reported",
           ss["min_directional_px"] == MIN_DIRECTIONAL_PX
           and ss["directional_length_share"] is not None)
-    check("the lattice-locked share is reported as a diagnostic",
-          "lattice_locked_share_all_segments" in ss)
+    check("the digitisation share is reported as a diagnostic, with no threshold on it",
+          "lattice_chord_share_all_segments" in ss)
+    # A field of 5 px stubs is the extreme case and must read as fully lattice-set: at
+    # that length every direction is within 22.5 deg of a lattice one.
+    check("a field of 5px stubs is entirely lattice-set",
+          ss["lattice_chord_share_all_segments"] == 1.0,
+          f"{ss['lattice_chord_share_all_segments']}")
 
     print(f"\n{len(F)} failed")
     for x in F: print(f"  - {x}")
