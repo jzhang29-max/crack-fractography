@@ -361,6 +361,11 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
 
     <div class="pane" id="pane-compare" role="tabpanel" hidden>
       <p class="note" id="specnote"></p>
+      <!-- What the whole arm supports, above the table it is about. Its own element
+           because renderSpecimens and renderReadout are both driven by loadArm and
+           specimens is painted first -- sharing one container made the conclusions
+           depend on which finished last. -->
+      <div id="armro"></div>
       <div id="specbody"></div>
     </div>
 

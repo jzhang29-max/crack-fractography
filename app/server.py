@@ -892,6 +892,15 @@ def readout(arm: str = Query(...), specimen: str | None = None, frame: str | Non
     frames = [f for f in _load("frames") if f.get("arm") == arm]
     out = {"arm": arm, "frame": [], "specimen": [], "refusals": conclusions.REFUSALS}
 
+    # WHAT THE WHOLE ARM SUPPORTS. The comparison view showed fourteen specimens by seven
+    # columns and left the reading to the reader; these are the statements that are true
+    # of the set rather than of any row in it.
+    try:
+        out["arm_statements"] = conclusions.for_arm(
+            [r for r in _load("specimens") if r.get("arm") == arm], frames)
+    except HTTPException:
+        out["arm_statements"] = []
+
     if frame:
         f = next((x for x in frames if x["frame"] == frame), None)
         if f is None:

@@ -706,6 +706,30 @@ function specimenCard(r) {
     extra.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("") + `</dl>`;
 }
 
+//: Set by renderReadout, rendered by renderSpecimens. Held rather than re-fetched because
+//: both are driven by loadArm and the order between them is not guaranteed.
+let ARM_STATEMENTS = [];
+
+function armStatements() {
+  if (!ARM_STATEMENTS.length) return "";
+  return `<div class="ro armro">` + ARM_STATEMENTS.map((st, i) =>
+    `<div class="ro-line ${st.level}" data-ro="arm:${i}" tabindex="0" role="button">
+       <span class="mk">${MARK[st.level] || "\u00b7"}</span>
+       <span class="tx">${esc(st.text)}</span>
+       <span class="who">THIS ARM</span>
+     </div>`).join("") + `</div>`;
+}
+
+function wireArmStatements() {
+  // Same interaction as every other read-out line: click opens the basis and the hedge in
+  // the definitions drawer, so the explanation is addressable instead of a hover tooltip.
+  document.querySelectorAll('#armro [data-ro]').forEach((el) => {
+    const open = () => openDefs(ARM_STATEMENTS[+el.dataset.ro.split(":")[1]]);
+    el.onclick = open;
+    el.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } };
+  });
+}
+
 function specimenTable(rows) {
   // All specimens: the comparison view. Six columns, in NAME order.
   //
@@ -722,13 +746,19 @@ function specimenTable(rows) {
     const ci = r.area_fraction_ci, ds = r.detector_sensitivity, as = r.arm_sensitivity;
     // esc on all three: specimen names are parsed out of filenames, and an uploaded file
     // is the one string in this table a user controls.
-    return `<tr data-spec="${esc(r.specimen)}"><td title="${esc(r.specimen)}">${esc(r.specimen)}</td>` +
+    // NO PER-ROW TOOLTIPS. This table carried 43 of them holding 540 words -- four times
+    // the 126 words it showed -- so most of what it had to say was reachable only by
+    // hovering, one row at a time, and never on a touch device. The same explanations are
+    // now arm-level conclusions above the table: stated once, with their basis and hedge
+    // one click away in the drawer, instead of fourteen times on hover. The specimen
+    // cell's own title was pure duplication; the name is fully rendered in the cell.
+    return `<tr data-spec="${esc(r.specimen)}"><td>${esc(r.specimen)}</td>` +
       `<td>${r.n_fields}<span class="u">${r.n_frames !== r.n_fields ? ` /${r.n_frames}f` : ""}</span></td>` +
       `<td>${pct(ci ? ci.mean : r.area_fraction_median)}</td>` +
       `<td>${ci ? `${ciLo(ci)}–${pct(ci.ci95_hi)}` : "<span class='u'>n&lt;3</span>"}</td>` +
-      `<td>${ci ? raBadge(ci, r) : "—"}</td>` +
+      `<td>${ci ? `<span class="ra${ci.pct_relative_accuracy > 10 ? " bad" : ""}">±${ci.pct_relative_accuracy}%</span>` : "—"}</td>` +
       `<td>${ds ? "×" + ds.cbs_over_etd_median : "—"}</td>` +
-      `<td title="${as ? as.n_frames_corrected + " of " + as.n_paired_frames + " frames carry a correction" : ""}">${as ? (as.n_frames_corrected ? "×" + as.gated_over_machine_where_corrected : "<span class='u'>none</span>") : "—"}</td></tr>`;
+      `<td>${as ? (as.n_frames_corrected ? "×" + as.gated_over_machine_where_corrected : "<span class='u'>none</span>") : "—"}</td></tr>`;
   }).join("");
   return `<div class="scroll"><table id="spectable"><thead><tr>` +
     `<th>Specimen</th><th title="Fields, and frames where they differ. A field imaged through two detectors is ONE field.">Fields</th>` +
@@ -758,9 +788,12 @@ async function renderSpecimens() {
   } else {
     const withCI = rows.filter((r) => r.area_fraction_ci);
     const meeting = withCI.filter((r) => r.area_fraction_ci.pct_relative_accuracy <= 10);
-    $("#specnote").innerHTML = withCI.length
-      ? `${rows.length} specimens · <span class="${meeting.length ? "" : "flag"}">${meeting.length} of ${withCI.length} reach ASTM E562's 10% relative accuracy</span>`
-      : `${rows.length} specimens`;
+    // The E562 count used to live here as a bare clause. It is the first arm-level
+    // conclusion now, with its basis and its hedge, so this is just the count.
+    $("#specnote").textContent = `${rows.length} specimens`;
+    // CONCLUSIONS FIRST, TABLE SECOND. The comparison view was fourteen rows by seven
+    // columns with no statement of what they amount to -- ingredients, and the reading
+    // left entirely to the reader.
     $("#specbody").innerHTML = specimenTable(rows);
     $("#spectable").querySelectorAll("tbody tr").forEach((tr) => {
       tr.onclick = () => { $("#spec").value = state.spec = tr.dataset.spec; loadArm(); };
@@ -955,8 +988,16 @@ async function renderReadout() {
   try { d = await api(`/api/readout?${q}`); }
   catch (e) { el.innerHTML = `<p class="ro-empty">${e.message}</p>`; return; }
   RO = { specimen: d.specimen || [], frame: d.frame || [] };
+  // The arm statements are kept OUT of roRender: they belong to Compare, where the table
+  // they describe is, and repeating them in the Analysis list would be the same sentence
+  // in two panes again. They still go into RO so the definitions drawer can open them --
+  // the key matches the data-ro prefix armStatements() emits.
+  ARM_STATEMENTS = d.arm_statements || [];
+  RO.arm = ARM_STATEMENTS;
+  const armEl = $("#armro");
+  if (armEl) { armEl.innerHTML = armStatements(); wireArmStatements(); }
 
-  const body = roRender(RO);
+  const body = roRender({ specimen: RO.specimen, frame: RO.frame });
   // Severity order is the same rule the list uses, so the strip and the list agree about
   // which statement matters most.
   const all = [...(RO.specimen || []), ...(RO.frame || [])]

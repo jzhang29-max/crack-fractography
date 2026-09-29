@@ -418,6 +418,115 @@ def for_specimen(r, frames=None):
 # Stated in the UI rather than silently omitted. The transgranular/intergranular question
 # recurs precisely because nothing on screen addresses it, and a decline that names the
 # image to acquire is worth more than a label with no evidence behind it.
+# ---------------------------------------------------------------------------------------
+# ARM-LEVEL READ-OUT: what the whole comparison supports, as opposed to one specimen.
+#
+# WHY THIS EXISTS. The Compare tab showed fourteen specimens by seven columns and left the
+# reading entirely to the reader -- ingredients, no conclusion -- while hiding 540 words of
+# explanation in 43 hover tooltips over a pane showing 126. The numbers that actually
+# characterise a corpus are not in any single row: how many specimens reach the precision
+# target, how far the detector moves the answer, how much of the corpus has no scale at
+# all. Each of those is computed here from the same records the table renders.
+#
+# EVERY ONE IS COMPUTED, none is a constant. An earlier version of this file shipped a
+# regime figure copied out of a research summary without recomputing it, and it was wrong
+# by a factor of two and a half. So each statement below derives its own numbers from the
+# records passed in, and each says how many records it is speaking for.
+#
+# AND NONE OF THEM RANKS. One imaged site per specimen makes the between-field and the
+# between-specimen variance the same component, so the ordering question the table's shape
+# invites is refused here, once, where the table is.
+def for_arm(records, frames=None):
+    """Read-out for one arm's whole set of specimen records."""
+    import statistics as _st
+
+    out = []
+    recs = list(records or [])
+    frames = list(frames or [])
+    if not recs:
+        return out
+
+    # --- PRECISION, over the specimens that have an interval at all -------------------
+    with_ci = [r for r in recs if r.get("area_fraction_ci")
+               and r["area_fraction_ci"].get("pct_relative_accuracy") is not None]
+    if with_ci:
+        ras = sorted(r["area_fraction_ci"]["pct_relative_accuracy"] for r in with_ci)
+        meet = [x for x in ras if x <= E562_RA_TARGET]
+        out.append(_s(
+            f"{len(meet)} of {len(with_ci)} specimens reach E562's "
+            f"±{E562_RA_TARGET:.0f}% precision target.",
+            f"ASTM E562-19e1 95% CI from between-field variance, per specimen, over the "
+            f"fields of one magnification. Relative accuracy runs ±{ras[0]:.1f}% to "
+            f"±{ras[-1]:.1f}%, median ±{_st.median(ras):.1f}%. The other "
+            f"{len(recs) - len(with_ci)} specimen-arm(s) here have no interval at all.",
+            hedge="Relative accuracy is precision within one imaged site. Reaching the "
+                  "target would not make two specimens comparable; see the statement "
+                  "below.",
+            level=("good" if len(meet) == len(with_ci) else "bad"),
+            value=round(_st.median(ras), 1)))
+
+    # --- RANKING, once, where the table that invites it is ----------------------------
+    from specimen_stats import PSEUDO_SPECIMEN
+    real = [r for r in recs if r.get("specimen") != PSEUDO_SPECIMEN]
+    if len(real) > 1:
+        out.append(_s(
+            "These specimens cannot be ordered by this sampling design.",
+            "each was imaged at a single site, so the scatter between its fields and the "
+            "difference between specimens are the same variance component, and no test on "
+            "these data separates them -- spatial pseudoreplication in Hurlbert's sense. "
+            "The table below is in name order for that reason.",
+            hedge="A second imaged site on a specimen would make the question answerable. "
+                  "Until then a narrower interval buys precision on the one site.",
+            level="warn"))
+
+    # --- THE DETECTOR, which is confounded with the specimen --------------------------
+    ds = [r["detector_sensitivity"]["cbs_over_etd_median"] for r in recs
+          if (r.get("detector_sensitivity") or {}).get("cbs_over_etd_median")]
+    if ds:
+        med = _st.median(ds)
+        out.append(_s(
+            f"Detector alone moves the answer {med:.1f}× across this arm.",
+            f"CBS against ETD on the SAME physical fields, in {len(ds)} specimen(s) imaged "
+            f"both ways. Per-specimen medians run {min(ds):.2f}× to {max(ds):.2f}×.",
+            hedge="Detector is confounded with specimen here -- some specimens were imaged "
+                  "one way only, so part of any difference between two of them is which "
+                  "detector looked.",
+            level="bad", value=round(med, 3)))
+
+    # --- HOW MUCH OF THE CORPUS CAN BE SPOKEN ABOUT IN MICROMETRES --------------------
+    if frames:
+        ns = sum(1 for f in frames if not f.get("scale_known"))
+        if ns:
+            out.append(_s(
+                f"{ns} of {len(frames)} frames have no scale: µm withheld.",
+                f"a frame gets micrometres only from a recoverable nm/px -- a databar, the "
+                f"TIFF's own metadata, or one you set. Without it every physical column is "
+                f"null rather than defaulted, and the corpus spans a 249× magnification "
+                f"range, so there is no defensible default to fall back on.",
+                hedge="Those frames are still measured; it is the unit that is missing, "
+                      "not the measurement. Set a scale per frame to recover them.",
+                level="warn", value=ns))
+
+    # --- WHAT THE OPERATOR CONTRIBUTED, where both arms exist -------------------------
+    sens = [r["arm_sensitivity"] for r in recs if r.get("arm_sensitivity")]
+    touched = [a for a in sens if a.get("n_frames_corrected")]
+    ratios = [a["gated_over_machine_where_corrected"] for a in touched
+              if a.get("gated_over_machine_where_corrected")]
+    if sens and ratios:
+        med = _st.median(ratios)
+        out.append(_s(
+            f"Operator corrections change {len(touched)} of {len(sens)} specimens.",
+            f"the gated and machine arms are the same frames with and without the "
+            f"operator's strokes. Where a correction exists the gated area fraction is "
+            f"{med:.2f}× the machine's at the median, running {min(ratios):.2f}× to "
+            f"{max(ratios):.2f}×.",
+            hedge="A specimen with no correction is not a specimen the detector got "
+                  "right; it is one nobody reviewed.",
+            level="info", value=round(med, 3)))
+
+    return out
+
+
 REFUSALS = [
     {
         "question": "Transgranular or intergranular?",
