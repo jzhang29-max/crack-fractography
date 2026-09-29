@@ -11,6 +11,7 @@ definitions of the object, so the API requires an arm and refuses to aggregate a
 """
 import json
 import os
+import threading
 import time
 
 from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
@@ -79,6 +80,38 @@ def _load(name):
         raise HTTPException(503, f"{name}.json is being written -- retry in a moment")
     _CACHE[name] = (stamp, data)
     return data
+
+
+#: Held across every read-modify-write of the dataset files. They are rewritten in place
+#: by upload, remeasure, mask_edit and set_scale, and remeasure is a sync def -- so FastAPI
+#: runs it in the threadpool and several execute at once. Six concurrent re-measures of six
+#: DIFFERENT frames returned five HTTP 500s: one thread read frames.json while another was
+#: streaming it out, and json.load hit the truncation mid-object. Two app windows, or the
+#: desktop app plus a browser, or the Mark tab's save overlapping the Analysis tab's
+#: re-measure (different buttons, each disabling only itself) all reach it. _load() already
+#: had a try/except serving the last good copy for exactly this hazard -- the writers' own
+#: reads had no such protection. Reentrant because remeasure calls _rebuild_specimen.
+_DATASET_LOCK = threading.RLock()
+
+
+def _write_json(path, obj):
+    """Write a dataset file so no reader can ever see a partial one.
+
+    tmp + os.replace, because os.replace is atomic within a filesystem: a reader gets the
+    whole old file or the whole new one, never the middle. Truncate-and-rewrite gives them
+    the middle. scale.py already used this for user_scale.json and server.py for the mask
+    PNG; the three files that ARE the app's product were the ones still doing it unsafely.
+
+    allow_nan=False because Python's json writes bare Infinity and NaN, which are not JSON
+    (RFC 8259) and which strict readers reject -- JSON.parse, R's jsonlite. One nm/px of
+    inf put 12 Infinity literals into frames.json and left three endpoints returning 500
+    across restarts with no route back through the UI. Refusing at the write keeps a
+    non-finite value out of the product rather than persisting it.
+    """
+    tmp = f"{path}.tmp"
+    with open(tmp, "w") as fh:
+        json.dump(obj, fh, allow_nan=False)
+    os.replace(tmp, path)
 
 
 @app.get("/api/arms")
@@ -350,13 +383,14 @@ async def upload(file: UploadFile = File(...), nm_per_px: float | None = None):
         r["specimen"] = "uploaded"
 
     # Append to the served dataset and drop the cache so the page sees it immediately.
-    for fname, new in (("frames", [summ]), ("cracks", rows)):
-        p = os.path.join(OUT, f"{fname}.json")
-        cur = json.load(open(p)) if os.path.exists(p) else []
-        cur = [x for x in cur if not (x.get("arm") == "uploads" and x.get("frame") == stem)]
-        cur.extend(new)
-        with open(p, "w") as fh:
-            json.dump(cur, fh)
+    with _DATASET_LOCK:
+        for fname, new in (("frames", [summ]), ("cracks", rows)):
+            p = os.path.join(OUT, f"{fname}.json")
+            cur = json.load(open(p)) if os.path.exists(p) else []
+            cur = [x for x in cur
+                   if not (x.get("arm") == "uploads" and x.get("frame") == stem)]
+            cur.extend(new)
+            _write_json(p, cur)
 
     # And rebuild the uploads specimen record. Without this an upload adds a frame and no
     # specimen, so the specimen card -- the FIRST card on the page -- simply disappeared
@@ -405,8 +439,7 @@ def _rebuild_uploads_specimen():
         r = specimen_stats.summarise("uploads", spec, fs)
         r["arm_sensitivity"] = None
         recs.append(r)
-    with open(sp, "w") as fh:
-        json.dump(others + recs, fh)
+    _write_json(sp, others + recs)
 
 
 # ---------------------------------------------------------------------------------------
@@ -685,15 +718,15 @@ def _measure_into_uploads(mask_path, frame, source=None, specimen=None):
     for r in rows:
         r["frame"] = summ["frame"]; r["arm"] = "uploads"
         r["specimen"] = summ["specimen"]
-    for fname, new_rows in (("frames", [summ]), ("cracks", rows)):
-        fp = os.path.join(OUT, f"{fname}.json")
-        cur = json.load(open(fp)) if os.path.exists(fp) else []
-        kept = [x for x in cur
-                if not (x.get("arm") == "uploads" and x.get("frame") == summ["frame"])]
-        with open(fp, "w") as fh:
-            json.dump(kept + new_rows, fh)
-    _CACHE.clear()
-    _rebuild_uploads_specimen()
+    with _DATASET_LOCK:
+        for fname, new_rows in (("frames", [summ]), ("cracks", rows)):
+            fp = os.path.join(OUT, f"{fname}.json")
+            cur = json.load(open(fp)) if os.path.exists(fp) else []
+            kept = [x for x in cur
+                    if not (x.get("arm") == "uploads" and x.get("frame") == summ["frame"])]
+            _write_json(fp, kept + new_rows)
+        _CACHE.clear()
+        _rebuild_uploads_specimen()
     _CACHE.clear()
 
 
@@ -744,6 +777,20 @@ def remeasure(arm: str = Query(...), frame: str = Query(...)):
                   if f.get("arm") == arm and f.get("frame") == frame), None)
     summ["arm"] = arm
     summ["specimen"] = (prior or {}).get("specimen") or "unparsed"
+    # CARRY THE IDENTITY FIELDS THROUGH. measure_path rebuilds the summary from the mask
+    # alone, so anything the record knew about WHERE IT CAME FROM was dropped on every
+    # re-measure -- and source_filename has exactly one consumer, the upload collision
+    # guard, so nothing else flagged the loss. That guard reads
+    # `existing.get("source_filename") not in (None, name)`, so a missing value reads as
+    # "no prior filename" and a genuinely different file that canonicalises to the same
+    # frame is then allowed to overwrite it. Measured: upload weld.png, upload a different
+    # weld_mask.png -> correctly refused 409. Re-measure once, upload weld_mask.png again
+    # -> 200, and the frame is replaced (area_fraction 0.117215 -> 0.040319, 185 cracks ->
+    # 75, the PNG on disk overwritten). mask_edit and set_scale both call remeasure, so
+    # the guard was off after every correction -- the exact moment the mask is worth most.
+    for k in ("source_filename", "was_segmented_here", "copied_from"):
+        if prior and prior.get(k) is not None and summ.get(k) is None:
+            summ[k] = prior[k]
     for r in rows:
         r["frame"] = summ["frame"]
         r["arm"] = arm
@@ -751,15 +798,15 @@ def remeasure(arm: str = Query(...), frame: str = Query(...)):
 
     # Replace exactly this frame's records. Everything else is left byte-for-byte alone:
     # a re-measure of one frame must never be able to disturb another.
-    for fname, new_rows in (("frames", [summ]), ("cracks", rows)):
-        fp = os.path.join(OUT, f"{fname}.json")
-        cur = json.load(open(fp)) if os.path.exists(fp) else []
-        kept = [x for x in cur
-                if not (x.get("arm") == arm and x.get("frame") == summ["frame"])]
-        with open(fp, "w") as fh:
-            json.dump(kept + new_rows, fh)
-    _CACHE.clear()
-    _rebuild_specimen(arm, summ["specimen"])
+    with _DATASET_LOCK:
+        for fname, new_rows in (("frames", [summ]), ("cracks", rows)):
+            fp = os.path.join(OUT, f"{fname}.json")
+            cur = json.load(open(fp)) if os.path.exists(fp) else []
+            kept = [x for x in cur
+                    if not (x.get("arm") == arm and x.get("frame") == summ["frame"])]
+            _write_json(fp, kept + new_rows)
+        _CACHE.clear()
+        _rebuild_specimen(arm, summ["specimen"])
     _CACHE.clear()
 
     # What actually moved, so the answer to "did my correction do anything" is on screen
@@ -807,8 +854,7 @@ def _rebuild_specimen(arm, specimen):
                       if not (r.get("arm") == arm and r.get("specimen") == specimen)]
         except Exception:
             others = []
-    with open(sp, "w") as fh:
-        json.dump(others + [rec], fh)
+    _write_json(sp, others + [rec])
 
 
 @app.get("/api/readout")

@@ -64,3 +64,79 @@ def test_the_result_message_survives_the_refresh():
     fn = js[js.index("async function remeasure("):js.index("async function loadArm()")]
     assert fn.index("await renderReadout()") < fn.index("fresh.innerHTML = msg"), (
         "the refresh must happen before the message is written")
+
+
+# --- the dataset files are shared mutable state. These drive a real server. ---------
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))   # for liveserver
+
+
+def test_concurrent_remeasures_do_not_tear_the_dataset(tmp_path):
+    """remeasure is a sync def, so FastAPI runs it in the threadpool and several execute at
+    once. Each did read-whole-file / filter / truncate-and-rewrite with no lock and no
+    atomic replace. Six concurrent re-measures of six DIFFERENT frames returned five HTTP
+    500s -- one thread read frames.json while another was streaming it out, and json.load
+    hit the truncation mid-object. Two app windows, or the Mark tab's save overlapping the
+    Analysis tab's re-measure, both reach it.
+
+    The containment property the rest of this file asserts is the one at risk: a torn read
+    does not produce a wrong number on the frame being measured, it produces wrong numbers
+    on someone else's.
+    """
+    import json as _json
+    from concurrent.futures import ThreadPoolExecutor
+
+    from liveserver import Server, mask_png
+
+    with Server(tmp_path / "d") as s:
+        frames = []
+        for i in range(6):
+            st, body = s.upload(f"conc{i}_gated.png", mask_png(bar=20 + 8 * i))
+            assert st == 200, body[:300]
+            frames.append(_json.loads(body)["frame"])
+
+        before = len(s.dataset("frames"))
+        with ThreadPoolExecutor(max_workers=6) as ex:
+            results = list(ex.map(
+                lambda f: s.post(f"/api/remeasure?arm=uploads&frame={f}")[0], frames))
+
+        assert all(r == 200 for r in results), (
+            f"concurrent re-measures returned {results} -- a non-200 here is a torn read "
+            f"of the dataset, not a measurement failure")
+
+        # And the files are still whole, still parseable, and still hold every frame.
+        rows = s.dataset("frames")
+        assert len(rows) == before, f"{before} frames before, {len(rows)} after"
+        keys = [(r["arm"], r["frame"]) for r in rows]
+        assert len(keys) == len(set(keys)), "a concurrent write duplicated a frame row"
+        s.dataset("cracks"); s.dataset("specimens")      # parse or raise
+
+
+def test_a_non_finite_scale_is_refused_before_it_reaches_the_dataset(tmp_path):
+    """float('inf') passed the old `v > 0` check. Every physical column is then a pixel
+    count times it, and json.dump writes bare `Infinity` -- which is not JSON (RFC 8259).
+    Python's json accepts it, which is why it went unnoticed; JSON.parse and R's jsonlite
+    do not. Three endpoints then returned 500 across restarts with no route back through
+    the UI, because the frame could no longer be selected to clear its scale."""
+    import json as _json
+
+    from liveserver import Server, mask_png
+
+    with Server(tmp_path / "d") as s:
+        st, body = s.upload("scaletest_gated.png", mask_png(bar=30))
+        assert st == 200
+        frame = _json.loads(body)["frame"]
+
+        for bad in ("inf", "-inf", "nan", "0", "-5"):
+            st, body = s.post(f"/api/scale?arm=uploads&frame={frame}&nm_per_px={bad}")
+            assert st == 400, f"nm_per_px={bad} returned {st}, expected a 400: {body[:200]}"
+            assert b"finite" in body or b"greater than zero" in body, body[:200]
+
+        # The dataset is untouched and every arm still answers.
+        for name in ("frames", "cracks", "specimens"):
+            raw = open(os.path.join(s.data_dir, f"{name}.json")).read()
+            assert "Infinity" not in raw and "NaN" not in raw, f"{name}.json is not JSON"
+        assert s.get("/api/frames?arm=uploads")[0] == 200
+
+        # A finite value still works.
+        st, _ = s.post(f"/api/scale?arm=uploads&frame={frame}&nm_per_px=52")
+        assert st == 200

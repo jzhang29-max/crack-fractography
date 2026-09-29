@@ -6,6 +6,7 @@ used the stripped one, so /api/cracks returned 0 of 305 rows it had just measure
 /api/mask 404'd while the read-out worked -- the frame looked measured. Then the fix for
 that applied the stripping TWICE for a double-suffixed name, reproducing the same split.
 """
+import json
 import os
 import sys
 
@@ -13,6 +14,7 @@ import pytest
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO, "analysis"))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # for liveserver
 from measure import MASK_SUFFIXES, canonical_stem   # noqa: E402
 
 
@@ -75,3 +77,37 @@ def test_the_smoke_check_actually_measures():
     # legitimately quotes the expression.
     assert 'if not health["capabilities"]["measure_uploaded_mask"]:' not in src, (
         "asserting on a literal True is not a measurement check")
+
+
+# --- the collision guard must survive the loop's central step -----------------------
+def test_a_remeasure_does_not_switch_off_the_upload_collision_guard(tmp_path):
+    """source_filename has exactly one consumer -- the guard that refuses a DIFFERENT file
+    canonicalising to the same frame. remeasure rebuilt the summary from the mask alone and
+    dropped it, so afterwards the guard read "no prior filename" and allowed the overwrite.
+    mask_edit and set_scale both call remeasure, so the guard was off after every
+    correction: the moment the mask is worth most.
+
+    Driven over real HTTP against a real server on its own data dir, because the existing
+    tests in this file assert on the source text of the guard, and source text is what was
+    already correct -- the field it reads had simply stopped being written.
+    """
+    from liveserver import Server, mask_png
+
+    with Server(tmp_path / "d") as s:
+        st, body = s.upload("weld_gated.png", mask_png(bar=40))
+        assert st == 200, body[:300]
+        frame = json.loads(body)["frame"]
+
+        # A genuinely different file canonicalising to the same frame: refused.
+        st, _ = s.upload("weld_mask.png", mask_png(bar=90))
+        assert st == 409, f"the guard should refuse a different file, got {st}"
+
+        # The loop's central step.
+        st, body = s.post(f"/api/remeasure?arm=uploads&frame={frame}")
+        assert st == 200, body[:300]
+
+        # AND IT IS STILL REFUSED. This returned 200 and silently replaced the frame.
+        st, body = s.upload("weld_mask.png", mask_png(bar=90))
+        assert st == 409, (
+            f"after a re-measure the collision guard let a different file overwrite the "
+            f"frame: {st} {body[:200]}")

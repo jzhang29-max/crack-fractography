@@ -16,6 +16,7 @@ is a separate, noisier instrument. Mixing it in silently would make two populati
 one.
 """
 import csv
+import math
 import os
 import sys as _sys
 
@@ -60,8 +61,19 @@ def set_user_scale(stem, nm_per_px):
         _USER.pop(stem, None)
     else:
         v = float(nm_per_px)
-        if not (v > 0):
-            raise ValueError("nm/px must be greater than zero")
+        # isfinite, not just > 0. float("inf") passes `v > 0`, and every physical column
+        # is then computed by multiplying a pixel count by it -- so json.dump wrote bare
+        # `Infinity` into frames.json, cracks.json and specimens.json (12, 5 and 4
+        # occurrences). Those files stop being JSON: JSON.parse and R's jsonlite reject
+        # them, Python's json is unusually permissive and accepts them, which is exactly
+        # why it went unnoticed. The three arm endpoints then returned 500 across restarts
+        # with no route back through the UI, because the frame could no longer be selected
+        # to clear its scale. A finite-but-huge value was already handled correctly
+        # (1e300 gives a clean OverflowError and leaves the files intact); only the
+        # non-finite case got through. _write_json's allow_nan=False is the second line of
+        # defence; this is the first, and it is the one that gives a usable message.
+        if not math.isfinite(v) or v <= 0:
+            raise ValueError("nm/px must be a finite number greater than zero")
         _USER[stem] = v
     _P.ensure_dirs()
     tmp = _user_path() + ".tmp"
