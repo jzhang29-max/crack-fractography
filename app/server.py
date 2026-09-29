@@ -13,10 +13,11 @@ import json
 import os
 import time
 
-from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 
+from . import mark_proxy
 from . import paths as P
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -430,6 +431,18 @@ def _listening(port):
         return t.connect_ex(("127.0.0.1", port)) == 0
 
 
+def _paint_port_candidates():
+    """Ports to try, override first.
+
+    MARK_PORT exists so a development instance can be pointed at a sandbox copy of the
+    paint layer. It is FIRST, not a fallback: if it is set and something is listening there,
+    that is the tool this app talks to. Silently preferring the default would mean a dev run
+    proxying to the researcher's real tool -- writes into hand-labelled data -- while
+    reporting the sandbox port back to the UI.
+    """
+    return [p for p in (mark_proxy.port_override(), _PAINT.get("port"), PAINT_PORT) if p]
+
+
 def _paint_alive():
     """Whether the marking tool is reachable, NOT whether this process started it.
 
@@ -438,14 +451,16 @@ def _paint_alive():
     the tool does not. Same shape as the dataset cache keyed on a name: state held here
     that should be read from the world.
     """
-    p = _PAINT["proc"]
-    if p and p.poll() is None:
-        return True
-    for port in (_PAINT.get("port"), PAINT_PORT):
-        if port and _listening(port):
+    for port in _paint_port_candidates():
+        if _listening(port):
             _PAINT["port"] = port
             return True
-    return False
+    # ONLY NOW the subprocess handle, and only as a "starting up" signal. It used to be
+    # checked first, which reported a tool this process had spawned as alive for the whole
+    # window between fork and first accept -- and, with MARK_PORT set, reported the wrong
+    # tool as the live one.
+    p = _PAINT["proc"]
+    return bool(p and p.poll() is None)
 
 
 @app.get("/api/paint")
@@ -481,10 +496,11 @@ def paint_start():
 
     # Its own default port first, so a tool the user already had open on 8767 is reused
     # rather than duplicated; otherwise whatever the OS gives us.
+    for port in _paint_port_candidates():
+        if _listening(port):
+            _PAINT["port"] = port
+            return {**paint_status(), "reused": True}
     port = PAINT_PORT
-    if _listening(port):
-        _PAINT["port"] = port
-        return {**paint_status(), "reused": True}
     with socket.socket() as t:
         try:
             t.bind(("127.0.0.1", port))
@@ -508,6 +524,40 @@ def paint_start():
                 return paint_status()
         _t.sleep(0.25)
     raise HTTPException(504, "the marking tool did not start within 20s")
+
+
+# ---------------------------------------------------------------------------------------
+# THE MARKING TOOL, SERVED INSIDE THIS APP.
+#
+# Everything the tool can do -- paint, flip a region, undo a correction, reapply the model,
+# retrain it, pick a model, export -- now works in this window instead of in a browser tab
+# this app opened and then had no control over. See app/mark_proxy.py for why the HTML has
+# to be rewritten and what is asserted about that rewrite.
+#
+# ASYNC, WITH THE BLOCKING CALL PUSHED TO THE THREADPOOL EXPLICITLY. urllib blocks, and a
+# retrain or a reapply holds the connection for minutes; doing that on the event loop would
+# freeze every other request, including the read-out the user is looking at while it runs.
+@app.api_route("/mark/{path:path}", methods=["GET", "POST"])
+async def mark(path: str, request: Request):
+    from starlette.concurrency import run_in_threadpool
+    if not _paint_alive():
+        raise HTTPException(503, "the marking tool is not running -- start it from the "
+                                 "Mark tab, which also reports why it cannot start")
+    port = _PAINT.get("port") or mark_proxy.port_override() or PAINT_PORT
+    body = await request.body() if request.method == "POST" else None
+    try:
+        status, headers, raw, _ = await run_in_threadpool(
+            mark_proxy.forward,
+            port, path, method=request.method, body=body,
+            headers=dict(request.headers), query=str(request.url.query or ""))
+    except ConnectionError as e:
+        raise HTTPException(502, str(e))
+    except ValueError as e:
+        # The rewrite found nothing to rewrite. Saying so is the whole point: the page would
+        # otherwise render perfectly and send every call to the wrong server.
+        raise HTTPException(500, str(e))
+    return Response(content=raw, status_code=status,
+                    media_type=headers.get("Content-Type") or headers.get("content-type"))
 
 
 # ---------------------------------------------------------------------------------------

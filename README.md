@@ -100,6 +100,47 @@ Tortuosity is left undefined unless a region has exactly two skeleton endpoints 
 points, the only topology for which path ÷ chord means anything. On a typical frame that is
 188 of 457 cracks.
 
+## Marking happens in this window
+
+The Mark tab offers two tools, because they cover different images:
+
+* **Edit mask** — this app's own canvas. Opens any frame the app knows about, including
+  uploads, needs no SEM repo, and writes a marked **copy** into `uploads` so the derived
+  research masks stay unwritten.
+* **Full tool** — the SEM repo's `paint_server.py`, with whole-region flip, undo, re-apply
+  model, retrain, model choice and export. It only knows that repo's own images.
+
+The full tool used to be a link that opened the system browser, which undid the point of
+packaging a desktop app at the one step that matters most. It is now reverse-proxied
+same-origin at `/mark/` (`app/mark_proxy.py`) and shown in the window itself. An embed was
+tried and abandoned once before: a cross-origin iframe rendered blank with no way to see
+inside it. Same origin removes the blankness *and* the blindness — the UI check reads the
+tool's own DOM through the frame and reports if it is empty.
+
+The proxy exists because the tool's UI is a single 82 KB page whose every call is a
+root-relative `fetch('/api/…')` or `img.src = '/api/…'` — 27 sites, no absolute origins
+except the SVG namespace, no `XMLHttpRequest` at all. Root-relative means a `<base href>`
+cannot help, so the HTML is rewritten on the way through and the rewrite **asserts a
+non-zero count**: the failure mode of a string rewrite is silence, where the page renders
+perfectly and every button talks to the wrong server.
+
+That assertion has to be scoped to the UI page, and getting it wrong is not hypothetical —
+it shipped for one test cycle. `/api/paintlayer` answers `204 No Content` with an empty body
+and `Content-Type: text/html`, because Flask stamps its default type on a bodyless response.
+Keying on the content type alone turned that correct 204 into a 500 blaming the tool for
+having changed shape. Upstream HTML *error* pages have the same problem in reverse: they
+carry no API calls either, so the assertion would have replaced the tool's own message
+("no template for this image", "a reapply job is already running") with a proxy complaint.
+Upstream statuses are forwarded verbatim for exactly that reason.
+
+**`MARK_PORT` keeps development off the real labels.** The paint layer is hand-labelled
+research data. The proxy was built and exercised against a *copy*, using the tool's own
+`SEMCRACK_PAINT_DIR` / `SEMCRACK_ORIGINAL_DIR` overrides, with `MARK_PORT` pointing this app
+at the sandbox instance. The override is tried **first**, not as a fallback: if the default
+won, a development run would proxy to the researcher's real tool — writing into that data —
+while reporting the sandbox port back to the UI. A whole-region flip was driven through the
+proxy end to end and the real `paint/` directory came out byte-identical.
+
 ## Arms are never mixed
 
 | arm | what it is |

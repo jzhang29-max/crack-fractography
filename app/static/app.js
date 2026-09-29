@@ -968,47 +968,74 @@ function defsAll() {
 // and it was reachable only by knowing it was there and starting it by hand on another
 // port. So the app would tell you a mask was unreviewed and say nothing about where to fix
 // it. It is started on demand and shown here.
-let MARK_URL = null;
+// TWO TOOLS, because they cover different images and the user needs both. "Edit" is this
+// app's own canvas: it opens ANY frame the app knows about, including uploads, needs no SEM
+// repo, and writes a marked COPY into uploads so research masks stay unwritten. "Full tool"
+// is the SEM repo's marking tool -- whole-region flip, undo, reapply, retrain, model
+// choice, export -- which only knows that repo's own images.
+//
+// The full tool now runs INSIDE this window, proxied same-origin at /mark/ (see
+// app/mark_proxy.py). It used to be a link that opened the system browser, which undid the
+// point of packaging a desktop app at the one step that matters most. An embed was tried
+// before and abandoned because a cross-origin iframe rendered blank with no way to see
+// inside it; same-origin removes both the blankness and the blindness -- the check below
+// reads the tool's own DOM through the frame and says so if it is empty.
+let MARK_MODE = "edit";
 
 async function renderMark() {
   const el = $("#markbody");
+  const paint = await api("/api/paint").catch(() => ({ available: false, why_not: "unreachable" }));
+  const head = `<div class="markmodes">
+      <button class="seg${MARK_MODE === "edit" ? " on" : ""}" data-mm="edit">Edit mask</button>
+      <button class="seg${MARK_MODE === "full" ? " on" : ""}" data-mm="full"
+        ${paint.available ? "" : `disabled title="${esc(paint.why_not || "")}"`}>Full tool</button>
+      ${MARK_MODE === "full" ? `<span class="u">whole-region flip · undo · reapply · retrain · export</span>` : ""}
+    </div>`;
+
+  if (MARK_MODE === "full") {
+    el.innerHTML = head + (paint.running
+      ? `<iframe id="markframe" src="/mark/" title="Marking tool"></iframe>`
+      : `<div class="markstate"><p class="markbig">Start the marking tool.</p>
+           <button id="markstart" class="upload">Start</button>
+           <p class="note" id="markstartout"></p></div>`);
+    wireModes();
+    const b = $("#markstart");
+    if (b) b.onclick = async () => {
+      b.disabled = true; b.textContent = "Starting…";
+      try { await api("/api/paint", { method: "POST" }); await renderMark(); }
+      catch (e) {
+        b.disabled = false; b.textContent = "Start";
+        $("#markstartout").innerHTML = `<span class="flag bad">${esc(e.message)}</span>`;
+      }
+    };
+    return;
+  }
+
   if (!state.frame) {
-    el.innerHTML = `<div class="markstate">
+    el.innerHTML = head + `<div class="markstate">
         <p class="markbig">Add an image to mark.</p>
         <p class="note">A black-and-white mask is measured as it is. A .tif is segmented
            first, which needs the SEM repo — see Setup.</p>
       </div>`;
+    wireModes();
     return;
   }
   // EVERY FRAME IS MARKABLE, IN THIS WINDOW. Editing a research frame writes a COPY into
   // uploads rather than touching the derived mask, so the loop is one app and the data the
   // app does not own stays unwritten.
-  return openEditor(state.frame);
+  await openEditor(state.frame, head);
+  wireModes();
 }
 
-function mountMark(url) {
-  MARK_URL = url;
-  // A HAND-OFF, NOT AN EMBED. The iframe loaded -- 750 px tall, HTTP 200, no blocking
-  // header, no console error -- and rendered blank. It is cross-origin (a different port),
-  // so there is no way to see inside it and find out why, and I am not going to ship a
-  // frame I cannot verify: a blank panel is worse for navigation than a plain link, which
-  // was the complaint in the first place.
-  //
-  // What this tab has to fix is that the tool was UNDISCOVERABLE. A named tab, a live
-  // status and one click does that. Embedding it properly would mean reverse-proxying the
-  // whole Flask app through this one to make it same-origin, which is a lot of surface for
-  // a canvas that POSTs image layers.
-  $("#markbody").innerHTML = `
-    <div class="markstate">
-      <p class="markbig">Marking tool is running.</p>
-      <a href="${url}" target="_blank" rel="noopener"><button class="upload">Open marking tool</button></a>
-      <p class="note">Red = crack, cyan = not crack.</p>
-      <p class="markbig" style="margin-top:14px">When the mask looks right</p>
-      <button id="remeasure1" class="upload">Re-measure this frame</button>
-      <p class="note" id="remeasure1out"></p>
-    </div>`;
-  const b = $("#remeasure1");
-  if (b) b.onclick = () => remeasure(b, $("#remeasure1out"));
+function wireModes() {
+  document.querySelectorAll("#markbody .markmodes .seg").forEach((b) => {
+    b.onclick = () => {
+      if (b.disabled || b.dataset.mm === MARK_MODE) return;
+      MARK_MODE = b.dataset.mm;
+      ED.frame = null;                       // so a return to Edit re-mounts the canvas
+      renderMark();
+    };
+  });
 }
 
 // ---------------------------------------------------------------------------------------
@@ -1081,10 +1108,10 @@ function editorHTML(frame) {
     <canvas id="edcanvas"></canvas>`;
 }
 
-async function openEditor(frame) {
+async function openEditor(frame, head = "") {
   if (ED.frame === frame && $("#edcanvas")) return;   // already showing this one
   const host = $("#markbody");
-  host.innerHTML = editorHTML(frame);
+  host.innerHTML = head + editorHTML(frame);
   const cv = $("#edcanvas");
   const img = new Image();
   img.crossOrigin = "anonymous";
