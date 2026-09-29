@@ -730,45 +730,6 @@ function wireArmStatements() {
   });
 }
 
-function specimenTable(rows) {
-  // All specimens: the comparison view. Six columns, in NAME order.
-  //
-  // It used to sort by the area fraction, under a comment saying so out loud -- which made
-  // this render path emit a ranking of the specimens at the same time as it emitted the
-  // refusal to rank them. Worse, the 11 records with no interval got ranked on a bare
-  // median. Every specimen here is one imaged site, so the site and the specimen variance
-  // are the same parameter and no ordering of these rows carries information (Hurlbert
-  // 1984). Name order is unconditional: there is no corpus state in which a default
-  // ranking is right. A sortable table, if ever wanted, is an explicit user control with a
-  // visible active column -- never the order the page opens in.
-  const body = rows.slice().sort((a, b) =>
-    (a.specimen + "\u0000" + a.arm).localeCompare(b.specimen + "\u0000" + b.arm)).map((r) => {
-    const ci = r.area_fraction_ci, ds = r.detector_sensitivity, as = r.arm_sensitivity;
-    // esc on all three: specimen names are parsed out of filenames, and an uploaded file
-    // is the one string in this table a user controls.
-    // NO PER-ROW TOOLTIPS. This table carried 43 of them holding 540 words -- four times
-    // the 126 words it showed -- so most of what it had to say was reachable only by
-    // hovering, one row at a time, and never on a touch device. The same explanations are
-    // now arm-level conclusions above the table: stated once, with their basis and hedge
-    // one click away in the drawer, instead of fourteen times on hover. The specimen
-    // cell's own title was pure duplication; the name is fully rendered in the cell.
-    return `<tr data-spec="${esc(r.specimen)}"><td>${esc(r.specimen)}</td>` +
-      `<td>${r.n_fields}<span class="u">${r.n_frames !== r.n_fields ? ` /${r.n_frames}f` : ""}</span></td>` +
-      `<td>${pct(ci ? ci.mean : r.area_fraction_median)}</td>` +
-      `<td>${ci ? `${ciLo(ci)}–${pct(ci.ci95_hi)}` : "<span class='u'>n&lt;3</span>"}</td>` +
-      `<td>${ci ? `<span class="ra${ci.pct_relative_accuracy > 10 ? " bad" : ""}">±${ci.pct_relative_accuracy}%</span>` : "—"}</td>` +
-      `<td>${ds ? "×" + ds.cbs_over_etd_median : "—"}</td>` +
-      `<td>${as ? (as.n_frames_corrected ? "×" + as.gated_over_machine_where_corrected : "<span class='u'>none</span>") : "—"}</td></tr>`;
-  }).join("");
-  return `<div class="scroll"><table id="spectable"><thead><tr>` +
-    `<th>Specimen</th><th title="Fields, and frames where they differ. A field imaged through two detectors is ONE field.">Fields</th>` +
-    `<th>Area frac</th><th title="ASTM E562, between-field variance">95% CI</th>` +
-    `<th title="Interval as a share of the mean. Target 10%.">±</th>` +
-    `<th title="Same physical field, two detectors. Away from 1 is instrument, not material.">CBS/ETD</th>` +
-    `<th title="Same frames, operator strokes vs detector alone.">G/M</th>` +
-    `</tr></thead><tbody>${body}</tbody></table></div>`;
-}
-
 async function renderSpecimens() {
   let rows;
   try { rows = await api(`/api/specimens?arm=${encodeURIComponent(state.arm)}`); }
@@ -783,6 +744,7 @@ async function renderSpecimens() {
   const f = state.frames.find((x) => x.frame === state.frame);
   renderStrip(one || (f ? rows.find((r) => r.specimen === f.specimen) : null));
   if (one) {
+    $("#spechead").hidden = false;
     $("#specnote").textContent = `${one.specimen} · ${one.n_fields} fields`;
     $("#specbody").innerHTML = specimenCard(one);
   } else {
@@ -790,14 +752,13 @@ async function renderSpecimens() {
     const meeting = withCI.filter((r) => r.area_fraction_ci.pct_relative_accuracy <= 10);
     // The E562 count used to live here as a bare clause. It is the first arm-level
     // conclusion now, with its basis and its hedge, so this is just the count.
-    $("#specnote").textContent = `${rows.length} specimens`;
-    // CONCLUSIONS FIRST, TABLE SECOND. The comparison view was fourteen rows by seven
-    // columns with no statement of what they amount to -- ingredients, and the reading
-    // left entirely to the reader.
-    $("#specbody").innerHTML = specimenTable(rows);
-    $("#spectable").querySelectorAll("tbody tr").forEach((tr) => {
-      tr.onclick = () => { $("#spec").value = state.spec = tr.dataset.spec; loadArm(); };
-    });
+    // NO TABLE OF ALL SPECIMENS. It listed fourteen rows by seven columns and ranked
+    // nothing -- it could not, since one imaged site per specimen makes the ordering it
+    // implied unestimable -- and every number in it is on that specimen's own card. What
+    // it was actually for is above, as arm-level conclusions.
+    $("#spechead").hidden = true;
+    $("#specnote").textContent = "";
+    $("#specbody").innerHTML = "";
   }
 }
 
@@ -812,17 +773,21 @@ async function renderSpecimens() {
 // answering "what about this frame?", so seeing one frame meant visiting three places.
 // They are one Analysis page now. And the order follows the work: mark a mask, then ask
 // what it measures, then compare, then export.
+// THREE TABS. Compare is gone: its table ranked nothing (it could not -- one imaged site
+// per specimen), its per-row numbers are each on their own specimen's card, and what it
+// was actually for -- what the whole arm supports -- is five sentences that belong with
+// the other conclusions. A tab whose content is "the same numbers again, in a grid" is
+// navigation cost with no answer at the end of it.
 const TABS = [
   ["mark", "Mark"],
   ["analysis", "Analysis"],
-  ["compare", "Compare"],
   ["figure", "Figure"],
 ];
 let TAB = "mark";
 
 //: Tabs that are about the NUMBERS. The statistics strip belongs to these and not to
 //: Mark: drawing needs to know which image is open, not what its 95% CI is.
-const ANALYSIS_TABS = new Set(["analysis", "compare", "figure"]);
+const ANALYSIS_TABS = new Set(["analysis", "figure"]);
 
 function showTab(id) {
   TAB = id;
@@ -1005,19 +970,28 @@ async function renderReadout() {
   RO_TOP = all.length
     ? { text: all[0].text, level: all[0].level, basis: all[0].basis, more: all.length - 1 }
     : {};
-  // ONE LINE, NOT THREE BLOCKS. The refusals were 51 words permanently on screen -- more
-  // than the read-out they sit under -- restating three questions the reader may not have
-  // asked. They still must be STATED rather than silently omitted, because the mode
-  // question recurs precisely when nothing addresses it; they just do not need to be the
-  // largest thing on the page. One summary line, expanding to the same content.
+  // THE QUESTION AND ITS ANSWER ARE ON SCREEN; the working is one click away.
+  //
+  // These were collapsed behind a single summary line reading "Not determinable here:
+  // crack mode · path roughness · ...", on the grounds that they were 51 words restating
+  // questions the reader may not have asked. That was wrong about which reader. The
+  // owner asked thrice for a transgranular/intergranular call -- most recently proposing
+  // linearity as the discriminator, which is the exact proxy the crack-mode entry
+  // refutes with measurements. The app HAD considered the question, HAD reached a
+  // conclusion, and had put it where nobody would find it. "This cannot be determined
+  // from this data, here is why, and here is the one experiment that would settle it" IS
+  // a conclusion, and for a researcher deciding what to image next it is the most
+  // actionable one here.
+  //
+  // So each question and its answer are visible, and only the why and the would-need are
+  // behind the disclosure. That is 4 questions and 4 answers, not 51 words of prose.
   const refusals = (d.refusals || []).length ? `
-    <details class="refuse-all">
-      <summary>Not determinable here: ${(d.refusals || []).map((r) =>
-        esc(r.label || r.question)).join(" · ")}</summary>
+    <h3 class="sect">Asked and answered: not from this data</h3>
+    <div class="refuse-all-open">
       ${(d.refusals || []).map((r) => `
         <div class="refuse">
-          <h4>${r.question}</h4>
-          <div class="ans">${r.answer}</div>
+          <h4>${esc(r.question)}</h4>
+          <div class="ans">${esc(r.answer)}</div>
           <details><summary>Why, and what would answer it</summary>
             <p>${r.why}</p>
             ${r.would_need && r.would_need.length
@@ -1025,7 +999,7 @@ async function renderReadout() {
             ${r.not_this ? `<p><strong>Not this:</strong> ${r.not_this}</p>` : ""}
           </details>
         </div>`).join("")}
-    </details>` : "";
+    </div>` : "";
 
   el.innerHTML = (body || `<p class="ro-empty">Nothing this data supports saying yet.</p>`)
     + (state.frame
