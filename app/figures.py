@@ -151,13 +151,21 @@ def build(frames, arm, kind, x=None, y=None, min_frames=3, include_thin=False):
     if mixed_detectors:
         dropped["_mixed_detectors"] = mixed_detectors
 
+    # The collapsed rows travel with the result so the conclusions under the chart are
+    # computed from exactly the points the chart drew -- the same rule the frame and
+    # specimen read-outs follow, and the reason a statement can never disagree with the
+    # figure beside it.
+    def _with_rows(d):
+        d["rows"] = rows
+        return d
+
     if kind == "histogram":
-        return _hist(rows, arm, y or x, dropped)
+        return _with_rows(_hist(rows, arm, y or x, dropped))
     if kind == "scatter":
         if not (x and y):
             raise ValueError("a scatter needs both x and y")
-        return _scatter(rows, arm, x, y, dropped)
-    return _by_specimen(rows, arm, y or x, kind, min_frames, include_thin, dropped)
+        return _with_rows(_scatter(rows, arm, x, y, dropped))
+    return _with_rows(_by_specimen(rows, arm, y or x, kind, min_frames, include_thin, dropped))
 
 
 def _frame(W, H, title, caption, body, ylab="", xlab=""):

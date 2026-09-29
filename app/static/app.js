@@ -709,6 +709,8 @@ function specimenCard(r) {
 //: Set by renderReadout, rendered by renderSpecimens. Held rather than re-fetched because
 //: both are driven by loadArm and the order between them is not guaranteed.
 let ARM_STATEMENTS = [];
+//: The statements under the current figure, so the drawer can open their basis.
+let FIG_SAID = [];
 
 function armStatements() {
   if (!ARM_STATEMENTS.length) return "";
@@ -1592,6 +1594,29 @@ async function loadArm() {
       return;
     }
     out.innerHTML = await r.text();
+    // WHAT THE FIGURE SHOWS, under the figure. A plot builder that renders a picture and
+    // says nothing about it leaves the reading to whoever is looking, which is the same
+    // gap the Compare table had. Fetched with the same parameters, from the same build,
+    // so the sentences cannot disagree with the points above them.
+    try {
+      const said = await api(`/api/figure/says?${q}`);
+      FIG_SAID = said.statements || [];
+      if (FIG_SAID.length) {
+        out.insertAdjacentHTML("beforeend", `<div class="ro figro">` + FIG_SAID.map((st, i) =>
+          `<div class="ro-line ${st.level}" data-figro="${i}" tabindex="0" role="button">
+             <span class="mk">${MARK[st.level] || "\u00b7"}</span>
+             <span class="tx">${esc(st.text)}</span>
+             <span class="who">THIS FIGURE</span>
+           </div>`).join("") + `</div>`);
+        out.querySelectorAll("[data-figro]").forEach((el) => {
+          const open = () => openDefs(FIG_SAID[+el.dataset.figro]);
+          el.onclick = open;
+          el.onkeydown = (e) => {
+            if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
+          };
+        });
+      }
+    } catch (e) { /* the picture is still worth showing without them */ }
     $("#figdl").onclick = () => {
       q.set("download", "true");
       download(`/api/figure.svg?${q}`,

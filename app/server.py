@@ -931,6 +931,27 @@ def figure_fields():
             "kinds": list(F.KINDS)}
 
 
+@app.get("/api/figure/says")
+def figure_says(arm: str = Query(...), kind: str = Query("box_by_specimen"),
+                x: str | None = None, y: str | None = None,
+                min_frames: int = 3, include_thin: bool = False):
+    """What the figure on screen shows, computed from the points it drew.
+
+    A separate call from figure.svg because that one returns image bytes. Same parameters,
+    same build, so the statements and the picture cannot disagree.
+    """
+    import sys as _sys
+    _sys.path.insert(0, os.path.join(RES, "analysis"))
+    import conclusions
+    from . import figures as F
+    try:
+        out = F.build(_load("frames"), arm, kind, x, y, min_frames, include_thin)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"statements": conclusions.for_figure(
+        kind, x, y, out.get("rows") or [], label_of=lambda k: F.FIELDS[k][0])}
+
+
 @app.get("/api/figure.svg")
 def figure_svg(arm: str = Query(...), kind: str = Query("box_by_specimen"),
                x: str | None = None, y: str | None = None,

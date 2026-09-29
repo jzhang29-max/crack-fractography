@@ -527,6 +527,130 @@ def for_arm(records, frames=None):
     return out
 
 
+#: Axis pairs whose relationship is ARITHMETIC, with the reason. Plotting one against the
+#: other produces a tidy correlation that is a restatement of a definition, and this app's
+#: own module docstring already rejects one such finding ("MeanWidth is defined as
+#: Area/Length, so its slope is the area slope minus one"). A user about to put a scatter
+#: in a paper should be told before, not after.
+ALGEBRAIC_PAIRS = {
+    frozenset(("area_fraction", "crack_area_px")):
+        "area fraction IS crack area divided by frame area, and within one magnification "
+        "the frame area is a constant -- so this plots a quantity against a rescaling of "
+        "itself",
+    frozenset(("p21_skeleton_mm_per_mm2", "tcl_um")):
+        "P21 is total centreline length per unit area and TCL is that same total length, "
+        "so they share a numerator",
+    frozenset(("p20_per_mm2", "n_cracks_measured")):
+        "P20 is the crack count per unit area and this is that same count, so they share "
+        "a numerator",
+    frozenset(("area_analysed_mm2", "p21_skeleton_mm_per_mm2")):
+        "area analysed is the DENOMINATOR of P21, so any trend here is partly the "
+        "definition",
+    frozenset(("area_analysed_mm2", "p20_per_mm2")):
+        "area analysed is the DENOMINATOR of P20, so any trend here is partly the "
+        "definition",
+}
+
+
+def for_figure(kind, x, y, rows, label_of=None):
+    """What the figure on screen actually shows, from the rows it was drawn from.
+
+    Takes the FIELD-COLLAPSED rows the renderer used, so a statement can never disagree
+    with the picture beside it -- the same rule the frame and specimen read-outs follow.
+
+    Deliberately modest. It reports a rank correlation with its p, the spread of the
+    specimen medians, and how concentrated a distribution is. It does NOT order specimens,
+    and it does not name a cause: this corpus is one imaged site per specimen, and a
+    figure cannot fix that.
+    """
+    import statistics as _st
+
+    out = []
+    rows = [r for r in (rows or [])]
+    if not rows:
+        return out
+    lab = label_of or (lambda k: k)
+
+    # --- SCATTER: a rank correlation, on fields, with its null ------------------------
+    if kind == "scatter" and x and y:
+        warn = ALGEBRAIC_PAIRS.get(frozenset((x, y)))
+        if warn:
+            out.append(_s(
+                "These two axes are related by definition, not by the material.",
+                f"{warn}. A correlation here is arithmetic: it would hold on random data "
+                f"that satisfied the same definitions.",
+                hedge="Plot one of them against something measured independently if the "
+                      "question is about the material.",
+                level="bad"))
+        xs = [r[x] for r in rows if r.get(x) is not None and r.get(y) is not None]
+        ys = [r[y] for r in rows if r.get(x) is not None and r.get(y) is not None]
+        if len(xs) >= 4:
+            from scipy import stats as _sp
+            rho, pv = _sp.spearmanr(xs, ys)
+            if rho is not None and rho == rho:
+                sig = pv < 0.05
+                out.append(_s(
+                    (f"{lab(y)} rises with {lab(x)}." if sig and rho > 0 else
+                     f"{lab(y)} falls as {lab(x)} rises." if sig else
+                     f"No monotonic relationship at this sample size."),
+                    f"Spearman rho = {rho:+.3f}, p = {pv:.4f}, over {len(xs)} fields "
+                    f"(not frames: a field imaged through two detectors is one point). "
+                    f"Rank-based, so it does not assume a straight line or normal errors.",
+                    hedge="Fields within a specimen are not independent -- on the "
+                          "2026-09-15 batch they are a raster across one patch -- so this "
+                          "p is optimistic. It describes these images, not the material.",
+                    level=("warn" if sig else "info"), value=round(float(rho), 3)))
+
+    # --- BY SPECIMEN: how far apart the groups are, and the refusal to order ----------
+    if kind in ("box_by_specimen", "bar_by_specimen") and (y or x):
+        f = y or x
+        g = {}
+        for r in rows:
+            if r.get(f) is not None:
+                g.setdefault(r.get("specimen", "unparsed"), []).append(r[f])
+        meds = {k: _st.median(v) for k, v in g.items() if v}
+        if len(meds) >= 2:
+            lo_k = min(meds, key=meds.get)
+            hi_k = max(meds, key=meds.get)
+            lo, hi = meds[lo_k], meds[hi_k]
+            # WITHIN against BETWEEN, because a spread of medians means nothing until you
+            # know how wide one specimen already is.
+            widths = [max(v) - min(v) for v in g.values() if len(v) > 1]
+            spread = (hi - lo)
+            typical = _st.median(widths) if widths else None
+            out.append(_s(
+                (f"Specimen medians span {hi / lo:.1f}× — less than one specimen's own range."
+                 if (typical is not None and typical >= spread and lo > 0) else
+                 f"Specimen medians span {hi / lo:.1f}×." if lo > 0 else
+                 "Specimen medians differ."),
+                f"{len(meds)} specimens, median {lab(f)} from {lo:.4g} ({lo_k}) to "
+                f"{hi:.4g} ({hi_k})"
+                + (f"; the typical specimen's own range is {typical:.4g}, against "
+                   f"{spread:.4g} between the extremes." if typical is not None else "."),
+                hedge="Each specimen here is ONE imaged site, so this spread cannot be "
+                      "separated into material difference and site difference. It is not "
+                      "a ranking and the named extremes are not a result.",
+                level="warn", value=(round(hi / lo, 2) if lo > 0 else None)))
+
+    # --- HISTOGRAM: is the total carried by a few values? -----------------------------
+    if kind == "histogram" and (y or x):
+        f = y or x
+        vals = sorted((r[f] for r in rows if r.get(f) is not None), reverse=True)
+        if len(vals) >= 5 and sum(vals) > 0:
+            k = max(1, len(vals) // 10)
+            share = sum(vals[:k]) / sum(vals)
+            out.append(_s(
+                f"The largest {k} of {len(vals)} fields hold {share * 100:.0f}% of the total.",
+                f"{lab(f)} summed over {len(vals)} fields; the top decile is "
+                f"{share * 100:.1f}% of that sum. A histogram shows the shape but not "
+                f"which end carries the mass.",
+                hedge="A concentrated total means the mean is describing the few, not the "
+                      "many. It does not by itself mean those fields are wrong.",
+                level=("warn" if share > 0.5 else "info"), value=round(share, 4)))
+
+    return out
+
+
 REFUSALS = [
     {
         "question": "Transgranular or intergranular?",
