@@ -263,3 +263,41 @@ def test_the_app_ships_its_own_icon_and_not_pyinstaller_s():
     assert any(open(os.path.join(res, f), "rb").read() == ours for f in shipped), (
         f"the bundle's icon ({shipped}) is not packaging/AppIcon.icns -- PyInstaller fell "
         f"back to its own default, which it does silently when icon= cannot be read")
+
+
+def test_no_test_spawns_a_hardcoded_venv_interpreter():
+    """A subprocess spawned as `<repo>/.venv/bin/python3` passes locally and cannot work on
+    CI, which pip-installs into the runner's own Python and never creates a repo venv.
+
+    That is the worst shape a test bug can take: green on the machine where it was written,
+    red everywhere else, and nothing in the local run can tell the difference. It took five
+    tests down on every push for a day before anyone looked at the badge. sys.executable is
+    correct by construction -- it is the interpreter already running the tests, so it has
+    exactly the packages pytest was able to import.
+
+    Parsed rather than grepped. The first version of this guard was a regex over every
+    line, which flagged two module docstrings that merely SAY how to run the file by hand
+    and its own pattern string -- three false positives and no true one. It now looks only
+    where the defect can live: the argument list of a subprocess call.
+    """
+    import ast
+    here = os.path.dirname(os.path.abspath(__file__))
+    SPAWN = {"run", "Popen", "call", "check_call", "check_output"}
+    bad = []
+    for f in sorted(os.listdir(here)):
+        if not f.endswith(".py"):
+            continue
+        tree = ast.parse(open(os.path.join(here, f)).read(), filename=f)
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or not node.args:
+                continue
+            fn = node.func
+            name = fn.attr if isinstance(fn, ast.Attribute) else getattr(fn, "id", "")
+            if name not in SPAWN:
+                continue
+            for lit in ast.walk(node.args[0]):
+                if isinstance(lit, ast.Constant) and isinstance(lit.value, str) \
+                        and ".venv" in lit.value:
+                    bad.append(f"{f}:{node.lineno}: spawns {lit.value!r}")
+    assert not bad, ("tests must spawn sys.executable, not a hardcoded venv "
+                     "(CI has no repo venv):\n  " + "\n  ".join(bad))

@@ -54,8 +54,15 @@ class Server:
                     shutil.copy(src, os.path.join(self.data_dir, name))
         env = {**os.environ, "FRACTOGRAPHY_DATA": self.data_dir,
                "PYTHONPATH": REPO}
+        # sys.executable, NOT a hardcoded .venv path. CI installs the dependencies into
+        # the runner's own Python and never creates a repo venv, so the hardcoded path
+        # raised FileNotFoundError and took five tests down on every push for a day --
+        # green locally, red on GitHub, and nothing in the local run could have told the
+        # difference. sys.executable is also the only choice that is correct by
+        # construction: it is the interpreter already running these tests, so it has
+        # exactly the packages pytest was able to import.
         self.proc = subprocess.Popen(
-            [os.path.join(REPO, ".venv", "bin", "python3"), "-m", "uvicorn",
+            [sys.executable, "-m", "uvicorn",
              "app.server:app", "--host", "127.0.0.1", "--port", str(self.port),
              "--log-level", "warning"],
             cwd=REPO, env=env,

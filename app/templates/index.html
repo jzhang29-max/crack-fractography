@@ -5,23 +5,18 @@
 <style>
 /* Roles, not raw hex, so light/dark swap in one place. Palette slots are the validated
    defaults; both modes were run through the six checks. */
+/* ONE FIXED THEME, NOT THREE PALETTES AND A MEDIA QUERY.
+   This used to default to light, switch to dark on prefers-color-scheme, and carry a
+   third near-identical block for an explicit data-theme=dark -- so the same app looked
+   different on two machines, and different on one machine at sunset if the OS was set to
+   switch automatically. Screenshots in an issue could not be compared with what the
+   reader had in front of them.
+   Dark, and dark specifically: the marking tool embedded in the Mark tab is dark-themed,
+   so a light shell around it read as two applications bolted together, which is the
+   complaint this release exists to answer. Masks render on their own white ground inside
+   an <img>, unaffected either way. To flip the whole app, change these values -- there is
+   now exactly one place to do it. */
 :root{
-  color-scheme:light;
-  --surface-1:#fcfcfb; --surface-2:#f4f3f1; --surface-3:#e9e7e4;
-  --text-primary:#0b0b0b; --text-secondary:#52514e; --text-muted:#82807a;
-  --rule:#dedbd6;
-  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100;
-  --warn:#b25000; --bad:#c0362c;
-}
-@media (prefers-color-scheme:dark){:root:where(:not([data-theme=light])){
-  color-scheme:dark;
-  --surface-1:#1a1a19; --surface-2:#222221; --surface-3:#2e2e2c;
-  --text-primary:#fff; --text-secondary:#c3c2b7; --text-muted:#928f86;
-  --rule:#3a3a37;
-  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500;
-  --warn:#e09b4a; --bad:#e8705f;
-}}
-:root[data-theme=dark]{
   color-scheme:dark;
   --surface-1:#1a1a19; --surface-2:#222221; --surface-3:#2e2e2c;
   --text-primary:#fff; --text-secondary:#c3c2b7; --text-muted:#928f86;

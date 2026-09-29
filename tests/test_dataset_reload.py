@@ -183,7 +183,9 @@ def test_a_run_that_measures_nothing_writes_nothing_and_exits_nonzero(tmp_path):
     keep = [{"arm": "sem/gated", "frame": "keepme", "area_fraction": 0.1}]
     (data / "frames.json").write_text(json.dumps(keep))
 
-    r = subprocess.run([os.path.join(repo, ".venv", "bin", "python3"),
+    # sys.executable: CI has no repo venv, and this subprocess must run under the same
+    # interpreter that imported the test's dependencies.
+    r = subprocess.run([sys.executable,
                         os.path.join(repo, "analysis", "batch.py"), "--arm", "uploads"],
                        cwd=repo, capture_output=True, text=True,
                        env={**os.environ, "FRACTOGRAPHY_DATA": str(data)})

@@ -1460,9 +1460,10 @@ async function loadArm() {
 }
 
 (async function () {
-  // The theme toggle is gone: a macOS app should follow system appearance, and the
-  // stylesheet already implements prefers-color-scheme, so the button existed to
-  // demonstrate the CSS.
+  // No theme toggle and no system-appearance following: the stylesheet is one fixed dark
+  // palette now. Following the OS meant the same app looked different on two machines and
+  // different on one machine at sunset, and the marking tool embedded in Mark is
+  // dark-themed regardless, so a light shell around it read as two applications.
   // Pass the filters the screen is applying. Without them a filtered view exported
   // unfiltered rows, and the file carried no record of what had been excluded.
   $("#csv").onclick = () => {
