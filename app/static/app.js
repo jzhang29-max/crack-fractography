@@ -810,6 +810,10 @@ function showTab(id) {
   $("#defsbtn").hidden = !ANALYSIS_TABS.has(id);
   $("#csv").hidden = !ANALYSIS_TABS.has(id);
   if (!ANALYSIS_TABS.has(id)) $("#defs").hidden = true;   // and close the drawer
+  // Repaint the strip: whether it mirrors the top conclusion depends on which tab this is
+  // (it does not, on Analysis, where the read-out already shows it), so leaving the strip
+  // alone across a tab switch would strand the previous tab's version of it.
+  if (typeof STRIP_REC !== "undefined" && STRIP_REC) renderStrip(STRIP_REC);
   $("#tabs").querySelectorAll("button").forEach((b) =>
     b.setAttribute("aria-selected", String(b.dataset.tab === id)));
   // The figure is expensive and the rose needs a laid-out box, so both render on reveal
@@ -883,7 +887,11 @@ function renderStrip(rec) {
   // a click, and the first thing asked afterwards was where the conclusions had gone. The
   // most severe statement now sits with the headline number, always visible, and says how
   // many more there are.
-  if (RO_TOP.text) {
+  // NOT ON ANALYSIS, where the full read-out is already on screen and this line is its
+  // first card -- the same sentence twice, 200 px apart, on the densest tab in the app.
+  // The mirror exists because making Mark the default put the conclusions behind a click;
+  // it earns its place on Mark, Compare and Figure, and nowhere else.
+  if (RO_TOP.text && TAB !== "analysis") {
     bits.push(`<span class="banner ${RO_TOP.level === "bad" ? "bad" : ""}" ` +
       `id="striptop" title="${esc(RO_TOP.basis || "")}">${MARK[RO_TOP.level] || ""} ` +
       `${esc(RO_TOP.text)}${RO_TOP.more ? ` <span class="u">+${RO_TOP.more}</span>` : ""}</span>`);
