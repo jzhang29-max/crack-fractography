@@ -16,6 +16,44 @@ intergranular versus transgranular — is read from grayscale surface **texture*
 binary mask has thrown away. This app does not attempt it, and a panel claiming to would be
 inventing its answers.
 
+## What kind of contribution this is
+
+Stated plainly, because the alternative is letting a reader assume something stronger.
+
+**No metric here is new, and the search for one is closed.** Per-region area, skeleton
+length, mean and maximum width, branch-point counts and an orientation index from a binary
+mask are **DiameterJ** (Hotaling et al., *Biomaterials* 61:327–338, 2015), which has a NIST
+validation behind it. Endpoint/slab/junction classification and branch lengths are **Fiji
+AnalyzeSkeleton**, shipped since about 2008. The density taxonomy (P10/P20/P21) is
+**Dershowitz & Herda (1992)**. The projected-length roughness parameter is **Underwood &
+Banerji**. The sampling, counting and confidence-interval layer is **ASTM E562, E1382,
+E1245, E2283** and **ISO 643**. The censoring machinery is rock-mechanics window sampling.
+Twenty-three separate novelty framings were tested against the literature over this
+project's life and all twenty-three were already owned; see
+`docs/PRACTICE_AND_PRIOR_ART.md` for the list and the citations that killed each one.
+
+**What this is, then:** those established metrics computed with the sampling discipline the
+standards actually require, on a corpus where that discipline changes the answer. Frames
+collapsed to fields, because a field imaged through two detectors is one field. One
+magnification per determination, because a 6.5× coarser pixel measures a different
+population. Arms never pooled. Specimens never ranked, because one imaged site per specimen
+makes the between-field and between-specimen variance the same parameter. Every statistic
+carrying its null or its interval, and every refusal stated on screen rather than left as a
+silence. The measured results it does assert — the detector changes crack length rather than
+width; crack area survives a 6× coarser pixel — each survived an adversarial attempt to kill
+them, and the ones that did not survive are recorded as killed.
+
+**The one framing that has not been refuted is procedural**, and it is conditional: no ASTM
+or ISO test method exists for quantifying cracks in micrographs by image analysis, and the
+coatings literature says so directly. A documented, sampled, interference-listed,
+Pij-labelled, CI-bearing procedure with quantified threshold sensitivity would be a modest
+standards-shaped contribution. **Treat that as unclaimed until someone checks the ASTM E04
+and E08 and the IIW work-item lists** — that check has not been done, and a live work item
+kills it.
+
+Use this as *fitness for purpose*: an app that reports what materials papers report, in
+units they can compare, with the uncertainty attached and the limits named.
+
 ## Install
 
 **As an app.** [Download the latest release](https://github.com/jzhang29-max/crack-fractography/releases/latest),

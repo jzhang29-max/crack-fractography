@@ -293,7 +293,8 @@ def measure_frame(mask, stem, modality="sem", grey=None):
         # without its null means nothing on this corpus, where uniform random angles return
         # R = 0.16-0.29 against a corpus median of 0.257.
         "rose_R": segsum.get("rose_R"),
-        "rose_R_null95": segsum.get("rose_R_null95"),
+        "rose_R_null": segsum.get("rose_R_null"),
+        "rose_null_pct": segsum.get("rose_null_pct"),
         "rose_theta_deg": segsum.get("rose_theta_deg"),
         "rose_beats_null": segsum.get("rose_beats_null"),
         "rose_null": segsum.get("rose_null"),

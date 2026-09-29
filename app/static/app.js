@@ -170,7 +170,7 @@ function renderFrames() {
 //    The measurement already knows this (the resultant is computed on doubled angles), and
 //    the convention in this literature -- FracPaQ, fractopo -- is to draw axial data as a
 //    full bidirectional rose. Half a disc was the arithmetic showing through the chart.
-// 2. THE NULL WAS COMPUTED AND NEVER SHOWN. rose_R_null95 is on every frame record and no
+// 2. THE NULL WAS COMPUTED AND NEVER SHOWN. rose_R_null is on every frame record and no
 //    pixel of this chart used it, so a reader saw a lopsided rose and concluded
 //    "preferentially oriented" every time -- which is exactly the failure the null exists
 //    to prevent. A synthetic mask of straight lines at UNIFORM RANDOM angles returns
@@ -194,7 +194,7 @@ function rose(hist, f) {
   const even = 1 / n;                      // uniform expectation for the drawn quantity
   const rAt = (v) => 10 + (R - 10) * (v / max);
   const beats = f && f.rose_beats_null === true;
-  const known = f && f.rose_R != null && f.rose_R_null95 != null;
+  const known = f && f.rose_R != null && f.rose_R_null != null;
   // Muted when the rose does not beat chance: the shape is still worth seeing, it just is
   // not evidence, and colour is the only channel that says so before you read anything.
   const op = (v) => ((beats ? 0.34 : 0.14) + (beats ? 0.62 : 0.2) * v / max).toFixed(2);
@@ -263,7 +263,7 @@ function rose(hist, f) {
       fill="${beats ? "var(--text-primary)" : "var(--text-muted)"}">${
         beats ? `Oriented near ${f.rose_theta_deg}°` : "Not distinguishable from random"}</text>
     <text x="${cx}" y="${cy + R + 48}" text-anchor="middle" font-size="10" fill="var(--text-muted)"
-      data-tip="${esc(f.rose_null || "")}">R = ${f.rose_R} · chance reaches ${f.rose_R_null95}</text></g>`;
+      data-tip="${esc(f.rose_null || "")}">R = ${f.rose_R} · chance reaches ${f.rose_R_null}</text></g>`;
 
   const note = document.querySelector("#rosenote");
   if (note) {
@@ -275,8 +275,8 @@ function rose(hist, f) {
   }
   el.innerHTML = `<svg viewBox="0 0 300 ${cy + R + 56}" width="100%" role="img"
     aria-label="${hist.weighted_by}-weighted crack orientation by skeleton branch, 15 degree bins, mirrored about the centre. ${
-      known ? (beats ? `Oriented near ${f.rose_theta_deg} degrees; resultant ${f.rose_R} against a chance level of ${f.rose_R_null95}.`
-                     : `Not distinguishable from random: resultant ${f.rose_R} against a chance level of ${f.rose_R_null95}.`) : ""}">
+      known ? (beats ? `Oriented near ${f.rose_theta_deg} degrees; resultant ${f.rose_R} against a chance level of ${f.rose_R_null}.`
+                     : `Not distinguishable from random: resultant ${f.rose_R} against a chance level of ${f.rose_R_null}.`) : ""}">
     ${ring}${p}${axis}${ticks}${tl}${verdict}</svg>`;
   wire(el);
 }

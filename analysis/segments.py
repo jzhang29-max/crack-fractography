@@ -56,9 +56,27 @@ MIN_DIRECTIONAL_PX = 20
 #: commonest case precisely ON the boundary and lets float error decide it.
 CHORD_WOBBLE_PX = 2.0
 
-#: Permutation draws for the anisotropy null. 1000 is enough for a 95th
-#: percentile and is vectorised, so it costs a few ms per frame.
+#: Permutation draws for the anisotropy null. 1000 is vectorised, so it costs a few ms
+#: per frame, and is enough resolution for the percentile below.
 ROSE_NULL_DRAWS = 1000
+
+#: WHICH PERCENTILE OF THE NULL THE VERDICT USES -- and it is 99, not 95, because 95 did
+#: not deliver 5%.
+#:
+#: CALIBRATED, not assumed. Pushing 108 synthetic masks that are ISOTROPIC BY CONSTRUCTION
+#: (straight 3-px lines at uniform random angles, three densities x three widths) through
+#: this exact function, the shipped 95th-percentile threshold called 10 of them oriented:
+#: a realised false-positive rate of 9.3% (95% CI 3.8-14.7%) against a nominal 5%. The
+#: 99th gives 2.8% and the 99.5th 1.9%, so 99 is the first that is conservative rather
+#: than anti-conservative.
+#:
+#: WHY 95 OVER-FIRES. The null draws an independent direction per skeleton branch, but
+#: branches are not independent: one crack fragments into several branches that all
+#: inherit its direction, so the observed resultant is built from fewer effective
+#: directions than the null assumes and sits high. It is NOT lattice bias -- on the same
+#: synthetic input the measured angles pass a uniformity chi-square (14.5 on 11 df against
+#: a 19.7 critical value) and the lattice bins hold 35% against 33% expected.
+ROSE_NULL_PCT = 99
 
 #: 8-connectivity neighbour count kernel, centre excluded.
 _K = np.array([[1, 1, 1], [1, 0, 1], [1, 1, 1]], np.uint8)
@@ -73,7 +91,7 @@ def _empty_summary(note):
             "directional_length_share", "lattice_chord_share_all_segments",
             "n_junctions", "n_triple", "n_quadruple_plus",
             "characteristic_length_px", "rose_bin_deg", "rose_length_share", "rose_R",
-            "rose_theta_deg", "rose_R_null95", "rose_beats_null")
+            "rose_theta_deg", "rose_R_null", "rose_null_pct", "rose_beats_null")
     out = {k: None for k in keys}
     out.update(n_segments=0, note=note, min_directional_px=MIN_DIRECTIONAL_PX,
                rose_weighted_by="segment length",
@@ -186,7 +204,7 @@ def skeleton_segments(mask):
     # long segments give a high R by chance, which is exactly how a rose over 103 segments
     # can look anisotropic and mean nothing. Deterministic seed so a frame's verdict does
     # not change between runs.
-    R = theta = R_null95 = None
+    R = theta = R_null = None
     if len(A) and L.sum() > 0:
         w = L / L.sum()
         two = np.deg2rad(2.0 * A)
@@ -196,7 +214,7 @@ def skeleton_segments(mask):
         rng = np.random.default_rng(0)
         draws = rng.uniform(0.0, 2.0 * np.pi, size=(ROSE_NULL_DRAWS, len(w)))
         Rn = np.hypot((w * np.cos(draws)).sum(axis=1), (w * np.sin(draws)).sum(axis=1))
-        R_null95 = float(np.percentile(Rn, 95))
+        R_null = float(np.percentile(Rn, ROSE_NULL_PCT))
 
     # How much of the skeleton the directional gate kept. A rose built on 8% of the length
     # is a different claim from one built on 80%.
@@ -255,13 +273,14 @@ def skeleton_segments(mask):
         "rose_length_share": ([round(float(h / tot), 4) for h in hist] if tot else None),
         "rose_weighted_by": "segment length",
         # The rose's own verdict. rose_beats_null is the only one of these safe to read on
-        # its own; R without R_null95 beside it means nothing on this corpus.
+        # its own; R without R_null beside it means nothing on this corpus.
         "rose_R": (round(R, 4) if R is not None else None),
         "rose_theta_deg": (round(theta, 1) if theta is not None else None),
-        "rose_R_null95": (round(R_null95, 4) if R_null95 is not None else None),
-        "rose_beats_null": (bool(R > R_null95) if (R is not None and R_null95 is not None)
+        "rose_R_null": (round(R_null, 4) if R_null is not None else None),
+        "rose_null_pct": ROSE_NULL_PCT,
+        "rose_beats_null": (bool(R > R_null) if (R is not None and R_null is not None)
                             else None),
         "rose_null": (f"uniform random directions with the observed segment lengths, "
-                      f"{ROSE_NULL_DRAWS} draws, 95th percentile"),
+                      f"{ROSE_NULL_DRAWS} draws, {ROSE_NULL_PCT}th percentile; calibrated to a measured 2.8% false-positive rate on isotropic synthetic masks, where the 95th percentile delivered 9.3%"),
     }
     return segs, summary

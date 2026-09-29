@@ -19,7 +19,7 @@ def frame(**kw):
     base = dict(arm="sem/gated", scale_known=True, n_cracks_measured=50,
                 largest_share_of_area=0.5, censored_share=0.02,
                 censored_share_by_length=0.05, rose_beats_null=None,
-                rose_R=None, rose_R_null95=None, rose_theta_deg=None)
+                rose_R=None, rose_R_null=None, rose_theta_deg=None)
     base.update(kw)
     return base
 
@@ -32,8 +32,8 @@ def texts(sts):
 def test_every_statement_is_within_the_word_cap():
     for f in (frame(), frame(largest_share_of_area=0.97), frame(scale_known=False),
               frame(arm="txm"), frame(n_cracks_measured=0),
-              frame(rose_beats_null=True, rose_R=0.6, rose_R_null95=0.2, rose_theta_deg=32),
-              frame(rose_beats_null=False, rose_R=0.2, rose_R_null95=0.3),
+              frame(rose_beats_null=True, rose_R=0.6, rose_R_null=0.2, rose_theta_deg=32),
+              frame(rose_beats_null=False, rose_R=0.2, rose_R_null=0.3),
               frame(censored_share_by_length=0.9, mcl_um=500, mcl_um_uncensored_only=100),
               frame(p21_skeleton_mm_per_mm2=40, probe={"p21_buffon_mm_per_mm2": 18})):
         for s in C.for_frame(f):
@@ -43,10 +43,10 @@ def test_every_statement_is_within_the_word_cap():
 
 # --- orientation: the whole point of the null ---------------------------------------
 def test_orientation_is_claimed_only_when_it_beats_its_null():
-    yes = C.for_frame(frame(rose_beats_null=True, rose_R=0.61, rose_R_null95=0.22,
+    yes = C.for_frame(frame(rose_beats_null=True, rose_R=0.61, rose_R_null=0.22,
                             rose_theta_deg=32.4))
     assert "oriented near" in texts(yes).lower()
-    no = C.for_frame(frame(rose_beats_null=False, rose_R=0.24, rose_R_null95=0.31))
+    no = C.for_frame(frame(rose_beats_null=False, rose_R=0.24, rose_R_null=0.31))
     assert "not resolvably oriented" in texts(no).lower()
     assert "oriented near" not in texts(no).lower()
 
@@ -484,3 +484,63 @@ def test_every_refusal_carries_a_short_label():
         assert r.get("label"), r["question"]
         assert len(r["label"].split()) <= 3, r["label"]
         assert "?" not in r["label"]
+
+
+# --- the engine must be able to say what IS the case, not only what is not ----------
+def test_the_arm_readout_leads_with_an_established_finding():
+    """Every statement in this engine was originally written to fire on FAILURE, so the
+    read-out could only ever say what was unknown: "cannot be ordered", "not determinable",
+    "no relationship", "0 of 9 reach the target". Each was true and the whole was useless,
+    and the owner said so.
+
+    Two results survived adversarial verification and belong at the top: the detector
+    changes crack LENGTH rather than width (36 same-field pairs at one magnification, with
+    a same-detector control showing the difference routes through width instead), and the
+    crack area survives a 6x coarser pixel (against a null where 1-2 px synthetic cracks
+    lose everything). This asserts the engine still states them, and states them first.
+    """
+    import json, os
+    from collections import defaultdict
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    fp = os.path.join(repo, "analysis", "out", "frames.json")
+    sp = os.path.join(repo, "analysis", "out", "specimens.json")
+    if not (os.path.exists(fp) and os.path.exists(sp)):
+        pytest.skip("no dataset built")
+    frames = json.load(open(fp))
+    specs = json.load(open(sp))
+
+    said = C.for_arm([r for r in specs if r["arm"] == "sem/gated"],
+                     [f for f in frames if f["arm"] == "sem/gated"])
+    assert said, "the gated arm produced no statements at all"
+    good = [s for s in said if s["level"] == "good"]
+    assert good, ("the arm read-out contains no established finding -- every statement is "
+                  "a caveat or a refusal, which is the state the owner rejected")
+    assert said[0]["level"] == "good", (
+        f"the read-out opens with {said[0]['level']!r}: {said[0]['text']!r}. Findings lead, "
+        f"limits follow.")
+    # Each one still carries its null and the condition under which it misleads.
+    for s in good:
+        assert s["basis"] and len(s["basis"].split()) > 12, s["text"]
+        assert s["hedge"], f"a positive finding with no hedge: {s['text']!r}"
+
+
+def test_a_calibrated_finding_is_not_asserted_for_an_arm_it_was_not_measured_on():
+    """The coarse-pixel calibration was measured on SEM fields at 51.883 nm/px. Firing it
+    for txm -- a different instrument at 29.24 nm/px -- would assert a result for an arm it
+    was never tested on. I made exactly that mistake writing it."""
+    import json, os
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    fp = os.path.join(repo, "analysis", "out", "frames.json")
+    sp = os.path.join(repo, "analysis", "out", "specimens.json")
+    if not (os.path.exists(fp) and os.path.exists(sp)):
+        pytest.skip("no dataset built")
+    frames = json.load(open(fp))
+    specs = json.load(open(sp))
+    txm = C.for_arm([r for r in specs if r["arm"] == "txm"],
+                    [f for f in frames if f["arm"] == "txm"])
+    joined = " ".join(s["text"] for s in txm)
+    assert "resolution artefact" not in joined, (
+        "the coarse-pixel calibration is being asserted for txm, which it was not "
+        "measured on")
+    assert "LENGTH, not width" not in joined, (
+        "the detector finding is being asserted for txm, which has no detector pair")

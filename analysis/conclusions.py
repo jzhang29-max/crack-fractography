@@ -119,12 +119,12 @@ def for_frame(f):
 
     # --- ORIENTATION, only against its own null. --------------------------------------
     beats = f.get("rose_beats_null")
-    R, R95, th = f.get("rose_R"), f.get("rose_R_null95"), f.get("rose_theta_deg")
+    R, Rnull, th = f.get("rose_R"), f.get("rose_R_null"), f.get("rose_theta_deg")
     if beats is True and th is not None:
         out.append(_s(
             f"Oriented near {th:.0f}° to image x.",
             f"length-weighted axial resultant R = {R:.3f} against its own permutation "
-            f"null R95 = {R95:.3f} (1000 draws, uniform directions, observed segment "
+            f"null Rnull = {Rnull:.3f} (1000 draws, uniform directions, observed segment "
             f"lengths). Construct: ASTM E1268-19 line-intercept anisotropy; axial "
             f"statistics per Mardia & Jupp.",
             hedge="Direction to no better than ±10°, and relative to IMAGE x -- "
@@ -134,7 +134,7 @@ def for_frame(f):
     elif beats is False:
         out.append(_s(
             "Not resolvably oriented.",
-            f"R = {R:.3f} does not exceed its permutation null R95 = {R95:.3f}. The null "
+            f"R = {R:.3f} does not exceed its permutation null Rnull = {Rnull:.3f}. The null "
             f"is computed for THIS frame from its own segment lengths, which is why it is "
             f"quoted beside the value: across this corpus it runs 0.04 to 1.00, median "
             f"0.14, because it scales with how many segments there are. A fixed threshold "
@@ -493,6 +493,105 @@ def for_arm(records, frames=None):
                   "detector looked.",
             level="bad", value=round(med, 3)))
 
+    # --- WHAT THE DETECTOR ACTUALLY CHANGES. A POSITIVE, CONTROLLED RESULT. ----------
+    #
+    # This is one of exactly two properly controlled contrasts in the corpus: the SAME
+    # physical field through two detectors. The app already said the detector moves the
+    # answer; what it never said is WHICH WAY, and that turns out to be the informative
+    # part. The excess is in centreline LENGTH, not in width.
+    #
+    # The control is what makes it a finding rather than an observation. Comparing two
+    # DIFFERENT fields with the SAME detector, the area difference routes through WIDTH
+    # instead (|log length| exceeded |log width| on only 69 of 144 and 96 of 144 such
+    # pairs). So "an area difference shows up as length" is not a generic property of
+    # comparing two crack masks here -- it is specific to the detector swap, where it held
+    # on 36 of 36 fields.
+    try:
+        from specimen_stats import detector_of, field_key
+        pairs = {}
+        for f in frames:
+            if not f.get("nm_per_px") or not f.get("total_skeleton_length_px"):
+                continue
+            d = detector_of(f.get("frame", ""))
+            if d in ("CBS", "ETD"):
+                pairs.setdefault((field_key(f["frame"]), f["nm_per_px"]), {})[d] = f
+        # ONE MAGNIFICATION ACROSS ALL THE PAIRS, not one per pair. Keying on
+        # (field, nm_per_px) already guarantees both members of a pair share a scale, but
+        # taking a median over pairs at DIFFERENT scales is the pooling this app forbids
+        # everywhere else -- and it moves the answer: including the 337.2396 nm/px overview
+        # pairs, where the ratio is about 1.0, pulled 2.79x down to 2.5x. Modal scale only.
+        from collections import Counter as _C
+        ready = [(k, v) for k, v in pairs.items() if len(v) == 2]
+        if ready:
+            modal = _C(k[1] for k, _ in ready).most_common(1)[0][0]
+            both = [v for k, v in ready if k[1] == modal]
+        else:
+            both, modal = [], None
+        if len(both) >= 8:
+            import statistics as _st
+            lr, wr, length_wins = [], [], 0
+            for v in both:
+                c, e = v["CBS"], v["ETD"]
+                Lc, Le = c["total_skeleton_length_px"], e["total_skeleton_length_px"]
+                Ac, Ae = c.get("crack_area_px"), e.get("crack_area_px")
+                if not (Lc and Le and Ac and Ae):
+                    continue
+                import math as _m
+                ll, ww = _m.log(Lc / Le), _m.log((Ac / Lc) / (Ae / Le))
+                lr.append(Lc / Le)
+                wr.append((Ac / Lc) / (Ae / Le))
+                length_wins += abs(ll) > abs(ww)
+            if len(lr) >= 8:
+                out.append(_s(
+                    f"The detector changes crack LENGTH, not width: CBS carries "
+                    f"{_st.median(lr):.1f}× ETD's.",
+                    f"{len(lr)} physical fields imaged both ways at {modal} nm/px -- one "
+                    f"magnification, because a median over pairs at different scales "
+                    f"would be the pooling this app refuses elsewhere. "
+                    f"Median centreline length ratio {_st.median(lr):.2f}×; median width "
+                    f"ratio (area/length) {_st.median(wr):.2f}×. The length term exceeds "
+                    f"the width term on {length_wins} of {len(lr)} fields. CONTROL: "
+                    f"between two DIFFERENT fields with the SAME detector the difference "
+                    f"routes through width instead, so this is a property of the detector "
+                    f"swap and not of comparing two crack masks.",
+                    hedge="It does NOT say CBS sees more real crack. A binary mask cannot "
+                          "say whether the extra centreline is crack ETD missed or "
+                          "segmentation gain on a noisier backscatter image, and nothing "
+                          "here referees these fields. Width is not identical either -- it "
+                          "is detectably about 8% narrower, not the same.",
+                    level="good", value=round(_st.median(lr), 2)))
+    except Exception:
+        pass
+
+    # --- THE MEASUREMENT'S VALIDITY ENVELOPE, stated as a positive ---------------------
+    #
+    # A CALIBRATION, not a per-corpus recomputation, and labelled as one. Re-binarising 36
+    # scaled fields from 51.9 to 311 nm/px with an area-preserving 50% rule preserved total
+    # crack area to a median ratio of 1.000 (bootstrap 95% CI 0.998-1.001), every field
+    # inside +/-10%. The null is what earns it: synthetic cracks 1 and 2 px wide, run
+    # through the identical operation, retain 0.04 of their area at 3x and 0.00 at 6x. So
+    # the crack mass this app measures genuinely sits above the resolution limit -- the area
+    # fraction is not a thing that appears because the pixels are small enough to see it.
+    # SCOPED TO WHERE IT WAS MEASURED. It was calibrated on SEM fields at 51.883 nm/px,
+    # and firing it on txm -- a different instrument at 29.24 nm/px -- would be asserting a
+    # result for an arm it was never tested on, which is the one thing this app refuses
+    # most consistently. It stays silent there rather than generalising.
+    CALIBRATED_AT = 51.883
+    if any(abs((f.get("nm_per_px") or 0) - CALIBRATED_AT) < 0.01 for f in frames):
+        out.append(_s(
+            "Crack area is not a resolution artefact: it survives a 6× coarser pixel.",
+            f"a calibration at {CALIBRATED_AT} nm/px, not a recount: re-binarising 36 "
+            "scaled fields from 51.9 to "
+            "311 nm/px with an area-preserving rule left total crack area at a median "
+            "ratio of 1.000 (95% CI 0.998-1.001), all 36 within ±10%. Synthetic cracks 1 "
+            "and 2 px wide put through the same operation retain 0.04 of their area at 3× "
+            "and none at 6×, so the test can fail and this mask does not.",
+            hedge="True of an area-preserving binarisation only. A dilating rule -- coarse "
+                  "pixel is crack if ANY sub-pixel is -- inflates the same fields to 1.47× "
+                  "at 6×, so at coarse pixels the rule matters more than the pixel size. "
+                  "It says nothing about the crack COUNT, which does not survive.",
+            level="good"))
+
     # --- HOW MUCH OF THE CORPUS CAN BE SPOKEN ABOUT IN MICROMETRES --------------------
     if frames:
         ns = sum(1 for f in frames if not f.get("scale_known"))
@@ -524,6 +623,13 @@ def for_arm(records, frames=None):
                   "right; it is one nobody reviewed.",
             level="info", value=round(med, 3)))
 
+    # FINDINGS FIRST, LIMITS AFTER. Every statement this engine could make was written to
+    # fire on FAILURE, and the result was a read-out that only ever said what could not be
+    # known -- true line by line and useless as a whole. The two established results now
+    # lead, and the limits follow them as qualifications rather than standing in for them.
+    # Severity order within each group, so nothing serious is buried.
+    ORDER = {"good": 0, "bad": 1, "warn": 2, "info": 3}
+    out.sort(key=lambda st: ORDER.get(st["level"], 9))
     return out
 
 

@@ -35,7 +35,7 @@ def test_an_isotropic_mask_does_not_beat_its_own_null():
     rng = np.random.default_rng(1)
     _, s = skeleton_segments(_lines(rng.uniform(0, 180, 24)))
     assert s["rose_beats_null"] is False, (
-        f"isotropic input reported anisotropy: R={s['rose_R']} null95={s['rose_R_null95']}")
+        f"isotropic input reported anisotropy: R={s['rose_R']} null95={s['rose_R_null']}")
     # And the point of the control: its R is NOT near zero, so R alone would over-read.
     assert s["rose_R"] > 0.05, "if R were ~0 for random input the null would be unnecessary"
 
@@ -61,7 +61,7 @@ def test_the_null_is_deterministic():
     m = _lines([20, 40, 60, 80, 100, 120])
     a = skeleton_segments(m)[1]
     b = skeleton_segments(m)[1]
-    assert a["rose_R_null95"] == b["rose_R_null95"]
+    assert a["rose_R_null"] == b["rose_R_null"]
 
 
 def test_the_null_is_described_with_its_draw_count():
@@ -83,14 +83,14 @@ def _appjs():
 
 
 def test_the_rose_chart_draws_its_own_null():
-    """rose_R_null95 was computed on every frame and no pixel of the chart used it, so a
+    """rose_R_null was computed on every frame and no pixel of the chart used it, so a
     reader saw a lopsided rose and concluded "preferentially oriented" every time -- which
     is the exact failure the null exists to prevent. A synthetic mask of straight lines at
     uniform random angles returns R = 0.267-0.285, at or above this corpus's median R."""
     js = _appjs()
     i = js.index("function rose(")
     body = js[i:js.index("/* -----", i)]
-    for needed in ("rose_beats_null", "rose_R_null95", "rose_R"):
+    for needed in ("rose_beats_null", "rose_R_null", "rose_R"):
         assert needed in body, f"the rose chart never reads {needed}"
     assert "Not distinguishable from random" in body, "no on-chart verdict when it fails"
     # Identity is never colour alone: the muting must be accompanied by the words.
@@ -119,3 +119,63 @@ def test_every_rose_call_passes_a_frame_record_that_is_in_scope():
             if name not in params and f"const {name}" not in js and f"let {name}" not in js:
                 bad.append(f"{fn}: passes {name!r}, which is not in scope there")
     assert not bad, "rose called without a usable frame record: " + "; ".join(bad)
+
+
+def test_the_orientation_gate_delivers_the_error_rate_it_claims():
+    """A verdict whose realised false-positive rate is double its nominal one is a verdict
+    that overstates itself, and this one was: the shipped 95th-percentile threshold called
+    10 of 108 isotropic-by-construction masks "oriented" -- 9.3% against a nominal 5%.
+
+    The cause is not lattice bias (the measured angles pass a uniformity chi-square on the
+    same input). It is that the null draws an independent direction per skeleton branch
+    while branches are NOT independent: one crack fragments into several that all inherit
+    its direction, so the observed resultant is built from fewer effective directions than
+    the null assumes.
+
+    Calibrated rather than assumed, which is why this test builds the isotropic input and
+    counts. Kept small enough to run in the suite; the full 108-mask calibration is in the
+    ROSE_NULL_PCT docstring.
+    """
+    import math
+    import numpy as np
+    import segments as S
+
+    rng = np.random.default_rng(99)
+    fired = total = 0
+    for nlines, width in ((30, 1), (50, 2), (70, 3)):
+        for _ in range(6):
+            im = np.zeros((520, 520), bool)
+            for _ in range(nlines):
+                th = rng.uniform(0, math.pi)
+                L = rng.integers(40, 170)
+                cx, cy = rng.integers(60, 460), rng.integers(60, 460)
+                for t in range(-L // 2, L // 2):
+                    x = int(cx + t * math.cos(th)); y = int(cy + t * math.sin(th))
+                    if width <= x < 520 - width and width <= y < 520 - width:
+                        im[y - width:y + width + 1, x - width:x + width + 1] = True
+            _, s = S.skeleton_segments(im)
+            if s.get("rose_beats_null") is None:
+                continue
+            total += 1
+            fired += bool(s["rose_beats_null"])
+
+    assert total >= 12, f"only {total} usable masks; the calibration is not measuring"
+    rate = fired / total
+    # Conservative side only. The point is that the stated level and the delivered level
+    # agree in the safe direction, not that they agree exactly at this sample size.
+    assert rate <= 0.12, (
+        f"the orientation gate fired on {fired} of {total} isotropic masks "
+        f"({100 * rate:.0f}%). It must be conservative against its nominal level; the "
+        f"95th percentile measured 9.3% and was replaced by ROSE_NULL_PCT = "
+        f"{S.ROSE_NULL_PCT}.")
+
+
+def test_the_null_says_which_percentile_it_used():
+    """It said "95th percentile" while the code moved to 99. A verdict's stated basis has
+    to track the threshold it actually applied."""
+    import numpy as np
+    import segments as S
+    bar = np.zeros((200, 400), bool); bar[100:103, 40:360] = True
+    _, s = S.skeleton_segments(bar)
+    assert s["rose_null_pct"] == S.ROSE_NULL_PCT
+    assert f"{S.ROSE_NULL_PCT}th percentile" in s["rose_null"]

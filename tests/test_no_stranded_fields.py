@@ -72,7 +72,7 @@ def test_the_anisotropy_verdict_specifically_is_in_the_record():
     would not say which field mattered if it regressed."""
     rec = measure_frame(_mask(), "probe", "sem")[1]
     seg = rec.get("segments") or {}
-    for k in ("rose_R", "rose_R_null95", "rose_beats_null", "rose_theta_deg", "rose_null"):
+    for k in ("rose_R", "rose_R_null", "rose_beats_null", "rose_theta_deg", "rose_null"):
         assert k in seg, f"{k} missing from the stored record"
     assert seg["rose_beats_null"] in (True, False), seg["rose_beats_null"]
 
