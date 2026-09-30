@@ -353,3 +353,37 @@ def test_no_comment_claims_a_tab_count_or_a_tab_that_does_not_exist():
     # And the tab list itself is the authority on how many there are.
     tabs = src[src.index("const TABS = ["):src.index("let TAB =")]
     assert tabs.count('["') == 2, f"the tab list has {tabs.count('[\"')} entries"
+
+
+# --- MODES, NOT STORAGE LAYOUT ---------------------------------------------------------
+def test_the_selector_offers_instruments_not_arms():
+    """It listed "sem/gated", "sem/machine", "txm", "uploads" -- the storage layout, not a
+    choice anyone wants to make. Asked for SEM or TXM."""
+    src = open(APPJS, encoding="utf-8").read()
+    modes = src[src.index("const MODES = ["):src.index("function modeOptions(")]
+    assert '"SEM"' in modes and '"TXM"' in modes
+    assert '"sem/gated"' in modes and '"txm"' in modes
+    assert "sem/machine" not in modes, (
+        "the uncorrected arm is offered again; its only consumer is the corrections "
+        "comparison, which reads it server-side")
+    # The label is what the reader sees, so the raw arm string must not be rendered.
+    opts = src[src.index("function modeOptions("):src.index("function firstMode(")]
+    assert "m.label" in opts and "${a.arm}" not in opts
+
+
+def test_a_mode_with_no_frames_is_not_offered():
+    """A fresh install has only uploads; a configured one has all three. Offering an arm
+    the dataset does not contain is a dead entry that 404s on selection."""
+    src = open(APPJS, encoding="utf-8").read()
+    opts = src[src.index("function modeOptions("):src.index("function firstMode(")]
+    assert "have.has" in opts or "filter" in opts, (
+        "modeOptions does not filter by what the dataset actually contains")
+
+
+def test_the_opening_mode_falls_back_when_sem_is_absent():
+    """A downloaded copy with no SEM repo must land on something that exists."""
+    src = open(APPJS, encoding="utf-8").read()
+    fn = src[src.index("function firstMode("):]
+    fn = fn[:fn.index("\n}")]
+    assert "MODES.find" in fn, "the opening mode is not chosen from the mode list"
+    assert "arms &&" in fn or "arms?." in fn, "an empty arms list would throw here"

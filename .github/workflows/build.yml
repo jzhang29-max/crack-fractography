@@ -148,6 +148,46 @@ jobs:
           esac
           python packaging/smoke_check.py "$BIN" 8898
 
+      # THE INTERFACE, ON THE PLATFORM THAT BUILT IT. Everything above proves the server
+      # starts and measures; nothing had ever RENDERED the app anywhere but my own macOS
+      # laptop. Asked "does Linux work?", the accurate answer was "the engine does, the UI
+      # is unverified there" -- which is not an answer about the thing people download.
+      #
+      # Drives the packaged binary with headless chromium: tabs switch, the frame list
+      # fills, a measurement and a figure render, the mask decodes, the limits drawer
+      # opens, a drawing surface appears, and no page error is thrown. Structure and
+      # behaviour, not pixels -- a screenshot diff would fail on font rendering between
+      # platforms, which is the one difference that does not matter.
+      - name: install a headless browser
+        run: pip install playwright && python -m playwright install --with-deps chromium
+
+      - name: the UI works on this platform
+        shell: bash
+        env:
+          FRACTOGRAPHY_DATA: ${{ github.workspace }}/_ui_data
+        run: |
+          set -e
+          case "${{ runner.os }}" in
+            macOS)   BIN="dist/Crack Fractography.app/Contents/MacOS/Crack Fractography" ;;
+            Windows) BIN="dist/Crack Fractography/Crack Fractography.exe" ;;
+            *)       BIN="dist/Crack Fractography/Crack Fractography" ;;
+          esac
+          PORT=8897 "$BIN" > _ui_server.log 2>&1 &
+          for i in $(seq 1 90); do
+            curl -sf http://127.0.0.1:8897/api/health >/dev/null 2>&1 && break
+            sleep 1
+          done
+          python packaging/ui_check.py http://127.0.0.1:8897
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: ui-failure-${{ matrix.os }}
+          path: |
+            ui_check.png
+            _ui_server.log
+          if-no-files-found: ignore
+
       - uses: actions/upload-artifact@v4
         with:
           name: package-${{ matrix.os }}

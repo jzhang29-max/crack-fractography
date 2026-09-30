@@ -212,8 +212,19 @@ def test_the_boot_treats_an_empty_arms_list_like_no_dataset_at_all():
     code = re.sub(r"//[^\n]*", "", boot)
     assert "arms.length" in code, (
         "the boot path does not check for an empty arms array before indexing it")
-    assert code.index("arms.length") < code.index("arms[0]"), (
-        "the emptiness check must come before arms[0]")
+    # THE INVARIANT, NOT THE SPELLING. This required the literal `arms[0]` in the boot
+    # block and threw ValueError when that indexing moved into firstMode() -- a correct
+    # refactor failing a test that had pinned the old wording. What must hold is that
+    # nothing indexes the array before emptiness is checked, wherever the indexing lives.
+    if "arms[0]" in code:
+        assert code.index("arms.length") < code.index("arms[0]"), (
+            "the emptiness check must come before arms[0]")
+    else:
+        helper = js[js.index("function firstMode("):]
+        helper = helper[:helper.index("\n}")]
+        assert "arms &&" in helper or "arms?." in helper, (
+            "the boot delegates indexing to firstMode(), which must itself guard against "
+            "an empty or missing array")
 
 
 def test_every_hidden_element_is_actually_hidden_by_the_stylesheet():

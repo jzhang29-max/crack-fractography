@@ -110,6 +110,36 @@ def txm_export():
     return _resolved("txm_export", "txm_export")
 
 
+def txm_images():
+    """The directory of TXM ORIGINAL .tif mosaics, or None.
+
+    WHY THIS IS SEPARATE FROM txm_export. The export tree holds one crack mask per frame
+    and nothing else -- I checked it, found only `<frame>_crack_mask.png`, and concluded
+    there was no TXM original to draw an overlay on. That was wrong: the originals live in
+    the TXM pipeline repo, in its own images/ directory, 71 .tif files whose names match
+    the 71 exported frames exactly and whose pixel dimensions match the masks exactly
+    (5039x3703 on the frame I compared). The mask tree was simply not where they are.
+
+    The consequence of getting that wrong was visible: the Mark tab showed TXM as a
+    black-and-white mask while SEM showed a red overlay on the micrograph, and a user said
+    so. A binary mask is the measurement's input, not a picture of the specimen.
+
+    Resolution order matches every other path here -- configured, then the dev symlink --
+    with one addition: the pipeline repo sits beside txm_crack_export in practice, so a
+    sibling named TXM_Crack_Detection_Pipeline/images is tried before giving up. That is a
+    convenience, not a contract; Setup can point it anywhere.
+    """
+    p = _resolved("txm_images", "txm_images")
+    if p:
+        return p
+    tx = txm_export()
+    if tx:
+        sib = os.path.join(os.path.dirname(tx), "TXM_Crack_Detection_Pipeline", "images")
+        if os.path.isdir(sib):
+            return os.path.realpath(sib)
+    return None
+
+
 def sem_derived():
     s = sem_repo()
     return os.path.join(s, "crack_export", "derived") if s else None

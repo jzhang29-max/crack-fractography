@@ -13,6 +13,44 @@ const state = { arm: null, spec: "", frames: [], frame: null, cracks: null, minA
 // the attribute and swallow the rest of the row silently.
 //: "1 fields". Every fresh upload is a one-field specimen and a one-frame arm, so this
 //: is among the first things a new user reads, and it was wrong in five places.
+//: MODES, NOT ARMS. The selector offered four entries -- "sem/gated", "sem/machine",
+//: "txm", "uploads" -- which is the storage layout, not a choice anyone wants to make.
+//: A user asked for SEM or TXM. Those are the two instruments; everything else in that
+//: list was an implementation detail leaking into the one control that decides what you
+//: are looking at.
+//:
+//: sem/machine is DELIBERATELY ABSENT and nothing is lost by it. It is the same frames
+//: without the operator's strokes, and its only consumer is the corrections comparison,
+//: which reads both arms server-side from the specimen records -- nobody needs to browse
+//: it, and offering it invited picking the uncorrected masks by accident.
+//: arm -> does it have originals, from /api/arms. Empty until the first load, which is
+//: before any editor can open.
+let ARM_HAS_ORIGINALS = {};
+
+const MODES = [
+  { arm: "sem/gated", label: "SEM" },
+  { arm: "txm", label: "TXM" },
+  { arm: "uploads", label: "Your images" },
+];
+
+function modeOptions(arms) {
+  ARM_HAS_ORIGINALS = Object.fromEntries(
+    (arms || []).map((a) => [a.arm, !!a.has_originals]));
+  const have = new Map((arms || []).map((a) => [a.arm, a]));
+  return MODES.filter((m) => have.has(m.arm)).map((m) => {
+    const a = have.get(m.arm);
+    return `<option value="${m.arm}">${m.label} \u00b7 ${plural(a.n_frames, "frame")}</option>`;
+  }).join("");
+}
+
+//: The arm to open on: the first mode that actually has frames, so a fresh install lands
+//: on "Your images" and a configured one lands on SEM.
+function firstMode(arms) {
+  const have = new Set((arms || []).map((a) => a.arm));
+  const m = MODES.find((x) => have.has(x.arm));
+  return m ? m.arm : (arms && arms[0] && arms[0].arm) || "uploads";
+}
+
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (ch) =>
@@ -1567,14 +1605,69 @@ async function openEditor(frame) {
   ED.off.width = img.naturalWidth; ED.off.height = img.naturalHeight;
   ED.off.getContext("2d").drawImage(img, 0, 0);
 
+  // THE MICROGRAPH GOES BEHIND THE MASK. Without this the TXM arm drew black specks on a
+  // white field while the SEM arm showed red crack over the actual specimen -- a user
+  // pointed at the difference and was right: a binary mask is the measurement's INPUT,
+  // and a boundary cannot be judged against a blank background, because there is nothing
+  // underneath to compare it to.
+  //
+  // ED.off STAYS THE MASK. It is what gets saved and what every measurement is computed
+  // from, so the background is a separate image used only when painting the visible
+  // canvas. Compositing into ED.off would write the micrograph into the mask.
+  //: Which arms have a micrograph behind their masks, straight from /api/arms. NOT a
+  //: hardcoded list here: the server decides it in original(), and a second copy of that
+  //: rule in JavaScript would be the one that goes stale when a third modality arrives.
+  ED.bg = null;
+  if (ARM_HAS_ORIGINALS[state.arm]) try {
+    const bg = new Image();
+    bg.crossOrigin = "anonymous";
+    await new Promise((res, rej) => {
+      bg.onload = res;
+      bg.onerror = () => rej(new Error("no original"));
+      bg.src = `/api/original/${state.arm}/${encodeURIComponent(frame)}`;
+    });
+    ED.bg = bg;
+  } catch (e) {
+    // A configured arm whose file is missing for THIS frame. The mask alone is still
+    // editable and still correct, so this is a fallback and not an error.
+    ED.bg = null;
+  }
+
+  //: Draw the visible canvas: micrograph, then the mask's crack pixels in red over it.
+  //: ONE function, because a second copy of the composite would drift from this one the
+  //: first time either changed -- and a stroke that repainted differently from the initial
+  //: render is the kind of thing nobody notices until a correction looks wrong.
+  ED.paint = () => {
+    const g = cv.getContext("2d");
+    if (!ED.bg) { g.drawImage(ED.off, 0, 0, cv.width, cv.height); return; }
+    g.clearRect(0, 0, cv.width, cv.height);
+    g.drawImage(ED.bg, 0, 0, cv.width, cv.height);
+    const lay = document.createElement("canvas");
+    lay.width = cv.width; lay.height = cv.height;
+    const lg = lay.getContext("2d");
+    lg.drawImage(ED.off, 0, 0, cv.width, cv.height);
+    const d = lg.getImageData(0, 0, cv.width, cv.height);
+    const px = d.data;
+    for (let i = 0; i < px.length; i += 4) {
+      if (px[i] < 128) { px[i] = 214; px[i + 1] = 40; px[i + 2] = 40; px[i + 3] = 235; }
+      else { px[i + 3] = 0; }
+    }
+    lg.putImageData(d, 0, 0);
+    g.drawImage(lay, 0, 0);
+  };
+
   const fit = () => {
     const w = Math.min(host.clientWidth - 4, img.naturalWidth);
     cv.width = w; cv.height = Math.round(w * img.naturalHeight / img.naturalWidth);
-    cv.getContext("2d").drawImage(ED.off, 0, 0, cv.width, cv.height);
+    ED.paint();
   };
   fit();
   const isUpload = state.arm === "uploads";
-  $("#edout").innerHTML = `${img.naturalWidth} × ${img.naturalHeight} px. Black is crack.` +
+  // "Black is crack" is wrong once a micrograph is behind it -- crack is RED there, and
+  // the label has to follow what is on screen or it teaches the reader the wrong colour.
+  $("#edout").innerHTML = `${img.naturalWidth} × ${img.naturalHeight} px. `
+    + (ED.bg ? `Red is crack, over the micrograph <span class="u">(high-pass render, `
+             + `display only)</span>.` : `Black is crack.`) +
     (isUpload ? "" :
      ` <span class="u">Saving writes a copy to <b>uploads</b> — ${esc(frame)} itself is` +
      ` not modified.</span>`);
@@ -1593,7 +1686,7 @@ async function openEditor(frame) {
     g.lineWidth = ED.brush * (ED.off.width / cv.width);
     g.lineCap = "round"; g.lineJoin = "round";
     g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke();
-    cv.getContext("2d").drawImage(ED.off, 0, 0, cv.width, cv.height);
+    ED.paint();
     ED.dirty = true; $("#edsave").disabled = false;
   };
   cv.onpointerdown = (e) => { drawing = true; last = toNat(e); stroke(last, last);
@@ -1753,8 +1846,8 @@ async function loadArm() {
 
     state.arm = "uploads"; state.spec = "";
     const arms = await api("/api/arms");
-    $("#arm").innerHTML = arms.map((a) =>
-      `<option value="${a.arm}"${a.arm === "uploads" ? " selected" : ""}>${a.arm} · ${plural(a.n_frames, "frame")}</option>`).join("");
+    $("#arm").innerHTML = modeOptions(arms);
+    $("#arm").value = "uploads";
     await loadArm();
     if (done.length) selectFrame(done[done.length - 1]);
     // Say what failed, per file. A batch that silently drops one is worse than a batch
@@ -1910,9 +2003,9 @@ async function loadArm() {
   try { arms = await api("/api/arms"); }
   catch (e) { firstRun(); return; }
   if (!arms || !arms.length) { firstRun(); return; }
-  $("#arm").innerHTML = arms.map((a) =>
-    `<option value="${a.arm}">${a.arm} · ${plural(a.n_frames, "frame")}</option>`).join("");
-  state.arm = arms[0].arm;
+  $("#arm").innerHTML = modeOptions(arms);
+  state.arm = firstMode(arms);
+  $("#arm").value = state.arm;
   // No total-count subtitle any more. The arm dropdown carries its own count and the strip
   // carries the number people actually cite, so a third tally of the same corpus was words
   // for their own sake.

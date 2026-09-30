@@ -38,6 +38,7 @@ COVERED = {
     ("get", "/api/figure.svg"), ("get", "/api/health"), ("post", "/api/config"),
     ("post", "/api/measure_corpus"), ("get", "/api/measure_corpus"), ("get", "/"),
     ("get", "/mark/{path:path}"), ("post", "/mark/{path:path}"),
+    ("get", "/api/original/{arm:path}/{frame}"),
 }
 
 
@@ -133,6 +134,21 @@ def test_readout_returns_statements_and_refusals(srv):
     for s in d["frame"]:
         assert set(s) >= {"text", "basis", "level"}
         assert len(s["text"].split()) <= 15, f"on-screen text too long: {s['text']}"
+
+
+def test_an_uploaded_frame_has_no_micrograph_behind_it(srv):
+    """/api/original serves the greyscale a mask was made from, so the Mark tab can show
+    red crack over the specimen instead of black specks on white. An upload is a mask with
+    no micrograph behind it, and the honest answer is 404 -- the caller's question has a
+    clean answer, and the editor falls back to drawing the mask alone."""
+    st, raw = srv.get(f"/api/original/uploads/{_frame(srv)}")
+    assert st == 404, f"expected 404 for an arm with no originals, got {st}"
+    assert b"original" in raw.lower() or b"no originals" in raw.lower(), raw[:200]
+
+
+def test_a_missing_original_is_404_not_a_blank_image(srv):
+    st, _ = srv.get("/api/original/txm/no_such_frame_at_all")
+    assert st in (404, 503), st
 
 
 def test_export_csv_is_a_csv_with_the_frames_in_it(srv):

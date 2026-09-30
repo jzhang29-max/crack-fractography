@@ -10,6 +10,7 @@ Arms are never mixed. sem/gated, sem/machine and txm are different instruments o
 definitions of the object, so the API requires an arm and refuses to aggregate across them.
 """
 import json
+import io
 import os
 import threading
 import time
@@ -126,8 +127,18 @@ def arms():
         a["n_scaled"] += 1 if f["scale_known"] else 0
         a["n_cracks"] += f["n_cracks_measured"]
         a["specimens"].add(f["specimen"])
+    # WHETHER A MICROGRAPH EXISTS BEHIND THIS ARM'S MASKS, so the client does not have to
+    # know. The editor draws the crack in red over the original where there is one; asking
+    # for one that cannot exist -- every uploaded mask -- produced a 404 per frame and a
+    # console error per 404, which is the noise a real error hides behind. The server
+    # already decides this in original(); reporting it keeps one source of that truth
+    # instead of a second copy of the rule in JavaScript.
+    have_sem = bool(P.sem_repo())
+    have_txm = bool(P.txm_images())
     for a in out.values():
         a["n_specimens"] = len(a.pop("specimens"))
+        a["has_originals"] = (a["arm"].startswith("sem/") and have_sem) or \
+                             (a["arm"] == "txm" and have_txm)
     return sorted(out.values(), key=lambda a: a["arm"])
 
 
@@ -186,6 +197,105 @@ def mask(arm: str, frame: str):
     if not os.path.exists(p):
         raise HTTPException(404, f"no mask on disk for {frame!r} in {arm!r}")
     return FileResponse(p, media_type="image/png")
+
+
+#: Display cap for an original. The TXM mosaics are 5039x3703 float32 (48 MB each) and the
+#: SEM originals 6144x4376; sending either at full size to draw behind a mask is megabytes
+#: of transfer for pixels no canvas will show.
+ORIGINAL_MAX_W = 2400
+
+#: Blur radius subtracted to remove tile-to-tile illumination. See original() below.
+HIGHPASS_SIGMA = 60
+
+
+@app.get("/api/original/{arm:path}/{frame}")
+def original(arm: str, frame: str):
+    """The GREYSCALE MICROGRAPH a mask was made from, as an 8-bit PNG.
+
+    WHY THIS EXISTS. The Mark tab drew the TXM arm as its bare mask -- black specks on
+    white -- while the SEM arm showed the crack in red over the actual micrograph, because
+    the SEM path hands off to a tool that owns the originals and the TXM path had nothing
+    to hand off to. A user pointed at the difference. A binary mask is the measurement's
+    INPUT; it is not a picture of the specimen, and you cannot judge a correction against
+    it because there is nothing underneath to compare the boundary to.
+
+    I had concluded no TXM original existed, having looked in the export tree and found
+    only `<frame>_crack_mask.png`. They were in the pipeline repo's own images/ directory
+    all along: 71 .tif files, names matching the 71 exported frames, pixel dimensions
+    matching the masks exactly.
+
+    THE DISPLAY TRANSFORM IS A HIGH-PASS, AND IT WAS CHOSEN BY MEASURING, NOT BY EYE.
+    A TXM mosaic's dominant variation is tile-to-tile illumination -- a visible 6x5 grid
+    of bright squares -- which is instrument, not specimen. Four candidates were scored on
+    the same frame by how far the crack pixels separate from the matrix, in units of the
+    matrix's own standard deviation, using the crack mask as the reference:
+
+        percentile 1-99             +0.15 sd     (the grid dominates; cracks invisible)
+        CLAHE                       +0.23 sd     (amplifies the tile seams; worse to look at)
+        divide by blur, sigma 80    +0.57 sd     (seams gone, but noise blows up off-specimen)
+        subtract blur, sigma 60     +2.05 sd     <- this one
+
+    Subtracting a heavily blurred copy removes exactly the low-frequency illumination and
+    leaves the crack, which is a fine dark feature. 13.7x the separation of the obvious
+    choice, and unlike the division it cannot blow up where the signal approaches zero
+    outside the specimen.
+
+    IT IS A DISPLAY TRANSFORM AND NOTHING MEASURED COMES FROM THIS ENDPOINT. Saying so
+    matters here specifically: this project has previously mistaken a flat-fielded render
+    for evidence about what was underneath it, calling a region featureless matrix when
+    91.3% of it lay inside the human's own painted crack. This image exists to be looked
+    at behind a red overlay, and the overlay -- not the greyscale -- is what states where
+    the crack is.
+    """
+    import numpy as np
+    from PIL import Image
+    Image.MAX_IMAGE_PIXELS = None
+
+    path = None
+    if arm == "txm":
+        d = P.txm_images()
+        if not d:
+            raise HTTPException(503, "no TXM image directory is configured, so the "
+                                     "original cannot be shown. Set one in Setup.")
+        for ext in (".tif", ".tiff", ".png"):
+            cand = os.path.join(d, frame + ext)
+            if os.path.exists(cand):
+                path = cand
+                break
+    elif arm.startswith("sem/"):
+        sem = P.sem_repo()
+        if not sem:
+            raise HTTPException(503, "no SEM repo is configured.")
+        for ext in (".tif", ".tiff", ".png"):
+            cand = os.path.join(sem, "original", frame + ext)
+            if os.path.exists(cand):
+                path = cand
+                break
+    else:
+        # An uploaded mask has no micrograph behind it -- 404 rather than 400, because the
+        # caller's question ("is there an original for this frame") has a clean answer.
+        raise HTTPException(404, f"the {arm!r} arm has no originals")
+    if not path:
+        raise HTTPException(404, f"no original on disk for {frame!r} in {arm!r}")
+
+    from scipy import ndimage as ndi
+    im = Image.open(path)
+    a = np.asarray(im, dtype=np.float32)
+    if a.ndim == 3:
+        a = a.mean(axis=2)
+    a = a - ndi.gaussian_filter(a, HIGHPASS_SIGMA)
+    lo, hi = np.percentile(a, 0.5), np.percentile(a, 99.5)
+    if hi <= lo:
+        lo, hi = float(a.min()), float(a.max() or 1)
+    a = np.clip((a - lo) / (hi - lo), 0, 1) * 255
+    out = Image.fromarray(a.astype("uint8"), mode="L")
+    if out.width > ORIGINAL_MAX_W:
+        h = round(out.height * ORIGINAL_MAX_W / out.width)
+        out = out.resize((ORIGINAL_MAX_W, h), Image.LANCZOS)
+    buf = io.BytesIO()
+    out.save(buf, "PNG", optimize=True)
+    return Response(buf.getvalue(), media_type="image/png",
+                    headers={"Cache-Control": "public, max-age=3600"})
 
 
 @app.get("/api/export.csv")

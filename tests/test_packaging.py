@@ -516,3 +516,29 @@ def test_no_test_reads_a_text_file_without_naming_its_encoding():
     assert not offenders, (
         "text reads with no explicit encoding, which decode differently on Windows: "
         + ", ".join(offenders))
+
+
+def test_the_ui_is_exercised_on_every_platform_that_builds():
+    """Everything else in the build job proves the server starts and measures. Nothing had
+    ever rendered the interface anywhere but the author's macOS laptop, so "does Linux
+    work?" could only be answered about the engine. The packaged binary is now driven by a
+    headless browser on all three runners."""
+    w = _workflow()
+    build = w[w.index("\n  build:"):w.index("\n  release:")]
+    assert "ui_check.py" in build, "the UI is never exercised in CI"
+    assert "playwright" in build
+    # Against the PACKAGED binary, not a dev server.
+    i = build.index("the UI works on this platform")
+    step = build[i:i + 1400]
+    assert "dist/" in step, "the UI check runs against something other than the build"
+    assert "FRACTOGRAPHY_DATA" in step, (
+        "the UI check would write into the runner's default data directory")
+
+
+def test_the_ui_check_asserts_behaviour_rather_than_pixels():
+    """A screenshot diff would fail on font rendering between platforms -- the one
+    difference that does not matter -- and would have to be regenerated per OS."""
+    src = open(os.path.join(REPO, "packaging", "ui_check.py"), encoding="utf-8").read()
+    for probe in ("#tabs button", "#figout svg", "#fsel dt", "naturalWidth", "pageerror"):
+        assert probe in src, f"the UI check does not verify {probe}"
+    assert "expected.png" not in src and "compare" not in src.lower().split("screenshot")[0][-200:]
