@@ -725,17 +725,12 @@ function armStatements() {
        <span class="tx">${esc(st.text)}</span>
      </div>`;
   const findings = ARM_STATEMENTS.map((st, i) => [st, i]).filter(([st]) => st.level === "good");
-  const limits = ARM_STATEMENTS.map((st, i) => [st, i]).filter(([st]) => st.level !== "good");
   let html = "";
   if (findings.length) {
     html += `<h3 class="sect">What this arm establishes</h3>`
       + `<div class="ro armro">` + findings.map(([st, i]) => line(st, i)).join("") + `</div>`;
   }
-  if (limits.length) {
-    html += `<details class="limits"><summary>${limits.length} limit${
-      limits.length === 1 ? "" : "s"} on these numbers</summary>`
-      + `<div class="ro armro">` + limits.map(([st, i]) => line(st, i)).join("") + `</div></details>`;
-  }
+  // Limits live in the header's Limits drawer, not under the findings -- see openLimits().
   return html;
 }
 
@@ -828,6 +823,7 @@ function showTab(id) {
   // Setup, because a first-run user has to be able to reach it. Definitions and CSV come
   // back on the analysis tabs, where the numbers they describe are on screen.
   $("#defsbtn").hidden = !ANALYSIS_TABS.has(id);
+  $("#limitsbtn").hidden = !ANALYSIS_TABS.has(id);
   $("#csv").hidden = !ANALYSIS_TABS.has(id);
   if (!ANALYSIS_TABS.has(id)) $("#defs").hidden = true;   // and close the drawer
   // Repaint the strip: whether it mirrors the top conclusion depends on which tab this is
@@ -962,8 +958,6 @@ function roRender(groups) {
        <span class="who">${x.heading}</span>
      </div>`;
   const findings = all.filter((x) => x.st.level === "good");
-  const limits = all.filter((x) => x.st.level !== "good")
-    .sort((a, b) => (SEV[a.st.level] ?? 9) - (SEV[b.st.level] ?? 9));
   let html = "";
   if (findings.length) html += `<div class="ro">` + findings.map(one).join("") + `</div>`;
   // With nothing established, say so in one line rather than leaving the reader to infer
@@ -972,11 +966,21 @@ function roRender(groups) {
     html += `<div class="ro"><div class="ro-line info"><span class="mk">\u00b7</span>`
       + `<span class="tx">Nothing is established for this frame yet.</span></div></div>`;
   }
-  if (limits.length) {
-    html += `<details class="limits"><summary>${limits.length} limit${
-      limits.length === 1 ? "" : "s"} on this frame</summary>`
-      + `<div class="ro">` + limits.map(one).join("") + `</div></details>`;
-  }
+  // THE LIMITS ARE NOT RENDERED HERE ANY MORE. They are reached from the header's Limits
+  // button, which reads the same RO object this does -- see openLimits(). A user looking
+  // at fourteen caveats stacked under four findings said they were useless and asked for
+  // them gone, twice.
+  //
+  // GONE FROM THE SURFACE, NOT DELETED, and that distinction was settled by measurement
+  // rather than taste. Three of them were audited against the question "what wrong number
+  // could a reader publish if this appeared nowhere", and all three came back
+  // load-bearing -- including the two I was most confident were noise. "Corrections change
+  // area 1.003x" looks like a rounding error on this frame and is the SAME template that
+  // prints 2.446x for MAR_Amb_AS on 6 of its 11 frames, where the operator's brush more
+  // than doubled the measured area. "1 of 5 fields are single-crack dominated" is the only
+  // thing stopping this frame's green "91%" line being read as the specimen's value, when
+  // the other four fields are all below the 0.90 cut. Judging a template by its mildest
+  // instance is how both of those looked deletable.
   return html;
 }
 
@@ -996,14 +1000,21 @@ async function renderReadout() {
   try { d = await api(`/api/readout?${q}`); }
   catch (e) { el.innerHTML = `<p class="ro-empty">${e.message}</p>`; return; }
   RO = { specimen: d.specimen || [], frame: d.frame || [] };
-  // The arm statements are kept OUT of roRender: they belong to Compare, where the table
-  // they describe is, and repeating them in the Analysis list would be the same sentence
-  // in two panes again. They still go into RO so the definitions drawer can open them --
-  // the key matches the data-ro prefix armStatements() emits.
+  // Arm statements render in their own section (#armro) rather than in roRender's list,
+  // so "what this arm establishes" is not interleaved with this frame's findings. They go
+  // into RO as well, keyed to match the data-ro prefix armStatements() emits, which is
+  // what lets the drawer open any of them -- and what lets currentLimits() see arm-level
+  // caveats without a second fetch.
   ARM_STATEMENTS = d.arm_statements || [];
   RO.arm = ARM_STATEMENTS;
   const armEl = $("#armro");
   if (armEl) { armEl.innerHTML = armStatements(); wireArmStatements(); }
+  // AFTER RO is fully populated, including .arm. Called here and nowhere else, because
+  // this is the only place the statements change. Written one line earlier -- before
+  // RO.arm existed -- the count silently excluded every arm-level caveat.
+  syncLimitsButton();
+  // If the drawer is already open in limits mode, the frame just changed underneath it.
+  if (!$("#defs").hidden && $("#defs").dataset.mode === "limits") openLimits();
 
   const body = roRender({ specimen: RO.specimen, frame: RO.frame });
   // Severity order is the same rule the list uses, so the strip and the list agree about
@@ -1108,8 +1119,76 @@ async function renderReadout() {
 // DEFINITIONS DRAWER. Addressable, persistent, keyboard-reachable and selectable — none of
 // which hover text is. Three slots per entry, and the third is the one documentation
 // normally omits: when the number lies.
+//: Every statement that is NOT a finding, for the current arm / specimen / frame, grouped
+//: by scope. Reads RO -- the same object the read-out renders from -- so the button's count
+//: and the drawer's contents cannot disagree with what the pane computed. A separate list
+//: built here would be a second source of truth for the same facts, which is how the arm
+//: and frame renderers came to disagree about ordering in the first place.
+function currentLimits() {
+  const out = [];
+  for (const scope of ["arm", "specimen", "frame"]) {
+    (RO[scope] || []).forEach((st, i) => {
+      if (st && st.level !== "good") out.push({ st, scope, key: `${scope}:${i}` });
+    });
+  }
+  return out.sort((a, b) => (SEV[a.st.level] ?? 9) - (SEV[b.st.level] ?? 9));
+}
+
+function syncLimitsButton() {
+  const b = $("#limitsbtn");
+  if (!b) return;
+  const n = currentLimits().length;
+  $("#limitsn").textContent = String(n);
+  b.dataset.none = n ? "0" : "1";
+  b.title = n
+    ? `${n} thing${n === 1 ? "" : "s"} these numbers do not cover`
+    : "Nothing limits these numbers";
+}
+
+//: The drawer, in limits mode: every caveat in full, with its basis and its hedge, grouped
+//: by what it is about. Uses the definitions drawer rather than a second panel -- the two
+//: answer the same kind of question ("when does this number lie") and a reader should not
+//: have to learn two places.
+function openLimits() {
+  const items = currentLimits();
+  $("#defs").hidden = false;
+  // The drawer has two modes and one heading. It said "Definitions" above a list of
+  // fourteen caveats.
+  $("#defstitle").textContent = items.length
+    ? `What these numbers do not cover \u00b7 ${items.length}`
+    : "What these numbers do not cover";
+  const body = $("#defsbody");
+  if (!items.length) {
+    body.innerHTML = `<div class="def"><h5>Nothing limits these numbers.</h5>`
+      + `<p class="u">No caveat applies to the current selection.</p></div>` + defsAll();
+    body.scrollTop = 0;
+    return;
+  }
+  const LABEL = { arm: "About this arm", specimen: "About this specimen",
+                  frame: "About this frame" };
+  let html = "";
+  for (const scope of ["arm", "specimen", "frame"]) {
+    const grp = items.filter((x) => x.scope === scope);
+    if (!grp.length) continue;
+    html += `<p class="limgrp">${LABEL[scope]} &middot; ${grp.length}</p>`;
+    html += grp.map((x) => `
+      <div class="def">
+        <h5><span class="mk ${x.st.level}">${MARK[x.st.level] || "\u00b7"}</span> ${esc(x.st.text)}</h5>
+        <dl>
+          <dt>Basis</dt><dd>${esc(x.st.basis || "\u2014")}</dd>
+          ${x.st.hedge ? `<dt>When it lies</dt><dd class="lies">${esc(x.st.hedge)}</dd>` : ""}
+          ${x.st.value != null ? `<dt>Value</dt><dd>${typeof x.st.value === "number" ? (+x.st.value).toFixed(4) : esc(x.st.value)}</dd>` : ""}
+        </dl>
+      </div>`).join("");
+  }
+  body.innerHTML = html;
+  body.scrollTop = 0;
+}
+
 function openDefs(st) {
   $("#defs").hidden = false;
+  $("#defs").dataset.mode = "defs";
+  $("#defstitle").textContent = "Definitions";
   const body = $("#defsbody");
   if (st) {
     body.innerHTML = `
@@ -1680,7 +1759,17 @@ async function loadArm() {
   wireTabs();
   $("#defsbtn").onclick = () => {
     const d = $("#defs");
-    if (d.hidden) { openDefs(null); } else { d.hidden = true; }
+    // If the drawer is open showing LIMITS, this switches it to definitions rather than
+    // closing it -- otherwise the button appears dead while the panel is visible.
+    if (d.hidden || d.dataset.mode === "limits") { d.dataset.mode = "defs"; openDefs(null); }
+    else { d.hidden = true; }
+  };
+  $("#limitsbtn").onclick = () => {
+    const d = $("#defs");
+    // Toggle: a second click on the same control closes what it opened.
+    if (!d.hidden && d.dataset.mode === "limits") { d.hidden = true; return; }
+    d.dataset.mode = "limits";
+    openLimits();
   };
   $("#defsclose").onclick = () => { $("#defs").hidden = true; };
   document.addEventListener("keydown", (e) => {

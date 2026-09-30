@@ -224,6 +224,17 @@ main{flex:1 1 auto;display:grid;grid-template-columns:minmax(260px,348px) minmax
   border-left:1px solid var(--rule);box-shadow:-8px 0 30px rgba(0,0,0,.18);z-index:40;
   display:flex;flex-direction:column}
 #defs[hidden]{display:none}
+#limitsbtn{border-color:color-mix(in srgb,var(--warn) 45%,var(--rule));
+  color:var(--warn)}
+#limitsbtn:hover{background:color-mix(in srgb,var(--warn) 12%,transparent);
+  color:var(--warn)}
+#limitsbtn[data-none="1"]{border-color:var(--rule);color:var(--text-muted)}
+#limitsn{font-variant-numeric:tabular-nums;font-weight:640}
+/* Group headings inside the limits drawer, so arm / specimen / frame stay distinguishable
+   once they are no longer sitting under their own sections on the page. */
+.limgrp{font-size:var(--t-micro);text-transform:uppercase;letter-spacing:.05em;
+  color:var(--text-muted);margin:var(--sp4) 0 var(--sp2)}
+.limgrp:first-child{margin-top:0}
 #defshead{display:flex;align-items:center;gap:8px;padding:11px 14px;
   border-bottom:1px solid var(--rule)}
 #defshead strong{font-size:var(--t-body)}
@@ -326,6 +337,12 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
   <span class="spacer"></span>
   <label class="upload" for="up">+ Add image</label>
   <input id="up" type="file" accept=".png,.bmp,.gif,.tif,.tiff" multiple hidden>
+  <!-- WHERE THE CAVEATS WENT. Fourteen of them used to stack under four findings on the
+       Analysis pane. They are load-bearing -- an audit of three against "what wrong number
+       could a reader publish without this" returned load-bearing on all three -- so they
+       are moved, not removed. The count is on the button so their existence is never a
+       surprise, and one click shows every one of them in full. -->
+  <button id="limitsbtn" title="What these numbers do not cover"><span id="limitsn">0</span> limits</button>
   <button id="defsbtn" title="What each number means, and when it lies">Definitions</button>
   <button id="csv">&darr; CSV</button>
   <button id="setupbtn" title="Where the app reads from">Setup</button>
@@ -433,7 +450,7 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
 
 <aside id="defs" hidden aria-label="Definitions">
   <div id="defshead">
-    <strong>Definitions</strong>
+    <strong id="defstitle">Definitions</strong>
     <span class="spacer"></span>
     <button id="defsclose" aria-label="Close">&times;</button>
   </div>
