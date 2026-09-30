@@ -13,10 +13,18 @@ this corpus's measured limits and most of it failed, because it turned out to be
 about the instrument rather than the material. On the 56 fields imaged through both CBS and
 ETD, the paired median ratio is:
 
-    largest_share_of_area   0.870  (p = 0.084, not significant)  <- survives
+    largest_share_of_area   0.870  (p = 0.084, not significant)  <- POOLED. SEE BELOW.
     n_cracks_measured       1.226  (p = 4.2e-4)
     area_fraction           2.286  (p = 8.1e-9)
     n_junctions             3.071  (p = 2.1e-6)                  <- rejected outright
+
+AND THE ONE THAT "SURVIVED" DID NOT. Those 56 pairs span three scale strata -- 36 fields at
+51.883 nm/px, 16 whose nm/px was never recovered, and 4 at the 337.2396 overview -- which is
+the pooling this app refuses in every other aggregate it computes. Restricted to the modal
+magnification the share MOVES: median 0.790, CBS lower on 29 of 36 fields, Wilcoxon on log
+ratios p = 3.1e-4. The excluded strata run the other way (1.08 and 1.11) and that is what
+dragged the pooled figure to 0.870 and its p to 0.084. So no metric tested here is
+detector-invariant; the appearance of one was an artefact of mixing scales.
 
 So junction density cannot carry a conclusion here: it moves threefold depending on which
 detector looked at the same piece of metal. Tortuosity and R_L were rejected for a
@@ -97,14 +105,22 @@ def for_frame(f):
             out.append(_s(w if len(w.split()) <= 15 else "Ingest check failed on this mask.",
                           w, level="bad"))
 
-    # --- REGIME. The only metric tested that the detector does not move. ---------------
+    # --- REGIME. NOT detector-invariant; see the module docstring. --------------------
     share = f.get("largest_share_of_area")
     if share is not None:
         if share >= DOMINANT_CUT:
             out.append(_s(
                 f"One crack holds {100 * share:.0f}% of the crack area.",
-                "largest_share_of_area; the only metric tested that the CBS/ETD detector "
-                "difference does not move (paired ratio 0.870, p = 0.084 n.s.)",
+                "largest_share_of_area. This used to be introduced as the one metric the "
+                "CBS/ETD detector does not move, on a paired ratio of 0.870 at p = 0.084 -- "
+                "which pooled 36 fields at 51.883 nm/px with 16 of unrecovered scale and 4 "
+                "at the 337.2396 overview. At the modal magnification alone the share DOES "
+                "move: 0.790, CBS lower on 29 of 36, p = 3.1e-4. What can honestly be said "
+                "about THIS verdict is narrower: no field at 51.883 nm/px reaches the cut "
+                "at all (the highest is 0.800), and on the 7 double-imaged fields that do "
+                "reach it -- every one unscaled or at the overview scale -- the ratio is "
+                "1.05 at p = 0.30, which at n = 7 is a statement about power and not about "
+                "invariance.",
                 hedge=f"Per-field, not per-specimen, and confounded with field size "
                       f"(Spearman +0.49 with nm/px: coarser pixels merge separate cracks "
                       f"into one). The {DOMINANT_CUT:.0%} cut is this app's, not a "
@@ -436,6 +452,16 @@ def for_specimen(r, frames=None):
 # AND NONE OF THEM RANKS. One imaged site per specimen makes the between-field and the
 # between-specimen variance the same component, so the ordering question the table's shape
 # invites is refused here, once, where the table is.
+def _partition_for_conclusions(frames):
+    """The modal-magnification group, or everything if the partition is unavailable."""
+    try:
+        from specimen_stats import _partition_by_magnification
+        g = _partition_by_magnification(frames)
+        return g[0][1] if g else frames
+    except Exception:
+        return frames
+
+
 def for_arm(records, frames=None):
     """Read-out for one arm's whole set of specimen records."""
     import statistics as _st
@@ -560,6 +586,63 @@ def for_arm(records, frames=None):
                           "here referees these fields. Width is not identical either -- it "
                           "is detectably about 8% narrower, not the same.",
                     level="good", value=round(_st.median(lr), 2)))
+    except Exception:
+        pass
+
+    # --- SPATIAL STRUCTURE, AS A FINDING RATHER THAN A NUISANCE -----------------------
+    #
+    # The gradient was already reported, per specimen, as a reason the E562 interval is
+    # unreliable. That is true and it is half the story: the trend is CONSISTENT IN
+    # DIRECTION across every specimen that has stage coordinates, which makes it a
+    # statement about the material and not only about the sampling. And it is actionable --
+    # blocking the interval on the stage row roughly halves the relative accuracy.
+    #
+    # Computed live from the records rather than stored, so it tracks the corpus.
+    try:
+        import stage as _stage
+        from specimen_stats import field_key as _fk
+        import statistics as _st2
+        rows_ok, ratios = 0, []
+        for spec in sorted({r.get("specimen") for r in recs}):
+            ff = [f for f in frames
+                  if f.get("specimen") == spec and f.get("scale_known")
+                  and f.get("area_fraction") is not None]
+            groups = _partition_for_conclusions(ff)
+            by = {}
+            for f in groups:
+                pos = _stage.position(f.get("frame", ""))
+                if pos:
+                    by.setdefault(_fk(f["frame"]), []).append((pos, f["area_fraction"]))
+            fields = [(v[0][0], _st2.mean([x[1] for x in v])) for v in by.values()]
+            if len(fields) != 9:
+                continue
+            fields.sort(key=lambda z: z[0][1])
+            vals = [v for _, v in fields]
+            r0, r1, r2 = vals[0:3], vals[3:6], vals[6:9]
+            if _st2.mean(r2) > _st2.mean(r1) > _st2.mean(r0):
+                rows_ok += 1
+                ratios.append(_st2.mean(r2) / _st2.mean(r0 + r1))
+        if len(ratios) >= 3 and rows_ok == len(ratios):
+            out.append(_s(
+                f"Cracking rises toward one edge of the raster in all "
+                f"{len(ratios)} positioned specimens.",
+                f"nine fields per specimen on a 3x3 stage raster at one magnification, "
+                f"collapsed to fields. The three highest-stage-Y fields carry "
+                f"{min(ratios):.1f}x to {max(ratios):.1f}x the area fraction of the lower "
+                f"six, and the three row means fall in the same order in all "
+                f"{rows_ok} of {len(ratios)}. Exact permutation of a specimen's own nine "
+                f"values over its nine positions reaches p = 0.0119 on three of them -- "
+                f"which is the FLOOR of that test (1 of 84 arrangements), not a small "
+                f"p-value. Stage X carries nothing by the same test.",
+                hedge="The consequence is practical: block the interval on the stage row "
+                      "and relative accuracy roughly halves. The caution is that the "
+                      "high-stage-Y row is also the FIRST-ACQUIRED row in every specimen, "
+                      "so position and acquisition order cannot be separated here; that "
+                      "stage Y maps to no declared build or loading direction; and that "
+                      "whether this is a step or a smooth ramp is undecidable at nine "
+                      "points -- a perfect ramp built from the same values passes every "
+                      "test above identically.",
+                level="good", value=round(_st2.median(ratios), 2)))
     except Exception:
         pass
 
