@@ -692,3 +692,33 @@ def test_no_between_specimen_width_difference_means_no_finding():
     sts = C.for_arm([{"specimen": f"S{i}"} for i in range(4)], fr)
     assert not any("width separates" in s["text"] for s in sts), (
         "width must not 'separate' specimens whose medians are identical")
+
+
+def test_the_refusal_does_not_contradict_itself_about_scale():
+    """It said "0 of the 62 labelled frames has a recoverable nm/px" and then, 71
+    characters later, "Ten ... DO carry a legible FEI databar ... so 42.15, 28.16 and 13.49
+    nm/px". Both are true under a distinction the sentence did not carry -- the APP cannot
+    extract a scale from any of them, a human can read the databar off ten -- so quoting
+    either sentence quoted a claim the other appeared to refute. This card exists to be
+    quoted."""
+    w = [r for r in C.REFUSALS if "ransgranular" in r["question"]][0]["why"]
+    assert "0 of the 62 labelled frames has a recoverable nm/px" not in w
+    i = w.index("0 of the 62")
+    claim = w[max(0, i - 120):i + 120]
+    assert "app" in claim.lower() or "extract" in claim.lower(), (
+        f"the nm/px claim does not say whose recovery it is about: {claim!r}")
+    assert "EXTRACTION PATH" in w, "the distinction is not stated where it is needed"
+
+
+def test_the_scale_spread_is_the_ratio_of_the_quantity_it_names():
+    """"the spread across all ten is 31x" followed a list of nm/px values, but 31x is
+    2590/82.9 -- the ratio of the two HFW values. In nm/px, the quantity the sentence is
+    about, it is 843.1/13.49 = 62.5x. They differ because that frame is 3072 px wide and
+    the others 6144, so a reader quoting 31x was a factor of two out."""
+    w = [r for r in C.REFUSALS if "ransgranular" in r["question"]][0]["why"]
+    assert "62.5x" in w
+    assert "is 31x rather than 3.1x" not in w, "the HFW ratio is still given as the nm/px spread"
+    # The numbers it rests on must still be present and must still produce 62.5.
+    for v in ("843.1", "13.49"):
+        assert v in w
+    assert round(843.1 / 13.49, 1) == 62.5

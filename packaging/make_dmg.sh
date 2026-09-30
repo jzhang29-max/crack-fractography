@@ -15,11 +15,24 @@
 set -euo pipefail
 
 APP="${1:-dist/Crack Fractography.app}"
-VERSION="${2:-0.0.0}"
-OUT="${3:-dist/CrackFractography-${VERSION}-macOS-arm64.dmg}"
-VOL="Crack Fractography ${VERSION}"
 
 [ -d "$APP" ] || { echo "no app bundle at: $APP" >&2; exit 1; }
+
+# THE DEFAULTS ARE READ FROM THE BUNDLE, NOT GUESSED. VERSION defaulted to 0.0.0 and the
+# architecture was a literal "arm64" in the filename, so running this by hand -- which the
+# README now tells people to do -- produced CrackFractography-0.0.0-macOS-arm64.dmg
+# containing an app whose Info.plist said 1.17.0, with a READ ME FIRST headed "0.0.0". On
+# an Intel Mac it also labelled an x86_64 build arm64. The bundle already knows both.
+if [ -z "${2:-}" ]; then
+  VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' \
+    "$APP/Contents/Info.plist" 2>/dev/null || echo 0.0.0)"
+else
+  VERSION="$2"
+fi
+ARCH="$(lipo -archs "$APP/Contents/MacOS/Crack Fractography" 2>/dev/null | tr ' ' '-' )"
+[ -n "$ARCH" ] || ARCH="$(uname -m)"
+OUT="${3:-dist/CrackFractography-${VERSION}-macOS-${ARCH}.dmg}"
+VOL="Crack Fractography ${VERSION}"
 
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT

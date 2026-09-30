@@ -114,7 +114,18 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 
+# THE WINDOWS ICON GOES ON THE EXE, NOT ON THE BUNDLE. `icon=` was passed only inside
+# BUNDLE(), which exists only on macOS -- so the published Windows .exe wore PyInstaller's
+# default windowed placeholder in Explorer, on the taskbar and in Alt-Tab. Nothing failed:
+# the suite's only icon assertion looks inside
+# dist/Crack Fractography.app/Contents/Resources, which Windows does not have.
+#
+# A prebuilt multi-size .ico, committed beside the .icns for the same reason that one is:
+# rendering it needs tooling that should not be required on every build machine to produce
+# a file that changes once a year. PyInstaller ignores `icon` on macOS EXE, so passing it
+# unconditionally is harmless and keeps one code path.
 exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name="Crack Fractography",
+          icon=os.path.join(REPO, "packaging", "AppIcon.ico"),
           debug=False, bootloader_ignore_signals=False, strip=False, upx=False,
           console=False, disable_windowed_traceback=False, argv_emulation=False,
           target_arch=None, codesign_identity=None, entitlements_file=None)
@@ -133,7 +144,7 @@ if MACOS:
                  icon=os.path.join(REPO, "packaging", "AppIcon.icns"),
                  bundle_identifier="edu.stanford.crack-fractography",
                  info_plist={
-                     "CFBundleShortVersionString": "1.17.0",
+                     "CFBundleShortVersionString": "1.18.0",
                      "NSHighResolutionCapable": True,
                      # It has a window, so it belongs in the Dock and quits like an app.
                      "LSBackgroundOnly": False,

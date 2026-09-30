@@ -40,6 +40,18 @@ def can_open(running, frame, images, arm="sem/gated"):
     return json.loads(out.stdout)
 
 
+
+def code_only(text):
+    """`text` with // comment lines removed.
+
+    THREE assertions in this file have failed against CORRECT code by matching the comment
+    written to explain the thing they forbid: a guard for loadArm() matched
+    "NOT loadArm(): ...", and a guard for the string "all 1 frames" matched the comment
+    quoting it. A source scan must look at code, so every scan here goes through this.
+    """
+    return "\n".join(L for L in text.split("\n") if not L.strip().startswith("//"))
+
+
 SEM = "260622_316_H_b2_back_CBS_01"
 TXM = "Average_mosaic_260618_B2_3_1_lbf_idx00000_mosaictileAA_img001of010.xrm.bim.bim"
 
@@ -109,7 +121,7 @@ def test_the_tool_and_the_editor_are_both_mounted_so_switching_keeps_state():
     # regression the message names would have left this passing. What matters is that
     # renderMark never writes innerHTML on the SHELL container; writing into #markedit is
     # how the editor is mounted and is correct.
-    code = "\n".join(L for L in rm.split("\n") if not L.strip().startswith("//"))
+    code = code_only(rm)
     import re as _re
     bad = _re.findall(r'\$\("#markbody"\)[^\n]*innerHTML', code)
     assert not bad, (
@@ -168,7 +180,7 @@ def test_the_specimen_is_chosen_in_one_place():
     # why it must not call it, and a raw substring scan matched that and failed on correct
     # code. This repo has made exactly this mistake before -- a boot guard fooled by the
     # comment written to explain the guard.
-    code = "\n".join(L for L in grp.split("\n") if not L.strip().startswith("//"))
+    code = code_only(grp)
     assert "state.spec" in code, "the group row still does not scope the numbers"
     assert "loadArm()" not in code, (
         "refetching the arm on a scope change resets the selection to frames[0] and throws "
@@ -184,7 +196,7 @@ def test_changing_arm_clears_the_frame_from_the_previous_arm():
     src = open(APPJS).read()
     h = src[src.index('$("#arm").onchange'):]
     h = h[:h.index("};") + 2]
-    code = "\n".join(L for L in h.split("\n") if not L.strip().startswith("//"))
+    code = code_only(h)
     assert "state.frame = null" in code, (
         "the previous arm's frame is carried into the new arm's requests")
     assert "state.spec" in code
@@ -207,7 +219,7 @@ def test_the_start_bar_is_added_once_not_once_per_visit():
     elements sharing id="markstart"."""
     src = open(APPJS).read()
     rm = src[src.index("async function renderMark()"):src.index("async function syncMarkFrame()")]
-    code = "\n".join(L for L in rm.split("\n") if not L.strip().startswith("//"))
+    code = code_only(rm)
     assert "prepend(bar)" in code
     guard = code[:code.index("prepend(bar)")]
     assert "markstart" in guard and "!" in guard, (
@@ -222,7 +234,7 @@ def test_the_start_button_is_not_offered_on_an_arm_the_tool_cannot_serve():
     the guard written to prevent it."""
     src = open(APPJS).read()
     rm = src[src.index("async function renderMark()"):src.index("async function syncMarkFrame()")]
-    code = "\n".join(L for L in rm.split("\n") if not L.strip().startswith("//"))
+    code = code_only(rm)
     # The WHOLE statement, not its first line: the guard now wraps, and a one-line check
     # read only `const startable = paint.available && !paint.running` and reported the arm
     # term missing from correct code.
@@ -258,7 +270,7 @@ def test_scoping_a_specimen_moves_the_selection_into_it():
     src = open(APPJS).read()
     h = src[src.index('t.querySelectorAll("tbody tr.grp")'):]
     h = h[:h.index("\n  });") + 6]
-    code = "\n".join(L for L in h.split("\n") if not L.strip().startswith("//"))
+    code = code_only(h)
     assert "selectFrame(" in code, "scoping does not move the selection"
     assert "f.specimen === state.spec" in code, (
         "the frame it selects is not required to belong to the scoped specimen")
@@ -312,7 +324,7 @@ def test_the_frame_list_header_pluralises_too():
     """The pluralise pass missed it: the guard matched `${...n_frames}` and this site
     interpolates state.frames.length, so the arm dropdown read "uploads . 1 frame" while
     the header directly beneath it read "all 1 frames scaled"."""
-    src = open(APPJS).read()
+    src = code_only(open(APPJS).read())
     assert "all 1 frames" not in src
     # There are four writes to #listcount; the one that carries the count is the noScale
     # ternary. Taking the first match found `= ""` and reported correct code as wrong.
@@ -320,3 +332,24 @@ def test_the_frame_list_header_pluralises_too():
     stmt = src[i:src.index(";", i)]
     assert "plural(" in stmt or '=== 1 ?' in stmt, stmt
     assert "frames scaled`" not in stmt, "the plural is still hardcoded in the scaled branch"
+
+
+def test_no_comment_claims_a_tab_count_or_a_tab_that_does_not_exist():
+    """Comments described three tabs, told the reader the strip banner "earns its place on
+    Mark, Compare and Figure", and named Analysis as somewhere it was suppressed -- while
+    the code has two tabs, the banner is deleted, and Figure is part of Results. Acting on
+    that comment would have restored a duplicate sentence 200 px from its original. Stale
+    prose under a change is a recurring defect here, so it is asserted."""
+    src = open(APPJS).read()
+    comments = "\n".join(L for L in src.split("\n") if L.strip().startswith("//"))
+    # PRESCRIPTIVE CLAIMS ONLY. A first version banned any mention of "the Figure tab" and
+    # failed on two comments that narrate, in the past tense, a bug from when that tab
+    # existed -- which is accurate and worth keeping. What must not survive is a comment
+    # that tells the reader something is true NOW, or directs behaviour at a tab that is
+    # gone: acting on "it earns its place on Mark, Compare and Figure" would have restored
+    # a duplicate sentence 200 px from its original.
+    for phrase in ("THREE TABS", "on Mark, Compare and Figure", "NOT ON ANALYSIS"):
+        assert phrase not in comments, f"a comment still asserts {phrase!r}"
+    # And the tab list itself is the authority on how many there are.
+    tabs = src[src.index("const TABS = ["):src.index("let TAB =")]
+    assert tabs.count('["') == 2, f"the tab list has {tabs.count('[\"')} entries"

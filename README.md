@@ -101,6 +101,13 @@ xattr -dr com.apple.quarantine "/Applications/Crack Fractography.app"
 The same instruction ships inside the disk image as `READ ME FIRST.txt`, so it is still
 there the next time you install.
 
+**On Windows**, the same absence of a signature means Microsoft Defender SmartScreen will
+say *"Windows protected your PC — prevented an unrecognised app from starting"* and the app
+will not open. Choose **More info → Run anyway**. Browsers also attach a mark-of-the-web to
+the downloaded `.zip`, which Explorer's extractor copies onto the extracted files; if you
+prefer to clear it first, right-click the `.zip` → Properties → **Unblock** before
+extracting.
+
 Your measurements live in the platform's own application-support directory
 (`~/Library/Application Support/Crack Fractography` on macOS) and survive replacing the
 app. Set `FRACTOGRAPHY_DATA` to put them somewhere else.
@@ -214,13 +221,22 @@ capped at 340 px now.
 
 ## Marking happens in this window
 
-The Mark tab offers two tools, because they cover different images:
+The Mark tab opens straight onto the drawing. There is no tool to choose: two of them are
+available and the tab picks per frame, because the choice was never a preference.
 
-* **Edit mask** — this app's own canvas. Opens any frame the app knows about, including
-  uploads, needs no SEM repo, and writes a marked **copy** into `uploads` so the derived
-  research masks stay unwritten.
-* **Full tool** — the SEM repo's `paint_server.py`, with whole-region flip, undo, re-apply
-  model, retrain, model choice and export. It only knows that repo's own images.
+* The **SEM repo's `paint_server.py`** — whole-region flip, undo, re-apply model, retrain,
+  model choice, export — appears when it is running and holds the selected image. It only
+  knows that repo's own originals.
+* This app's **own mask canvas** appears otherwise. It opens any frame in any arm, needs no
+  SEM repo, and writes a marked **copy** into `uploads` so the derived research masks stay
+  unwritten.
+
+That used to be a segmented pair you picked between, and the failure mode is why it is
+gone: selecting a TXM frame while the full tool was running left the SEM tool on screen,
+showing a different image than the sidebar named, with a note underneath explaining that
+the chosen frame was not one of its images. A brush stroke would have landed on the wrong
+micrograph. The decision is now a single function of (tool running, arm, image list) and
+is tested without a DOM.
 
 The full tool used to be a link that opened the system browser, which undid the point of
 packaging a desktop app at the one step that matters most. It is now reverse-proxied

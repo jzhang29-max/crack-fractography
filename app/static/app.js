@@ -839,11 +839,10 @@ async function renderSpecimens() {
 // answering "what about this frame?", so seeing one frame meant visiting three places.
 // They are one Analysis page now. And the order follows the work: mark a mask, then ask
 // what it measures, then compare, then export.
-// THREE TABS. Compare is gone: its table ranked nothing (it could not -- one imaged site
-// per specimen), its per-row numbers are each on their own specimen's card, and what it
-// was actually for -- what the whole arm supports -- is five sentences that belong with
-// the other conclusions. A tab whose content is "the same numbers again, in a grid" is
-// navigation cost with no answer at the end of it.
+// Two tabs now, and both of the two removed since were removed for the same reason: a tab
+// whose content is the same numbers in another arrangement is navigation cost with no
+// answer at the end of it. Compare's table ranked nothing -- it could not, one imaged site
+// per specimen -- and its rows were each already on their own specimen's card.
 //: TWO TABS. Analysis and Figure both answered "what do these images show?", so a reader
 //: had to already know that the conclusions were on one and the chart supporting them on
 //: the other -- and the figure, which is the thing most worth looking at, was the one
@@ -963,10 +962,6 @@ function renderStrip(rec) {
   // a click, and the first thing asked afterwards was where the conclusions had gone. The
   // most severe statement now sits with the headline number, always visible, and says how
   // many more there are.
-  // NOT ON ANALYSIS, where the full read-out is already on screen and this line is its
-  // first card -- the same sentence twice, 200 px apart, on the densest tab in the app.
-  // The mirror exists because making Mark the default put the conclusions behind a click;
-  // it earns its place on Mark, Compare and Figure, and nowhere else.
   // THE MIRRORED TOP CONCLUSION IS GONE, because it had become unreachable rather than
   // merely redundant: the strip is painted only when ANALYSIS_TABS.has(TAB) and
   // ANALYSIS_TABS is now {"results"}, while this was emitted only when TAB !== "results".

@@ -40,8 +40,26 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: pip install -r requirements.txt -r packaging/requirements-build.txt
+      - run: pip install -r requirements.txt -r packaging/requirements-build.txt pytest
+
+      # RE-VENDOR, AS packaging/build.sh DOES. The bundled copy of the shared measurement
+      # code is what a downloaded app measures with, and this job ran pyinstaller directly
+      # -- no vendor.py, no pytest. The `test` job cannot cover it either: it runs on a
+      # fresh ubuntu checkout with no SEM repo, so the drift check skips itself. So a tag
+      # pushed after the sibling repo changed would publish installers measuring with the
+      # previous implementation, with a green run and /api/health reporting drift=False
+      # because there was nothing to compare against. No-op when there is no SEM repo,
+      # which is the CI case -- the point is that the step exists on the path that builds
+      # what people download.
+      - run: python packaging/vendor.py
       - run: pyinstaller --noconfirm --clean packaging/fractography.spec
+
+      # THE BUNDLE'S OWN GUARDS, against the bundle that was just built -- the same order
+      # build.sh uses locally, and for the reason this repo learnt once already: an icon
+      # test run BEFORE the rebuild asserted on the previous bundle and deadlocked the
+      # build it was meant to protect.
+      - name: bundle guards
+        run: python -m pytest -q tests/test_packaging.py
 
       # Does it START and SERVE? A build that produces a binary which cannot answer a
       # request is a green check on nothing -- this project has shipped that before.

@@ -367,3 +367,66 @@ def test_the_readme_describes_the_files_that_are_actually_published():
         assert token in inst, f"the install section does not mention {token}"
     assert "com.apple.quarantine" in inst
     assert "unzip, drag" not in inst, "the old zip-only instruction survives"
+
+
+def test_the_windows_exe_is_given_an_icon():
+    """`icon=` was passed only inside BUNDLE(), which exists only on macOS, so the published
+    .exe wore PyInstaller's placeholder in Explorer and on the taskbar. Nothing failed: the
+    only icon assertion in this file looks inside the .app's Resources, which Windows has
+    no equivalent of."""
+    spec = open(os.path.join(REPO, "packaging", "fractography.spec")).read()
+    exe = spec[spec.index("exe = EXE("):spec.index("coll = COLLECT(")]
+    assert "AppIcon.ico" in exe, "EXE() is not given a Windows icon"
+    ico = os.path.join(REPO, "packaging", "AppIcon.ico")
+    assert os.path.exists(ico), "AppIcon.ico is not committed"
+    from PIL import Image
+    im = Image.open(ico)
+    assert im.size[0] >= 256, f"the .ico's largest size is {im.size}; too small for the taskbar"
+
+
+def test_the_job_that_publishes_also_revendors_and_runs_the_bundle_guards():
+    """packaging/build.sh re-vendors and runs the suite before building; the CI job that
+    produces the PUBLISHED artifacts ran pyinstaller directly -- no vendor.py, no pytest.
+    The `test` job cannot cover it either: fresh ubuntu checkout, no SEM repo, so the drift
+    check skips itself. A tag pushed after the sibling repo changed would publish installers
+    measuring with the previous implementation, green, with /api/health reporting
+    drift=False because there was nothing to compare against."""
+    w = _workflow()
+    build = w[w.index("\n  build:"):w.index("\n  release:")]
+    assert "packaging/vendor.py" in build, "the build job never re-vendors"
+    assert "tests/test_packaging.py" in build, "the build job never runs the bundle guards"
+    # And in the right order: guards AFTER the build they are about.
+    assert build.index("pyinstaller") < build.index("tests/test_packaging.py"), (
+        "the bundle guards run before the bundle exists, which is how this repo once "
+        "asserted on a stale bundle and deadlocked the build")
+
+
+def test_make_dmg_reads_the_version_and_arch_from_the_bundle():
+    """Run by hand with no arguments -- which the README now instructs -- it produced
+    CrackFractography-0.0.0-macOS-arm64.dmg around an app whose Info.plist said 1.17.0,
+    with a READ ME FIRST headed 0.0.0, and labelled an Intel build arm64."""
+    sh = open(os.path.join(REPO, "packaging", "make_dmg.sh")).read()
+    assert "CFBundleShortVersionString" in sh, "the version is still guessed"
+    assert "lipo -archs" in sh or "uname -m" in sh, "the architecture is still a literal"
+    assert "-macOS-arm64.dmg}" not in sh, "arm64 is still hardcoded in the default name"
+
+
+def test_the_readme_does_not_document_the_deleted_mark_modes():
+    """It described "two tools" with **Edit mask** and **Full tool** as things to pick
+    between, and was the only place either label still appeared -- so a reader went looking
+    for a control that no longer exists."""
+    r = open(os.path.join(REPO, "README.md")).read()
+    sec = r[r.index("## Marking happens in this window"):]
+    sec = sec[:sec.index("\n## ")]
+    assert "**Edit mask**" not in sec and "**Full tool**" not in sec, (
+        "the README still presents the deleted segmented pair")
+    assert "picks per frame" in sec or "per frame" in sec
+
+
+def test_the_readme_covers_the_windows_first_launch_block_too():
+    """The macOS quarantine note is prominent and ships inside the dmg; the Windows install
+    row ended at "run Crack Fractography.exe", which is exactly where SmartScreen stops an
+    unsigned binary."""
+    r = open(os.path.join(REPO, "README.md")).read()
+    assert "SmartScreen" in r
+    assert "Run anyway" in r
