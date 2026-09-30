@@ -157,3 +157,13 @@ def test_changing_arm_clears_the_frame_from_the_previous_arm():
     assert "state.frame = null" in code, (
         "the previous arm's frame is carried into the new arm's requests")
     assert "state.spec" in code
+
+
+def test_a_one_field_specimen_does_not_read_one_fields():
+    """Every fresh upload is a one-field specimen, so "1 fields" is among the first things
+    a new user reads. Two sites printed it."""
+    src = open(APPJS).read()
+    import re
+    # Any interpolation of a count immediately followed by a bare plural noun.
+    bad = re.findall(r"\$\{[A-Za-z_.\[\]]*n_(?:fields|frames)\} (?:fields|frames)", src)
+    assert not bad, f"unpluralised counts: {bad}"

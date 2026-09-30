@@ -11,6 +11,10 @@ const state = { arm: null, spec: "", frames: [], frame: null, cracks: null, minA
 // attribute has to be escaped. The definition strings are written in measure.py and contain
 // apostrophes and parentheses today; one double quote added there later would otherwise end
 // the attribute and swallow the rest of the row silently.
+//: "1 fields". Every fresh upload is a one-field specimen and a one-frame arm, so this
+//: is among the first things a new user reads, and it was wrong in five places.
+const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (ch) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 const fmt = (v, d = 2) =>
@@ -700,7 +704,7 @@ function specimenCard(r) {
   const rows = [
     ["Crack area fraction",
      ci ? `<span class="big">${pct(ci.mean)}</span> <span class="ci">95% CI ${ciLo(ci)}–${pct(ci.ci95_hi)}, ${ci.n_fields} field${ci.n_fields === 1 ? "" : "s"}${ci.n_fields_off_determination ? ` at ${ci.nm_per_px} nm/px` : ""}</span>${raBadge(ci, r)}`
-        : `<span class="big">${pct(r.area_fraction_median)}</span> <span class="ci">${r.no_ci_reason && r.no_ci_reason.indexOf("split across magnifications") >= 0 ? `median of ${r.n_fields} fields — no single magnification has three` : `median of ${r.n_fields} field${r.n_fields > 1 ? "s" : ""} — under 3, no interval`}</span>`],
+        : `<span class="big">${pct(r.area_fraction_median)}</span> <span class="ci">${r.no_ci_reason && r.no_ci_reason.indexOf("split across magnifications") >= 0 ? `median of ${plural(r.n_fields, "field")} — no single magnification has three` : `median of ${plural(r.n_fields, "field")} — under 3, no interval`}</span>`],
     ["P10", `${num(r.p10_min_per_mm)} <span class="u">/mm min</span> · ${num(r.p10_mean_per_mm)} <span class="u">/mm mean</span>`],
     ["P21 · P20", `${num(r.p21_skeleton_mm_per_mm2)} <span class="u">mm/mm²</span> · ${num(r.p20_per_mm2, 0)} <span class="u">/mm²</span>`],
     // null / 1000 is 0 in JavaScript, so an unscaled specimen was reporting "0.00 mm" of
@@ -785,7 +789,7 @@ async function renderSpecimens() {
     const ci0 = one.area_fraction_ci;
     $("#specnote").textContent = `${one.specimen} · `
       + `${ci0 ? pct(ci0.mean) : pct(one.area_fraction_median)} crack area · `
-      + `${one.n_fields} fields`;
+      + `${one.n_fields} field${one.n_fields === 1 ? "" : "s"}`;
     $("#specbody").innerHTML = specimenCard(one);
   } else {
     const withCI = rows.filter((r) => r.area_fraction_ci);
@@ -908,7 +912,9 @@ function renderStrip(rec) {
     ci ? `<span class="ci">95% CI ${ciLo(ci)}–${pct(ci.ci95_hi)}</span>${
            /precision target/.test(RO_TOP.text || "") ? "" : raBadge(ci, rec)}`
        : `<span class="ci">no interval, ${rec.n_fields} field${rec.n_fields === 1 ? "" : "s"}</span>`,
-    `<span class="u">${rec.n_fields} fields${rec.n_frames !== rec.n_fields ? ` / ${rec.n_frames} frames` : ""}</span>`,
+    `<span class="u">${rec.n_fields} field${rec.n_fields === 1 ? "" : "s"}${
+       rec.n_frames !== rec.n_fields
+         ? ` / ${rec.n_frames} frame${rec.n_frames === 1 ? "" : "s"}` : ""}</span>`,
   ];
   // The strip prints the specimen's field count next to an interval computed over fewer
   // of them. Unexplained, that is the app contradicting itself in its own headline.
@@ -920,7 +926,7 @@ function renderStrip(rec) {
   // line, and the false half was the half that sounded authoritative.
   if (ci && rec.n_fields_off_determination) {
     const g = (rec.magnification_groups || [])[0] || {};
-    bits.push(`<span class="banner" title="${esc((ci && ci.magnification_note) || "")} ASTM E562 fixes the magnification before the fields are counted, and this repo's own rule is that pooling frames of unequal physical area is the error the standards exist to prevent.">interval over ${g.n_fields} of ${rec.n_fields} fields · one magnification</span>`);
+    bits.push(`<span class="banner" title="${esc((ci && ci.magnification_note) || "")} ASTM E562 fixes the magnification before the fields are counted, and this repo's own rule is that pooling frames of unequal physical area is the error the standards exist to prevent.">interval over ${g.n_fields} of ${plural(rec.n_fields, "field")} · one magnification</span>`);
   }
   if (ds && Math.abs(ds.cbs_over_etd_median - 1) > 0.2) {
     bits.push(`<span class="banner bad" title="CBS against ETD on ${ds.n_fields_both_detectors} fields imaged both ways. Detector is confounded with specimen here.">detector ×${ds.cbs_over_etd_median}</span>`);
@@ -1679,7 +1685,7 @@ async function loadArm() {
     state.arm = "uploads"; state.spec = "";
     const arms = await api("/api/arms");
     $("#arm").innerHTML = arms.map((a) =>
-      `<option value="${a.arm}"${a.arm === "uploads" ? " selected" : ""}>${a.arm} · ${a.n_frames} frames</option>`).join("");
+      `<option value="${a.arm}"${a.arm === "uploads" ? " selected" : ""}>${a.arm} · ${plural(a.n_frames, "frame")}</option>`).join("");
     await loadArm();
     if (done.length) selectFrame(done[done.length - 1]);
     // Say what failed, per file. A batch that silently drops one is worse than a batch
@@ -1836,7 +1842,7 @@ async function loadArm() {
   catch (e) { firstRun(); return; }
   if (!arms || !arms.length) { firstRun(); return; }
   $("#arm").innerHTML = arms.map((a) =>
-    `<option value="${a.arm}">${a.arm} · ${a.n_frames} frames</option>`).join("");
+    `<option value="${a.arm}">${a.arm} · ${plural(a.n_frames, "frame")}</option>`).join("");
   state.arm = arms[0].arm;
   // No total-count subtitle any more. The arm dropdown carries its own count and the strip
   // carries the number people actually cite, so a third tally of the same corpus was words
