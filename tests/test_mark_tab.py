@@ -167,3 +167,58 @@ def test_a_one_field_specimen_does_not_read_one_fields():
     # Any interpolation of a count immediately followed by a bare plural noun.
     bad = re.findall(r"\$\{[A-Za-z_.\[\]]*n_(?:fields|frames)\} (?:fields|frames)", src)
     assert not bad, f"unpluralised counts: {bad}"
+
+
+def test_the_start_button_is_not_offered_on_an_arm_the_tool_cannot_serve():
+    """The guard read `... && (await markImages()).size === 0`, and markImages() can only
+    return names from a RUNNING tool -- so whenever the tool is not running the set is
+    empty and that conjunct is always true. It excluded nothing, and the button appeared on
+    TXM frames the tool cannot open: the dead control the modes used to be, reintroduced by
+    the guard written to prevent it."""
+    src = open(APPJS).read()
+    rm = src[src.index("async function renderMark()"):src.index("async function syncMarkFrame()")]
+    code = "\n".join(L for L in rm.split("\n") if not L.strip().startswith("//"))
+    line = [L for L in code.split("\n") if "startable =" in L]
+    assert line, "the startable guard vanished"
+    assert "markImages()" not in line[0], (
+        "the guard still consults an image list that is empty whenever it is consulted")
+    assert "state.arm" in line[0], "the guard does not test the arm, which is knowable"
+
+
+def test_the_frame_list_is_never_narrowed_to_one_specimen():
+    """THE REGRESSION. Four sites refetched frames with `&specimen=` appended, so scoping a
+    specimen and then pressing Re-measure replaced the only frame picker in the app with
+    that specimen's rows -- 142 down to 1 -- and un-scoping did not refetch, so it stayed
+    collapsed with the count beside it still reading "62/142 frames"."""
+    src = open(APPJS).read()
+    import re
+    bad = re.findall(r"state\.frames = await api\([^)]*specimen", src, re.S)
+    assert not bad, f"a frames fetch is still specimen-filtered: {bad}"
+    assert src.count("state.frames = await allFrames();") >= 4, (
+        "the unfiltered helper is not used at every refetch site")
+    helper = src[src.index("async function allFrames()"):]
+    helper = helper[:helper.index("\n}")]
+    assert "specimen" not in helper, "allFrames() filters, which defeats the point"
+
+
+def test_scoping_a_specimen_moves_the_selection_into_it():
+    """Scoping used to leave state.frame in another specimen, so the strip, specimen card
+    and limits drawer described one specimen while the mask, frame statements and
+    measurements below were another's."""
+    src = open(APPJS).read()
+    h = src[src.index('t.querySelectorAll("tbody tr.grp")'):]
+    h = h[:h.index("\n  });") + 6]
+    code = "\n".join(L for L in h.split("\n") if not L.strip().startswith("//"))
+    assert "selectFrame(" in code, "scoping does not move the selection"
+    assert "f.specimen === state.spec" in code, (
+        "the frame it selects is not required to belong to the scoped specimen")
+
+
+def test_the_limits_drawer_names_which_specimen_and_frame_it_describes():
+    """It labelled its groups "About this specimen" without naming which, which is how a
+    reader takes the wrong confidence interval into a caption."""
+    src = open(APPJS).read()
+    fn = src[src.index("function openLimits()"):src.index("function openDefs(")]
+    assert "state.spec" in fn and "state.frame" in fn, fn[:200]
+    assert "About this specimen" in fn, "no fallback wording when nothing is scoped"
+    assert "state.arm" in fn, "the arm-level group does not name the arm"

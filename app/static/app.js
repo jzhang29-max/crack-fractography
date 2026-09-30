@@ -176,9 +176,24 @@ function renderFrames() {
       state.spec = k;
       GROUPS_OPEN.add(k);
     }
-    // NOT loadArm(): the arm's frames have not changed, only the scope over them. Calling
-    // it would refetch and then reset the selection to frames[0], throwing away the frame
-    // the reader was looking at.
+    // THE SCOPE AND THE SELECTED FRAME MUST AGREE.
+    //
+    // This used to set state.spec and leave state.frame alone, which put two different
+    // specimens on one page: the strip, the specimen card and the limits drawer described
+    // the newly scoped specimen while the mask, the frame statements and the measurements
+    // below them were still the previously selected frame's. The drawer labels its groups
+    // "About this specimen" without naming which, so a reader taking a methods caveat from
+    // it could be told their frame's specimen has no confidence interval when it has one --
+    // and the reverse, promised an interval that does not exist.
+    //
+    // Scoping a specimen therefore moves the selection into it. Nothing is lost: the frame
+    // list still holds the whole arm, so any frame is one click away.
+    if (state.spec) {
+      const first = state.frames.find((f) => f.specimen === state.spec);
+      if (first && first.frame !== state.frame) { selectFrame(first.frame); return; }
+    }
+    // NOT loadArm(): the arm's frames have not changed, only the scope over them, and
+    // refetching would be a round trip for data already held.
     renderFrames();
     renderSpecimens();
     renderReadout();
@@ -911,7 +926,10 @@ function renderStrip(rec) {
     // the E562 target beside it, and its tooltip keeps the per-specimen remedy.
     ci ? `<span class="ci">95% CI ${ciLo(ci)}–${pct(ci.ci95_hi)}</span>${
            /precision target/.test(RO_TOP.text || "") ? "" : raBadge(ci, rec)}`
-       : `<span class="ci">no interval, ${rec.n_fields} field${rec.n_fields === 1 ? "" : "s"}</span>`,
+       // NO FIELD COUNT HERE. The next bit prints it unconditionally, so this read
+       // "no interval, 1 field   1 field" -- one quantity twice, side by side, which
+       // reads as two quantities in an app whose whole pitch is careful numbers.
+       : `<span class="ci">no interval</span>`,
     `<span class="u">${rec.n_fields} field${rec.n_fields === 1 ? "" : "s"}${
        rec.n_frames !== rec.n_fields
          ? ` / ${rec.n_frames} frame${rec.n_frames === 1 ? "" : "s"}` : ""}</span>`,
@@ -1104,8 +1122,7 @@ async function renderReadout() {
       const r = await fetch(`/api/scale?${q}`, { method: "POST" });
       const d = await r.json();
       if (!r.ok) throw new Error(d.detail || r.statusText);
-      state.frames = await api(`/api/frames?arm=${encodeURIComponent(state.arm)}` +
-        (state.spec ? `&specimen=${encodeURIComponent(state.spec)}` : ""));
+      state.frames = await allFrames();
       renderFrames(); renderSpecimens(); await renderReadout();
       const fresh = document.getElementById("remeasure2out");
       if (fresh) fresh.innerHTML = `<span class="u">${v} nm/px — micrometre values now shown</span>`;
@@ -1179,8 +1196,15 @@ function openLimits() {
     body.scrollTop = 0;
     return;
   }
-  const LABEL = { arm: "About this arm", specimen: "About this specimen",
-                  frame: "About this frame" };
+  // NAMED, not just scoped. "About this specimen" over a caveat about a specimen other
+  // than the selected frame's is how a reader takes the wrong interval into a caption.
+  // The heading now carries the subject, so the statement is self-describing even if the
+  // selection moves underneath it.
+  const LABEL = {
+    arm: `About the ${state.arm} arm`,
+    specimen: state.spec ? `About ${state.spec}` : "About this specimen",
+    frame: state.frame ? `About ${shortFrame(state.frame)}` : "About this frame",
+  };
   let html = "";
   for (const scope of ["arm", "specimen", "frame"]) {
     const grp = items.filter((x) => x.scope === scope);
@@ -1377,10 +1401,19 @@ async function renderMark() {
     ED.frame = null;
     return;
   }
-  //: The full tool can be started from here when it would help THIS frame -- i.e. it is
-  //: installed, not running, and holds this image. Offering it on a TXM frame it cannot
-  //: open is the dead button the modes used to be.
-  const startable = paint.available && !paint.running && (await markImages()).size === 0;
+  //: The full tool can be started from here when it would help THIS frame.
+  //:
+  //: THE IMAGE-LIST CONJUNCT WAS DEAD. The first version read
+  //: `paint.available && !paint.running && (await markImages()).size === 0`, and
+  //: markImages() can only return names by asking a tool that is RUNNING -- so whenever
+  //: !paint.running the set is empty and that third test is always true. It excluded
+  //: nothing, and the button it was meant to withhold appeared on TXM frames the tool
+  //: cannot open: exactly the dead control the modes used to be, reintroduced by the guard
+  //: written to prevent it.
+  //:
+  //: The arm is the test that can actually be made before the tool exists. It reads the
+  //: SEM originals, so it can only ever help a sem/* frame.
+  const startable = paint.available && !paint.running && state.arm.startsWith("sem");
   await openEditor(state.frame);
   if (startable) {
     const bar = document.createElement("p");
@@ -1452,8 +1485,7 @@ async function remeasure(btn, where) {
     // Refresh FIRST, then write the message. renderReadout() rebuilds the element the
     // message lives in, so writing it before the refresh silently erased it -- the button
     // worked, the numbers updated, and the user saw nothing happen.
-    state.frames = await api(`/api/frames?arm=${encodeURIComponent(state.arm)}` +
-      (state.spec ? `&specimen=${encodeURIComponent(state.spec)}` : ""));
+    state.frames = await allFrames();
     renderFrames();
     renderSpecimens();
     await renderReadout();
@@ -1585,8 +1617,7 @@ async function openEditor(frame) {
         selectFrame(d.frame);
         return;
       }
-      state.frames = await api(`/api/frames?arm=${encodeURIComponent(state.arm)}` +
-        (state.spec ? `&specimen=${encodeURIComponent(state.spec)}` : ""));
+      state.frames = await allFrames();
       renderFrames(); renderSpecimens(); renderReadout();
     } catch (e) {
       out.innerHTML = `<span class="flag bad">${e.message}</span>`;
@@ -1596,10 +1627,26 @@ async function openEditor(frame) {
   };
 }
 
+//: THE FRAME LIST IS ALWAYS THE WHOLE ARM.
+//:
+//: Four call sites fetched frames with `&specimen=` appended when a specimen was scoped,
+//: and the consequence was unrecoverable. Scoping a specimen and then pressing
+//: "Re-measure this frame" -- or Save and re-measure, or Set scale -- replaced state.frames
+//: with that one specimen's rows, so the ONLY frame picker in the app collapsed from 142
+//: rows to 1. Clicking the group row again cleared the scope but deliberately did not
+//: refetch, so the list stayed collapsed, while the count beside it still read
+//: "62/142 frames"; and the header dropdown that used to offer "all" had just been deleted,
+//: so the only way back was switching arms or reloading the page.
+//:
+//: A scope is a view over the arm, not a different arm. Everything that depends on the
+//: scope -- the specimen card, the read-out, the figure, the CSV -- passes it per request.
+async function allFrames() {
+  return api(`/api/frames?arm=${encodeURIComponent(state.arm)}`);
+}
+
 async function loadArm() {
   try {
-    state.frames = await api(`/api/frames?arm=${encodeURIComponent(state.arm)}` +
-      (state.spec ? `&specimen=${encodeURIComponent(state.spec)}` : ""));
+    state.frames = await allFrames();
   } catch (e) {
     // CLEAR THE VIEW, do not leave it. This used to write the message and return, so
     // state.frames, the frame table, the specimen dropdown and the detail pane all stayed
