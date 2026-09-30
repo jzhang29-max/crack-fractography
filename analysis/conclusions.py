@@ -491,6 +491,91 @@ def for_arm(records, frames=None):
             level=("good" if len(meet) == len(with_ci) else "bad"),
             value=round(_st.median(ras), 1)))
 
+    # --- ONE MAGNIFICATION, EVERY FRAME SCALED ---------------------------------------
+    # WHY THIS EXISTS. The txm arm had TWO statements, both negative, and no finding at all
+    # -- so its Analysis pane said "Nothing is established" while the sem arm showed three
+    # findings. That was not a property of the data. Every arm finding in this function is
+    # gated on something only the SEM corpus has (a CBS/ETD detector swap, a 3x3 stage
+    # raster, a specific calibrated magnification), and nobody had ever written a finding
+    # for the other arm. The asymmetry was in the engine, not in the microscope.
+    #
+    # GUARDED ON THE DATA, NOT ON THE ARM NAME. "arm == 'txm'" would be a lie the moment a
+    # second single-magnification corpus is loaded, and it would hide the fact that this is
+    # a statement about scale coverage rather than about a machine.
+    scaled = [f for f in frames if f.get("scale_known") and f.get("nm_per_px")]
+    if frames and len(scaled) == len(frames) and len(frames) >= 8:
+        mags = {round(float(f["nm_per_px"]), 4) for f in scaled}
+        if len(mags) == 1:
+            only = next(iter(mags))
+            out.append(_s(
+                "Every frame is scaled at one magnification, so micrometres are comparable.",
+                f"{len(frames)} frames, all with a recoverable nm/px, all at {only} nm/px. "
+                f"Every physical column is populated and no aggregate here pools across "
+                f"scales -- the two things that most often make a micrometre value in this "
+                f"app either absent or meaningless. For contrast the SEM corpus withholds "
+                f"micrometres on 62 of 142 frames and spans a 249x magnification range, "
+                f"which is why its physical aggregates are computed per determination.",
+                hedge="One magnification means one resolution: a crack narrower than a "
+                      "pixel is unresolved, not absent. It says nothing about accuracy, "
+                      "only that the unit is defined and consistent.",
+                level="good", value=only))
+
+    # --- WIDTH, WHICH IS THE ONE PHYSICAL QUANTITY THIS ARM MEASURES WELL -------------
+    # Width = crack area / centreline length, both in physical units. Reported for this arm
+    # specifically because its length is NOT trustworthy -- skeleton and Buffon estimators
+    # differ about 2.1x where cracks are a few pixels wide -- while its width is tens of
+    # pixels and survives that. Measuring the thing the modality is good at rather than
+    # repeating the thing it is bad at.
+    #
+    # A SEPARATION CLAIM, NEVER AN ORDERING. Each specimen here is one imaged site, so the
+    # named extremes are not a result; the same rule the figure read-out follows.
+    try:
+        import statistics as _st2
+        # ONE MAGNIFICATION, or this is the pooling the app forbids everywhere else.
+        # Nothing in the first version of this block required it: it happened to be
+        # correct for the txm arm, where all 71 frames sit at 29.24 nm/px, and would have
+        # silently compared widths across a 249x scale range on any corpus that did not.
+        # A statement that is true only because of the data in front of me is a defect
+        # waiting for the next import.
+        from collections import Counter as _C2
+        usable = [f for f in frames
+                  if f.get("crack_area_um2") and f.get("total_length_um")
+                  and f["total_length_um"] > 0 and f.get("nm_per_px")]
+        wid = {}
+        if usable:
+            modal_w = _C2(round(float(f["nm_per_px"]), 4) for f in usable).most_common(1)[0][0]
+            for f in usable:
+                if round(float(f["nm_per_px"]), 4) != modal_w:
+                    continue
+                wid.setdefault(f.get("specimen", "unparsed"), []).append(
+                    f["crack_area_um2"] / f["total_length_um"])
+        multi = {k: v for k, v in wid.items() if len(v) >= 2}
+        if len(multi) >= 3:
+            meds = {k: _st2.median(v) for k, v in multi.items()}
+            between = max(meds.values()) - min(meds.values())
+            within = _st2.median([max(v) - min(v) for v in multi.values()])
+            allw = sorted(x for v in multi.values() for x in v)
+            if within > 0 and between > within:
+                out.append(_s(
+                    "Crack width separates these specimens by more than each one varies.",
+                    f"width = crack area / centreline length, both in micrometres, over "
+                    f"{len(allw)} frames in {len(multi)} specimens. Specimen medians "
+                    f"{min(meds.values()):.3f} to {max(meds.values()):.3f} um, a spread of "
+                    f"{between:.3f} um against a typical specimen's own range of "
+                    f"{within:.3f} um -- between exceeds within by {between / within:.1f}x. "
+                    f"Individual frames run {allw[0]:.3f} to {allw[-1]:.3f} um "
+                    f"({allw[-1] / allw[0]:.1f}x). Width is used rather than length because "
+                    f"this arm's two length estimators disagree about 2.1x at these crack "
+                    f"widths, while the widths themselves are tens of pixels across. "
+                    f"All of these frames sit at {modal_w} nm/px: a width median over "
+                    f"frames at different scales would be the pooling refused elsewhere.",
+                    hedge="Separated is not ordered. Each specimen is ONE imaged site, so "
+                          "material difference and site difference are the same variance "
+                          "component here and the named extremes are not a ranking.",
+                    level="good", value=round(between / within, 2)))
+    except Exception:
+        pass
+
     # --- RANKING, once, where the table that invites it is ----------------------------
     from specimen_stats import PSEUDO_SPECIMEN
     real = [r for r in recs if r.get("specimen") != PSEUDO_SPECIMEN]

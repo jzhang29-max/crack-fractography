@@ -544,3 +544,88 @@ def test_a_calibrated_finding_is_not_asserted_for_an_arm_it_was_not_measured_on(
         "measured on")
     assert "LENGTH, not width" not in joined, (
         "the detector finding is being asserted for txm, which has no detector pair")
+
+
+# --- THE OTHER ARM GETS FINDINGS TOO ---------------------------------------------------
+def _txm_like(n_spec=4, per=4, nm=29.24, widths=(0.34, 0.45, 1.21, 0.55)):
+    """A single-magnification corpus with a real between-specimen width difference."""
+    out = []
+    for i in range(n_spec):
+        for j in range(per):
+            w = widths[i % len(widths)] * (1 + 0.06 * j)
+            L = 1000.0
+            out.append({"arm": "txm", "specimen": f"S{i}", "frame": f"S{i}_f{j}",
+                        "scale_known": True, "nm_per_px": nm,
+                        "total_length_um": L, "crack_area_um2": w * L,
+                        "area_fraction": 0.02 + 0.01 * i, "n_cracks_measured": 9})
+    return out
+
+
+def test_a_single_magnification_corpus_gets_the_scale_finding():
+    """The txm arm shipped with TWO statements, both negative, and no finding at all -- its
+    pane said "Nothing is established" while sem showed three. Every arm finding was gated
+    on something only the SEM corpus has (a CBS/ETD swap, a 3x3 stage raster, one
+    calibrated magnification). The asymmetry was in the engine, not the microscope."""
+    fr = _txm_like()
+    sts = C.for_arm([{"specimen": f"S{i}"} for i in range(4)], fr)
+    good = [s for s in sts if s["level"] == "good"]
+    assert good, "a fully scaled single-magnification arm must establish something"
+    assert any("one magnification" in s["text"] for s in good), [s["text"] for s in good]
+
+
+def test_the_scale_finding_is_guarded_on_the_data_not_the_arm_name():
+    """`arm == "txm"` would be a lie the moment a second single-magnification corpus loads,
+    and it would hide that this is a claim about scale coverage, not about a machine."""
+    fr = _txm_like()
+    for f in fr:
+        f["arm"] = "some/other/corpus"
+    sts = C.for_arm([{"specimen": f"S{i}"} for i in range(4)], fr)
+    assert any("one magnification" in s["text"] for s in sts if s["level"] == "good")
+
+
+def test_one_unscaled_frame_withdraws_the_scale_finding():
+    fr = _txm_like()
+    fr[0]["scale_known"] = False
+    sts = C.for_arm([{"specimen": f"S{i}"} for i in range(4)], fr)
+    assert not any("one magnification" in s["text"] for s in sts), (
+        "'every frame is scaled' must not survive a frame that is not")
+
+
+def test_the_width_finding_refuses_to_pool_across_magnifications():
+    """Nothing in the first version required one magnification. It was correct for txm by
+    accident -- all 71 frames sit at 29.24 nm/px -- and would have compared widths across a
+    249x scale range on any corpus that did not."""
+    fr = _txm_like()
+    # Give one specimen a different scale, with a width that would swing the spread.
+    for f in fr:
+        if f["specimen"] == "S2":
+            f["nm_per_px"] = 337.2396
+            f["crack_area_um2"] = f["total_length_um"] * 9.0
+    sts = C.for_arm([{"specimen": f"S{i}"} for i in range(4)], fr)
+    w = [s for s in sts if "width separates" in s["text"]]
+    for s in w:
+        assert "9.0" not in s["basis"], "an off-magnification specimen entered the spread"
+        assert "29.24 nm/px" in s["basis"], s["basis"]
+
+
+def test_the_width_finding_is_a_separation_not_a_ranking():
+    """The app's own established limit is that these specimens cannot be ordered: each is
+    one imaged site, so material difference and site difference are one variance
+    component."""
+    sts = C.for_arm([{"specimen": f"S{i}"} for i in range(4)], _txm_like())
+    w = [s for s in sts if "width separates" in s["text"]]
+    assert w, "the width finding did not fire on a corpus built to trigger it"
+    for s in w:
+        assert "not a ranking" in (s["hedge"] or ""), s["hedge"]
+        for banned in ("highest", "lowest", "worst", "best", "most cracked"):
+            assert banned not in s["text"].lower()
+
+
+def test_no_between_specimen_width_difference_means_no_finding():
+    """A separation claim has to be able to fail, or it is decoration."""
+    fr = _txm_like(widths=(0.45, 0.45, 0.45, 0.45))
+    for i, f in enumerate(fr):          # wide within, identical between
+        f["crack_area_um2"] = f["total_length_um"] * (0.2 + 0.5 * (i % 4))
+    sts = C.for_arm([{"specimen": f"S{i}"} for i in range(4)], fr)
+    assert not any("width separates" in s["text"] for s in sts), (
+        "width must not 'separate' specimens whose medians are identical")
