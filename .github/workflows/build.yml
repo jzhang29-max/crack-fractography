@@ -42,16 +42,23 @@ jobs:
         with: { python-version: "3.12" }
       - run: pip install -r requirements.txt -r packaging/requirements-build.txt pytest
 
-      # RE-VENDOR, AS packaging/build.sh DOES. The bundled copy of the shared measurement
-      # code is what a downloaded app measures with, and this job ran pyinstaller directly
-      # -- no vendor.py, no pytest. The `test` job cannot cover it either: it runs on a
-      # fresh ubuntu checkout with no SEM repo, so the drift check skips itself. So a tag
-      # pushed after the sibling repo changed would publish installers measuring with the
-      # previous implementation, with a green run and /api/health reporting drift=False
-      # because there was nothing to compare against. No-op when there is no SEM repo,
-      # which is the CI case -- the point is that the step exists on the path that builds
-      # what people download.
-      - run: python packaging/vendor.py
+      # RE-VENDOR ON THE PATH THAT BUILDS WHAT PEOPLE DOWNLOAD. This job ran pyinstaller
+      # directly -- no vendor.py, no pytest -- and the `test` job cannot cover the drift
+      # check either, because it runs on a fresh checkout with no SEM repo and skips
+      # itself.
+      #
+      # --if-available, and NOT because the flag is tidier: plain `vendor.py` exits 1 when
+      # no SEM repo is present, which is correct for a person who asked to re-vendor and
+      # wrong for a runner that has none on purpose. Added without it, this step failed all
+      # three builds on the assumption that it would no-op -- an assumption I wrote into
+      # the comment instead of checking.
+      #
+      # AND IT IS HONEST ABOUT WHAT CI PROVES: with no SEM checkout, nothing here can
+      # detect that the vendored copy is stale, because that copy is the only
+      # implementation present. The drift guarantee is local, made by packaging/build.sh on
+      # a machine that has both repos. What this buys is that a runner which CAN reach a
+      # repo re-vendors, and that the bundle guards below run against the bundle just built.
+      - run: python packaging/vendor.py --if-available
       - run: pyinstaller --noconfirm --clean packaging/fractography.spec
 
       # THE BUNDLE'S OWN GUARDS, against the bundle that was just built -- the same order

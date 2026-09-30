@@ -430,3 +430,53 @@ def test_the_readme_covers_the_windows_first_launch_block_too():
     r = open(os.path.join(REPO, "README.md")).read()
     assert "SmartScreen" in r
     assert "Run anyway" in r
+
+
+# --- vendor.py's two exit conventions --------------------------------------------------
+def _run_vendor(args, sem_repo):
+    """Run vendor.py's main() with app.paths.sem_repo() forced to `sem_repo`."""
+    import importlib
+    import io
+    import contextlib
+    sys.path.insert(0, REPO)
+    from app import paths as P
+    mod = importlib.import_module("packaging.vendor") if False else None
+    # Load it as a module by path, so this does not depend on packaging/ being a package.
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "vendor_under_test", os.path.join(REPO, "packaging", "vendor.py"))
+    v = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(v)
+    was, P.sem_repo = P.sem_repo, (lambda: sem_repo)
+    argv_was, sys.argv = sys.argv, ["vendor.py"] + args
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            rc = v.main()
+        return 0 if rc in (0, None) else rc, buf.getvalue()
+    except SystemExit as e:
+        return (e.code if isinstance(e.code, int) else 1), buf.getvalue() + str(e.code or "")
+    finally:
+        P.sem_repo, sys.argv = was, argv_was
+
+
+def test_vendor_refuses_without_a_repo_when_run_by_hand():
+    """Correct for a person who asked to re-vendor: there is nothing to vendor FROM."""
+    rc, out = _run_vendor([], None)
+    assert rc != 0, "a hand run with no source of truth must fail"
+    assert "source of truth" in out
+
+
+def test_vendor_succeeds_without_a_repo_when_told_it_is_optional():
+    """CI has no SEM checkout on purpose. Adding `python packaging/vendor.py` to the build
+    job on the ASSUMPTION that it would no-op failed all three builds -- the assumption was
+    written into the workflow comment instead of being checked. This is that check."""
+    rc, out = _run_vendor(["--if-available"], None)
+    assert rc == 0, f"--if-available still fails without a repo (exit {rc}): {out}"
+    assert "leaving the committed copy as-is" in out
+
+
+def test_the_workflow_uses_the_optional_form():
+    w = _workflow()
+    assert "vendor.py --if-available" in w, (
+        "the build job would fail on every runner that has no SEM repo, which is all of them")

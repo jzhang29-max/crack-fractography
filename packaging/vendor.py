@@ -40,11 +40,30 @@ def md5(p):
 
 
 def main():
+    # --if-available: succeed when there is no SEM repo instead of refusing.
+    #
+    # Exiting non-zero on a missing repo is right for a person running this by hand -- you
+    # asked to re-vendor and there is nothing to vendor FROM. It is wrong for CI, which has
+    # no SEM checkout on purpose, and that mismatch broke all three build jobs when this
+    # was added to the workflow on the assumption that it would no-op. It does not; the
+    # assumption was never checked.
+    #
+    # WHAT CI CAN AND CANNOT VERIFY, since the flag makes it easy to overclaim: with no SEM
+    # repo present, nothing on a runner can detect that the vendored copy is stale, because
+    # the copy is the only implementation there. The drift check is a LOCAL guarantee, made
+    # by packaging/build.sh on a machine that has both. This step exists so the build path
+    # re-vendors wherever a repo IS reachable, and so the bundle guards run against the
+    # bundle that was just built.
+    optional = "--if-available" in sys.argv
     sys.path.insert(0, REPO)
     from app import paths as P
     sem = P.sem_repo()
     if not sem:
-        sys.exit("no SEM repo found -- vendoring needs the source of truth")
+        msg = "no SEM repo found -- vendoring needs the source of truth"
+        if optional:
+            print(msg + "; leaving the committed copy as-is (--if-available)")
+            return 0
+        sys.exit(msg)
     os.makedirs(VENDOR, exist_ok=True)
     man = {"source_repo": os.path.basename(sem), "files": {}}
     for rel in FILES:
