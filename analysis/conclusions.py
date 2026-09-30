@@ -807,10 +807,34 @@ def for_figure(kind, x, y, rows, label_of=None):
             widths = [max(v) - min(v) for v in g.values() if len(v) > 1]
             spread = (hi - lo)
             typical = _st.median(widths) if widths else None
+            # WITHIN vs BETWEEN IS THE FINDING, AND IT USED TO BE BURIED IN THE BASIS.
+            # This block emitted exactly one statement, always at level "warn", reading
+            # "Specimen medians span 39.5x." -- which is a number, not a conclusion, and
+            # amber, so the whole Figure tab showed a single complaint. The comparison a
+            # box-by-specimen plot actually answers was already computed one line above
+            # and only appeared in the basis text: is the gap BETWEEN specimens bigger
+            # than the range INSIDE one? That question has a verdict either way, so it is
+            # stated as a finding, and the confound that stops it becoming a ranking is
+            # stated separately as its own limit rather than as this line's hedge.
+            if typical is not None and spread > 0:
+                resolved = spread > typical
+                out.append(_s(
+                    ("Specimen differences exceed the variation inside one specimen."
+                     if resolved else
+                     "Specimen differences are smaller than the variation inside one."),
+                    f"{len(meds)} specimens. Between the extreme medians: {spread:.4g} "
+                    f"{lab(f)}. The typical specimen's own range: {typical:.4g}. "
+                    + ("Between is the larger, so the groups are separated by more than "
+                       "one group's own width."
+                       if resolved else
+                       "Within is the larger, so this figure does not show a specimen "
+                       "effect -- the boxes overlap by more than they differ."),
+                    hedge="Separated is not ordered: see the limit on this figure. A "
+                          "verdict either way is about these images, not the material.",
+                    level="good",
+                    value=round(spread / typical, 3) if typical > 0 else None))
             out.append(_s(
-                (f"Specimen medians span {hi / lo:.1f}× — less than one specimen's own range."
-                 if (typical is not None and typical >= spread and lo > 0) else
-                 f"Specimen medians span {hi / lo:.1f}×." if lo > 0 else
+                (f"Specimen medians span {hi / lo:.1f}×." if lo > 0 else
                  "Specimen medians differ."),
                 f"{len(meds)} specimens, median {lab(f)} from {lo:.4g} ({lo_k}) to "
                 f"{hi:.4g} ({hi_k})"

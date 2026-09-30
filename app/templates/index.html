@@ -39,6 +39,21 @@ html,body{height:100%}
    The per-element rules below are now redundant and kept only for their comments. */
 [hidden]{display:none !important}
 
+/* A TYPE SCALE AND A SPACING SCALE, declared once.
+   Before this the sheet used 11, 11.5, 12, 12.5 and 13px -- five sizes inside a 2px band,
+   which is not a hierarchy, it is noise: nothing led the eye and the only large thing on
+   the page was one percentage. Padding was worse -- 15 distinct values chosen ad hoc -- so
+   nothing aligned with anything down the page.
+   Type steps at roughly 1.25x, enough to read as deliberate. Space on a 4px grid.
+   NAMED --sp*, NOT --s*: --s1..--s4 are already this sheet's SERIES COLOURS, and a
+   spacing token called --s3 would have silently repainted every chart and accent that
+   references it. Caught because the patch asserted on a rule it was about to rewrite. */
+:root{
+  --t-micro:11px; --t-small:12.5px; --t-body:14px;
+  --t-sub:17px; --t-lead:21px; --t-hero:34px;
+  --sp1:4px; --sp2:8px; --sp3:12px; --sp4:16px; --sp5:24px; --sp6:32px;
+}
+
 body{margin:0;background:var(--surface-1);color:var(--text-primary);
   font:14px/1.5 ui-sans-serif,-apple-system,"Segoe UI",system-ui,sans-serif;
   display:flex;flex-direction:column;overflow:hidden}
@@ -49,7 +64,7 @@ body{margin:0;background:var(--surface-1);color:var(--text-primary);
    fold. The researcher's actual loop is pick a frame, look at it, pick the next one, so the
    frame list stays put on the left and the right pane changes. The selector IS the
    navigation, which is why there is no nav furniture. */
-header{display:flex;align-items:center;gap:12px;padding:10px 16px;
+header{display:flex;align-items:center;gap:var(--sp3);padding:var(--sp3) var(--sp5);
   border-bottom:1px solid var(--rule);flex:0 0 auto;flex-wrap:wrap}
 h1{font-size:14px;margin:0;font-weight:650;letter-spacing:-.01em;white-space:nowrap}
 .spacer{flex:1}
@@ -67,70 +82,77 @@ input[type=text],input[type=number]{cursor:text;background:var(--surface-1)}
    it scrolled off at the first flick. Its caveats live here too, as always-visible inline
    elements rather than hover text: they are assertions about the data currently loaded, not
    stable definitions, so they must not be behind any click at all. */
-.strip{display:flex;align-items:baseline;gap:14px;padding:9px 16px;flex-wrap:wrap;
+.strip{display:flex;align-items:baseline;gap:var(--sp4);padding:var(--sp3) var(--sp5);flex-wrap:wrap;
   background:var(--surface-2);border-bottom:1px solid var(--rule);flex:0 0 auto}
-.strip .big{font-size:21px;font-weight:600;letter-spacing:-.02em;
+.strip .big{font-size:var(--t-hero);font-weight:640;letter-spacing:-.025em;line-height:1;
   font-variant-numeric:tabular-nums}
-.strip .who{color:var(--text-secondary);font-size:12.5px}
-.strip .ci{color:var(--text-secondary);font-size:12.5px;font-variant-numeric:tabular-nums}
+.strip .who{color:var(--text-primary);font-size:var(--t-lead);font-weight:560;letter-spacing:-.01em}
+.strip .ci{color:var(--text-secondary);font-size:var(--t-small);font-variant-numeric:tabular-nums}
 .ra{font-size:11px;border-radius:5px;padding:1px 6px;white-space:nowrap;
   border:1px solid var(--rule);color:var(--text-secondary)}
 .ra.bad{color:var(--warn);border-color:var(--warn)}
-.banner{font-size:11.5px;border-radius:5px;padding:2px 7px;border:1px solid var(--warn);
+.banner{font-size:var(--t-micro);border-radius:5px;padding:2px 7px;border:1px solid var(--warn);
   color:var(--warn);white-space:nowrap}
 .banner.bad{border-color:var(--bad);color:var(--bad)}
 
-main{flex:1 1 auto;display:grid;grid-template-columns:minmax(220px,300px) minmax(0,1fr);
+main{flex:1 1 auto;display:grid;grid-template-columns:minmax(260px,348px) minmax(0,1fr);
   min-height:0}
 /* minmax(0,...) on the track AND min-width:0 on the item, and it has to be both: a grid
    item's default min-width is its content's, which is how a 1,109 px table dragged the
    whole page sideways at every viewport. */
 #list{border-right:1px solid var(--rule);display:flex;flex-direction:column;min-height:0;
   min-width:0;background:var(--surface-2)}
-#listhead{padding:8px 10px;border-bottom:1px solid var(--rule);display:flex;gap:6px;
+#listhead{padding:var(--sp3);border-bottom:1px solid var(--rule);display:flex;gap:var(--sp2);
   align-items:center}
-#listhead input{flex:1;min-width:0;font-size:12.5px;padding:4px 7px}
+#listhead input{flex:1;min-width:0;font-size:var(--t-body);padding:var(--sp2) var(--sp3)}
 #listwrap{overflow:auto;min-height:0;flex:1}
 #detail{display:flex;flex-direction:column;min-height:0;min-width:0}
 
-.tabs{display:flex;gap:2px;padding:6px 12px 0;border-bottom:1px solid var(--rule);
+.tabs{display:flex;gap:var(--sp1);padding:var(--sp2) var(--sp5) 0;border-bottom:1px solid var(--rule);
   flex:0 0 auto;overflow-x:auto;scrollbar-width:none}
 .tabs::-webkit-scrollbar{display:none}
 .tabs button{background:none;border:none;border-bottom:2px solid transparent;border-radius:0;
-  padding:6px 11px;color:var(--text-secondary);font-size:13px;white-space:nowrap}
+  padding:var(--sp2) var(--sp4);color:var(--text-secondary);font-size:var(--t-body);white-space:nowrap}
 .tabs button:hover{background:none;color:var(--text-primary)}
 .tabs button[aria-selected=true]{color:var(--text-primary);font-weight:620;
   border-bottom-color:var(--s1)}
-.pane{overflow:auto;padding:14px 16px 28px;flex:1 1 auto;min-height:0}
+.pane{overflow:auto;padding:var(--sp5) var(--sp5) var(--sp6);flex:1 1 auto;min-height:0}
 .pane[hidden]{display:none}
 
 /* THE READ-OUT. Four or five sentences instead of a table. "Why" is one click away in the
    definitions drawer, not on hover: 2,392 words used to live in 398 title= attributes,
    which is unreachable on touch and undiscoverable on a laptop. */
-.ro{display:flex;flex-direction:column;gap:9px;max-width:68ch}
-.ro-line{display:flex;gap:9px;align-items:flex-start;padding:9px 11px;border-radius:9px;
-  background:var(--surface-2);border:1px solid var(--rule);cursor:pointer}
+.ro{display:flex;flex-direction:column;gap:var(--sp2);max-width:74ch}
+.ro-line{display:flex;gap:var(--sp3);align-items:flex-start;padding:var(--sp3) var(--sp4);
+  border-radius:10px;font-size:var(--t-body);line-height:1.45;
+  background:var(--surface-2);border:1px solid var(--rule);
+  /* AFTER the shorthand, not before. Written first, `border:1px` reset it to 1px and the
+     accent was invisible -- and a 1px vs 3px edge is not something a screenshot shows.
+     getComputedStyle reported borderLeftWidth 1px, which is how this was caught. */
+  border-left:3px solid transparent;cursor:pointer}
 .ro-line:hover{background:var(--surface-3)}
 /* display:flex on .ro-line OVERRIDES the UA stylesheet's [hidden]{display:none}, so every
    "hidden" statement was still on screen: the DOM reported 4 hidden and the page showed all
    9. Caught by looking at a screenshot after the query said the cap was working. */
 .ro-line[hidden]{display:none}
-.ro-line .mk{flex:0 0 auto;font-size:13px;line-height:1.45;width:1.1em;text-align:center}
+.ro-line .mk{flex:0 0 auto;font-size:var(--t-body);line-height:1.45;width:1.1em;text-align:center}
+/* The accent carries the verdict at a glance, so a finding and a caveat are not two
+   identical grey boxes told apart only by a small glyph. */
+.ro-line.good{border-left-color:var(--s3)}
+.ro-line.bad{border-left-color:var(--bad)}
+.ro-line.warn{border-left-color:var(--warn)}
 .ro-line.good .mk{color:var(--s3)} .ro-line.warn .mk{color:var(--warn)}
 .ro-line.bad .mk{color:var(--bad)} .ro-line.info .mk{color:var(--text-muted)}
 .ro-line .tx{flex:1;min-width:0}
-.ro-sec{font-size:11.5px;font-weight:650;letter-spacing:.04em;text-transform:uppercase;
+.ro-sec{font-size:var(--t-micro);font-weight:650;letter-spacing:.04em;text-transform:uppercase;
   color:var(--text-muted);margin:6px 0 0}
 /* Which level the statement is about, as a tag on the line rather than a heading over a
    group -- two fewer headings, and it survives the severity sort that mixes the two. */
-.ro-line .who{flex:0 0 auto;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;
+.ro-line .who{flex:0 0 auto;font-size:var(--t-micro);text-transform:uppercase;letter-spacing:.05em;
   color:var(--text-muted);padding-top:3px}
-.ro-empty{color:var(--text-muted);font-size:13px}
+.ro-empty{color:var(--text-muted);font-size:var(--t-body)}
 /* "+N more" rather than nine warnings at once. Severity decides what shows: a reader
    should be able to stop after the first line and not have missed the worst thing. */
-.ro-more{align-self:flex-start;font-size:12.5px;color:var(--text-secondary);
-  background:none;border:none;padding:4px 0;text-decoration:underline}
-.ro-more:hover{background:none;color:var(--text-primary)}
 /* The marking tool, embedded. It is a separate Flask app in the SEM repo on its own port;
    an iframe is the honest way to reach it without reimplementing a painting canvas. */
 .edbar{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-bottom:9px}
@@ -153,7 +175,7 @@ main{flex:1 1 auto;display:grid;grid-template-columns:minmax(220px,300px) minmax
   border-radius:7px;background:transparent;color:var(--text-secondary);cursor:pointer}
 .markmodes .seg.on{background:var(--s1);border-color:var(--s1);color:#fff}
 .markmodes .seg:disabled{opacity:.45;cursor:not-allowed}
-.markmodes .u{font-size:11.5px}
+.markmodes .u{font-size:var(--t-micro)}
 /* The proxied tool fills the pane. It is same-origin, so this frame can be inspected --
    which is the reason it is a frame at all and not a link out to the browser. */
 /* FLUSH, NOT A CARD. A bordered, rounded, white-backed frame around a tool that has its
@@ -163,7 +185,7 @@ main{flex:1 1 auto;display:grid;grid-template-columns:minmax(220px,300px) minmax
    it bleeds to the pane's edges so there is one box on screen instead of two. */
 #markframe{display:block;border:0;border-radius:0;background:transparent;
   width:calc(100% + 32px);margin:0 -16px -28px;height:calc(100vh - 168px);min-height:520px}
-.sect{font-size:12px;font-weight:650;text-transform:uppercase;letter-spacing:.04em;
+.sect{font-size:var(--t-sub);font-weight:600;letter-spacing:-.01em;color:var(--text-primary);
   color:var(--text-muted);margin:22px 0 6px;border-top:1px solid var(--rule);padding-top:14px}
 .roact{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px;
   padding-top:12px;border-top:1px solid var(--rule)}
@@ -188,10 +210,10 @@ main{flex:1 1 auto;display:grid;grid-template-columns:minmax(220px,300px) minmax
 .refuse-all>summary:hover{color:var(--text-primary)}
 .refuse{border:1px dashed var(--rule);border-radius:9px;padding:11px 13px;max-width:68ch;
   margin-top:8px}
-.refuse h4{margin:0 0 3px;font-size:13px;font-weight:650}
+.refuse h4{margin:0 0 var(--sp1);font-size:var(--t-body);font-weight:640}
 .refuse .ans{color:var(--bad);font-size:12.5px}
 .refuse details{margin-top:6px}
-.refuse summary{cursor:pointer;color:var(--text-secondary);font-size:12px}
+.refuse summary{cursor:pointer;color:var(--text-secondary);font-size:var(--t-small)}
 .refuse p,.refuse li{font-size:12.5px;color:var(--text-secondary);margin:5px 0}
 .refuse ul{margin:5px 0;padding-left:18px}
 
@@ -204,7 +226,7 @@ main{flex:1 1 auto;display:grid;grid-template-columns:minmax(220px,300px) minmax
 #defs[hidden]{display:none}
 #defshead{display:flex;align-items:center;gap:8px;padding:11px 14px;
   border-bottom:1px solid var(--rule)}
-#defshead strong{font-size:13px}
+#defshead strong{font-size:var(--t-body)}
 #defsbody{overflow:auto;padding:12px 14px 30px}
 .def{padding:9px 0;border-bottom:1px solid var(--rule)}
 .def:target,.def.hi{background:color-mix(in oklab,var(--s1) 12%,transparent);
@@ -218,18 +240,18 @@ main{flex:1 1 auto;display:grid;grid-template-columns:minmax(220px,300px) minmax
 table{width:100%;min-width:0;border-collapse:collapse;font-variant-numeric:tabular-nums}
 th,td{text-align:right;padding:4px 7px;border-bottom:1px solid var(--rule);white-space:nowrap}
 th:first-child,td:first-child{text-align:left}
-th{color:var(--text-secondary);font-weight:600;font-size:12px;cursor:pointer;
+th{color:var(--text-secondary);font-weight:600;font-size:var(--t-small);cursor:pointer;
   position:sticky;top:0;background:var(--surface-2);z-index:1}
 th:hover{color:var(--text-primary)}
 tbody tr:hover{background:var(--surface-3)}
 tbody tr[aria-selected=true]{background:color-mix(in oklab,var(--s1) 20%,transparent)}
-#frames td{font-size:12.5px;padding:3px 7px}
+#frames td{font-size:var(--t-body);padding:var(--sp2) var(--sp3);line-height:1.35}
 /* Specimen groups. The header row is the set; its children are indented under it. */
-#frames tr.grp td{background:var(--surface-3);font-weight:620;font-size:12px;
+#frames tr.grp td{background:var(--surface-3);font-weight:640;font-size:var(--t-small);
   cursor:pointer;position:sticky;top:26px}
 #frames tr.grp:hover td{color:var(--text-primary)}
-#frames td.ind{padding-left:20px}
-#frames td:first-child{max-width:15ch;overflow:hidden;text-overflow:ellipsis}
+#frames td.ind{padding-left:var(--sp5)}
+#frames td:first-child{max-width:20ch;overflow:hidden;text-overflow:ellipsis}
 .scroll{overflow:auto;max-width:100%;scrollbar-gutter:stable}
 .scroll::-webkit-scrollbar{height:9px;width:9px}
 .scroll::-webkit-scrollbar-thumb{background:var(--rule);border-radius:5px}
@@ -237,11 +259,11 @@ tbody tr[aria-selected=true]{background:color-mix(in oklab,var(--s1) 20%,transpa
   max-width:62ch}
 .kv dt{color:var(--text-secondary);font-size:12.5px}
 .kv dd{margin:0;text-align:right}
-.muted{color:var(--text-muted);font-size:11.5px;font-weight:400}
-.flag{color:var(--warn);font-size:12px}
+.muted{color:var(--text-muted);font-size:var(--t-micro);font-weight:400}
+.flag{color:var(--warn);font-size:var(--t-small)}
 .flag.bad{color:var(--bad)}
-.u{color:var(--text-muted);font-size:12px}
-.note{color:var(--text-muted);font-size:12px;margin:0 0 10px}
+.u{color:var(--text-muted);font-size:var(--t-small)}
+.note{color:var(--text-muted);font-size:var(--t-small);margin:0 0 var(--sp3)}
 img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
   background:#fff;display:block}
 /* A crack row is only useful if you can find the region on the image. centroid_x_px and
@@ -254,7 +276,7 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
 #cracks tbody tr{cursor:pointer}
 #cracks tbody tr[aria-selected=true]{background:color-mix(in oklab,var(--s2) 22%,transparent)}
 .tip{position:fixed;pointer-events:none;background:var(--surface-1);color:var(--text-primary);
-  border:1px solid var(--rule);border-radius:7px;padding:6px 9px;font-size:12px;
+  border:1px solid var(--rule);border-radius:7px;padding:var(--sp2) var(--sp3);font-size:var(--t-small);
   box-shadow:0 4px 14px rgba(0,0,0,.18);opacity:0;transition:opacity .08s;z-index:9;
   font-variant-numeric:tabular-nums}
 .err{color:var(--bad);padding:12px 16px}
@@ -264,9 +286,9 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
   max-width:66ch}
 .spec dt{color:var(--text-secondary);font-size:12.5px;white-space:nowrap}
 .spec dd{margin:0;font-variant-numeric:tabular-nums;font-size:13.5px}
-.spec dd .u{color:var(--text-muted);font-size:12px}
-.big{font-size:20px;font-weight:600;letter-spacing:-.01em}
-.ci{color:var(--text-secondary);font-size:12.5px;font-weight:400}
+.spec dd .u{color:var(--text-muted);font-size:var(--t-small)}
+.big{font-size:var(--t-hero);font-weight:640;letter-spacing:-.025em}
+.ci{color:var(--text-secondary);font-size:var(--t-small);font-weight:400}
 #spectable tbody tr{cursor:pointer}
 
 /* Setup. Shown automatically when something the app needs is not configured, which is the
@@ -274,7 +296,7 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
 #setup{padding:12px 16px;border-bottom:1px solid var(--rule);background:var(--surface-2);
   flex:0 0 auto}
 #setup[hidden]{display:none}
-#setup h2{font-size:13px;margin:0 0 8px;font-weight:650}
+#setup h2{font-size:var(--t-sub);margin:0 0 var(--sp3);font-weight:600}
 #setup .row{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:9px}
 #setup input[type=text]{flex:1;min-width:220px}
 .caps{display:flex;gap:16px;flex-wrap:wrap;margin:0;padding:0;list-style:none;font-size:12.5px}

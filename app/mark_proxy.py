@@ -64,6 +64,15 @@ DROP = {"content-length", "transfer-encoding", "connection", "keep-alive",
 NEEDLE = "'/api/"
 REPLACEMENT = "'/mark/api/"
 
+#: The app's --surface-1, written literally into INJECT below as well.
+#:
+#: NOT interpolated with an f-string: INJECT is a stylesheet, so every one of its CSS
+#: blocks is a brace pair and f"" reads them as format fields -- the module raised
+#: NameError: name 'display' is not defined on `#side { display: none }` at import. The
+#: literal is duplicated instead, and a test asserts all three copies agree: this
+#: constant, the hex inside INJECT, and --surface-1 in index.html.
+SURFACE_1 = "#1a1a19"
+
 #: Where the injected stylesheet goes. Matched case-insensitively; every HTML document the
 #: tool serves has one.
 HEAD_CLOSE = "</head>"
@@ -91,8 +100,23 @@ INJECT = """
   /* AND NO PANEL CHROME OF ITS OWN. The tool is a standalone application and styles
      itself like one -- its own page background, its own bordered toolbar strip. Nested
      inside this app's pane that reads as a second app in a box, which is what a user
-     looking at it said. Flattened so the only visible container is the pane. */
-  html, body { background: transparent !important; }
+     looking at it said. Flattened so the only visible container is the pane.
+
+     THE BACKGROUND IS A COLOUR, NOT `transparent`, AND color-scheme IS RESTATED.
+     `transparent` was the obvious choice and it was wrong: an iframe document gets an
+     opaque white canvas from the UA, and color-scheme does NOT cross a document
+     boundary -- the app declares `color-scheme: dark` on its own :root, and the framed
+     tool still computed `normal`. So the tool's toolbar, whose own background this
+     stylesheet had just cleared, showed that white canvas through: a bright strip across
+     the top of an otherwise dark window, with a light scrollbar beside it. Exactly the
+     "two apps" seam this block exists to remove, reintroduced by the line meant to
+     remove it. Naming the surface makes the framed document opaque and self-consistent,
+     and color-scheme here is what makes its scrollbars and native controls dark.
+
+     SURFACE_1 must equal --surface-1 in index.html; a test asserts it, because a palette
+     change there would otherwise leave this seam behind with nothing to catch it. */
+  :root { color-scheme: dark; }
+  html, body { background: #1a1a19 !important;  /* == SURFACE_1 */ }
   #top { border: 0 !important; border-radius: 0 !important; background: transparent !important;
          box-shadow: none !important; padding-left: 0 !important; padding-right: 0 !important; }
   #foot { border: 0 !important; background: transparent !important; }

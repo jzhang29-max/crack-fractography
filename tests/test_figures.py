@@ -155,3 +155,98 @@ def test_the_censored_share_axes_name_their_weighting():
     assert "Regions" in axis_label("censored_share")
     assert "Area touching" not in FIELDS["censored_share"][0], (
         "censored_share is a count share and must not be labelled as an area share")
+
+
+# --- AXIS LABELS THAT DO NOT COLLIDE ---------------------------------------------------
+#: Fourteen specimens with names the length of the real corpus's. The defect scaled with
+#: specimen count, so a two-specimen fixture -- which is what every test above uses --
+#: could not see it.
+def _many_specimens(n=14, name_len=17):
+    out = []
+    for i in range(n):
+        spec = f"260622_316_{'ambH'[i % 4]}_b{i}".ljust(name_len, "x")
+        for j in range(4):
+            out.append({"arm": "sem/gated", "specimen": spec,
+                        "frame": f"{spec}_CBS_000{j}", "scale_known": True,
+                        "area_fraction": 0.01 + 0.004 * i + 0.001 * j,
+                        "n_cracks_measured": 10})
+    return out
+
+
+def _labels(svg):
+    """(cx, cy, angle, text) for every rotated axis label in the SVG."""
+    import re
+    out = []
+    for m in re.finditer(
+            r'<text x="([\d.]+)" y="(\d+)"[^>]*transform="rotate\((-?[\d.]+) '
+            r'([\d.]+) ([\d.]+)\)"[^>]*>(.*?)</text>', svg, re.S):
+        txt = re.sub(r"<[^>]+>", "", m.group(6))
+        out.append((float(m.group(4)), float(m.group(5)), float(m.group(3)), txt.strip()))
+    return out
+
+
+def test_specimen_labels_do_not_overlap_each_other():
+    """THE REGRESSION. Labels were rotated -38 degrees, where a label's horizontal
+    footprint is most of its text length. With 14 specimens that is 96px of text on 68px
+    centres, and getBoundingClientRect on the rendered figure found 10 of 13 consecutive
+    pairs overlapping -- by up to 30px across and 80px down. Nine tests in this file
+    passed throughout, because each used two specimens and asserted on n, not geometry.
+
+    At -90 the footprint is the font size, so this holds for any name length."""
+    out = F.build(_many_specimens(), "sem/gated", "box_by_specimen", y="area_fraction")
+    labs = _labels(out["svg"])
+    assert len(labs) == 14, f"expected one label per specimen, got {len(labs)}"
+    for cx, cy, ang, txt in labs:
+        assert ang == -90, (
+            f"label at {cx} is rotated {ang}; at anything other than -90 the horizontal "
+            "footprint grows with the name length and long names collide")
+    xs = sorted(cx for cx, _, _, _ in labs)
+    spacing = min(b - a for a, b in zip(xs, xs[1:]))
+    #: A vertical label occupies its line box across the axis: font-size 10 with ascender
+    #: and descender is under 14px. Compared against the real tick spacing.
+    assert spacing > 14, (
+        f"ticks are {spacing:.1f}px apart, which cannot fit a 10px vertical label")
+
+
+def test_the_bottom_margin_fits_the_longest_label():
+    """Vertical labels extend DOWN from the axis, so the margin has to be computed from
+    the longest one rather than fixed at 120px -- otherwise the fix for overlap just
+    moves the defect from collision to clipping."""
+    import re
+    long_names = _many_specimens(n=6, name_len=40)
+    out = F.build(long_names, "sem/gated", "box_by_specimen", y="area_fraction")
+    svg = out["svg"]
+    H = float(re.search(r'viewBox="0 0 [\d.]+ ([\d.]+)"', svg).group(1))
+    labs = _labels(svg)
+    assert labs, "no labels were rendered"
+    for cx, cy, _, txt in labs:
+        # 5.2px per character at font-size 10, the same estimate the renderer sizes by.
+        reach = cy + len(txt) * 5.2
+        assert reach <= H, (
+            f"label {txt!r} reaches y={reach:.0f} in a {H:.0f}px figure: it is clipped")
+
+
+def test_long_names_are_truncated_not_allowed_to_grow_the_figure_forever():
+    out = F.build(_many_specimens(n=4, name_len=60), "sem/gated", "box_by_specimen",
+                  y="area_fraction")
+    for _, _, _, txt in _labels(out["svg"]):
+        assert "…" in txt, "a 60-character name must be elided"
+        assert len(txt) < 32, f"label is {len(txt)} chars: {txt!r}"
+
+
+def test_the_mixed_detector_count_carries_its_denominator():
+    """"7 specimens average two detectors per field" sat directly under a figure drawing
+    fourteen boxes. The clause was true -- seven of the fourteen are imaged twice -- but
+    the leading number in a caption is read as the figure's specimen count, so the caption
+    contradicted the picture above it. A number needs the object it belongs to."""
+    frames = []
+    for i in range(4):
+        spec = f"S{i}"
+        for j in range(3):
+            dets = ("CBS", "ETD") if i < 2 else ("CBS",)
+            for det in dets:
+                frames.append({"arm": "sem/gated", "specimen": spec,
+                               "frame": f"{spec}_{det}_000{j}", "scale_known": True,
+                               "area_fraction": 0.02 + 0.01 * i, "n_cracks_measured": 10})
+    cap = F.build(frames, "sem/gated", "box_by_specimen", y="area_fraction")["caption"]
+    assert "2 of 4 specimens average two detectors" in cap, cap

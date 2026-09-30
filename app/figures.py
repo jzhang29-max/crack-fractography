@@ -150,6 +150,12 @@ def build(frames, arm, kind, x=None, y=None, min_frames=3, include_thin=False):
         dropped["_collapsed"] = (n_frames, len(rows))
     if mixed_detectors:
         dropped["_mixed_detectors"] = mixed_detectors
+    #: The DENOMINATOR for that count. Without it the caption read "7 specimens average
+    #: two detectors per field" directly beneath a figure drawing FOURTEEN boxes, and the
+    #: leading number in a caption is read as the figure's specimen count. The clause was
+    #: true and attached to the wrong object -- the same class of error as a count of
+    #: components read as a mass. Stating it as "7 of 14" removes the reading entirely.
+    dropped["_n_specimens"] = len({r.get("specimen", "unparsed") for r in rows})
 
     # The collapsed rows travel with the result so the conclusions under the chart are
     # computed from exactly the points the chart drew -- the same rule the frame and
@@ -222,7 +228,9 @@ def _cap(arm, n, dropped, extra=""):
     # same physical field is showing instrument spread as if it were material spread.
     if dropped.get("_mixed_detectors"):
         m = dropped["_mixed_detectors"]
-        bits.append(f"{len(m)} specimens average two detectors per field "
+        tot = dropped.get("_n_specimens")
+        of = f" of {tot}" if tot else ""
+        bits.append(f"{len(m)}{of} specimens average two detectors per field "
                     f"(CBS reads ~2.3x ETD; the spread is partly instrument)")
     if extra:
         bits.append(extra)
@@ -318,9 +326,29 @@ def _by_specimen(rows, arm, field, kind, min_frames, include_thin, dropped):
         raise ValueError(f"every specimen has fewer than {min_frames} fields; "
                          f"tick 'include thin specimens' to plot them anyway")
     keys = sorted(g)
+    # LABELS ARE VERTICAL AND THE BOTTOM MARGIN IS COMPUTED FROM THEM.
+    #
+    # They were rotated -38 degrees into a fixed 120px margin, which reads fine with four
+    # specimens and is broken with fourteen: a 38-degree label's horizontal footprint is
+    # most of its text length, so at 96px of text on 68px centres they collide. Measured on
+    # the real corpus, 10 of 13 consecutive pairs overlapped, by up to 30px across and 80px
+    # down -- names sitting on top of each other. It is not obvious in a screenshot, which
+    # is why it survived: every label is present and roughly where it belongs, just
+    # unreadable where they cross. getBoundingClientRect on the rendered <text> found it.
+    #
+    # At -90 the footprint is the FONT SIZE rather than the text length, so overlap stops
+    # depending on how long the specimen names happen to be -- the one rotation that is
+    # correct by construction instead of correct for the corpus in front of me. The cost is
+    # vertical space, so the margin is sized from the longest label actually being drawn.
+    SHORT = 18
+    shorts = {k: (k if len(k) <= SHORT else k[:SHORT - 1] + "…") for k in keys}
+    #: ~5.2px per character at font-size 10 for this face, plus the " (n=NN)" tail that is
+    #: part of the same text element, plus room for the axis label underneath.
+    label_px = max(len(v) + 7 for v in shorts.values()) * 5.2
+    bottom = int(min(220, max(96, label_px + 30)))
     W = max(520, 90 + 74 * len(keys))
-    H = 470
-    x0, y0, x1, y1 = 74, 40, W - 20, H - 120
+    H = 350 + bottom
+    x0, y0, x1, y1 = 74, 40, W - 20, H - bottom
     allv = [v for vs in g.values() for v in vs]
     lo, hi, st = _nice(min(allv), max(allv))
     bw = (x1 - x0) / len(keys)
@@ -348,10 +376,12 @@ def _by_specimen(rows, arm, field, kind, min_frames, include_thin, dropped):
                          f'y2="{Y(med):.1f}" stroke="var(--text-primary,#0b0b0b)" stroke-width="2"/>')
         # n goes INSIDE the rotated label. As two separate texts they collided: the rotated
         # name swept through the horizontal n= line at every tick.
-        short = k if len(k) <= 15 else k[:14] + "…"
-        marks.append(f'<text x="{cx:.1f}" y="{y1+14}" font-size="10" text-anchor="end" '
-                     f'fill="var(--text-secondary,#52514e)" '
-                     f'transform="rotate(-38 {cx:.1f} {y1+14})">{_esc(short)} '
+        # dominant-baseline centres the label on its tick: after a -90 rotation the
+        # baseline runs vertically, so the perpendicular shift is the horizontal one.
+        short = shorts[k]
+        marks.append(f'<text x="{cx:.1f}" y="{y1+10}" font-size="10" text-anchor="end" '
+                     f'dominant-baseline="middle" fill="var(--text-secondary,#52514e)" '
+                     f'transform="rotate(-90 {cx:.1f} {y1+10})">{_esc(short)} '
                      f'<tspan fill="var(--text-muted,#82807a)">(n={len(vs)})</tspan></text>')
     body = (_axes(x0, y0, x1, y1, lo, hi, st, horizontal=True)
             + f'<line x1="{x0}" y1="{y1}" x2="{x1}" y2="{y1}" stroke="var(--rule,#dedbd6)"/>'

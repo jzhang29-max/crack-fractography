@@ -267,3 +267,33 @@ def test_hidden_not_deleted():
     assert "display: none" in MP.INJECT
     for gone in ("<!-- removed", "imageList { content", "remove()"):
         assert gone not in MP.INJECT
+
+
+def test_the_framed_tool_is_opaque_and_dark_schemed():
+    """`background: transparent` on the framed document was wrong in a way that only shows
+    on screen. An iframe gets an OPAQUE WHITE canvas from the UA, and color-scheme does not
+    cross a document boundary -- the app sets `color-scheme: dark` on its own :root and the
+    framed tool still computed `normal`. Clearing the tool's toolbar background therefore
+    revealed that white canvas: a bright strip across the top of a dark window, with a light
+    scrollbar beside it. The measurement that caught it was getComputedStyle on the framed
+    document reporting colorScheme "normal"; the screenshot showed the strip but not why."""
+    assert "color-scheme: dark" in MP.INJECT, "the framed document needs its own scheme"
+    body_rule = MP.INJECT.split("html, body")[1].split("}")[0]
+    assert "transparent" not in body_rule, (
+        "a transparent framed document exposes the UA's white iframe canvas")
+    assert MP.SURFACE_1 in body_rule
+
+
+def test_the_injected_surface_matches_the_apps_own_palette():
+    """The framed document cannot read the parent's custom properties, so this one colour is
+    duplicated. Duplicated colours drift silently -- a palette change in index.html would
+    leave the tool sitting on the old surface and put the seam back."""
+    import re
+    here = os.path.dirname(os.path.abspath(__file__))
+    css = open(os.path.join(here, "..", "app", "templates", "index.html")).read()
+    m = re.search(r"--surface-1:\s*(#[0-9a-fA-F]{3,8})", css)
+    assert m, "index.html no longer declares --surface-1; this guard needs updating"
+    assert m.group(1).lower() == MP.SURFACE_1.lower(), (
+        f"index.html --surface-1 is {m.group(1)} but mark_proxy.SURFACE_1 is {MP.SURFACE_1}; "
+        "the framed tool would sit on a different surface than the window around it")
+    assert MP.SURFACE_1 in MP.INJECT, "the constant and the stylesheet's literal disagree"

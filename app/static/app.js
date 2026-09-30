@@ -929,14 +929,25 @@ function renderStrip(rec) {
 // is unreachable on touch and undiscoverable on a laptop.
 const MARK = { good: "●", warn: "▲", bad: "✕", info: "·" };
 
-// ONE LIST, SEVERITY FIRST, CAPPED. Two sections of four each showed eight statements and
-// collapsed nothing, because the cap was per section while the reader sees the total. The
-// specimen/frame distinction still matters, so it becomes a tag on the line rather than a
-// heading over a group -- which also removes two headings' worth of words.
+// FINDINGS OUT, LIMITS IN -- the same shape as armStatements(), and it was not that.
 //
-// Sorted so a reader can stop after the first line and not have missed the worst thing.
+// This list used to sort severity-first and cap at five, which sounds prudent and was the
+// single worst thing in the pane. A frame typically carries two or three findings and six
+// or seven caveats; severity-first put every caveat at the top, the cap of five was then
+// filled entirely by caveats, and the findings were pushed into the collapsed "5 more".
+// So a pane that DID have conclusions displayed five failures and hid every one of them.
+// A user looking at that screen said the conclusions were all inconclusive, and they were
+// reading it correctly -- that is what it showed. Not a wording problem and not a
+// statistics problem: an ordering bug with a truncation behind it.
+//
+// Findings stay open and uncapped -- there are never many, and they are the reason the
+// pane exists. Caveats collapse to one line carrying its own count, so "six limits" costs
+// one line instead of six and is still one click from being read in full.
+//
+// THE STRIP STILL LEADS WITH THE WORST THING (see RO_TOP below): a reader who never opens
+// this tab must not be able to miss a caveat. Lead with findings where there is room for
+// both, lead with severity where there is room for one.
 const SEV = { bad: 0, warn: 1, good: 2, info: 3 };
-const RO_SHOWN = 5;
 
 function roRender(groups) {
   const all = [];
@@ -944,19 +955,29 @@ function roRender(groups) {
     (sts || []).forEach((st, i) => all.push({ st, key: `${heading}:${i}`, heading }));
   }
   if (!all.length) return "";
-  all.sort((a, b) => (SEV[a.st.level] ?? 9) - (SEV[b.st.level] ?? 9));
-  const one = (x, hidden) =>
-    `<div class="ro-line ${x.st.level}" data-ro="${x.key}" tabindex="0" role="button"${hidden ? " hidden" : ""}>
+  const one = (x) =>
+    `<div class="ro-line ${x.st.level}" data-ro="${x.key}" tabindex="0" role="button">
        <span class="mk">${MARK[x.st.level] || "\u00b7"}</span>
-       <span class="tx">${x.st.text}</span>
+       <span class="tx">${esc(x.st.text)}</span>
        <span class="who">${x.heading}</span>
      </div>`;
-  const rest = all.slice(RO_SHOWN);
-  return all.slice(0, RO_SHOWN).map((x) => one(x, false)).join("") +
-    (rest.length
-      ? rest.map((x) => one(x, true)).join("") +
-        `<button class="ro-more">${rest.length} more</button>`
-      : "");
+  const findings = all.filter((x) => x.st.level === "good");
+  const limits = all.filter((x) => x.st.level !== "good")
+    .sort((a, b) => (SEV[a.st.level] ?? 9) - (SEV[b.st.level] ?? 9));
+  let html = "";
+  if (findings.length) html += `<div class="ro">` + findings.map(one).join("") + `</div>`;
+  // With nothing established, say so in one line rather than leaving the reader to infer
+  // it from a list of caveats. This is the honest case, not a hidden one.
+  if (!findings.length) {
+    html += `<div class="ro"><div class="ro-line info"><span class="mk">\u00b7</span>`
+      + `<span class="tx">Nothing is established for this frame yet.</span></div></div>`;
+  }
+  if (limits.length) {
+    html += `<details class="limits"><summary>${limits.length} limit${
+      limits.length === 1 ? "" : "s"} on this frame</summary>`
+      + `<div class="ro">` + limits.map(one).join("") + `</div></details>`;
+  }
+  return html;
 }
 
 let RO = {};
@@ -1073,12 +1094,6 @@ async function renderReadout() {
   // frame change.
   if (typeof STRIP_REC !== "undefined" && STRIP_REC) renderStrip(STRIP_REC);
 
-  el.querySelectorAll(".ro-more").forEach((b) => {
-    b.onclick = () => {
-      el.querySelectorAll(".ro-line[hidden]").forEach((n) => { n.hidden = false; });
-      b.remove();
-    };
-  });
   el.querySelectorAll(".ro-line").forEach((n) => {
     const open = () => {
       const [h, i] = n.dataset.ro.split(":");
