@@ -17,7 +17,9 @@ here. What matters is that the page boots, the tabs switch, the frame list is po
 a measurement renders, and nothing throws.
 """
 import json
+import os
 import sys
+import time
 import urllib.request
 import uuid
 
@@ -42,10 +44,58 @@ def seed(base):
         return json.loads(r.read()).get("frame")
 
 
+def serve(binary, port):
+    """Start the packaged app and wait for it, the way smoke_check.py does.
+
+    WHY THIS IS HERE RATHER THAN IN THE WORKFLOW. The first version backgrounded the
+    binary from bash -- `PORT=8897 "$BIN" &` -- and waited with curl. That works on macOS
+    and Linux and hung on Windows: the step burned its full 180s on the seed upload and
+    the server never answered, while smoke_check.py launches the SAME binary on the SAME
+    runner without trouble. Rather than debug Git Bash's handling of a windowed exe from
+    2,000 miles away, use the launcher that is already proven on all three platforms.
+    One code path, no shell in it.
+    """
+    import subprocess
+    env = dict(os.environ, PORT=str(port))
+    env.setdefault("FRACTOGRAPHY_DATA", os.path.abspath("_ui_data"))
+    log = open("_ui_server.log", "wb")
+    proc = subprocess.Popen([binary], env=env, stdout=log, stderr=subprocess.STDOUT)
+    base = f"http://127.0.0.1:{port}"
+    for _ in range(120):
+        if proc.poll() is not None:
+            raise RuntimeError("the app exited during startup; see _ui_server.log")
+        try:
+            urllib.request.urlopen(base + "/api/health", timeout=3).read()
+            return proc, base
+        except Exception:
+            time.sleep(1)
+    proc.terminate()
+    raise RuntimeError("the app did not answer /api/health within 120s")
+
+
 def main():
     if len(sys.argv) < 2:
-        sys.exit("usage: ui_check.py <base-url>")
-    base = sys.argv[1].rstrip("/")
+        sys.exit("usage: ui_check.py <base-url | path-to-binary>")
+    arg = sys.argv[1]
+    proc = None
+    if arg.startswith("http://") or arg.startswith("https://"):
+        base = arg.rstrip("/")
+    else:
+        if not os.path.exists(arg):
+            sys.exit(f"no binary at {arg}")
+        proc, base = serve(arg, int(sys.argv[2]) if len(sys.argv) > 2 else 8897)
+    try:
+        return run(base)
+    finally:
+        if proc and proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=15)
+            except Exception:
+                proc.kill()
+
+
+def run(base):
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
