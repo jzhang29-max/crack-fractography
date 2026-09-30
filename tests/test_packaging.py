@@ -355,3 +355,15 @@ def test_the_dmg_carries_the_quarantine_instruction():
     assert "com.apple.quarantine" in sh
     assert "READ ME FIRST" in sh
     assert "/Applications" in sh, "no Applications symlink, so it is not drag-to-install"
+
+
+def test_the_readme_describes_the_files_that_are_actually_published():
+    """The install section said "unzip" and treated Windows and Linux as build-it-yourself,
+    which stopped being true the moment the release started carrying all three. Prose going
+    stale under a change is a recurring defect here."""
+    r = open(os.path.join(REPO, "README.md")).read()
+    inst = r[r.index("## Install"):r.index("### What works without anything else installed")]
+    for token in (".dmg", "-Windows-x64.zip", "-Linux-x86_64.tar.gz"):
+        assert token in inst, f"the install section does not mention {token}"
+    assert "com.apple.quarantine" in inst
+    assert "unzip, drag" not in inst, "the old zip-only instruction survives"

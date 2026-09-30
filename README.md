@@ -78,28 +78,44 @@ units they can compare, with the uncertainty attached and the limits named.
 
 ## Install
 
-**As an app.** [Download the latest release](https://github.com/jzhang29-max/crack-fractography/releases/latest),
-unzip, drag `Crack Fractography.app` to Applications, double-click. It is a real application
-window — the analysis runs inside it, not in a browser tab. The app is unsigned, so macOS
-refuses it and reports that it **"is damaged and can't be opened"**. That message is wrong:
-it means only that there is no developer signature. Once, in Terminal:
+**As an app.** [Download the latest release](https://github.com/jzhang29-max/crack-fractography/releases/latest)
+and pick the file for your machine. Python and every library are inside it; there is
+nothing to install alongside.
+
+| Platform | File | What to do |
+|---|---|---|
+| macOS (Apple Silicon) | `...-macOS-arm64.dmg` | Open it, drag the app onto **Applications** |
+| Windows (x64) | `...-Windows-x64.zip` | Unzip anywhere, run `Crack Fractography.exe` |
+| Linux (x86_64) | `...-Linux-x86_64.tar.gz` | `tar -xzf ...`, run `Crack Fractography` |
+
+It is a real application window — the analysis runs inside it, not in a browser tab.
+
+The macOS build is unsigned, so macOS refuses it and reports that it **"is damaged and
+can't be opened"**. That message is wrong: it means only that there is no developer
+signature. Once, in Terminal:
 
 ```bash
 xattr -dr com.apple.quarantine "/Applications/Crack Fractography.app"
 ```
 
-Apple Silicon, macOS 12+. Your measurements live in
-`~/Library/Application Support/Crack Fractography` and survive replacing the app.
+The same instruction ships inside the disk image as `READ ME FIRST.txt`, so it is still
+there the next time you install.
+
+Your measurements live in the platform's own application-support directory
+(`~/Library/Application Support/Crack Fractography` on macOS) and survive replacing the
+app. Set `FRACTOGRAPHY_DATA` to put them somewhere else.
 
 **From source.** `./run` — it builds its own virtualenv and serves on
 <http://127.0.0.1:8810>.
 
-**To build the app yourself:** `./packaging/build.sh`.
+**To build the app yourself:** `./packaging/build.sh`, then `./packaging/make_dmg.sh` for
+a disk image.
 
-**Windows and Linux.** Both build and pass CI's smoke check, but only macOS is used by hand
-here — treat them as untested in practice. On Linux the native window needs GTK or Qt
-bindings that cannot be bundled reliably, so the app falls back to opening your browser and
-says so in its log; everything else is identical.
+**On Windows and Linux** every release is built, unpacked from its own archive and started
+by CI before it is published — but only macOS is used by hand here, so treat the behaviour
+beyond "it starts and serves" as untested in practice. On Linux the native window needs GTK
+or Qt bindings that cannot be bundled reliably, so the app falls back to opening your
+browser and says so in its log; everything else is identical.
 
 ### What works without anything else installed
 
