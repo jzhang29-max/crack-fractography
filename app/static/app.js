@@ -794,11 +794,18 @@ async function renderSpecimens() {
     renderStrip(null);
     return;
   }
-  const one = state.spec ? rows.find((r) => r.specimen === state.spec) : null;
-  // The strip shows the selected specimen, or the one the selected frame belongs to, so the
-  // headline number is never blank and never has to be scrolled to.
-  const f = state.frames.find((x) => x.frame === state.frame);
-  renderStrip(one || (f ? rows.find((r) => r.specimen === f.specimen) : null));
+  const f0 = state.frames.find((x) => x.frame === state.frame);
+  const one = (f0 && rows.find((r) => r.specimen === f0.specimen))
+    || (state.spec ? rows.find((r) => r.specimen === state.spec) : null);
+  // THE SELECTED FRAME WINS OVER THE SCOPE. This read
+  //     const one = state.spec ? rows.find(r => r.specimen === state.spec) : null
+  // so a scope beat the open frame, and since the frame list is no longer filtered by the
+  // scope, picking a frame from another specimen left the strip, the specimen card and the
+  // limits drawer describing MAR_H_AS while the mask, the measurements and the per-frame
+  // statements below were 260622_316_H_b2_back_CBS_01's. The frame is what everything else
+  // on the page is about, so it decides. The scope still drives the aggregates that are
+  // genuinely about a specimen -- the figure and the read-out request carry it.
+  renderStrip(one);
   if (one) {
     $("#specwrap").hidden = false;
     const ci0 = one.area_fraction_ci;
@@ -960,11 +967,12 @@ function renderStrip(rec) {
   // first card -- the same sentence twice, 200 px apart, on the densest tab in the app.
   // The mirror exists because making Mark the default put the conclusions behind a click;
   // it earns its place on Mark, Compare and Figure, and nowhere else.
-  if (RO_TOP.text && TAB !== "results") {
-    bits.push(`<span class="banner ${RO_TOP.level === "bad" ? "bad" : ""}" ` +
-      `id="striptop" title="${esc(RO_TOP.basis || "")}">${MARK[RO_TOP.level] || ""} ` +
-      `${esc(RO_TOP.text)}${RO_TOP.more ? ` <span class="u">+${RO_TOP.more}</span>` : ""}</span>`);
-  }
+  // THE MIRRORED TOP CONCLUSION IS GONE, because it had become unreachable rather than
+  // merely redundant: the strip is painted only when ANALYSIS_TABS.has(TAB) and
+  // ANALYSIS_TABS is now {"results"}, while this was emitted only when TAB !== "results".
+  // Two mutually exclusive conditions, so the banner could never appear. It existed to
+  // carry the worst statement above the Figure tab, and the figure now sits on the same
+  // page as the read-out that states it in full.
   if (rec.scale_known_frames === 0) {
     bits.push(`<span class="banner" title="No frame in this specimen has a recoverable nm/px, and the corpus spans a 249x magnification range, so there is no defensible default.">no scale</span>`);
   }
@@ -1359,6 +1367,10 @@ function markShell() {
     <div id="markedit" hidden></div>`;
 }
 
+//: The arms the marking tool serves. It reads the SEM originals, so an uploads or txm
+//: frame is never its image no matter what the frame is called.
+const TOOL_ARMS = ["sem"];
+
 //: THE WHOLE RULE, as a pure function so it can be tested without a DOM.
 //:
 //: Every one of these three conditions is load-bearing, and the bug that prompted this was
@@ -1366,9 +1378,17 @@ function markShell() {
 //: the image it happened to have open. On the txm arm that meant the canvas showed
 //: 260622_316_H_b2_back_CBS_01 while the sidebar highlighted a TXM frame -- and the brush
 //: would have painted the SEM image the reader was not looking at.
-function toolCanOpen(running, frame, images) {
+function toolCanOpen(running, frame, images, arm) {
   if (!running) return false;              // nothing to show it in
   if (!frame) return false;                // nothing chosen
+  // THE ARM, NOT JUST THE NAME. A frame name is not an identity across arms: the SEM
+  // repo's own export names masks `<stem>_gated.png` and this app's canonical_stem()
+  // strips `_gated`, so uploading MAR_H_AS_CBS_0001_gated.png files it as
+  // arm=uploads, frame=MAR_H_AS_CBS_0001 -- a name that IS in the tool's 154 originals.
+  // Matching on the name alone therefore opened the SEM repo's own micrograph while the
+  // sidebar said uploads, which is the same class of defect as the TXM case this
+  // function was written to fix, reached through a collision instead of a gap.
+  if (!TOOL_ARMS.some((a) => arm === a || (arm || "").startsWith(a + "/"))) return false;
   return !!(images && images.has(frame));  // and it must hold THIS image
 }
 
@@ -1377,7 +1397,7 @@ async function renderMark() {
   const tool = $("#marktool"), edit = $("#markedit");
   const paint = await api("/api/paint").catch(() => ({ available: false, why_not: "unreachable" }));
 
-  const canUseTool = toolCanOpen(paint.running, state.frame, await markImages());
+  const canUseTool = toolCanOpen(paint.running, state.frame, await markImages(), state.arm);
 
   if (canUseTool) {
     const fr = $("#markframe");
@@ -1413,9 +1433,15 @@ async function renderMark() {
   //:
   //: The arm is the test that can actually be made before the tool exists. It reads the
   //: SEM originals, so it can only ever help a sem/* frame.
-  const startable = paint.available && !paint.running && state.arm.startsWith("sem");
+  const startable = paint.available && !paint.running
+    && TOOL_ARMS.some((a) => state.arm === a || state.arm.startsWith(a + "/"));
   await openEditor(state.frame);
-  if (startable) {
+  // ONE BAR, NOT ONE PER VISIT. openEditor early-returns when the frame has not changed,
+  // which is exactly what a Mark -> Results -> Mark round trip looks like, so an
+  // unconditional prepend added another "Start the full tool" bar every time: three
+  // visits, three bars, three elements with id="markstart".
+  const existing = $("#markstart");
+  if (startable && !existing) {
     const bar = document.createElement("p");
     bar.className = "note";
     bar.innerHTML = `<button id="markstart" class="upload">Start the full tool</button>
@@ -1664,18 +1690,19 @@ async function loadArm() {
       + `pick an arm again to retry.</span>`;
     return;
   }
-  // The specimen list comes from the specimen table, not from the frames just fetched:
-  // those are already filtered to one specimen, so deriving the options from them left the
-  // dropdown reading "all (1 specimens)" with no way back to the rest.
-  let specs;
-  try {
-    specs = (await api(`/api/specimens?arm=${encodeURIComponent(state.arm)}`))
-      .map((r) => r.specimen).sort();
-  } catch (e) { specs = [...new Set(state.frames.map((f) => f.specimen))].sort(); }
+  // NO SPECIMEN FETCH HERE. One used to run to populate the header dropdown; the dropdown
+  // was deleted and the two lines that read the result went with it, leaving every arm
+  // change blocking on an HTTP round trip that was thrown away -- and duplicating the
+  // request renderSpecimens() makes a few lines below.
   const noScale = state.frames.filter((f) => !f.scale_known).length;
+  const n = state.frames.length;
+  // plural(), like every other count. The pluralise pass missed this one because its guard
+  // matched `${...n_frames}` and this site interpolates state.frames.length -- so on the
+  // first-run path the commit cited, the arm dropdown read "uploads · 1 frame" correctly
+  // while the header directly under it read "all 1 frames scaled".
   $("#listcount").textContent = noScale
-    ? `${noScale}/${state.frames.length} frames: no scale, µm withheld`
-    : `all ${state.frames.length} frames scaled`;
+    ? `${noScale}/${n} ${n === 1 ? "frame" : "frames"}: no scale, µm withheld`
+    : `all ${plural(n, "frame")} scaled`;
   renderFrames();
   renderSpecimens();
   renderReadout();

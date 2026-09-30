@@ -189,27 +189,15 @@ main{flex:1 1 auto;display:grid;grid-template-columns:minmax(260px,348px) minmax
 .more{margin-top:22px;border-top:1px solid var(--rule);padding-top:12px;max-width:100%}
 .more>summary{cursor:pointer;color:var(--text-secondary);font-size:12.5px;padding:4px 0}
 .more>summary:hover{color:var(--text-primary)}
-.refuse-all{max-width:68ch;margin-top:14px}
 /* The questions and their answers are on screen; only the working is behind a details.
    They were collapsed behind one summary line, which is where the app's answer to
    "transgranular or intergranular?" had been sitting, unread, while it was asked again. */
-.refuse-all-open{max-width:68ch;display:flex;flex-direction:column;gap:9px}
 /* The conclusions under a figure, same treatment as every other read-out line. */
 .figro{margin-top:12px;max-width:68ch}
 /* The limits, behind one line. Open on demand, count on the summary. */
 .limits{max-width:68ch;margin:10px 0 4px}
 .limits>summary{cursor:pointer;color:var(--text-muted);font-size:12.5px;padding:5px 0}
 .limits>summary:hover{color:var(--text-primary)}
-.refuse-all>summary{cursor:pointer;color:var(--text-muted);font-size:12.5px;padding:6px 0}
-.refuse-all>summary:hover{color:var(--text-primary)}
-.refuse{border:1px dashed var(--rule);border-radius:9px;padding:11px 13px;max-width:68ch;
-  margin-top:8px}
-.refuse h4{margin:0 0 var(--sp1);font-size:var(--t-body);font-weight:640}
-.refuse .ans{color:var(--bad);font-size:12.5px}
-.refuse details{margin-top:6px}
-.refuse summary{cursor:pointer;color:var(--text-secondary);font-size:var(--t-small)}
-.refuse p,.refuse li{font-size:12.5px;color:var(--text-secondary);margin:5px 0}
-.refuse ul{margin:5px 0;padding-left:18px}
 
 /* DEFINITIONS DRAWER. Addressable, persistent, keyboard-reachable, selectable -- all of
    which hover text is not. Three slots per entry and the third is the one documentation

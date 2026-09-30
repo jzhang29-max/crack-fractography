@@ -37,13 +37,28 @@ COVERED = {
     ("get", "/api/readout"), ("get", "/api/figure/fields"), ("get", "/api/figure/says"),
     ("get", "/api/figure.svg"), ("get", "/api/health"), ("post", "/api/config"),
     ("post", "/api/measure_corpus"), ("get", "/api/measure_corpus"), ("get", "/"),
+    ("get", "/mark/{path:path}"), ("post", "/mark/{path:path}"),
 }
 
 
 def declared_routes():
+    """Every route, including the api_route the first version of this could not see.
+
+    The pattern matched only @app.get/post/put/delete, so
+    `@app.api_route("/mark/{path:path}", methods=["GET","POST"])` was invisible -- and the
+    inventory check passed because COVERED equalled the routes it could see. The one route
+    it missed is the marking proxy, which is where this repo has already shipped a
+    204-turned-into-500. A guard that cannot see a whole decorator form is not an
+    inventory.
+    """
     src = open(os.path.join(REPO, "app", "server.py")).read()
-    return {(m, p) for m, p in re.findall(r'^@app\.(get|post|put|delete)\("([^"]+)"', src,
-                                          re.M)}
+    out = {(m, p) for m, p in re.findall(r'^@app\.(get|post|put|delete)\("([^"]+)"', src,
+                                         re.M)}
+    for path, methods in re.findall(r'^@app\.api_route\("([^"]+)",\s*methods=\[([^\]]+)\]',
+                                    src, re.M):
+        for m in re.findall(r'"(\w+)"', methods):
+            out.add((m.lower(), path))
+    return out
 
 
 def test_the_inventory_is_complete():
@@ -177,20 +192,60 @@ def test_scale_then_remeasure_changes_the_micrometre_columns(srv):
     assert row.get("nm_per_px") == 50.0
 
 
-def test_mask_edit_writes_a_copy_and_leaves_the_original(srv):
+def test_mask_edit_replaces_the_mask_and_remeasures(srv):
+    """MULTIPART WITH QUERY PARAMS, not JSON. The signature is
+    mask_edit(arm=Query(...), frame=Query(...), file=UploadFile=File(...)), so the first
+    version of this test -- which posted a JSON body -- always got 422 on three missing
+    fields and passed vacuously against `st in (200, 400, 422)`. It never reached the
+    handler, so the behaviour its own name claimed was unverified while the module
+    docstring promised every route was exercised."""
+    import urllib.parse as _u
     fr = _frame(srv)
     before = srv.get(f"/api/mask/uploads/{fr}")[1]
-    st, raw = srv.post("/api/mask_edit",
-                       json.dumps({"frame": fr, "arm": "uploads",
-                                   "png_b64": None}).encode(), "application/json")
-    # (mask_edit DOES take a JSON body -- it is declared with a Pydantic model.)
-    # Either it rejects the empty payload or it accepts a real one; both are fine, what
-    # matters is that it does not corrupt the stored mask.
-    assert st in (200, 400, 422), st
+    q = _u.urlencode({"arm": "uploads", "frame": fr})
+    # A DIFFERENT mask: a wider bar means a different area fraction, so "it was replaced"
+    # is checkable from the measurement rather than only from the bytes.
+    st, raw = srv.upload("edited.png", mask_png(160, 120, 100),
+                         path=f"/api/mask_edit?{q}", field="file")
+    assert st == 200, (st, raw[:300])
     after = srv.get(f"/api/mask/uploads/{fr}")[1]
     assert after[:4] == b"\x89PNG"
-    if st != 200:
-        assert after == before, "a rejected edit must not have changed the mask"
+    assert after != before, "the mask was not replaced"
+    row = [f for f in srv.json("/api/frames?arm=uploads")[1] if f["frame"] == fr][0]
+    assert row.get("area_fraction"), "the edit did not trigger a re-measure"
+
+
+def test_mask_edit_rejects_a_request_with_no_file(srv):
+    st, _ = srv.post("/api/mask_edit?arm=uploads&frame=" + _frame(srv))
+    assert st == 422, f"a missing file must be rejected, got {st}"
+
+
+def test_the_mark_proxy_answers_even_with_no_tool_running(srv):
+    """The one route the inventory could not see. With no marking tool up it must fail as a
+    gateway error naming the port, not 500 as an app bug -- this repo has shipped a proxy
+    that turned a correct 204 into a 500."""
+    st, raw = srv.get("/mark/api/images")
+    # BOTH STATES ARE VALID and the machine decides which: the marking tool is a separate
+    # Flask app that may or may not be up. A first version asserted only the gateway error
+    # and failed on the developer's own machine, where the tool was running -- which would
+    # have passed on CI and failed for the one person able to exercise the real path.
+    if st == 200:
+        assert raw.lstrip()[:1] in (b"[", b"{"), raw[:120]
+    else:
+        assert st in (502, 503), f"neither a proxied answer nor a gateway error: {st}"
+        assert b"tool" in raw.lower() or b"port" in raw.lower(), raw[:200]
+
+
+def test_the_mark_proxy_rewrites_the_tools_api_calls(srv):
+    """The rewrite is the thing this route exists for: the tool's page calls '/api/...'
+    root-relative, which would hit THIS app's API. Skipped rather than faked when the tool
+    is not running, because a stub would test the stub."""
+    st, raw = srv.get("/mark/")
+    if st != 200 or b"<html" not in raw[:4096].lower():
+        pytest.skip("the marking tool is not running on this machine")
+    assert b"'/mark/api/" in raw, "the tool's API calls were not pointed back through /mark/"
+    assert b"'/api/" not in raw, "a root-relative call survives and would hit this app"
+    assert b"fracto-embed" in raw, "the embed stylesheet was not injected"
 
 
 def test_config_rejects_a_directory_that_does_not_exist(srv):

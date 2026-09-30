@@ -22,15 +22,19 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 APPJS = os.path.join(REPO, "app", "static", "app.js")
 
 
-def can_open(running, frame, images):
+def can_open(running, frame, images, arm="sem/gated"):
     node = shutil.which("node")
     if not node:
         pytest.skip("node is not installed")
     src = open(APPJS).read()
+    # TOOL_ARMS is part of the rule, so it has to come along -- taking only the function
+    # gave ReferenceError, which is the harness telling the truth about a real dependency.
+    arms = src[src.index("const TOOL_ARMS"):]
+    arms = arms[:arms.index("\n") + 1]
     fn = src[src.index("function toolCanOpen("):src.index("async function renderMark()")]
-    harness = (fn + "\nprocess.stdout.write(JSON.stringify(toolCanOpen("
+    harness = (arms + fn + "\nprocess.stdout.write(JSON.stringify(toolCanOpen("
                + json.dumps(running) + ", " + json.dumps(frame)
-               + ", new Set(" + json.dumps(images) + "))));\n")
+               + ", new Set(" + json.dumps(images) + "), " + json.dumps(arm) + ")));\n")
     out = subprocess.run([node, "-e", harness], capture_output=True, text=True)
     assert out.returncode == 0, out.stderr
     return json.loads(out.stdout)
@@ -40,11 +44,25 @@ SEM = "260622_316_H_b2_back_CBS_01"
 TXM = "Average_mosaic_260618_B2_3_1_lbf_idx00000_mosaictileAA_img001of010.xrm.bim.bim"
 
 
+def test_a_name_that_collides_with_a_sem_original_does_not_open_the_sem_tool():
+    """THE ARM IS PART OF THE IDENTITY. The SEM repo's own export names masks
+    `<stem>_gated.png` and this app's canonical_stem() strips `_gated`, so uploading
+    MAR_H_AS_CBS_0001_gated.png files it as arm=uploads, frame=MAR_H_AS_CBS_0001 -- a name
+    that IS one of the tool's 154 originals. Matching on the name alone opened the SEM
+    repo's own micrograph while the sidebar said uploads: the same defect the TXM case
+    established, reached through a collision instead of a gap."""
+    assert can_open(True, "MAR_H_AS_CBS_0001", ["MAR_H_AS_CBS_0001"], arm="uploads") is False
+    assert can_open(True, "MAR_H_AS_CBS_0001", ["MAR_H_AS_CBS_0001"], arm="txm") is False
+    # And the arms it does serve still work.
+    assert can_open(True, "MAR_H_AS_CBS_0001", ["MAR_H_AS_CBS_0001"], arm="sem/gated") is True
+    assert can_open(True, "MAR_H_AS_CBS_0001", ["MAR_H_AS_CBS_0001"], arm="sem/machine") is True
+
+
 def test_a_frame_the_tool_does_not_hold_never_shows_the_tool():
     """THE REGRESSION. The tool holds the 154 SEM originals and nothing else. Asked about a
     TXM frame it must answer no, so the caller shows the mask editor instead of leaving
     someone else's image on screen."""
-    assert can_open(True, TXM, [SEM]) is False
+    assert can_open(True, TXM, [SEM], arm="txm") is False
 
 
 def test_the_tool_shows_for_a_frame_it_does_hold():
@@ -85,8 +103,21 @@ def test_the_tool_and_the_editor_are_both_mounted_so_switching_keeps_state():
     assert 'id="marktool"' in fn and 'id="markedit"' in fn
     rm = src[src.index("async function renderMark()"):src.index("async function syncMarkFrame()")]
     assert "tool.hidden" in rm and "edit.hidden" in rm, "visibility is not what switches"
-    assert "innerHTML" not in rm.split("markShell()")[0], (
-        "renderMark rebuilds the shell, which would tear down the live tool")
+    # THE SLICE WAS 32 CHARACTERS LONG. `rm.split("markShell()")[0]` splits at the FIRST
+    # occurrence, which is the call on renderMark's opening line, so the text actually
+    # scanned was 'async function renderMark() {\n  ' -- re-introducing the exact
+    # regression the message names would have left this passing. What matters is that
+    # renderMark never writes innerHTML on the SHELL container; writing into #markedit is
+    # how the editor is mounted and is correct.
+    code = "\n".join(L for L in rm.split("\n") if not L.strip().startswith("//"))
+    import re as _re
+    bad = _re.findall(r'\$\("#markbody"\)[^\n]*innerHTML', code)
+    assert not bad, (
+        f"renderMark writes #markbody.innerHTML ({bad}), which destroys #marktool and "
+        "#markedit and therefore the live iframe -- discarding unsaved strokes and "
+        "forcing a 23 MB refetch")
+    assert "markShell()" in code.split("\n")[1], (
+        "the shell is not built on entry, so the containers may not exist")
 
 
 # --- THE PAGE STRUCTURE THE USER ASKED FOR --------------------------------------------
@@ -169,6 +200,20 @@ def test_a_one_field_specimen_does_not_read_one_fields():
     assert not bad, f"unpluralised counts: {bad}"
 
 
+def test_the_start_bar_is_added_once_not_once_per_visit():
+    """openEditor early-returns when the frame has not changed, which is exactly what a
+    Mark -> Results -> Mark round trip looks like -- so an unconditional prepend added
+    another "Start the full tool" bar on every visit: three visits, three bars, three
+    elements sharing id="markstart"."""
+    src = open(APPJS).read()
+    rm = src[src.index("async function renderMark()"):src.index("async function syncMarkFrame()")]
+    code = "\n".join(L for L in rm.split("\n") if not L.strip().startswith("//"))
+    assert "prepend(bar)" in code
+    guard = code[:code.index("prepend(bar)")]
+    assert "markstart" in guard and "!" in guard, (
+        "the bar is prepended without checking whether one is already there")
+
+
 def test_the_start_button_is_not_offered_on_an_arm_the_tool_cannot_serve():
     """The guard read `... && (await markImages()).size === 0`, and markImages() can only
     return names from a RUNNING tool -- so whenever the tool is not running the set is
@@ -178,11 +223,16 @@ def test_the_start_button_is_not_offered_on_an_arm_the_tool_cannot_serve():
     src = open(APPJS).read()
     rm = src[src.index("async function renderMark()"):src.index("async function syncMarkFrame()")]
     code = "\n".join(L for L in rm.split("\n") if not L.strip().startswith("//"))
-    line = [L for L in code.split("\n") if "startable =" in L]
-    assert line, "the startable guard vanished"
-    assert "markImages()" not in line[0], (
+    # The WHOLE statement, not its first line: the guard now wraps, and a one-line check
+    # read only `const startable = paint.available && !paint.running` and reported the arm
+    # term missing from correct code.
+    assert "startable =" in code, "the startable guard vanished"
+    stmt = code[code.index("startable ="):]
+    stmt = stmt[:stmt.index(";") + 1]
+    assert "markImages()" not in stmt, (
         "the guard still consults an image list that is empty whenever it is consulted")
-    assert "state.arm" in line[0], "the guard does not test the arm, which is knowable"
+    assert "state.arm" in stmt, "the guard does not test the arm, which is knowable"
+    assert "TOOL_ARMS" in stmt, "the served arms are hardcoded rather than named once"
 
 
 def test_the_frame_list_is_never_narrowed_to_one_specimen():
@@ -222,3 +272,51 @@ def test_the_limits_drawer_names_which_specimen_and_frame_it_describes():
     assert "state.spec" in fn and "state.frame" in fn, fn[:200]
     assert "About this specimen" in fn, "no fallback wording when nothing is scoped"
     assert "state.arm" in fn, "the arm-level group does not name the arm"
+
+
+def test_no_css_survives_for_the_removed_refusal_section():
+    """The .markmodes half of this cleanup was done and is asserted above; the .refuse half
+    was missed. Nine rules matching nothing is not a failure, but it is the residue that
+    makes the next reader think the section still exists."""
+    css = open(os.path.join(REPO, "app", "templates", "index.html")).read()
+    src = open(APPJS).read()
+    for cls in (".refuse", ".refuse-all", ".refuse-all-open", ".ans"):
+        assert cls not in css, f"{cls} still styled, but nothing emits it"
+    for cls in ('class="refuse', 'class="ans'):
+        assert cls not in src
+
+
+def test_the_unreachable_top_conclusion_banner_is_gone():
+    """It was emitted only when TAB !== "results" while the strip itself is painted only
+    when ANALYSIS_TABS.has(TAB), and ANALYSIS_TABS is now {"results"} -- two mutually
+    exclusive conditions, so it could never appear."""
+    src = open(APPJS).read()
+    assert "striptop" not in src
+    html = open(os.path.join(REPO, "app", "templates", "index.html")).read()
+    assert "striptop" not in html
+
+
+def test_loadarm_does_not_fetch_a_list_nothing_reads():
+    """The specimen fetch fed the deleted dropdown. Its two consumers went with the
+    dropdown, leaving every arm change blocking on a round trip that was discarded -- and
+    duplicating the request renderSpecimens() makes moments later."""
+    src = open(APPJS).read()
+    fn = src[src.index("async function loadArm()"):]
+    fn = fn[:fn.index("\n}\n")]
+    code = "\n".join(L for L in fn.split("\n") if not L.strip().startswith("//"))
+    assert "/api/specimens" not in code, "loadArm still fetches the specimen list"
+    assert "let specs" not in code
+
+
+def test_the_frame_list_header_pluralises_too():
+    """The pluralise pass missed it: the guard matched `${...n_frames}` and this site
+    interpolates state.frames.length, so the arm dropdown read "uploads . 1 frame" while
+    the header directly beneath it read "all 1 frames scaled"."""
+    src = open(APPJS).read()
+    assert "all 1 frames" not in src
+    # There are four writes to #listcount; the one that carries the count is the noScale
+    # ternary. Taking the first match found `= ""` and reported correct code as wrong.
+    i = src.index("$(\"#listcount\").textContent = noScale")
+    stmt = src[i:src.index(";", i)]
+    assert "plural(" in stmt or '=== 1 ?' in stmt, stmt
+    assert "frames scaled`" not in stmt, "the plural is still hardcoded in the scaled branch"

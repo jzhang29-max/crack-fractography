@@ -253,16 +253,38 @@ def test_the_mixed_detector_count_carries_its_denominator():
 
 
 # --- THE STAGE RASTER FIGURES ----------------------------------------------------------
+def _frames_from_disk(arm):
+    """The measured corpus, read from the dataset the app itself writes.
+
+    NOT an HTTP call to a dev server on a fixed port. These tests were written against
+    127.0.0.1:8822 and skipped when it was absent -- so they passed on the machine where I
+    happened to have a server up and SILENTLY DID NOT RUN anywhere else, including CI. A
+    test that only executes on the author's desktop is the coverage equivalent of a comment,
+    and the raster defect these cover (a 7x9 grid holding nine cells on a diagonal) is
+    exactly the kind that reaches a release through that gap.
+
+    Falls back to the app's own data directory, then the repo's analysis/out.
+    """
+    import json
+    for base in (os.environ.get("FRACTOGRAPHY_DATA"),
+                 os.path.expanduser("~/Library/Application Support/Crack Fractography"),
+                 os.path.join(REPO, "analysis", "out")):
+        if not base:
+            continue
+        f = os.path.join(base, "frames.json")
+        if os.path.exists(f):
+            rows = json.load(open(f))
+            rows = rows if isinstance(rows, list) else rows.get("frames", [])
+            hit = [r for r in rows if r.get("arm") == arm]
+            if hit:
+                return hit
+    pytest.skip(f"no measured {arm} corpus on this machine "
+                "(frames.json absent -- expected on a fresh checkout and on CI)")
+
+
 def _positioned():
     """Real frames from the arm that actually recorded stage coordinates."""
-    import json
-    import urllib.request
-    try:
-        fr = json.load(urllib.request.urlopen(
-            "http://127.0.0.1:8822/api/frames?arm=sem%2Fgated", timeout=10))
-    except Exception:
-        pytest.skip("no dev server on 8822 to read the positioned corpus from")
-    return fr if isinstance(fr, list) else fr.get("frames", [])
+    return _frames_from_disk("sem/gated")
 
 
 def test_a_three_by_three_raster_is_drawn_as_three_by_three():
@@ -329,14 +351,7 @@ def test_the_other_kinds_still_receive_every_row():
 
 def test_a_stage_figure_on_an_arm_with_no_coordinates_says_so():
     """txm records no stage position. Refusing with a message beats drawing an empty grid."""
-    import json
-    import urllib.request
-    try:
-        fr = json.load(urllib.request.urlopen(
-            "http://127.0.0.1:8822/api/frames?arm=txm", timeout=10))
-    except Exception:
-        pytest.skip("no dev server on 8822")
-    fr = fr if isinstance(fr, list) else fr.get("frames", [])
+    fr = _frames_from_disk("txm")
     with pytest.raises(ValueError) as e:
         F.build(fr, "txm", "stage_map", y="area_fraction")
     assert "stage position" in str(e.value)
