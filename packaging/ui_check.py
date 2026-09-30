@@ -111,7 +111,12 @@ def run(base):
         pg.on("pageerror", lambda e: errors.append(f"pageerror: {e}"))
         pg.on("console", lambda m: errors.append(f"console.{m.type}: {m.text}")
               if m.type == "error" else None)
-        pg.goto(base + "/", wait_until="networkidle", timeout=120_000)
+        # domcontentloaded, NOT networkidle. networkidle resolves only after 500ms with no
+        # requests in flight, which never happens if anything on the page polls -- it held
+        # on macOS and Linux by timing luck and timed out at 120s on Windows. The real
+        # readiness signal is the elements this check is about, and it waits for those
+        # below, so the load condition only has to get the document parsed.
+        pg.goto(base + "/", wait_until="domcontentloaded", timeout=120_000)
 
         # 1. The shell.
         tabs = pg.eval_on_selector_all("#tabs button", "els => els.map(e => e.textContent.trim())")
