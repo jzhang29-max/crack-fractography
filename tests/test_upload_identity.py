@@ -58,7 +58,7 @@ def test_a_plain_name_is_untouched():
 def test_the_upload_endpoint_refuses_a_colliding_name():
     """weld.png and weld_mask.png are both frame "weld". The second used to replace the
     first, and the only sign was a crack count changing on a row nobody was looking at."""
-    src = open(os.path.join(REPO, "app", "server.py")).read()
+    src = open(os.path.join(REPO, "app", "server.py"), encoding="utf-8").read()
     up = src[src.index("async def upload("):src.index("def _rebuild_uploads_specimen")]
     assert "409" in up, "a colliding upload must be refused, not silently overwritten"
     assert "source_filename" in up, (
@@ -69,7 +69,7 @@ def test_the_smoke_check_actually_measures():
     """It printed "OK: starts, serves, and measures" while its only measurement assertion
     read health['capabilities']['measure_uploaded_mask'] — a literal True in server.py. It
     is the release gate, and it could not fail."""
-    src = open(os.path.join(REPO, "packaging", "smoke_check.py")).read()
+    src = open(os.path.join(REPO, "packaging", "smoke_check.py"), encoding="utf-8").read()
     assert "/api/upload" in src, "the gate must upload something"
     assert "/api/cracks" in src and "/api/mask" in src, (
         "the gate must confirm the three views of a frame agree — that is the bug it missed")

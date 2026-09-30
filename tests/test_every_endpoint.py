@@ -51,7 +51,7 @@ def declared_routes():
     204-turned-into-500. A guard that cannot see a whole decorator form is not an
     inventory.
     """
-    src = open(os.path.join(REPO, "app", "server.py")).read()
+    src = open(os.path.join(REPO, "app", "server.py"), encoding="utf-8").read()
     out = {(m, p) for m, p in re.findall(r'^@app\.(get|post|put|delete)\("([^"]+)"', src,
                                          re.M)}
     for path, methods in re.findall(r'^@app\.api_route\("([^"]+)",\s*methods=\[([^\]]+)\]',

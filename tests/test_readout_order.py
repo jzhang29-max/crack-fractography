@@ -58,7 +58,7 @@ def render(groups):
     node = shutil.which("node")
     if not node:
         pytest.skip("node is not installed")
-    src = open(APPJS).read()
+    src = open(APPJS, encoding="utf-8").read()
     # Take the file's own esc(), MARK, SEV and roRender rather than restating them here: a
     # copy of the renderer in the test would let the shipped one drift away from it.
     start = src.index("const MARK = {")
@@ -138,7 +138,7 @@ def render_limits(groups):
     node = shutil.which("node")
     if not node:
         pytest.skip("node is not installed")
-    src = open(APPJS).read()
+    src = open(APPJS, encoding="utf-8").read()
     sev = src[src.index("const SEV = {"):src.index("\n", src.index("const SEV = {"))]
     fn = src[src.index("function currentLimits()"):src.index("function syncLimitsButton()")]
     harness = (sev + "\nlet RO = " + json.dumps(groups) + ";\n" + fn
@@ -196,7 +196,7 @@ def test_the_caveats_are_ordered_worst_first_in_the_drawer():
 
 def test_the_drawer_heading_names_its_mode():
     """One drawer, two modes. It read "Definitions" above a list of fourteen caveats."""
-    src = open(APPJS).read()
+    src = open(APPJS, encoding="utf-8").read()
     lim = src[src.index("function openLimits()"):src.index("function openDefs(")]
     dfs = src[src.index("function openDefs("):src.index("const DEFS = [")]
     assert "defstitle" in lim, "limits mode does not set the heading"

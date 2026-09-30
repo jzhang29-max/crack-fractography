@@ -22,7 +22,7 @@ def test_no_research_mask_is_ever_written():
     The invariant is not "editing is refused" -- that was the earlier, blunter version, and
     it is what forced marking out into a separate program. It is that the destination path
     is ALWAYS inside the app's own uploads directory, whatever the source arm."""
-    fn = _fn("mask_edit", open(os.path.join(REPO, "app", "server.py")).read())
+    fn = _fn("mask_edit", open(os.path.join(REPO, "app", "server.py"), encoding="utf-8").read())
     import re
     dests = re.findall(r"dest = os\.path\.join\((\w+)", fn)
     assert dests, "no destination assignment found"
@@ -36,14 +36,14 @@ def test_no_research_mask_is_ever_written():
 def test_a_marked_research_frame_keeps_its_scale():
     """A marked copy is the same field at the same magnification. Losing the scale would
     silently drop every micrometre column from the copy."""
-    fn = _fn("mask_edit", open(os.path.join(REPO, "app", "server.py")).read())
+    fn = _fn("mask_edit", open(os.path.join(REPO, "app", "server.py"), encoding="utf-8").read())
     assert "set_user_scale(new_frame, src_scale)" in fn
 
 
 def test_a_half_written_mask_cannot_replace_a_whole_one():
     """An interrupted save must not leave a truncated PNG where the measurement's input
     used to be."""
-    fn = _fn("mask_edit", open(os.path.join(REPO, "app", "server.py")).read())
+    fn = _fn("mask_edit", open(os.path.join(REPO, "app", "server.py"), encoding="utf-8").read())
     assert "dest + \".tmp\"" in fn and "os.replace(tmp, dest)" in fn
     assert "im.verify()" in fn, "the bytes must be a readable image before they replace one"
 
@@ -53,7 +53,7 @@ def test_the_editor_draws_at_natural_resolution():
     scaled copy and uploading that would resample the user's mask, changing every
     measurement by more than their correction did. Verified in the browser: after a stroke
     the saved mask was still 6144x4096."""
-    js = open(os.path.join(REPO, "app", "static", "app.js")).read()
+    js = open(os.path.join(REPO, "app", "static", "app.js"), encoding="utf-8").read()
     fn = js[js.index("async function openEditor("):js.index("async function loadArm()")]
     assert "img.naturalWidth" in fn and "img.naturalHeight" in fn, (
         "the offscreen canvas must be the image's own size")
@@ -64,7 +64,7 @@ def test_the_editor_draws_at_natural_resolution():
 
 
 def test_saving_re_measures_rather_than_just_storing():
-    fn = _fn("mask_edit", open(os.path.join(REPO, "app", "server.py")).read())
+    fn = _fn("mask_edit", open(os.path.join(REPO, "app", "server.py"), encoding="utf-8").read())
     assert "remeasure(" in fn, "an edit that does not re-measure leaves a stale number"
 
 

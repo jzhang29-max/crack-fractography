@@ -415,7 +415,7 @@ def test_the_discordance_rate_matches_the_dataset():
         pytest.skip("no dataset built")
     sys.path.insert(0, os.path.join(REPO, "analysis"))
     from specimen_stats import detector_of, field_key
-    fr = json.load(open(out))
+    fr = json.load(open(out, encoding="utf-8"))
     for arm in ("sem/gated", "sem/machine"):
         byf = {}
         for f in fr:
@@ -442,8 +442,8 @@ def test_no_fixed_orientation_null_range_is_quoted():
     """The null is per-frame and spans 0.04–1.00 on this corpus; only 31% of frames fall in
     the 0.16–0.29 that was being quoted as though it were the null, and 12 frames exceed 0.29
     while still failing their own. Quoting a fixed range invites exactly that misreading."""
-    src = open(os.path.join(REPO, "analysis", "conclusions.py")).read()
-    js = open(os.path.join(REPO, "app", "static", "app.js")).read()
+    src = open(os.path.join(REPO, "analysis", "conclusions.py"), encoding="utf-8").read()
+    js = open(os.path.join(REPO, "app", "static", "app.js"), encoding="utf-8").read()
     for where, text in (("conclusions.py", src), ("app.js", js)):
         assert "0.16-0.29" not in text and "0.16–0.29" not in text, (
             f"{where} still quotes a fixed null range")
@@ -498,7 +498,7 @@ def test_the_accuracy_badge_is_never_rendered_without_its_record():
     the correction without any error."""
     import re
     js = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                           "app", "static", "app.js")).read()
+                           "app", "static", "app.js"), encoding="utf-8").read()
     # Check the ARGUMENT IS IN SCOPE, not merely that one was passed. The first version of
     # this guard only looked for a comma, so raBadge(ci, r) inside renderStrip(rec) --
     # where r does not exist -- sailed through it. A guard that cannot see the bug in front
@@ -569,8 +569,8 @@ def test_the_arm_readout_leads_with_an_established_finding():
     sp = os.path.join(repo, "analysis", "out", "specimens.json")
     if not (os.path.exists(fp) and os.path.exists(sp)):
         pytest.skip("no dataset built")
-    frames = json.load(open(fp))
-    specs = json.load(open(sp))
+    frames = json.load(open(fp, encoding="utf-8"))
+    specs = json.load(open(sp, encoding="utf-8"))
 
     said = C.for_arm([r for r in specs if r["arm"] == "sem/gated"],
                      [f for f in frames if f["arm"] == "sem/gated"])
@@ -597,8 +597,8 @@ def test_a_calibrated_finding_is_not_asserted_for_an_arm_it_was_not_measured_on(
     sp = os.path.join(repo, "analysis", "out", "specimens.json")
     if not (os.path.exists(fp) and os.path.exists(sp)):
         pytest.skip("no dataset built")
-    frames = json.load(open(fp))
-    specs = json.load(open(sp))
+    frames = json.load(open(fp, encoding="utf-8"))
+    specs = json.load(open(sp, encoding="utf-8"))
     txm = C.for_arm([r for r in specs if r["arm"] == "txm"],
                     [f for f in frames if f["arm"] == "txm"])
     joined = " ".join(s["text"] for s in txm)

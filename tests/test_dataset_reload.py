@@ -28,7 +28,7 @@ from app import server as S                # noqa: E402
 
 def write(d, name, rows):
     """Write a dataset file the way batch.py does: truncate in place, no atomic rename."""
-    with open(os.path.join(d, f"{name}.json"), "w") as fh:
+    with open(os.path.join(d, f"{name}.json"), "w", encoding="utf-8") as fh:
         json.dump(rows, fh)
 
 
@@ -119,7 +119,7 @@ def test_a_half_written_file_serves_the_last_good_copy_not_a_500(out):
     assert S.frames(arm="sem/gated")[0]["frame"] == "f1"
 
     p = os.path.join(out, "frames.json")
-    with open(p, "w") as fh:
+    with open(p, "w", encoding="utf-8") as fh:
         fh.write('[{"frame": "f2", "arm": "sem/g')        # truncated mid-write
     assert S.frames(arm="sem/gated")[0]["frame"] == "f1", "served a torn read"
 
@@ -129,7 +129,7 @@ def test_a_half_written_file_serves_the_last_good_copy_not_a_500(out):
 
 def test_a_torn_file_with_nothing_cached_says_so(out):
     """No last-good copy to fall back on: 503, not a JSONDecodeError traceback."""
-    with open(os.path.join(out, "frames.json"), "w") as fh:
+    with open(os.path.join(out, "frames.json"), "w", encoding="utf-8") as fh:
         fh.write('[{"frame":')
     with pytest.raises(HTTPException) as e:
         S.frames(arm="sem/gated")
@@ -204,7 +204,7 @@ def test_the_boot_treats_an_empty_arms_list_like_no_dataset_at_all():
     tell a newcomer what to do. The first-run screen went blank and stayed blank."""
     import os, re
     js = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                           "app", "static", "app.js")).read()
+                           "app", "static", "app.js"), encoding="utf-8").read()
     boot = js[js.index("let arms;"):js.index("loadArm();", js.index("let arms;"))]
     # STRIP THE COMMENTS FIRST. The comment explaining this defect says "arms[0].arm" in
     # prose, so an ordering check on the raw text found the explanation before the code and
@@ -223,7 +223,7 @@ def test_every_hidden_element_is_actually_hidden_by_the_stylesheet():
     (#setup .row, the corpus button on the first-run screen) was missed."""
     import os, re
     html = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                             "app", "templates", "index.html")).read()
+                             "app", "templates", "index.html"), encoding="utf-8").read()
     assert re.search(r"^\[hidden\]\{display:none\s*!important\}", html, re.M), (
         "no global [hidden] rule -- per-element overrides are whack-a-mole on a class of "
         "bug that is silent by construction")

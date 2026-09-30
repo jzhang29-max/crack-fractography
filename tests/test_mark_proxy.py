@@ -290,7 +290,7 @@ def test_the_injected_surface_matches_the_apps_own_palette():
     leave the tool sitting on the old surface and put the seam back."""
     import re
     here = os.path.dirname(os.path.abspath(__file__))
-    css = open(os.path.join(here, "..", "app", "templates", "index.html")).read()
+    css = open(os.path.join(here, "..", "app", "templates", "index.html"), encoding="utf-8").read()
     m = re.search(r"--surface-1:\s*(#[0-9a-fA-F]{3,8})", css)
     assert m, "index.html no longer declares --surface-1; this guard needs updating"
     assert m.group(1).lower() == MP.SURFACE_1.lower(), (

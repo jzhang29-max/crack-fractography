@@ -418,7 +418,7 @@ def main():
     # *_definition strings are the ones most likely to rot -- they are prose, so nothing
     # breaks when they stop being rendered, and a reader then meets the number with the
     # label alone, which is the whole defect this change exists to fix.
-    js = open(os.path.join(REPO, "app", "static", "app.js")).read()
+    js = open(os.path.join(REPO, "app", "static", "app.js"), encoding="utf-8").read()
     rendered = [k for k in sorted(_reachable(s_frame(rows)))
                 if k.startswith(("mcl", "largest_network_centreline"))]
     missing = [k for k in rendered if k not in js]

@@ -287,7 +287,7 @@ def test_the_corpus_values_this_rule_was_written_for():
     out = os.path.join(here, "analysis", "out", "frames.json")
     if not os.path.exists(out):
         pytest.skip("no dataset built")
-    fr = json.load(open(out))
+    fr = json.load(open(out, encoding="utf-8"))
     want = {"MAR_AmbB_AS": 62.0, "MAR_AmbB_HIP": 84.2, "MAR_H_AS": 49.1, "MAR_H_HIP": 93.0}
     for arm in ("sem/gated", "sem/machine"):
         for spec, ra in want.items():
@@ -323,7 +323,7 @@ def test_n_fields_scaled_never_exceeds_the_interval_it_sits_beside():
     out = os.path.join(repo, "analysis", "out", "frames.json")
     if not os.path.exists(out):
         pytest.skip("no dataset built")     # CI has no corpus; the synthetic case below covers the rule
-    fr = json.load(open(out))
+    fr = json.load(open(out, encoding="utf-8"))
     rows = fr["records"] if isinstance(fr, dict) else fr
     g = defaultdict(list)
     for f in rows:
@@ -399,7 +399,7 @@ def test_no_physical_aggregate_is_written_as_a_median_over_raw_frames():
     each time the new field simply copied the shape of the one above it."""
     import os, re
     src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                            "analysis", "specimen_stats.py")).read()
+                            "analysis", "specimen_stats.py"), encoding="utf-8").read()
     body = src[src.index("def summarise("):]
     offenders = re.findall(r'"([a-z0-9_]+)":\s*_median\(\[[^\]]*for f in (?:scaled|frames)\]',
                            body, re.S)

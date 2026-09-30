@@ -26,7 +26,7 @@ def can_open(running, frame, images, arm="sem/gated"):
     node = shutil.which("node")
     if not node:
         pytest.skip("node is not installed")
-    src = open(APPJS).read()
+    src = open(APPJS, encoding="utf-8").read()
     # TOOL_ARMS is part of the rule, so it has to come along -- taking only the function
     # gave ReferenceError, which is the harness telling the truth about a real dependency.
     arms = src[src.index("const TOOL_ARMS"):]
@@ -100,17 +100,17 @@ def test_an_empty_image_list_is_not_a_wildcard():
 def test_there_is_no_mode_toggle_left_to_get_wrong():
     """The two buttons were the mechanism: they let the app be in a state where the visible
     canvas and the selected frame disagreed, and asked the reader to resolve it."""
-    src = open(APPJS).read()
+    src = open(APPJS, encoding="utf-8").read()
     for gone in ("MARK_MODE", "wireModes", "markmodes", "Full tool</button>"):
         assert gone not in src, f"{gone!r} survives; the mode machinery is meant to be gone"
-    css = open(os.path.join(REPO, "app", "templates", "index.html")).read()
+    css = open(os.path.join(REPO, "app", "templates", "index.html"), encoding="utf-8").read()
     assert "markmodes" not in css
 
 
 def test_the_tool_and_the_editor_are_both_mounted_so_switching_keeps_state():
     """Tearing the iframe down on every switch would discard unsaved strokes and refetch a
     23 MB template on the way back, so visibility is toggled instead."""
-    src = open(APPJS).read()
+    src = open(APPJS, encoding="utf-8").read()
     fn = src[src.index("function markShell()"):src.index("async function renderMark()")]
     assert 'id="marktool"' in fn and 'id="markedit"' in fn
     rm = src[src.index("async function renderMark()"):src.index("async function syncMarkFrame()")]
@@ -136,14 +136,14 @@ def test_the_tool_and_the_editor_are_both_mounted_so_switching_keeps_state():
 def test_there_are_two_tabs_not_three():
     """Analysis and Figure both answered "what do these images show?", so the figure -- the
     thing most worth looking at -- was the one behind an extra click."""
-    src = open(APPJS).read()
+    src = open(APPJS, encoding="utf-8").read()
     tabs = src[src.index("const TABS = ["):src.index("let TAB =")]
     assert '"mark"' in tabs and '"results"' in tabs
     assert '"figure"' not in tabs and '"analysis"' not in tabs, tabs
 
 
 def test_the_figure_is_on_the_results_page_above_the_frame_detail():
-    html = open(os.path.join(REPO, "app", "templates", "index.html")).read()
+    html = open(os.path.join(REPO, "app", "templates", "index.html"), encoding="utf-8").read()
     pane = html[html.index('id="pane-results"'):html.index('</main>')]
     assert 'id="figout"' in pane, "the figure did not move onto the results page"
     assert pane.index('id="figout"') < pane.index('id="mask"'), (
@@ -155,8 +155,8 @@ def test_the_refusal_section_is_not_in_the_ui():
     """It listed four questions the app declines, on every frame, so a page whose job is to
     report findings opened with a block about what it cannot do. The refusals still exist
     in conclusions.py and still travel in the API response -- they are not rendered."""
-    html = open(os.path.join(REPO, "app", "templates", "index.html")).read()
-    src = open(APPJS).read()
+    html = open(os.path.join(REPO, "app", "templates", "index.html"), encoding="utf-8").read()
+    src = open(APPJS, encoding="utf-8").read()
     assert 'id="refusals"' not in html
     assert "Asked and answered" not in src and "Asked and answered" not in html
     # Still available to anyone who asks the endpoint.
@@ -170,8 +170,8 @@ def test_the_specimen_is_chosen_in_one_place():
     """A header dropdown SCOPED the statistics to a specimen while the sidebar's group rows
     only expanded and collapsed -- two controls that looked like one thing and did two
     different things. Clicking a specimen's name did not select it."""
-    html = open(os.path.join(REPO, "app", "templates", "index.html")).read()
-    src = open(APPJS).read()
+    html = open(os.path.join(REPO, "app", "templates", "index.html"), encoding="utf-8").read()
+    src = open(APPJS, encoding="utf-8").read()
     assert 'id="spec"' not in html, "the specimen dropdown survives"
     assert '$("#spec")' not in src, "the dropdown is gone but the code still reads it"
     grp = src[src.index('t.querySelectorAll("tbody tr.grp")'):]
@@ -193,7 +193,7 @@ def test_changing_arm_clears_the_frame_from_the_previous_arm():
     /api/readout?arm=uploads&frame=<a TXM frame name> and took a 404 on every arm switch.
     The next render corrects it, which is why it survived -- a 404 per switch in the
     console is the noise a real one hides behind."""
-    src = open(APPJS).read()
+    src = open(APPJS, encoding="utf-8").read()
     h = src[src.index('$("#arm").onchange'):]
     h = h[:h.index("};") + 2]
     code = code_only(h)
@@ -205,7 +205,7 @@ def test_changing_arm_clears_the_frame_from_the_previous_arm():
 def test_a_one_field_specimen_does_not_read_one_fields():
     """Every fresh upload is a one-field specimen, so "1 fields" is among the first things
     a new user reads. Two sites printed it."""
-    src = open(APPJS).read()
+    src = open(APPJS, encoding="utf-8").read()
     import re
     # Any interpolation of a count immediately followed by a bare plural noun.
     bad = re.findall(r"\$\{[A-Za-z_.\[\]]*n_(?:fields|frames)\} (?:fields|frames)", src)
@@ -217,7 +217,7 @@ def test_the_start_bar_is_added_once_not_once_per_visit():
     Mark -> Results -> Mark round trip looks like -- so an unconditional prepend added
     another "Start the full tool" bar on every visit: three visits, three bars, three
     elements sharing id="markstart"."""
-    src = open(APPJS).read()
+    src = open(APPJS, encoding="utf-8").read()
     rm = src[src.index("async function renderMark()"):src.index("async function syncMarkFrame()")]
     code = code_only(rm)
     assert "prepend(bar)" in code
@@ -232,7 +232,7 @@ def test_the_start_button_is_not_offered_on_an_arm_the_tool_cannot_serve():
     empty and that conjunct is always true. It excluded nothing, and the button appeared on
     TXM frames the tool cannot open: the dead control the modes used to be, reintroduced by
     the guard written to prevent it."""
-    src = open(APPJS).read()
+    src = open(APPJS, encoding="utf-8").read()
     rm = src[src.index("async function renderMark()"):src.index("async function syncMarkFrame()")]
     code = code_only(rm)
     # The WHOLE statement, not its first line: the guard now wraps, and a one-line check
@@ -252,7 +252,7 @@ def test_the_frame_list_is_never_narrowed_to_one_specimen():
     specimen and then pressing Re-measure replaced the only frame picker in the app with
     that specimen's rows -- 142 down to 1 -- and un-scoping did not refetch, so it stayed
     collapsed with the count beside it still reading "62/142 frames"."""
-    src = open(APPJS).read()
+    src = open(APPJS, encoding="utf-8").read()
     import re
     bad = re.findall(r"state\.frames = await api\([^)]*specimen", src, re.S)
     assert not bad, f"a frames fetch is still specimen-filtered: {bad}"
@@ -267,7 +267,7 @@ def test_scoping_a_specimen_moves_the_selection_into_it():
     """Scoping used to leave state.frame in another specimen, so the strip, specimen card
     and limits drawer described one specimen while the mask, frame statements and
     measurements below were another's."""
-    src = open(APPJS).read()
+    src = open(APPJS, encoding="utf-8").read()
     h = src[src.index('t.querySelectorAll("tbody tr.grp")'):]
     h = h[:h.index("\n  });") + 6]
     code = code_only(h)
@@ -279,7 +279,7 @@ def test_scoping_a_specimen_moves_the_selection_into_it():
 def test_the_limits_drawer_names_which_specimen_and_frame_it_describes():
     """It labelled its groups "About this specimen" without naming which, which is how a
     reader takes the wrong confidence interval into a caption."""
-    src = open(APPJS).read()
+    src = open(APPJS, encoding="utf-8").read()
     fn = src[src.index("function openLimits()"):src.index("function openDefs(")]
     assert "state.spec" in fn and "state.frame" in fn, fn[:200]
     assert "About this specimen" in fn, "no fallback wording when nothing is scoped"
@@ -290,8 +290,8 @@ def test_no_css_survives_for_the_removed_refusal_section():
     """The .markmodes half of this cleanup was done and is asserted above; the .refuse half
     was missed. Nine rules matching nothing is not a failure, but it is the residue that
     makes the next reader think the section still exists."""
-    css = open(os.path.join(REPO, "app", "templates", "index.html")).read()
-    src = open(APPJS).read()
+    css = open(os.path.join(REPO, "app", "templates", "index.html"), encoding="utf-8").read()
+    src = open(APPJS, encoding="utf-8").read()
     for cls in (".refuse", ".refuse-all", ".refuse-all-open", ".ans"):
         assert cls not in css, f"{cls} still styled, but nothing emits it"
     for cls in ('class="refuse', 'class="ans'):
@@ -302,9 +302,9 @@ def test_the_unreachable_top_conclusion_banner_is_gone():
     """It was emitted only when TAB !== "results" while the strip itself is painted only
     when ANALYSIS_TABS.has(TAB), and ANALYSIS_TABS is now {"results"} -- two mutually
     exclusive conditions, so it could never appear."""
-    src = open(APPJS).read()
+    src = open(APPJS, encoding="utf-8").read()
     assert "striptop" not in src
-    html = open(os.path.join(REPO, "app", "templates", "index.html")).read()
+    html = open(os.path.join(REPO, "app", "templates", "index.html"), encoding="utf-8").read()
     assert "striptop" not in html
 
 
@@ -312,7 +312,7 @@ def test_loadarm_does_not_fetch_a_list_nothing_reads():
     """The specimen fetch fed the deleted dropdown. Its two consumers went with the
     dropdown, leaving every arm change blocking on a round trip that was discarded -- and
     duplicating the request renderSpecimens() makes moments later."""
-    src = open(APPJS).read()
+    src = open(APPJS, encoding="utf-8").read()
     fn = src[src.index("async function loadArm()"):]
     fn = fn[:fn.index("\n}\n")]
     code = "\n".join(L for L in fn.split("\n") if not L.strip().startswith("//"))
@@ -324,7 +324,7 @@ def test_the_frame_list_header_pluralises_too():
     """The pluralise pass missed it: the guard matched `${...n_frames}` and this site
     interpolates state.frames.length, so the arm dropdown read "uploads . 1 frame" while
     the header directly beneath it read "all 1 frames scaled"."""
-    src = code_only(open(APPJS).read())
+    src = code_only(open(APPJS, encoding="utf-8").read())
     assert "all 1 frames" not in src
     # There are four writes to #listcount; the one that carries the count is the noScale
     # ternary. Taking the first match found `= ""` and reported correct code as wrong.
@@ -340,7 +340,7 @@ def test_no_comment_claims_a_tab_count_or_a_tab_that_does_not_exist():
     the code has two tabs, the banner is deleted, and Figure is part of Results. Acting on
     that comment would have restored a duplicate sentence 200 px from its original. Stale
     prose under a change is a recurring defect here, so it is asserted."""
-    src = open(APPJS).read()
+    src = open(APPJS, encoding="utf-8").read()
     comments = "\n".join(L for L in src.split("\n") if L.strip().startswith("//"))
     # PRESCRIPTIVE CLAIMS ONLY. A first version banned any mention of "the Figure tab" and
     # failed on two comments that narrate, in the past tense, a bug from when that tab

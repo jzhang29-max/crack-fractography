@@ -29,7 +29,7 @@ def _digest(rows, skip_arm, skip_frame):
 def test_remeasure_replaces_only_its_own_frame():
     """Verified against the real dataset: re-measuring one uploaded frame left the digest
     of all 355 other frames byte-identical."""
-    src = open(os.path.join(REPO, "app", "server.py")).read()
+    src = open(os.path.join(REPO, "app", "server.py"), encoding="utf-8").read()
     fn = src[src.index("def remeasure("):src.index("def _rebuild_specimen")]
     # The filter must exclude on BOTH arm and frame. On frame alone it would delete the
     # same-named frame in every other arm; on arm alone it would delete the whole arm.
@@ -43,14 +43,14 @@ def test_remeasure_reports_what_moved_and_the_masks_age():
     is how a user tells a real no-change from corrections that have not been exported yet:
     the marking tool paints into a paint layer, and a derived mask only changes after that
     tool re-applies."""
-    src = open(os.path.join(REPO, "app", "server.py")).read()
+    src = open(os.path.join(REPO, "app", "server.py"), encoding="utf-8").read()
     fn = src[src.index("def remeasure("):src.index("def _rebuild_specimen")]
     for k in ("changed", "mask_modified", "seconds_since_mask_written", "unchanged"):
         assert f'"{k}"' in fn, f"the reply must carry {k}"
 
 
 def test_the_specimen_record_is_rebuilt_for_that_specimen_only():
-    src = open(os.path.join(REPO, "app", "server.py")).read()
+    src = open(os.path.join(REPO, "app", "server.py"), encoding="utf-8").read()
     fn = src[src.index("def _rebuild_specimen"):src.index('@app.get("/api/readout")')]
     assert 'r.get("arm") == arm and r.get("specimen") == specimen' in fn, (
         "only the affected specimen-arm record may be replaced")
@@ -60,7 +60,7 @@ def test_the_result_message_survives_the_refresh():
     """renderReadout() rebuilds the element the message is written into, so writing the
     message first erased it: the button worked, the numbers updated, and the user saw
     nothing happen."""
-    js = open(os.path.join(REPO, "app", "static", "app.js")).read()
+    js = open(os.path.join(REPO, "app", "static", "app.js"), encoding="utf-8").read()
     fn = js[js.index("async function remeasure("):js.index("async function loadArm()")]
     assert fn.index("await renderReadout()") < fn.index("fresh.innerHTML = msg"), (
         "the refresh must happen before the message is written")
@@ -133,7 +133,7 @@ def test_a_non_finite_scale_is_refused_before_it_reaches_the_dataset(tmp_path):
 
         # The dataset is untouched and every arm still answers.
         for name in ("frames", "cracks", "specimens"):
-            raw = open(os.path.join(s.data_dir, f"{name}.json")).read()
+            raw = open(os.path.join(s.data_dir, f"{name}.json"), encoding="utf-8").read()
             assert "Infinity" not in raw and "NaN" not in raw, f"{name}.json is not JSON"
         assert s.get("/api/frames?arm=uploads")[0] == 200
 

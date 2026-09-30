@@ -34,7 +34,7 @@ def test_vendored_copy_matches_the_repo_it_came_from():
     sem = P.sem_repo()
     if not sem:
         pytest.skip("no SEM repo configured")
-    man = json.load(open(os.path.join(REPO, "analysis", "_vendor", "MANIFEST.json")))
+    man = json.load(open(os.path.join(REPO, "analysis", "_vendor", "MANIFEST.json"), encoding="utf-8"))
     for rel, recorded in man["files"].items():
         live = os.path.join(sem, *rel.split("/"))
         copy = os.path.join(REPO, "analysis", "_vendor", os.path.basename(rel))
@@ -63,7 +63,7 @@ def test_every_file_loaded_by_path_is_in_the_bundle():
     """Files read at runtime by path are invisible to PyInstaller's module graph, so the
     spec has to name them. Anything loaded by path and NOT under a datas entry ships
     missing and fails on first use."""
-    spec = open(os.path.join(REPO, "packaging", "fractography.spec")).read()
+    spec = open(os.path.join(REPO, "packaging", "fractography.spec"), encoding="utf-8").read()
     for needed in ("app/templates", "app/static", "analysis_files", "analysis/_vendor"):
         assert needed in spec, f"{needed} is not in the spec's datas"
     # And it must NOT sweep the whole analysis directory: that ships analysis/out.
@@ -92,7 +92,7 @@ def test_no_module_hardcodes_a_sibling_repo_path():
         for name in sorted(os.listdir(d)):
             if not name.endswith(".py") or name in ("paths.py", "detect_one.py"):
                 continue
-            src = open(os.path.join(d, name)).read()
+            src = open(os.path.join(d, name), encoding="utf-8").read()
             for i, line in enumerate(src.splitlines(), 1):
                 if line.lstrip().startswith("#"):
                     continue
@@ -150,7 +150,7 @@ def test_the_native_window_backend_is_importable():
 def test_downloads_do_not_rely_on_navigation():
     """WKWebView has no download manager, so `location.href = <a CSV url>` shows the CSV as
     text instead of saving it. Both download buttons must go through the bridge."""
-    js = open(os.path.join(REPO, "app", "static", "app.js")).read()
+    js = open(os.path.join(REPO, "app", "static", "app.js"), encoding="utf-8").read()
     import re
     for m in re.finditer(r"location\.href\s*=\s*`?/?api/[^\n]*", js):
         pytest.fail(f"a download still navigates: {m.group(0)[:90]}")
@@ -163,7 +163,7 @@ def test_uploading_maintains_all_three_dataset_files():
     the page, simply vanished for the uploads arm, which is the only arm a downloaded copy
     has until a SEM repo is configured."""
     import re
-    src = open(os.path.join(REPO, "app", "server.py")).read()
+    src = open(os.path.join(REPO, "app", "server.py"), encoding="utf-8").read()
     up = src[src.index("async def upload("):src.index("def _rebuild_uploads_specimen")]
     assert "_rebuild_uploads_specimen()" in up, "upload must maintain the specimen table"
     reb = src[src.index("def _rebuild_uploads_specimen"):]
@@ -194,7 +194,7 @@ def test_the_licence_and_attribution_ship_with_the_binary():
             assert os.path.exists(os.path.join(app, f)), (
                 f"{f} is not in the BUILT bundle at {app} -- rebuild before releasing")
     else:
-        spec = open(os.path.join(REPO, "packaging", "fractography.spec")).read()
+        spec = open(os.path.join(REPO, "packaging", "fractography.spec"), encoding="utf-8").read()
         for f in ("LICENSE", "NOTICE"):
             assert f'"{f}"' in spec, f"{f} is not in the spec's datas, so it will not ship"
 
@@ -241,7 +241,7 @@ def test_the_app_ships_its_own_icon_and_not_pyinstaller_s():
         assert fh.read(4) == b"icns", "not an .icns file"
 
     spec_path = os.path.join(REPO, "packaging", "fractography.spec")
-    assert "AppIcon.icns" in open(spec_path).read(), "the spec does not point at an icon"
+    assert "AppIcon.icns" in open(spec_path, encoding="utf-8").read(), "the spec does not point at an icon"
 
     app = os.path.join(REPO, "dist", "Crack Fractography.app", "Contents")
     if not os.path.isdir(app):
@@ -287,7 +287,7 @@ def test_no_test_spawns_a_hardcoded_venv_interpreter():
     for f in sorted(os.listdir(here)):
         if not f.endswith(".py"):
             continue
-        tree = ast.parse(open(os.path.join(here, f)).read(), filename=f)
+        tree = ast.parse(open(os.path.join(here, f), encoding="utf-8").read(), filename=f)
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call) or not node.args:
                 continue
@@ -305,7 +305,7 @@ def test_no_test_spawns_a_hardcoded_venv_interpreter():
 
 # --- WHAT A PERSON ACTUALLY DOWNLOADS --------------------------------------------------
 def _workflow():
-    return open(os.path.join(REPO, ".github", "workflows", "build.yml")).read()
+    return open(os.path.join(REPO, ".github", "workflows", "build.yml"), encoding="utf-8").read()
 
 
 def test_every_platform_produces_a_single_downloadable_file():
@@ -351,7 +351,7 @@ def test_the_dmg_carries_the_quarantine_instruction():
     """An unsigned app makes macOS say it is damaged. If the only place that is explained
     is the release notes, the person who downloaded the dmg a week ago has no way back to
     it -- so it ships inside the disk image."""
-    sh = open(os.path.join(REPO, "packaging", "make_dmg.sh")).read()
+    sh = open(os.path.join(REPO, "packaging", "make_dmg.sh"), encoding="utf-8").read()
     assert "com.apple.quarantine" in sh
     assert "READ ME FIRST" in sh
     assert "/Applications" in sh, "no Applications symlink, so it is not drag-to-install"
@@ -361,7 +361,7 @@ def test_the_readme_describes_the_files_that_are_actually_published():
     """The install section said "unzip" and treated Windows and Linux as build-it-yourself,
     which stopped being true the moment the release started carrying all three. Prose going
     stale under a change is a recurring defect here."""
-    r = open(os.path.join(REPO, "README.md")).read()
+    r = open(os.path.join(REPO, "README.md"), encoding="utf-8").read()
     inst = r[r.index("## Install"):r.index("### What works without anything else installed")]
     for token in (".dmg", "-Windows-x64.zip", "-Linux-x86_64.tar.gz"):
         assert token in inst, f"the install section does not mention {token}"
@@ -374,7 +374,7 @@ def test_the_windows_exe_is_given_an_icon():
     .exe wore PyInstaller's placeholder in Explorer and on the taskbar. Nothing failed: the
     only icon assertion in this file looks inside the .app's Resources, which Windows has
     no equivalent of."""
-    spec = open(os.path.join(REPO, "packaging", "fractography.spec")).read()
+    spec = open(os.path.join(REPO, "packaging", "fractography.spec"), encoding="utf-8").read()
     exe = spec[spec.index("exe = EXE("):spec.index("coll = COLLECT(")]
     assert "AppIcon.ico" in exe, "EXE() is not given a Windows icon"
     ico = os.path.join(REPO, "packaging", "AppIcon.ico")
@@ -405,7 +405,7 @@ def test_make_dmg_reads_the_version_and_arch_from_the_bundle():
     """Run by hand with no arguments -- which the README now instructs -- it produced
     CrackFractography-0.0.0-macOS-arm64.dmg around an app whose Info.plist said 1.17.0,
     with a READ ME FIRST headed 0.0.0, and labelled an Intel build arm64."""
-    sh = open(os.path.join(REPO, "packaging", "make_dmg.sh")).read()
+    sh = open(os.path.join(REPO, "packaging", "make_dmg.sh"), encoding="utf-8").read()
     assert "CFBundleShortVersionString" in sh, "the version is still guessed"
     assert "lipo -archs" in sh or "uname -m" in sh, "the architecture is still a literal"
     assert "-macOS-arm64.dmg}" not in sh, "arm64 is still hardcoded in the default name"
@@ -415,7 +415,7 @@ def test_the_readme_does_not_document_the_deleted_mark_modes():
     """It described "two tools" with **Edit mask** and **Full tool** as things to pick
     between, and was the only place either label still appeared -- so a reader went looking
     for a control that no longer exists."""
-    r = open(os.path.join(REPO, "README.md")).read()
+    r = open(os.path.join(REPO, "README.md"), encoding="utf-8").read()
     sec = r[r.index("## Marking happens in this window"):]
     sec = sec[:sec.index("\n## ")]
     assert "**Edit mask**" not in sec and "**Full tool**" not in sec, (
@@ -427,7 +427,7 @@ def test_the_readme_covers_the_windows_first_launch_block_too():
     """The macOS quarantine note is prominent and ships inside the dmg; the Windows install
     row ended at "run Crack Fractography.exe", which is exactly where SmartScreen stops an
     unsigned binary."""
-    r = open(os.path.join(REPO, "README.md")).read()
+    r = open(os.path.join(REPO, "README.md"), encoding="utf-8").read()
     assert "SmartScreen" in r
     assert "Run anyway" in r
 
@@ -480,3 +480,39 @@ def test_the_workflow_uses_the_optional_form():
     w = _workflow()
     assert "vendor.py --if-available" in w, (
         "the build job would fail on every runner that has no SEM repo, which is all of them")
+
+
+def test_no_test_reads_a_text_file_without_naming_its_encoding():
+    """Python's default text encoding is the LOCALE's, so a bare text read is cp1252 on a
+    Windows runner and UTF-8 here. The suite's own bundle guards had never run on Windows
+    until the build job started invoking them, and the first one to do so died with
+    UnicodeDecodeError on byte 0x8f of index.html -- a latent defect in the tests, exposed
+    rather than caused by running them somewhere new.
+
+    PARSED, NOT GREPPED. A regex version matched this test's own docstring and its own
+    failure message, reporting itself as the offender -- the fourth time in this session a
+    source scan has matched the prose written to explain it. The AST sees calls.
+    """
+    import ast
+    offenders = []
+    tests_dir = os.path.join(REPO, "tests")
+    for f in sorted(os.listdir(tests_dir)):
+        if not f.endswith(".py"):
+            continue
+        path = os.path.join(tests_dir, f)
+        tree = ast.parse(open(path, encoding="utf-8").read(), filename=f)
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                    and node.func.id == "open"):
+                continue
+            if any(k.arg == "encoding" for k in node.keywords):
+                continue
+            mode = ""
+            if len(node.args) > 1 and isinstance(node.args[1], ast.Constant):
+                mode = str(node.args[1].value)
+            if "b" in mode:
+                continue                       # binary: an encoding would be an error
+            offenders.append(f"{f}:{node.lineno}")
+    assert not offenders, (
+        "text reads with no explicit encoding, which decode differently on Windows: "
+        + ", ".join(offenders))

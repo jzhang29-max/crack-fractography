@@ -66,7 +66,7 @@ def test_the_collapsed_value_is_the_field_mean():
 def test_figure_and_specimen_card_cannot_disagree_about_a_field():
     """Both must route through specimen_stats.field_key. A second rule is how they drifted."""
     import specimen_stats
-    src = open(os.path.join(REPO, "app", "figures.py")).read()
+    src = open(os.path.join(REPO, "app", "figures.py"), encoding="utf-8").read()
     assert "from specimen_stats import" in src, (
         "figures.py must reuse specimen_stats.field_key, not define its own")
     assert specimen_stats.field_key("S1_CBS_0001") == specimen_stats.field_key("S1_ETD_0001")
@@ -76,7 +76,7 @@ def test_figure_and_specimen_card_cannot_disagree_about_a_field():
 def _src(rel):
     import os
     return open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                             *rel.split("/"))).read()
+                             *rel.split("/")), encoding="utf-8").read()
 
 
 def test_every_control_in_the_markup_is_wired_to_something():
@@ -273,7 +273,7 @@ def _frames_from_disk(arm):
             continue
         f = os.path.join(base, "frames.json")
         if os.path.exists(f):
-            rows = json.load(open(f))
+            rows = json.load(open(f, encoding="utf-8"))
             rows = rows if isinstance(rows, list) else rows.get("frames", [])
             hit = [r for r in rows if r.get("arm") == arm]
             if hit:

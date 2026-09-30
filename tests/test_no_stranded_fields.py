@@ -113,7 +113,7 @@ def test_nothing_is_described_as_unrendered_while_the_ui_renders_it():
     import os
     import re
     repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    js = open(os.path.join(repo, "app", "static", "app.js")).read()
+    js = open(os.path.join(repo, "app", "static", "app.js"), encoding="utf-8").read()
 
     sources = [os.path.join(repo, "README.md")]
     for d in ("analysis", "app"):
@@ -125,7 +125,7 @@ def test_nothing_is_described_as_unrendered_while_the_ui_renders_it():
                        r"|never displayed|shown nowhere", re.I)
     offenders = []
     for path in sources:
-        lines = open(path).read().splitlines()
+        lines = open(path, encoding="utf-8").read().splitlines()
         for i, line in enumerate(lines):
             if not CLAIM.search(line):
                 continue

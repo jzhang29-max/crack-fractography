@@ -116,7 +116,7 @@ class Server:
         return status, (json.loads(raw) if raw else None)
 
     def dataset(self, name):
-        with open(os.path.join(self.data_dir, f"{name}.json")) as fh:
+        with open(os.path.join(self.data_dir, f"{name}.json"), encoding="utf-8") as fh:
             return json.load(fh)
 
 

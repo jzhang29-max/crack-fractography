@@ -79,7 +79,7 @@ def test_an_empty_mask_reports_no_verdict_rather_than_a_false_one():
 def _appjs():
     import os
     return open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                             "app", "static", "app.js")).read()
+                             "app", "static", "app.js"), encoding="utf-8").read()
 
 
 def test_the_rose_chart_draws_its_own_null():
