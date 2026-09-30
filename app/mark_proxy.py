@@ -87,6 +87,16 @@ INJECT = """
   /* Its main column was sized against that rail. */
   #main { width: 100% !important; max-width: none !important; margin-left: 0 !important; }
   body { overflow-x: hidden; }
+
+  /* AND NO PANEL CHROME OF ITS OWN. The tool is a standalone application and styles
+     itself like one -- its own page background, its own bordered toolbar strip. Nested
+     inside this app's pane that reads as a second app in a box, which is what a user
+     looking at it said. Flattened so the only visible container is the pane. */
+  html, body { background: transparent !important; }
+  #top { border: 0 !important; border-radius: 0 !important; background: transparent !important;
+         box-shadow: none !important; padding-left: 0 !important; padding-right: 0 !important; }
+  #foot { border: 0 !important; background: transparent !important; }
+  #canvasWrap { border: 0 !important; border-radius: 0 !important; }
 </style>
 """
 

@@ -156,8 +156,13 @@ main{flex:1 1 auto;display:grid;grid-template-columns:minmax(220px,300px) minmax
 .markmodes .u{font-size:11.5px}
 /* The proxied tool fills the pane. It is same-origin, so this frame can be inspected --
    which is the reason it is a frame at all and not a link out to the browser. */
-#markframe{width:100%;height:calc(100vh - 210px);min-height:520px;border:1px solid var(--rule);
-  border-radius:9px;background:#fff;display:block}
+/* FLUSH, NOT A CARD. A bordered, rounded, white-backed frame around a tool that has its
+   own toolbar and its own dark canvas reads as a second application sitting inside this
+   one -- which is exactly what the user saw and said. The frame is furniture; the pane it
+   sits in is already the container. No border, no radius, no background of its own, and
+   it bleeds to the pane's edges so there is one box on screen instead of two. */
+#markframe{display:block;border:0;border-radius:0;background:transparent;
+  width:calc(100% + 32px);margin:0 -16px -28px;height:calc(100vh - 168px);min-height:520px}
 .sect{font-size:12px;font-weight:650;text-transform:uppercase;letter-spacing:.04em;
   color:var(--text-muted);margin:22px 0 6px;border-top:1px solid var(--rule);padding-top:14px}
 .roact{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px;
@@ -175,6 +180,10 @@ main{flex:1 1 auto;display:grid;grid-template-columns:minmax(220px,300px) minmax
 .refuse-all-open{max-width:68ch;display:flex;flex-direction:column;gap:9px}
 /* The conclusions under a figure, same treatment as every other read-out line. */
 .figro{margin-top:12px;max-width:68ch}
+/* The limits, behind one line. Open on demand, count on the summary. */
+.limits{max-width:68ch;margin:10px 0 4px}
+.limits>summary{cursor:pointer;color:var(--text-muted);font-size:12.5px;padding:5px 0}
+.limits>summary:hover{color:var(--text-primary)}
 .refuse-all>summary{cursor:pointer;color:var(--text-muted);font-size:12.5px;padding:6px 0}
 .refuse-all>summary:hover{color:var(--text-primary)}
 .refuse{border:1px dashed var(--rule);border-radius:9px;padding:11px 13px;max-width:68ch;
@@ -342,16 +351,22 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
          sentences, then the picture they are about, then the numbers behind them, then
          the raw rows behind a disclosure. -->
     <div class="pane" id="pane-analysis" role="tabpanel" hidden>
-      <!-- WHAT THIS ARM SUPPORTS, first: the statements that are true of the whole set
-           rather than of one frame. These used to open the Compare tab, which is gone. -->
+      <!-- ORDER IS THE NAVIGATION. This pane had grown to six stacked sections with the
+           IMAGE third, so reaching the thing a researcher looks at most meant scrolling
+           past two blocks of prose. Findings, then the picture, then the numbers behind
+           it, then the charts. The four answered questions are reference rather than
+           per-frame findings -- they do not change when you pick a different frame -- so
+           they moved to the end, where reference belongs. -->
       <div id="armro"></div>
 
-      <!-- THIS SPECIMEN. The card from the old Compare tab; the ranked table that sat
-           beside it is deleted, because one imaged site per specimen means the ordering
-           it implied was never estimable. -->
-      <h3 class="sect" id="spechead">This specimen</h3>
-      <p class="note" id="specnote"></p>
-      <div id="specbody"></div>
+      <!-- THE PICTURE COMES BEFORE THE TABLES. With the specimen card open, the image sat
+           2,240 px down the pane: past two blocks of prose and nine rows of numbers. The
+           card is detail, and detail belongs behind a disclosure whose summary carries the
+           one number worth seeing without opening it. -->
+      <details class="more" id="specwrap">
+        <summary id="spechead">This specimen <span class="u" id="specnote"></span></summary>
+        <div id="specbody"></div>
+      </details>
 
       <h3 class="sect">This frame</h3>
       <div class="ro" id="readout"></div>
@@ -361,22 +376,24 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
       <div class="maskwrap"><img class="mask" id="mask" alt="" hidden>
         <div id="crackpin" hidden></div></div>
 
-      <h3 class="sect">Measurements</h3>
-      <p class="note" id="fsel-note">Select a frame.</p>
-      <dl class="kv" id="fsel"></dl>
-
       <h3 class="sect">Orientation and size</h3>
       <p class="note" id="rosenote">Length-weighted, 15&deg; bins.</p>
       <div id="rose"></div>
       <div id="sizes"></div>
+
+      <h3 class="sect">Measurements</h3>
+      <p class="note" id="fsel-note">Select a frame.</p>
+      <dl class="kv" id="fsel"></dl>
 
       <details class="more">
         <summary>Every crack in this frame</summary>
         <p class="note" id="cracknote"></p>
         <div class="scroll"><table id="cracks"><thead></thead><tbody></tbody></table></div>
       </details>
-    </div>
 
+      <!-- Filled by renderReadout; last, because it is the same four answers on every
+           frame and a reader needs it once, not on the way to the image. -->
+      <div id="refusals"></div>
     </div>
 
     <div class="pane" id="pane-figure" role="tabpanel" hidden>

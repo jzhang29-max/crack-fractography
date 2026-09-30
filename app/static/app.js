@@ -714,12 +714,29 @@ let FIG_SAID = [];
 
 function armStatements() {
   if (!ARM_STATEMENTS.length) return "";
-  return `<div class="ro armro">` + ARM_STATEMENTS.map((st, i) =>
+  // FINDINGS OUT, LIMITS IN. Seven statements of which two are results and five are
+  // caveats reads as five caveats: the useful part is outnumbered on its own line. The
+  // established findings stay open; the limits collapse to one summary the reader opens
+  // when they want to know what the findings do not cover. Not hidden -- one click, and
+  // the count is on the line, so a reader can see there are five without reading five.
+  const line = (st, i) =>
     `<div class="ro-line ${st.level}" data-ro="arm:${i}" tabindex="0" role="button">
        <span class="mk">${MARK[st.level] || "\u00b7"}</span>
        <span class="tx">${esc(st.text)}</span>
-       <span class="who">THIS ARM</span>
-     </div>`).join("") + `</div>`;
+     </div>`;
+  const findings = ARM_STATEMENTS.map((st, i) => [st, i]).filter(([st]) => st.level === "good");
+  const limits = ARM_STATEMENTS.map((st, i) => [st, i]).filter(([st]) => st.level !== "good");
+  let html = "";
+  if (findings.length) {
+    html += `<h3 class="sect">What this arm establishes</h3>`
+      + `<div class="ro armro">` + findings.map(([st, i]) => line(st, i)).join("") + `</div>`;
+  }
+  if (limits.length) {
+    html += `<details class="limits"><summary>${limits.length} limit${
+      limits.length === 1 ? "" : "s"} on these numbers</summary>`
+      + `<div class="ro armro">` + limits.map(([st, i]) => line(st, i)).join("") + `</div></details>`;
+  }
+  return html;
 }
 
 function wireArmStatements() {
@@ -746,8 +763,11 @@ async function renderSpecimens() {
   const f = state.frames.find((x) => x.frame === state.frame);
   renderStrip(one || (f ? rows.find((r) => r.specimen === f.specimen) : null));
   if (one) {
-    $("#spechead").hidden = false;
-    $("#specnote").textContent = `${one.specimen} · ${one.n_fields} fields`;
+    $("#specwrap").hidden = false;
+    const ci0 = one.area_fraction_ci;
+    $("#specnote").textContent = `${one.specimen} · `
+      + `${ci0 ? pct(ci0.mean) : pct(one.area_fraction_median)} crack area · `
+      + `${one.n_fields} fields`;
     $("#specbody").innerHTML = specimenCard(one);
   } else {
     const withCI = rows.filter((r) => r.area_fraction_ci);
@@ -758,7 +778,7 @@ async function renderSpecimens() {
     // nothing -- it could not, since one imaged site per specimen makes the ordering it
     // implied unestimable -- and every number in it is on that specimen's own card. What
     // it was actually for is above, as arm-level conclusions.
-    $("#spechead").hidden = true;
+    $("#specwrap").hidden = true;
     $("#specnote").textContent = "";
     $("#specbody").innerHTML = "";
   }
@@ -1012,8 +1032,12 @@ async function renderReadout() {
                   <input id="scaleset" type="number" step="any" min="0" placeholder="e.g. 52">
                   <button id="scaleapply">Set scale</button>` : ""}
              <span class="u" id="remeasure2out"></span>
-           </div>` : "")
-    + refusals;
+           </div>` : "");
+  // ...into its OWN element at the end of the pane. Appended to the frame read-out, the
+  // four answered questions sat between the conclusions and the image, and they are the
+  // same four on every frame -- reference, not a per-frame finding.
+  const refEl = $("#refusals");
+  if (refEl) refEl.innerHTML = refusals;
   const rb = $("#remeasure2");
   if (rb) rb.onclick = () => remeasure(rb, $("#remeasure2out"));
 
