@@ -57,8 +57,104 @@ jobs:
           esac
           python packaging/smoke_check.py "$BIN" 8899
 
+      # ---------------------------------------------------------------------------
+      # PACKAGE IT INTO THE THING THAT PLATFORM'S USERS ACTUALLY DOWNLOAD.
+      # dist/ was uploaded raw as a CI artifact: a folder, 14-day retention, and only
+      # reachable by someone logged into GitHub who knows to look at a workflow run. That
+      # is not a download. Each platform gets its conventional single file, and the
+      # release job below attaches all three to the tag.
+      - name: name the version
+        id: ver
+        shell: bash
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          case "$GITHUB_REF" in refs/tags/v*) ;; *) V="0.0.0-$(git rev-parse --short HEAD)";; esac
+          echo "v=$V" >> "$GITHUB_OUTPUT"
+
+      - name: package (macOS .dmg)
+        if: runner.os == 'macOS'
+        run: bash packaging/make_dmg.sh "dist/Crack Fractography.app" "${{ steps.ver.outputs.v }}"
+
+      - name: package (Windows .zip)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        # Compress-Archive is built in; no 7-Zip install to fail on.
+        run: |
+          $v = "${{ steps.ver.outputs.v }}"
+          Compress-Archive -Path "dist/Crack Fractography" `
+            -DestinationPath "dist/CrackFractography-$v-Windows-x64.zip" -Force
+
+      - name: package (Linux .tar.gz)
+        if: runner.os == 'Linux'
+        shell: bash
+        # tar.gz rather than AppImage: appimagetool needs FUSE on the runner, and a
+        # packaging step that can fail for reasons unrelated to the app is worse than a
+        # format every Linux user can already open.
+        run: |
+          v="${{ steps.ver.outputs.v }}"
+          tar -C dist -czf "dist/CrackFractography-$v-Linux-x86_64.tar.gz" "Crack Fractography"
+
+      # THE PACKAGE MUST ALSO START. Packaging can produce a file that unpacks to a broken
+      # tree -- a missing symlink, a dropped permission bit -- and the smoke test above ran
+      # on dist/, not on this. So it is unpacked to a fresh location and run from there,
+      # which is what a downloader does.
+      - name: the packaged copy starts
+        shell: bash
+        run: |
+          set -e
+          v="${{ steps.ver.outputs.v }}"
+          rm -rf _unpack && mkdir _unpack
+          case "${{ runner.os }}" in
+            macOS)
+              hdiutil attach "dist/CrackFractography-$v-macOS-arm64.dmg" -nobrowse -quiet -mountpoint _mnt
+              cp -R "_mnt/Crack Fractography.app" _unpack/
+              hdiutil detach _mnt -quiet
+              BIN="_unpack/Crack Fractography.app/Contents/MacOS/Crack Fractography" ;;
+            Windows)
+              # Expand-Archive, not unzip: Git Bash on the Windows runner does not ship
+              # unzip, and a packaging check that fails because its own extractor is
+              # missing tells you nothing about the package.
+              powershell -NoProfile -Command \
+                "Expand-Archive -Path 'dist/CrackFractography-$v-Windows-x64.zip' -DestinationPath '_unpack' -Force"
+              BIN="_unpack/Crack Fractography/Crack Fractography.exe" ;;
+            *)
+              tar -xzf "dist/CrackFractography-$v-Linux-x86_64.tar.gz" -C _unpack
+              BIN="_unpack/Crack Fractography/Crack Fractography" ;;
+          esac
+          python packaging/smoke_check.py "$BIN" 8898
+
       - uses: actions/upload-artifact@v4
         with:
-          name: crack-fractography-${{ matrix.os }}
-          path: dist/
+          name: package-${{ matrix.os }}
+          path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/*.tar.gz
+          if-no-files-found: error
           retention-days: 14
+
+  # One release carrying all three downloads, built from the tag that triggered it.
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: package-*
+          merge-multiple: true
+          path: pkg
+      - name: what was built
+        run: ls -lh pkg
+      - name: all three platforms are present
+        # A release missing a platform should fail loudly rather than ship two of three.
+        run: |
+          for ext in dmg zip tar.gz; do
+            ls pkg/*."$ext" >/dev/null 2>&1 || { echo "no .$ext in the release"; exit 1; }
+          done
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: pkg/*
+          fail_on_unmatched_files: true

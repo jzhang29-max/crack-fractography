@@ -301,3 +301,57 @@ def test_no_test_spawns_a_hardcoded_venv_interpreter():
                     bad.append(f"{f}:{node.lineno}: spawns {lit.value!r}")
     assert not bad, ("tests must spawn sys.executable, not a hardcoded venv "
                      "(CI has no repo venv):\n  " + "\n  ".join(bad))
+
+
+# --- WHAT A PERSON ACTUALLY DOWNLOADS --------------------------------------------------
+def _workflow():
+    return open(os.path.join(REPO, ".github", "workflows", "build.yml")).read()
+
+
+def test_every_platform_produces_a_single_downloadable_file():
+    """dist/ was uploaded raw as a CI artifact: a folder, 14-day retention, reachable only
+    by someone logged into GitHub who knows to open a workflow run. That is not a download.
+    Each platform now gets the file its users expect."""
+    w = _workflow()
+    for token in (".dmg", "Windows-x64.zip", "Linux-x86_64.tar.gz"):
+        assert token in w, f"no {token} is built"
+    assert "make_dmg.sh" in w
+    assert os.access(os.path.join(REPO, "packaging", "make_dmg.sh"), os.X_OK), (
+        "make_dmg.sh is not executable, so the runner cannot invoke it")
+
+
+def test_the_release_attaches_them_and_fails_if_one_is_missing():
+    """A release carrying two of three platforms should fail loudly. Silently shipping a
+    partial release is how a platform quietly stops being supported."""
+    # NO YAML PARSER. pyyaml is not in requirements.txt, so importing it here would pass
+    # on a machine that happens to have it and fail on CI with an ImportError -- the same
+    # green-locally-red-on-CI shape as the hardcoded venv path this repo shipped once
+    # before. The assertions are about text that must be present, so read the text.
+    w = _workflow()
+    rel = w[w.index("\n  release:"):]
+    assert "needs: build" in rel
+    assert "refs/tags/v" in rel, "the release job must only run on a version tag"
+    assert "contents: write" in rel
+    assert "fail_on_unmatched_files: true" in rel
+    assert "all three platforms are present" in rel
+
+
+def test_the_packaged_copy_is_started_not_just_the_build_directory():
+    """The smoke test ran on dist/, not on the archive. Packaging can produce a file that
+    unpacks to a broken tree -- a dropped permission bit, a missing symlink -- and that
+    would have passed."""
+    w = _workflow()
+    assert "the packaged copy starts" in w
+    i = w.index("the packaged copy starts")
+    assert "smoke_check.py" in w[i:i + 2000], "the unpacked copy is never run"
+    assert "_unpack" in w[i:i + 2000]
+
+
+def test_the_dmg_carries_the_quarantine_instruction():
+    """An unsigned app makes macOS say it is damaged. If the only place that is explained
+    is the release notes, the person who downloaded the dmg a week ago has no way back to
+    it -- so it ships inside the disk image."""
+    sh = open(os.path.join(REPO, "packaging", "make_dmg.sh")).read()
+    assert "com.apple.quarantine" in sh
+    assert "READ ME FIRST" in sh
+    assert "/Applications" in sh, "no Applications symlink, so it is not drag-to-install"

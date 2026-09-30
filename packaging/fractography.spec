@@ -133,7 +133,7 @@ if MACOS:
                  icon=os.path.join(REPO, "packaging", "AppIcon.icns"),
                  bundle_identifier="edu.stanford.crack-fractography",
                  info_plist={
-                     "CFBundleShortVersionString": "1.15.0",
+                     "CFBundleShortVersionString": "1.16.0",
                      "NSHighResolutionCapable": True,
                      # It has a window, so it belongs in the Dock and quits like an app.
                      "LSBackgroundOnly": False,
