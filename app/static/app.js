@@ -138,7 +138,7 @@ function renderFrames() {
                  fs.some((f) => f.frame === state.frame);
     const af = fs.map((f) => f.area_fraction).filter((v) => v != null).sort((x, y) => x - y);
     const med = af.length ? af[Math.floor(af.length / 2)] : null;
-    const head = `<tr class="grp" data-grp="${esc(spec)}">` +
+    const head = `<tr class="grp${state.spec === spec ? " on" : ""}" data-grp="${esc(spec)}">` +
       `<td colspan="${FCOLS.length - 1}">${open ? "\u25be" : "\u25b8"} ${esc(spec)}` +
       ` <span class="u">${fs.length}</span></td>` +
       `<td class="u">${med == null ? "" : fmt(med, 4)}</td></tr>`;
@@ -152,10 +152,33 @@ function renderFrames() {
     state.sortDir = state.sortKey === k ? -state.sortDir : 1;
     state.sortKey = k; renderFrames();
   });
+  // ONE PLACE TO PICK A SPECIMEN, AND IT IS THIS LIST.
+  //
+  // There were two controls that looked like one thing and did two different things: a
+  // header dropdown that SCOPED the statistics to a specimen, and these group rows, which
+  // only expanded and collapsed. Clicking a specimen's name in the list therefore did not
+  // select it, and selecting it in the dropdown did not open it in the list. Reported as
+  // the navigation being confusing and unorganised, which it was.
+  //
+  // The row does both now: it scopes the numbers AND opens itself. Clicking the row of the
+  // specimen already scoped returns to all specimens, so there is no separate "all" to
+  // find. The dropdown is gone.
   t.querySelectorAll("tbody tr.grp").forEach((tr) => tr.onclick = () => {
     const k = tr.dataset.grp;
-    if (GROUPS_OPEN.has(k)) GROUPS_OPEN.delete(k); else GROUPS_OPEN.add(k);
+    if (state.spec === k) {
+      state.spec = "";
+      GROUPS_OPEN.delete(k);
+    } else {
+      state.spec = k;
+      GROUPS_OPEN.add(k);
+    }
+    // NOT loadArm(): the arm's frames have not changed, only the scope over them. Calling
+    // it would refetch and then reset the selection to frames[0], throwing away the frame
+    // the reader was looking at.
     renderFrames();
+    renderSpecimens();
+    renderReadout();
+    if (typeof window.figRenderRef === "function") window.figRenderRef();
   });
   t.querySelectorAll("tbody tr:not(.grp)").forEach((tr) =>
     tr.onclick = () => selectFrame(tr.dataset.f));
@@ -795,16 +818,20 @@ async function renderSpecimens() {
 // was actually for -- what the whole arm supports -- is five sentences that belong with
 // the other conclusions. A tab whose content is "the same numbers again, in a grid" is
 // navigation cost with no answer at the end of it.
+//: TWO TABS. Analysis and Figure both answered "what do these images show?", so a reader
+//: had to already know that the conclusions were on one and the chart supporting them on
+//: the other -- and the figure, which is the thing most worth looking at, was the one
+//: behind the extra click. They are one page now, findings first and the figure directly
+//: under them.
 const TABS = [
   ["mark", "Mark"],
-  ["analysis", "Analysis"],
-  ["figure", "Figure"],
+  ["results", "Results"],
 ];
 let TAB = "mark";
 
 //: Tabs that are about the NUMBERS. The statistics strip belongs to these and not to
 //: Mark: drawing needs to know which image is open, not what its 95% CI is.
-const ANALYSIS_TABS = new Set(["analysis", "figure"]);
+const ANALYSIS_TABS = new Set(["results"]);
 
 function showTab(id) {
   TAB = id;
@@ -834,9 +861,11 @@ function showTab(id) {
     b.setAttribute("aria-selected", String(b.dataset.tab === id)));
   // The figure is expensive and the rose needs a laid-out box, so both render on reveal
   // rather than on every frame change.
-  if (id === "figure" && typeof window.figRenderRef === "function") window.figRenderRef();
   if (id === "mark") renderMark();
-  if (id === "analysis") {
+  if (id === "results") {
+    // Both render on reveal rather than on every frame change: the figure is expensive and
+    // the rose needs a laid-out box to size itself against.
+    if (typeof window.figRenderRef === "function") window.figRenderRef();
     const rf = state.frames.find((x) => x.frame === state.frame) || {};
     rose(rf.orientation_hist_deg, rf);
   }
@@ -907,7 +936,7 @@ function renderStrip(rec) {
   // first card -- the same sentence twice, 200 px apart, on the densest tab in the app.
   // The mirror exists because making Mark the default put the conclusions behind a click;
   // it earns its place on Mark, Compare and Figure, and nowhere else.
-  if (RO_TOP.text && TAB !== "analysis") {
+  if (RO_TOP.text && TAB !== "results") {
     bits.push(`<span class="banner ${RO_TOP.level === "bad" ? "bad" : ""}" ` +
       `id="striptop" title="${esc(RO_TOP.basis || "")}">${MARK[RO_TOP.level] || ""} ` +
       `${esc(RO_TOP.text)}${RO_TOP.more ? ` <span class="u">+${RO_TOP.more}</span>` : ""}</span>`);
@@ -1039,21 +1068,6 @@ async function renderReadout() {
   //
   // So each question and its answer are visible, and only the why and the would-need are
   // behind the disclosure. That is 4 questions and 4 answers, not 51 words of prose.
-  const refusals = (d.refusals || []).length ? `
-    <h3 class="sect">Asked and answered: not from this data</h3>
-    <div class="refuse-all-open">
-      ${(d.refusals || []).map((r) => `
-        <div class="refuse">
-          <h4>${esc(r.question)}</h4>
-          <div class="ans">${esc(r.answer)}</div>
-          <details><summary>Why, and what would answer it</summary>
-            <p>${r.why}</p>
-            ${r.would_need && r.would_need.length
-              ? `<ul>${r.would_need.map((x) => `<li>${x}</li>`).join("")}</ul>` : ""}
-            ${r.not_this ? `<p><strong>Not this:</strong> ${r.not_this}</p>` : ""}
-          </details>
-        </div>`).join("")}
-    </div>` : "";
 
   el.innerHTML = (body || `<p class="ro-empty">Nothing this data supports saying yet.</p>`)
     + (state.frame
@@ -1065,11 +1079,6 @@ async function renderReadout() {
                   <button id="scaleapply">Set scale</button>` : ""}
              <span class="u" id="remeasure2out"></span>
            </div>` : "");
-  // ...into its OWN element at the end of the pane. Appended to the frame read-out, the
-  // four answered questions sat between the conclusions and the image, and they are the
-  // same four on every frame -- reference, not a per-frame finding.
-  const refEl = $("#refusals");
-  if (refEl) refEl.innerHTML = refusals;
   const rb = $("#remeasure2");
   if (rb) rb.onclick = () => remeasure(rb, $("#remeasure2out"));
 
@@ -1280,101 +1289,120 @@ function defsAll() {
 //: Falls back to "edit" when the full tool cannot run -- no SEM repo, or a frame it does
 //: not have -- resolved in renderMark, not here, because availability is not known until
 //: /api/paint answers.
-let MARK_MODE = "full";
+//: THE MARK TAB HAS NO MODES. It had two, "Edit mask" and "Full tool", and the reader was
+//: expected to know which one their frame supported -- so picking a TXM frame while the
+//: tool was up left the SEM tool on screen showing 260622_316_H_b2_back_CBS_01 with a note
+//: underneath saying the chosen frame was not one of its 154 images. The sidebar said one
+//: image, the canvas showed another, and the brush would have painted the one the reader
+//: was not looking at. A user reported this as "the txm images don't work"; it was worse
+//: than that.
+//:
+//: One rule now, applied per frame and never asked about: if the full tool is running AND
+//: it holds this exact image, that is what appears; otherwise the mask editor does, which
+//: works on every frame in every arm because it reads this app's own /api/mask.
+//:
+//: BOTH CONTAINERS STAY MOUNTED and visibility is toggled. Tearing the iframe down on a
+//: switch would discard unsaved strokes and re-fetch a 23 MB template on the way back.
 
-async function renderMark() {
-  const el = $("#markbody");
-  const paint = await api("/api/paint").catch(() => ({ available: false, why_not: "unreachable" }));
-  const head = `<div class="markmodes">
-      <button class="seg${MARK_MODE === "edit" ? " on" : ""}" data-mm="edit">Edit mask</button>
-      <button class="seg${MARK_MODE === "full" ? " on" : ""}" data-mm="full"
-        ${paint.available ? "" : `disabled title="${esc(paint.why_not || "")}"`}>Full tool</button>
-      ${MARK_MODE === "full" ? `<span class="u">whole-region flip · undo · reapply · retrain · export</span>` : ""}
-    </div>`;
-
-  // FALL BACK RATHER THAN SHOW A DEAD PANE. "full" is the default, and a downloaded copy
-  // with no SEM repo cannot run it; landing such a user on a Start button they have no
-  // way to satisfy is worse than opening the editor that does work for them.
-  if (MARK_MODE === "full" && !paint.available) MARK_MODE = "edit";
-
-  if (MARK_MODE === "full") {
-    // DO NOT RE-MOUNT A LIVE TOOL. renderMark runs on every frame pick, and rewriting
-    // innerHTML would tear down the iframe and reload the whole application inside it --
-    // discarding unsaved strokes and re-fetching a 23 MB template every time the reader
-    // clicks a different row. If it is already up, just point it at the new image.
-    if (paint.running && $("#markframe")) { wireModes(); syncMarkFrame(); return; }
-    el.innerHTML = head + (paint.running
-      ? `<p class="note" id="marksync"></p>
-         <iframe id="markframe" src="/mark/" title="Marking tool"></iframe>`
-      : `<div class="markstate"><p class="markbig">Start the marking tool.</p>
-           <button id="markstart" class="upload">Start</button>
-           <p class="note" id="markstartout"></p></div>`);
-    wireModes();
-    const fr = $("#markframe");
-    // Follow the app's sidebar, both now and on every later pick. The tool auto-loads
-    // its own images[0] as it boots, so this also corrects that first choice.
-    if (fr) fr.onload = () => { MARK_LOADED = null; syncMarkFrame(); };
-    syncMarkFrame();
-    const b = $("#markstart");
-    if (b) b.onclick = async () => {
-      b.disabled = true; b.textContent = "Starting…";
-      try { await api("/api/paint", { method: "POST" }); await renderMark(); }
-      catch (e) {
-        b.disabled = false; b.textContent = "Start";
-        $("#markstartout").innerHTML = `<span class="flag bad">${esc(e.message)}</span>`;
-      }
-    };
-    return;
-  }
-
-  if (!state.frame) {
-    el.innerHTML = head + `<div class="markstate">
-        <p class="markbig">Add an image to mark.</p>
-        <p class="note">A black-and-white mask is measured as it is. A .tif is segmented
-           first, which needs the SEM repo — see Setup.</p>
-      </div>`;
-    wireModes();
-    return;
-  }
-  // EVERY FRAME IS MARKABLE, IN THIS WINDOW. Editing a research frame writes a COPY into
-  // uploads rather than touching the derived mask, so the loop is one app and the data the
-  // app does not own stays unwritten.
-  await openEditor(state.frame, head);
-  wireModes();
-}
-
-//: The tool's own image names, fetched once. It knows only the SEM originals it was
-//: pointed at -- not this app's TXM frames, and not anything uploaded here -- so the app
-//: has to be able to say "that one is not in the tool" rather than silently showing a
-//: different image than the sidebar says.
+//: The tool's own image names, fetched once.
 let MARK_IMAGES = null;
 //: The frame this side last asked the tool to open, so a re-sync is not a re-load.
 let MARK_LOADED = null;
 
-async function syncMarkFrame() {
-  const fr = $("#markframe");
-  const note = $("#marksync");
-  if (!fr || !note) return;
+async function markImages() {
   if (MARK_IMAGES === null) {
     try { MARK_IMAGES = new Set((await api("/mark/api/images")).map((i) => i.name)); }
     catch (e) { MARK_IMAGES = new Set(); }
   }
+  return MARK_IMAGES;
+}
+
+function markShell() {
+  //: Built once. renderMark only flips `hidden` after this.
+  const el = $("#markbody");
+  if ($("#marktool")) return;
+  el.innerHTML = `
+    <div id="marktool" hidden>
+      <p class="note" id="marksync"></p>
+      <iframe id="markframe" title="Marking tool"></iframe>
+    </div>
+    <div id="markedit" hidden></div>`;
+}
+
+//: THE WHOLE RULE, as a pure function so it can be tested without a DOM.
+//:
+//: Every one of these three conditions is load-bearing, and the bug that prompted this was
+//: the third being checked only to print a WARNING while the tool stayed on screen showing
+//: the image it happened to have open. On the txm arm that meant the canvas showed
+//: 260622_316_H_b2_back_CBS_01 while the sidebar highlighted a TXM frame -- and the brush
+//: would have painted the SEM image the reader was not looking at.
+function toolCanOpen(running, frame, images) {
+  if (!running) return false;              // nothing to show it in
+  if (!frame) return false;                // nothing chosen
+  return !!(images && images.has(frame));  // and it must hold THIS image
+}
+
+async function renderMark() {
+  markShell();
+  const tool = $("#marktool"), edit = $("#markedit");
+  const paint = await api("/api/paint").catch(() => ({ available: false, why_not: "unreachable" }));
+
+  const canUseTool = toolCanOpen(paint.running, state.frame, await markImages());
+
+  if (canUseTool) {
+    const fr = $("#markframe");
+    if (!fr.src) {
+      fr.src = "/mark/";
+      fr.onload = () => { MARK_LOADED = null; syncMarkFrame(); };
+    }
+    tool.hidden = false; edit.hidden = true;
+    syncMarkFrame();
+    return;
+  }
+
+  tool.hidden = true; edit.hidden = false;
+
   if (!state.frame) {
-    note.innerHTML = `<span class="u">Pick an image on the left to mark it.</span>`;
+    edit.innerHTML = `<div class="markstate">
+        <p class="markbig">Add an image to mark.</p>
+        <p class="note">A black-and-white mask is measured as it is. A .tif is segmented
+           first, which needs the SEM repo — see Setup.</p>
+      </div>`;
+    ED.frame = null;
     return;
   }
-  // BE HONEST ABOUT WHAT THE TOOL CAN OPEN. Showing its canvas on some other image while
-  // the sidebar highlights this one is the two-lists problem in a subtler form: one
-  // sidebar, still disagreeing with what is under the brush.
-  if (!MARK_IMAGES.has(state.frame)) {
-    note.innerHTML = `<span class="flag">${esc(shortFrame(state.frame))}</span> `
-      + `<span class="u">is not one of the ${MARK_IMAGES.size} images the full tool was `
-      + `pointed at — it reads the SEM originals only. Use <b>Edit mask</b> for this one, `
-      + `which works on any frame here.</span>`;
-    fr.style.opacity = "0.35";
-    return;
+  //: The full tool can be started from here when it would help THIS frame -- i.e. it is
+  //: installed, not running, and holds this image. Offering it on a TXM frame it cannot
+  //: open is the dead button the modes used to be.
+  const startable = paint.available && !paint.running && (await markImages()).size === 0;
+  await openEditor(state.frame);
+  if (startable) {
+    const bar = document.createElement("p");
+    bar.className = "note";
+    bar.innerHTML = `<button id="markstart" class="upload">Start the full tool</button>
+      <span class="u">— whole-region flip, undo, reapply, retrain, export, on the SEM
+      originals.</span> <span id="markstartout"></span>`;
+    edit.prepend(bar);
+    $("#markstart").onclick = async (e) => {
+      const b = e.currentTarget;
+      b.disabled = true; b.textContent = "Starting…";
+      try {
+        await api("/api/paint", { method: "POST" });
+        MARK_IMAGES = null;              // re-read: the tool now has a list
+        ED.frame = null;                 // so a return to the editor re-mounts
+        await renderMark();
+      } catch (err) {
+        b.disabled = false; b.textContent = "Start the full tool";
+        $("#markstartout").innerHTML = `<span class="flag bad">${esc(err.message)}</span>`;
+      }
+    };
   }
-  fr.style.opacity = "";
+}
+
+async function syncMarkFrame() {
+  const fr = $("#markframe");
+  const note = $("#marksync");
+  if (!fr || !note || !state.frame) return;
   note.innerHTML = `<span class="u">Marking <b>${esc(shortFrame(state.frame))}</b> — `
     + `chosen on the left. Corrections are written into the SEM repo.</span>`;
   // Same-origin, so the tool's own loader is callable. Calling loadImage rather than
@@ -1390,17 +1418,6 @@ async function syncMarkFrame() {
       w.loadImage(state.frame);
     }
   } catch (e) { /* not loaded yet; the onload handler calls again */ }
-}
-
-function wireModes() {
-  document.querySelectorAll("#markbody .markmodes .seg").forEach((b) => {
-    b.onclick = () => {
-      if (b.disabled || b.dataset.mm === MARK_MODE) return;
-      MARK_MODE = b.dataset.mm;
-      ED.frame = null;                       // so a return to Edit re-mounts the canvas
-      renderMark();
-    };
-  });
 }
 
 // ---------------------------------------------------------------------------------------
@@ -1473,10 +1490,10 @@ function editorHTML(frame) {
     <canvas id="edcanvas"></canvas>`;
 }
 
-async function openEditor(frame, head = "") {
+async function openEditor(frame) {
   if (ED.frame === frame && $("#edcanvas")) return;   // already showing this one
-  const host = $("#markbody");
-  host.innerHTML = head + editorHTML(frame);
+  const host = $("#markedit");
+  host.innerHTML = editorHTML(frame);
   const cv = $("#edcanvas");
   const img = new Image();
   img.crossOrigin = "anonymous";
@@ -1587,7 +1604,6 @@ async function loadArm() {
     // diagnostic on the page.
     state.frames = []; state.frame = null;
     renderFrames();
-    $("#spec").innerHTML = `<option value="">all</option>`;
     $("#detail").querySelectorAll(".pane").forEach((el) => { el.innerHTML = ""; });
     $("#listcount").textContent = "";
     $("#strip").innerHTML = `<span class="flag bad">Could not load the ${esc(state.arm)} `
@@ -1603,9 +1619,6 @@ async function loadArm() {
     specs = (await api(`/api/specimens?arm=${encodeURIComponent(state.arm)}`))
       .map((r) => r.specimen).sort();
   } catch (e) { specs = [...new Set(state.frames.map((f) => f.specimen))].sort(); }
-  const cur = state.spec;
-  $("#spec").innerHTML = `<option value="">all (${specs.length} specimens)</option>` +
-    specs.map((s) => `<option${s === cur ? " selected" : ""}>${s}</option>`).join("");
   const noScale = state.frames.filter((f) => !f.scale_known).length;
   $("#listcount").textContent = noScale
     ? `${noScale}/${state.frames.length} frames: no scale, µm withheld`
@@ -1829,7 +1842,16 @@ async function loadArm() {
   // carries the number people actually cite, so a third tally of the same corpus was words
   // for their own sake.
   if (HEALTH && !HEALTH.sem_repo) showSetup(true);
-  $("#arm").onchange = (e) => { state.arm = e.target.value; state.spec = ""; loadArm(); };
-  $("#spec").onchange = (e) => { state.spec = e.target.value; loadArm(); };
+  $("#arm").onchange = (e) => {
+    // CLEAR THE FRAME TOO. state.frame belongs to the arm being left, and loadArm()
+    // re-renders before it picks the new arm's first frame -- so the read-out fired
+    // /api/readout?arm=uploads&frame=<a TXM frame name> and took a 404 on every single
+    // arm switch. Harmless in effect, because the next render corrects it, and a 404 per
+    // switch in the console is the kind of noise that hides a real one.
+    state.arm = e.target.value;
+    state.spec = "";
+    state.frame = null;
+    loadArm();
+  };
   loadArm();
 })();

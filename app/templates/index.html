@@ -170,12 +170,6 @@ main{flex:1 1 auto;display:grid;grid-template-columns:minmax(260px,348px) minmax
 #rose svg,#sizes svg{display:block}
 /* The two marking tools. A segmented pair, not a dropdown: there are exactly two and the
    choice is which set of images you are working on, so both should be readable at once. */
-.markmodes{display:flex;gap:6px;align-items:center;margin:0 0 10px;flex-wrap:wrap}
-.markmodes .seg{font-size:12.5px;padding:5px 11px;border:1px solid var(--rule);
-  border-radius:7px;background:transparent;color:var(--text-secondary);cursor:pointer}
-.markmodes .seg.on{background:var(--s1);border-color:var(--s1);color:#fff}
-.markmodes .seg:disabled{opacity:.45;cursor:not-allowed}
-.markmodes .u{font-size:var(--t-micro)}
 /* The proxied tool fills the pane. It is same-origin, so this frame can be inspected --
    which is the reason it is a frame at all and not a link out to the browser. */
 /* FLUSH, NOT A CARD. A bordered, rounded, white-backed frame around a tool that has its
@@ -258,6 +252,10 @@ tbody tr:hover{background:var(--surface-3)}
 tbody tr[aria-selected=true]{background:color-mix(in oklab,var(--s1) 20%,transparent)}
 #frames td{font-size:var(--t-body);padding:var(--sp2) var(--sp3);line-height:1.35}
 /* Specimen groups. The header row is the set; its children are indented under it. */
+/* The scoped specimen. Selection has to be visible, or clicking a row to scope the
+   numbers looks like it did nothing. */
+#frames tr.grp.on td{box-shadow:inset 3px 0 0 var(--s1)}
+#frames tr.grp.on td:first-child{color:var(--text-primary)}
 #frames tr.grp td{background:var(--surface-3);font-weight:640;font-size:var(--t-small);
   cursor:pointer;position:sticky;top:26px}
 #frames tr.grp:hover td{color:var(--text-primary)}
@@ -333,7 +331,6 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
 <header>
   <h1>Crack networks</h1>
   <select id="arm" aria-label="Arm"></select>
-  <select id="spec" aria-label="Specimen"></select>
   <span class="spacer"></span>
   <label class="upload" for="up">+ Add image</label>
   <input id="up" type="file" accept=".png,.bmp,.gif,.tif,.tiff" multiple hidden>
@@ -389,7 +386,7 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
          places to see one thing. They are one scroll now, most-answering first: the
          sentences, then the picture they are about, then the numbers behind them, then
          the raw rows behind a disclosure. -->
-    <div class="pane" id="pane-analysis" role="tabpanel" hidden>
+    <div class="pane" id="pane-results" role="tabpanel" hidden>
       <!-- ORDER IS THE NAVIGATION. This pane had grown to six stacked sections with the
            IMAGE third, so reaching the thing a researcher looks at most meant scrolling
            past two blocks of prose. Findings, then the picture, then the numbers behind
@@ -409,6 +406,21 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
 
       <h3 class="sect">This frame</h3>
       <div class="ro" id="readout"></div>
+
+      <!-- ONE RESULTS PAGE. Analysis and Figure were two tabs answering the same
+           question -- "what do these images show?" -- so a reader had to know that the
+           conclusions were on one and the chart that supports them on the other. The
+           figure is the thing most worth looking at, so it sits directly under the
+           findings and above the frame-level detail. -->
+      <h3 class="sect">Figure</h3>
+      <div class="figbar">
+        <select id="figkind"></select>
+        <select id="figy"></select>
+        <span id="figxwrap" hidden>vs <select id="figx"></select></span>
+        <span class="spacer"></span>
+        <button id="figdl">&darr; SVG</button>
+      </div>
+      <div id="figout"></div>
 
       <h3 class="sect">The mask these numbers came from</h3>
       <p class="note" id="masknote">Select a frame.</p>
@@ -430,21 +442,15 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
         <div class="scroll"><table id="cracks"><thead></thead><tbody></tbody></table></div>
       </details>
 
-      <!-- Filled by renderReadout; last, because it is the same four answers on every
-           frame and a reader needs it once, not on the way to the image. -->
-      <div id="refusals"></div>
+      <!-- THE "ASKED AND ANSWERED" SECTION IS GONE. It listed four questions the app
+           refuses -- crack mode, tortuosity, ductile/brittle, crack depth -- on every
+           frame, which made a page whose job is to report findings open with a block
+           about what it cannot do. Told repeatedly that this reads as the app having
+           nothing to offer. The refusals still exist in analysis/conclusions.py and still
+           travel in the API response, so the reasoning is intact for anyone who asks the
+           endpoint; it is no longer the thing a reader scrolls through to reach results. -->
     </div>
 
-    <div class="pane" id="pane-figure" role="tabpanel" hidden>
-      <div class="figbar">
-        <select id="figkind"></select>
-        <select id="figy"></select>
-        <span id="figxwrap" hidden>vs <select id="figx"></select></span>
-        <span class="spacer"></span>
-        <button id="figdl">&darr; SVG</button>
-      </div>
-      <div id="figout"></div>
-    </div>
   </section>
 </main>
 
