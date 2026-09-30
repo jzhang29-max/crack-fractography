@@ -930,6 +930,69 @@ def for_figure(kind, x, y, rows, label_of=None):
                       "a ranking and the named extremes are not a result.",
                 level="warn", value=(round(hi / lo, 2) if lo > 0 else None)))
 
+    # --- STAGE RASTER: the gradient, per specimen, from the drawn rows ----------------
+    # A chart with no statement under it is what the figure tab used to be, and these two
+    # kinds arrived that way: 36 cells on screen and an empty conclusion strip. The
+    # statement is the gradient itself, which is the reason the figure exists.
+    #
+    # PER SPECIMEN, NEVER POOLED. Each raster is one patch on one specimen; a Spearman over
+    # all four stacked together would be testing whether four unrelated patches happen to
+    # share a direction in instrument stage coordinates, which is not a question about the
+    # material and would borrow significance from the sample size.
+    if kind in ("stage_map", "stage_surface") and (y or x):
+        f = y or x
+        try:
+            import sys as _sys
+            import os as _os
+            _sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.abspath(__file__))))
+            import stage as _stage
+            bysp = {}
+            for r in rows:
+                bysp.setdefault(r.get("specimen", "unparsed"), []).append(r)
+            grads = {}
+            for spec, frs in bysp.items():
+                g = _stage.gradient(frs, field=f)
+                if g and g.get("spearman_rho") is not None:
+                    grads[spec] = g
+            if grads:
+                sig = {k: g for k, g in grads.items() if (g.get("p_value") or 1) < 0.05}
+                same = {g["spearman_rho"] > 0 for g in sig.values()}
+                rhos = sorted(g["spearman_rho"] for g in grads.values())
+                ps = sorted(g.get("p_value") or 1 for g in grads.values())
+                if len(sig) == len(grads) and len(same) == 1 and len(grads) >= 2:
+                    out.append(_s(
+                        f"Every raster trends across the patch, all in one direction.",
+                        f"Spearman of {lab(f)} against the trending stage axis, computed "
+                        f"SEPARATELY for each of {len(grads)} specimens and never pooled: "
+                        f"rho {rhos[0]:+.3f} to {rhos[-1]:+.3f}, every p below "
+                        f"{ps[-1]:.4f}. Each raster is one patch on one specimen, so a "
+                        f"Spearman over all of them stacked together would be asking "
+                        f"whether unrelated patches share a direction in instrument stage "
+                        f"coordinates, and would borrow significance from the sample size. "
+                        f"The axis is chosen per specimen as the stronger of stage X and "
+                        f"stage Y, so each p is uncorrected for a best-of-two selection: "
+                        f"doubling them leaves every one below {min(2 * max(ps), 1.0):.4f}.",
+                        hedge="A gradient means these fields are not a sample OVER a "
+                              "surface, so the E562 interval on them is largely describing "
+                              "a trend rather than sampling error -- and more tiles in the "
+                              "SAME patch will not narrow it. More patches would.",
+                        level="good", value=round(rhos[-1], 3)))
+                else:
+                    out.append(_s(
+                        f"{len(sig)} of {len(grads)} rasters trend across the patch.",
+                        f"Spearman of {lab(f)} against the trending stage axis, per "
+                        f"specimen, never pooled: rho {rhos[0]:+.3f} to {rhos[-1]:+.3f}. "
+                        f"{len(sig)} reach p < 0.05"
+                        + ("" if len(same) <= 1 else " and they do not agree on direction")
+                        + ".",
+                        hedge="Where a raster does trend, its fields are not a sample over "
+                              "a surface and more tiles in the same patch will not narrow "
+                              "its interval.",
+                        level=("warn" if sig else "info"),
+                        value=round(rhos[-1], 3)))
+        except Exception:
+            pass
+
     # --- HISTOGRAM: is the total carried by a few values? -----------------------------
     if kind == "histogram" and (y or x):
         f = y or x

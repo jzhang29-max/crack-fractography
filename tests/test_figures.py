@@ -250,3 +250,118 @@ def test_the_mixed_detector_count_carries_its_denominator():
                                "area_fraction": 0.02 + 0.01 * i, "n_cracks_measured": 10})
     cap = F.build(frames, "sem/gated", "box_by_specimen", y="area_fraction")["caption"]
     assert "2 of 4 specimens average two detectors" in cap, cap
+
+
+# --- THE STAGE RASTER FIGURES ----------------------------------------------------------
+def _positioned():
+    """Real frames from the arm that actually recorded stage coordinates."""
+    import json
+    import urllib.request
+    try:
+        fr = json.load(urllib.request.urlopen(
+            "http://127.0.0.1:8822/api/frames?arm=sem%2Fgated", timeout=10))
+    except Exception:
+        pytest.skip("no dev server on 8822 to read the positioned corpus from")
+    return fr if isinstance(fr, list) else fr.get("frames", [])
+
+
+def test_a_three_by_three_raster_is_drawn_as_three_by_three():
+    """Grid indices came from RANKING the distinct stage coordinates, and stage.py says in
+    its own docstring that the nine fields of a 3x3 raster differ in the sixth decimal
+    place, so every field landed in its own group. The result was a 7x9 grid holding nine
+    cells strung along a diagonal. It rendered, it looked deliberate, and it was not a
+    raster -- no test could see it because no test drew a positioned corpus."""
+    cells, modal = F._stage_cells([f for f in _positioned() if f.get("arm") == "sem/gated"])
+    assert cells, "no specimen produced raster cells"
+    for spec, cs in cells.items():
+        ncols = max(c for c, _, _, _ in cs) + 1
+        nrows = max(r for _, r, _, _ in cs) + 1
+        assert ncols * nrows == len(cs), (
+            f"{spec}: {len(cs)} cells in a {ncols}x{nrows} grid -- the grid has holes, "
+            "which means the axis clustering split one raster step into several")
+        assert ncols <= 4 and nrows <= 4, f"{spec}: {ncols}x{nrows} is not a raster"
+
+
+def test_the_axis_clustering_survives_jitter_and_rejects_a_non_raster():
+    # Three steps of 4.3e-4 with 5e-6 of jitter inside each -- the real geometry.
+    vals = [0.0256486, 0.0256532, 0.0260859, 0.0260883, 0.0260886, 0.0265221, 0.0265247]
+    idx = F._axis_clusters(vals)
+    assert idx is not None
+    assert len(set(idx.values())) == 3, f"expected 3 steps, got {len(set(idx.values()))}"
+    # Evenly spread coordinates are not a raster axis, and inventing one cell per value
+    # would fabricate a grid.
+    assert F._axis_clusters([i / 50 for i in range(30)]) is None
+
+
+def test_the_caption_counts_what_the_figure_drew_not_what_the_arm_holds():
+    """_cap(arm, len(rows), ...) printed "n = 86 fields" under panels built from the 36 that
+    carry a stage position. The same wrong-denominator defect as the "7 specimens" clause,
+    in the same function, one release later -- so every count is now rescoped."""
+    out = F.build(_positioned(), "sem/gated", "stage_map", y="area_fraction")
+    cap = out["caption"]
+    assert f"n = {out['n']} fields" in cap, cap
+    assert "no stage position recorded" in cap, "the excluded fields must be declared"
+    assert "of 14 specimens" not in cap, (
+        "the detector clause still carries the arm's specimen count, not the figure's")
+
+
+def test_the_statement_is_computed_from_the_rows_the_figure_drew():
+    """A statement under a chart must come from the points above it. The full 86 rows were
+    travelling to the conclusions engine, which put the 337.2396 nm/px overview field on
+    the gradient axis -- its field of view is 10.6x a fine field's and spans much of the
+    raster. That weakened the reported trend from +0.750..+0.867 to +0.745..+0.842."""
+    out = F.build(_positioned(), "sem/gated", "stage_map", y="area_fraction")
+    assert len(out["rows"]) == out["n"], (
+        f"{len(out['rows'])} rows travelled for a figure that drew {out['n']}")
+    mags = {round(float(r["nm_per_px"]), 4) for r in out["rows"] if r.get("nm_per_px")}
+    assert len(mags) == 1, f"the drawn rows span {mags}; a raster is one magnification"
+
+
+def test_the_other_kinds_still_receive_every_row():
+    """_with_rows now reads an optional override. A bug there would silently narrow the
+    rows behind every other figure's statement."""
+    fr = _positioned()
+    for kind in ("box_by_specimen", "histogram"):
+        out = F.build(fr, "sem/gated", kind, y="area_fraction")
+        assert len(out["rows"]) > out["n"] or len(out["rows"]) == out["n"]
+        assert len(out["rows"]) == 86, f"{kind} received {len(out['rows'])} rows, expected 86"
+
+
+def test_a_stage_figure_on_an_arm_with_no_coordinates_says_so():
+    """txm records no stage position. Refusing with a message beats drawing an empty grid."""
+    import json
+    import urllib.request
+    try:
+        fr = json.load(urllib.request.urlopen(
+            "http://127.0.0.1:8822/api/frames?arm=txm", timeout=10))
+    except Exception:
+        pytest.skip("no dev server on 8822")
+    fr = fr if isinstance(fr, list) else fr.get("frames", [])
+    with pytest.raises(ValueError) as e:
+        F.build(fr, "txm", "stage_map", y="area_fraction")
+    assert "stage position" in str(e.value)
+
+
+def test_the_surface_normalises_within_each_panel_not_across_them():
+    """On one shared height scale the four specimens' maxima (1.79 to 12.0) collapsed three
+    panels to flat tiles, leaving only the BETWEEN-specimen difference visible -- the one
+    comparison this app refuses to support -- while flattening away the within-patch
+    gradient that is actually established. So each panel carries its own range, printed."""
+    out = F.build(_positioned(), "sem/gated", "stage_surface", y="area_fraction")
+    svg = out["svg"]
+    assert "scaled to its own range" in svg, "the per-panel scaling is not disclosed"
+    # Every panel must contain a full-height column: that is what per-panel scaling means.
+    import re
+    ys = [float(m) for m in re.findall(r'points="[\d.]+,([\d.]+)', svg)]
+    assert ys, "no columns drawn"
+    # And the shared legend must be gone -- it would describe a scale nothing is drawn on.
+    assert svg.count('rx="2"') == 0, "a shared colour legend survives on a per-panel figure"
+
+
+def test_the_map_keeps_a_shared_legend_and_prints_every_value():
+    """The opposite choice, for the opposite reason: the map prints each cell's number, so
+    a shared ramp loses no information and small multiples should share one."""
+    out = F.build(_positioned(), "sem/gated", "stage_map", y="area_fraction")
+    svg = out["svg"]
+    assert svg.count('rx="2"') == len(F.RAMP), "the map lost its shared legend"
+    assert svg.count("<title>") == out["n"], "not every cell carries its value"

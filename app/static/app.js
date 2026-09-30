@@ -1750,8 +1750,19 @@ async function loadArm() {
     $("#figx").innerHTML = opts;
     $("#figy").value = "area_fraction";
     $("#figx").value = "n_cracks_measured";
+    // Named, rather than the underscore-stripped key. "stage surface" undersells the one
+    // figure here that shows a spatial finding, and a reader choosing a chart type should
+    // be told what it answers, not what its enum is called.
+    const KIND_LABEL = {
+      scatter: "scatter \u2014 one field per point",
+      box_by_specimen: "box by specimen",
+      bar_by_specimen: "bar by specimen",
+      histogram: "distribution over fields",
+      stage_map: "stage raster \u2014 where on the specimen",
+      stage_surface: "stage raster in 3D \u2014 height is the value",
+    };
     $("#figkind").innerHTML = FIG.kinds.map((k) =>
-      `<option value="${k}">${k.replace(/_/g, " ")}</option>`).join("");
+      `<option value="${k}">${KIND_LABEL[k] || k.replace(/_/g, " ")}</option>`).join("");
     $("#figkind").value = "box_by_specimen";
     ["figkind", "figy", "figx"].forEach((id) => $("#" + id).onchange = figRender);
   } catch (e) { $("#figout").innerHTML = `<p class="note">figures unavailable: ${e.message}</p>`; }
