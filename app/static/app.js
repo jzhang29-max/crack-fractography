@@ -1430,7 +1430,14 @@ async function renderMark() {
   const tool = $("#marktool"), edit = $("#markedit");
   const paint = await api("/api/paint").catch(() => ({ available: false, why_not: "unreachable" }));
 
-  const canUseTool = toolCanOpen(paint.running, state.frame, await markImages(), state.arm);
+  // DO NOT ASK A TOOL THAT IS NOT RUNNING. markImages() fetches /mark/api/images, which
+  // the proxy answers 503 when there is nothing behind it -- so every visit to Mark in a
+  // copy with no SEM repo (which is every downloaded copy, and all three CI runners)
+  // logged a console error for a question the app had already answered one line above.
+  // It never showed here because the tool is running on this machine. Found by the UI
+  // check counting page errors, which is the reason it counts them.
+  const canUseTool = paint.running
+    && toolCanOpen(true, state.frame, await markImages(), state.arm);
 
   if (canUseTool) {
     const fr = $("#markframe");
@@ -1468,6 +1475,8 @@ async function renderMark() {
   //: SEM originals, so it can only ever help a sem/* frame.
   const startable = paint.available && !paint.running
     && TOOL_ARMS.some((a) => state.arm === a || state.arm.startsWith(a + "/"));
+  // (startable deliberately does NOT consult markImages() either: see the note on
+  //  toolCanOpen. An image list can only come from a tool that is already up.)
   await openEditor(state.frame);
   // ONE BAR, NOT ONE PER VISIT. openEditor early-returns when the frame has not changed,
   // which is exactly what a Mark -> Results -> Mark round trip looks like, so an

@@ -387,3 +387,19 @@ def test_the_opening_mode_falls_back_when_sem_is_absent():
     fn = fn[:fn.index("\n}")]
     assert "MODES.find" in fn, "the opening mode is not chosen from the mode list"
     assert "arms &&" in fn or "arms?." in fn, "an empty arms list would throw here"
+
+
+def test_the_image_list_is_not_fetched_when_no_tool_is_running():
+    """markImages() fetches /mark/api/images, which the proxy answers 503 with nothing
+    behind it -- so every visit to Mark in a copy with no SEM repo (every downloaded copy,
+    and all three CI runners) logged a console error for a question already answered by
+    paint.running one line above. It never appeared locally because the tool runs here."""
+    src = open(APPJS, encoding="utf-8").read()
+    rm = src[src.index("async function renderMark()"):src.index("async function syncMarkFrame()")]
+    code = code_only(rm)
+    i = code.index("canUseTool")
+    stmt = code[i:code.index(";", i)]
+    assert "paint.running" in stmt and "&&" in stmt, (
+        "markImages() is awaited before the running check short-circuits it")
+    assert stmt.index("paint.running") < stmt.index("markImages()"), (
+        "the running check must come first, or the fetch happens anyway")
