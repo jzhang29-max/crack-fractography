@@ -184,13 +184,57 @@ def test_regime_is_a_tally_over_fields_not_a_median():
 
 
 # --- the refusals ------------------------------------------------------------------
-def test_the_mode_question_is_answered_with_a_shopping_list():
+def test_the_mode_question_is_answered_with_a_measured_budget():
+    """The answer used to be "Not determinable from a crack mask." True, and it pointed at
+    the wrong thing: it reads as "this app only has masks", and the app holds 154
+    micrographs with the grain structure plainly visible. A user objected on exactly that
+    ground. Both micrograph routes were then built and measured, so the refusal states a
+    NUMBER -- the resolution budget that blocks the call -- instead of a limitation."""
     q = [r for r in C.REFUSALS if "ransgranular" in r["question"]][0]
-    assert "Not determinable" in q["answer"]
     assert any("EBSD" in w for w in q["would_need"])
     assert q["not_this"] and "ortuosity" in q["not_this"]
-    # It must name the corpus-specific reason, not just wave at "needs grain data".
-    assert "enclosed islands" in q["why"].lower() or "islands it encloses" in q["why"].lower()
+    # A quantity in the answer itself, not a category of ignorance.
+    assert "\u00b5m" in q["answer"], q["answer"]
+    assert "determinable" not in q["answer"].lower(), (
+        f"the answer still names a limitation rather than a measurement: {q['answer']}")
+    # And the two things that make it a budget rather than an opinion: the scale needed and
+    # the scale available.
+    assert "13 \u00b5m" in q["answer"] and "3.0 \u00b5m" in q["answer"]
+
+
+def test_the_refusal_reports_the_positive_control_that_killed_the_route():
+    """THE RESULT THAT MATTERS, and the one a reader has to be able to check. Real labels
+    score z = +2.0 to +3.4 for boundary coincidence, which is publishable-looking. A
+    synthetic path built FROM the boundary skeleton -- following boundaries by construction
+    -- reaches at most z = +0.62 under any legitimate exclusion. The real data beats the
+    ground-truth ceiling, which is impossible for a path signal, so the apparent result is
+    self-reference. Without that control this app would have shipped the opposite claim, so
+    the control is part of the finding and not part of the workings."""
+    q = [r for r in C.REFUSALS if "ransgranular" in r["question"]][0]
+    why = q["why"]
+    assert "+0.62" in why, "the ground-truth ceiling is not stated"
+    assert "+2.0 to +3.4" in why or "+3.4" in why, "the real-data score is not stated"
+    assert "positive control" in why.lower()
+    # The decay that identifies the artefact's source.
+    assert "80" in why and "0.0%" in why, "the contamination sweep is not reported"
+
+
+def test_the_refusal_reports_why_the_linearity_route_failed_specifically():
+    """The user proposed linearity, and the honest answer is not "no" but "here is the
+    number". Three pre-stated kill criteria fired; each has to be recoverable."""
+    why = [r for r in C.REFUSALS if "ransgranular" in r["question"]][0]["why"]
+    assert "+0.891" in why, "the brush-width confound is not quantified"
+    assert "30 of\n               30" in why or "30 of 30" in why, (
+        "the smooth-path false-positive rate is not stated")
+    assert "0.778" in why, "the frames-as-units result is not stated"
+
+
+def test_the_refusal_still_reports_what_is_positively_true():
+    """A refusal that only says no is less useful than one that says what IS established.
+    Where the label is thin enough to carry a facet signal, there is none."""
+    why = [r for r in C.REFUSALS if "ransgranular" in r["question"]][0]["why"]
+    assert "0.7555" in why, "the half-normal reference is not stated"
+    assert "341" in why, "the admissible-branch count is not stated"
 
 
 def test_the_field_tally_counts_fields_not_frames():
@@ -281,14 +325,33 @@ def test_the_refusal_attributes_the_tortuosity_numbers_to_the_sibling_repo():
 
 
 def test_the_refusal_does_not_make_an_unfalsifiable_negative_claim():
+    """It may not claim that no proxy EXISTS -- that is unfalsifiable. It used to say "we
+    know of no validated proxy", which was the honest form while nothing had been tested.
+    Two proxies have now been built and measured, so the claim is stronger and narrower:
+    named routes, with the numbers that killed them and the conditions that would revive
+    them. A universal negative would still be wrong."""
     q = [r for r in C.REFUSALS if "ransgranular" in r["question"]][0]
-    assert "No geometric proxy from a binary mask is validated" not in q["why"]
-    assert "know of no validated proxy" in q["why"]
+    why = q["why"]
+    for forbidden in ("No geometric proxy from a binary mask is validated",
+                      "no proxy exists", "cannot be measured", "is impossible"):
+        assert forbidden not in why, f"unfalsifiable claim: {forbidden!r}"
+    # Falsifiable instead: it names what would change the answer.
+    assert "No frame in this corpus reaches that" in why, (
+        "the budget must be stated as a corpus fact, which a better corpus could falsify")
+    assert any("EBSD" in w for w in q["would_need"])
 
 
-def test_the_grain_size_is_labelled_an_estimate():
-    q = [r for r in C.REFUSALS if "ransgranular" in r["question"]][0]
-    assert "visual estimate" in q["why"] or "by eye" in q["why"]
+def test_the_grain_size_is_measured_with_its_method_not_estimated():
+    """It used to be a visual estimate of 300-500 px, explicitly labelled as one. It is now
+    a measurement with a bracket and a stated scale: 9 um (7-12) on the frames whose FEI
+    databar survives, and 140 px (125-165) counted on the unscaled set. The refusal's
+    geometric budget rests on this number, so it may not go back to being an eyeball."""
+    why = [r for r in C.REFUSALS if "ransgranular" in r["question"]][0]["why"]
+    assert "9 um (7-12)" in why or "9 um" in why, "the measured grain diameter is missing"
+    assert "42.15 nm/px" in why, "the scale the grain size was measured at is missing"
+    assert "300-500" not in why, "the superseded visual estimate is still being quoted"
+    # The budget itself: blanking radius as a fraction of a grain.
+    assert "0.38-0.57" in why, "the radius-to-grain ratio is missing"
 
 
 # --- MCL after the geodesic fix ------------------------------------------------------
