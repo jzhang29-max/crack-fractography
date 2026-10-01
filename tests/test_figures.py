@@ -109,7 +109,18 @@ def test_no_function_reference_is_called_without_ever_being_assigned():
     js = _src("app/static/app.js")
     # Injected by the host, not by this file. An allowlist rather than a looser pattern,
     # because the whole value of this guard is that it has no way to shrug.
-    EXTERNAL = {"pywebview"}   # the native shell's js_api bridge (packaging/launcher.py)
+    EXTERNAL = {
+        "pywebview",          # the native shell's js_api bridge (packaging/launcher.py)
+        # BROWSER BUILT-INS. The guard is about app-defined hooks -- a name this file
+        # calls and expects this file to have assigned. Platform members are assigned by
+        # the platform, so requiring a `window.X =` for them makes the guard fire on
+        # correct code: it did, on window.addEventListener, the first time one was added.
+        # Named individually rather than pattern-matched, because the value of this guard
+        # is that it has no way to shrug.
+        "addEventListener", "removeEventListener", "location", "setTimeout",
+        "clearTimeout", "requestAnimationFrame", "innerWidth", "innerHeight",
+        "devicePixelRatio", "getComputedStyle", "matchMedia", "scrollTo",
+    }
     # `=(?!=)` IS THE WHOLE GUARD. The first version matched `\s*=`, which also matches the
     # `===` in `typeof window.figRenderRef === "function"` -- so it counted the dead
     # comparison as an assignment and could never fire on the exact pattern it was written

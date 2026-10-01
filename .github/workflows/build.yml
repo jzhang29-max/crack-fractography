@@ -103,20 +103,19 @@ jobs:
       - name: package (Windows .zip)
         if: runner.os == 'Windows'
         shell: bash
-        # bsdtar, NOT Compress-Archive. `tar -a` picks the format from the extension, so
-        # this still produces a .zip -- and it is the same tool that builds the Linux
-        # archive, so there is one archiver to reason about instead of two.
-        #
-        # Compress-Archive wrote an archive that the matching Expand-Archive could not
-        # restore: the dist/ binary started fine and the copy unpacked from the zip died
-        # with RecursionError before answering /api/health. A PyInstaller onedir tree is
-        # thousands of files deep inside _internal/, which is where those cmdlets are
-        # weakest. Caught by the unpack-and-start step below, which is the reason it
-        # exists -- the previous releases' zips passed it, so this was marginal rather
-        # than always broken, which is worse.
+        # packaging/make_zip.py, not a shell tool. Two have been tried and each failed
+        # differently on this runner and nowhere else:
+        #   Compress-Archive wrote an archive Expand-Archive could not restore -- dist/
+        #   started and served, the unpacked copy died with RecursionError.
+        #   bsdtar was correct and evidently stored rather than deflated: the published
+        #   zip went 71 MB -> 160 MB on the switch, while the same command on macOS
+        #   compresses 4,640 KB of JavaScript to 1,596 KB.
+        # Python's zipfile is installed wherever this runs, takes the compression as an
+        # argument rather than a default, and refuses to emit a stored archive.
         run: |
           v="${{ steps.ver.outputs.v }}"
-          tar -a -c -f "dist/CrackFractography-$v-Windows-x64.zip" -C dist "Crack Fractography"
+          python packaging/make_zip.py write "dist/Crack Fractography" \
+            "dist/CrackFractography-$v-Windows-x64.zip" "Crack Fractography"
 
       - name: package (Linux .tar.gz)
         if: runner.os == 'Linux'
@@ -145,10 +144,9 @@ jobs:
               hdiutil detach _mnt -quiet
               BIN="_unpack/Crack Fractography.app/Contents/MacOS/Crack Fractography" ;;
             Windows)
-              # tar again, for the same reason it now writes the archive: Git Bash has no
-              # unzip, and Expand-Archive could not faithfully restore what
-              # Compress-Archive wrote.
-              tar -x -f "dist/CrackFractography-$v-Windows-x64.zip" -C _unpack
+              # The same helper that wrote it, for the same reason.
+              python packaging/make_zip.py read \
+                "dist/CrackFractography-$v-Windows-x64.zip" _unpack
               BIN="_unpack/Crack Fractography/Crack Fractography.exe" ;;
             *)
               tar -xzf "dist/CrackFractography-$v-Linux-x86_64.tar.gz" -C _unpack

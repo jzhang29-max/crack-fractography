@@ -886,6 +886,9 @@ function showTab(id) {
     b.setAttribute("aria-selected", String(b.dataset.tab === id)));
   // The figure is expensive and the rose needs a laid-out box, so both render on reveal
   // rather than on every frame change.
+  // Leaving Mark with strokes inside the autosave delay: write them before the pane goes
+  // away. Not awaited, because showTab is synchronous and the save reports itself.
+  if (id !== "mark" && ED.dirty && ED.flushSave) ED.flushSave();
   if (id === "mark") renderMark();
   if (id === "results") {
     // Both render on reveal rather than on every frame change: the figure is expensive and
@@ -1486,6 +1489,10 @@ async function remeasure(btn, where) {
 // mask, changing every measurement by more than their correction did.
 const ED = { img: null, off: null, mode: "add", brush: 24, dirty: false, frame: null };
 
+//: Shown in the Save button's tooltip, so the automatic behaviour is discoverable from
+//: the one control that used to be mandatory.
+const AUTOSAVE_HINT = "a moment after you stop drawing";
+
 function editorHTML(frame) {
   return `
     <div class="edbar">
@@ -1497,7 +1504,7 @@ function editorHTML(frame) {
       <button id="edundo" disabled title="Undo the last stroke (\u2318Z)">Undo</button>
       <label class="u"><input type="checkbox" id="edshow" checked> Show result</label>
       <span class="spacer"></span>
-      <button id="edsave" class="upload" disabled>Save and re-measure</button>
+      <button id="edsave" disabled title="Saves on its own ${AUTOSAVE_HINT}; this forces it now">Save now</button>
     </div>
     <p class="note" id="edout">Black is crack. Edits apply at the image's own resolution.</p>
     <canvas id="edcanvas"></canvas>`;
@@ -1505,6 +1512,10 @@ function editorHTML(frame) {
 
 async function openEditor(frame) {
   if (ED.frame === frame && $("#edcanvas")) return;   // already showing this one
+  // A DIFFERENT FRAME IS BEING OPENED. Strokes still inside the autosave delay would
+  // otherwise be discarded by the rebuild below, which is the one failure this whole
+  // mechanism exists to avoid -- so they go to disk first.
+  if (ED.dirty && ED.flushSave) { try { await ED.flushSave(); } catch (e) { /* reported in the editor */ } }
   const host = $("#markedit");
   host.innerHTML = editorHTML(frame);
   const cv = $("#edcanvas");
@@ -1624,7 +1635,9 @@ async function openEditor(frame) {
     g.lineCap = "round"; g.lineJoin = "round";
     g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke();
     ED.paint();
-    ED.dirty = true; $("#edsave").disabled = false;
+    ED.dirty = true;
+    $("#edsave").disabled = false;
+    if (ED.scheduleSave) ED.scheduleSave();
   };
   // Snapshot BEFORE the stroke starts, so one undo step is one stroke rather than one
   // pointermove segment.
@@ -1667,9 +1680,34 @@ async function openEditor(frame) {
   ED.showResult = true;
   $("#edshow").onchange = (e) => { ED.showResult = e.target.checked; ED.paint(); };
 
-  $("#edsave").onclick = async () => {
+  //: SAVING IS AUTOMATIC. The SEM tool writes a stroke into the paint layer as it is
+  //: drawn, and this editor made the reader press a button -- so correcting a TXM frame
+  //: and correcting a SEM frame were different jobs, which is the asymmetry a user asked
+  //: twice to have removed.
+  //:
+  //: DEBOUNCED, NOT PER STROKE, for a reason that is about the data and not about
+  //: politeness: a save re-measures the frame, and a TXM mosaic is 5039 x 3703, so
+  //: per-stroke saving would queue a full re-measurement behind every flick of the brush.
+  //: It fires once the brush has been still for AUTOSAVE_MS.
+  //:
+  //: AND IT MAY CHANGE THE ARM, which is why this is a considered default rather than an
+  //: obvious one. Editing a research frame writes a COPY into uploads and follows it --
+  //: the sem and txm masks are not this app's to modify. That already happened on the
+  //: manual save; autosave only makes it happen sooner, and the message says so. The one
+  //: thing it must not do is fire mid-stroke, hence the idle delay.
+  const AUTOSAVE_MS = 1800;
+  let saving = false, queued = false, timer = null;
+
+  const saveNow = async (why) => {
+    if (!ED.dirty) return;
+    // One save in flight at a time. A second stroke during a save sets `queued` and the
+    // save re-runs when this one lands, so the last state always reaches disk -- dropping
+    // it would silently lose the newest strokes, which is the worst failure available
+    // here.
+    if (saving) { queued = true; return; }
+    saving = true;
     const btn = $("#edsave"), out = $("#edout");
-    btn.disabled = true; btn.textContent = "Saving…";
+    if (btn) { btn.disabled = true; btn.textContent = "Saving\u2026"; }
     try {
       const blob = await new Promise((r) => ED.off.toBlob(r, "image/png"));
       const fd = new FormData();
@@ -1678,30 +1716,48 @@ async function openEditor(frame) {
       const r = await fetch(`/api/mask_edit?${q}`, { method: "POST", body: fd });
       const d = await r.json();
       if (!r.ok) throw new Error(d.detail || r.statusText);
-      const ch = Object.entries(d.changed || {});
-      out.innerHTML = ch.length
-        ? ch.map(([k, v]) => `<b>${k.replace(/_/g, " ")}</b> ${fmt(v.before, 4)} → ${fmt(v.after, 4)}`).join("  ·  ")
-        : `<span class="u">Saved. No measurement changed.</span>`;
       ED.dirty = false;
+      const ch = Object.entries(d.changed || {});
+      if (out) {
+        out.innerHTML = (why === "auto" ? `<span class="u">Saved automatically.</span> ` : "")
+          + (ch.length
+              ? ch.map(([k, v]) => `<b>${k.replace(/_/g, " ")}</b> ${fmt(v.before, 4)} \u2192 ${fmt(v.after, 4)}`).join("  \u00b7  ")
+              : `<span class="u">No measurement changed.</span>`);
+      }
       if (d.copied_from) {
-        // The edit became a new frame in another arm. Follow it, or the user is looking at
-        // the original while reading numbers that belong to their copy.
-        out.innerHTML = `<span class="u">Saved as <b>${esc(d.frame)}</b> in uploads` +
-          ` (${esc(d.copied_from)} unchanged).</span> ` + out.innerHTML;
+        // The edit became a new frame in another arm. Follow it, or the reader is looking
+        // at the original while reading numbers that belong to their copy.
+        if (out) {
+          out.innerHTML = `<span class="u">Saved as <b>${esc(d.frame)}</b> in uploads`
+            + ` (${esc(d.copied_from)} unchanged).</span> ` + out.innerHTML;
+        }
         state.arm = "uploads"; state.spec = ""; state.frame = d.frame;
         $("#arm").value = "uploads";
         await loadArm();
         selectFrame(d.frame);
-        return;
+        return;                       // the editor is being rebuilt for the copy
       }
       state.frames = await allFrames();
       renderFrames(); renderSpecimens(); renderReadout();
     } catch (e) {
-      out.innerHTML = `<span class="flag bad">${e.message}</span>`;
+      if (out) out.innerHTML = `<span class="flag bad">${esc(e.message)}</span>`;
+    } finally {
+      saving = false;
+      const b = $("#edsave");
+      if (b) { b.textContent = "Save now"; b.disabled = !ED.dirty; }
+      if (queued) { queued = false; saveNow("auto"); }
     }
-    btn.textContent = "Save and re-measure";
-    btn.disabled = !ED.dirty;
   };
+
+  //: Called by stroke(). Restarts the clock, so a run of strokes saves once at the end.
+  ED.scheduleSave = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => saveNow("auto"), AUTOSAVE_MS);
+  };
+  //: Leaving the frame, the tab or the window must not strand unsaved strokes.
+  ED.flushSave = () => { clearTimeout(timer); return saveNow("flush"); };
+
+  $("#edsave").onclick = () => saveNow("manual");
 }
 
 //: THE FRAME LIST IS ALWAYS THE WHOLE ARM.
@@ -1919,6 +1975,11 @@ async function loadArm() {
     if (d.hidden || d.dataset.mode === "limits") { d.dataset.mode = "defs"; openDefs(null); }
     else { d.hidden = true; }
   };
+  // Closing the window or reloading. Best effort only -- a browser will not wait for an
+  // async request here -- but it converts "silently lost" into "usually saved", and the
+  // 1.8s delay means the window where anything is at risk is small.
+  window.addEventListener("beforeunload", () => { if (ED.dirty && ED.flushSave) ED.flushSave(); });
+
   $("#limitsbtn").onclick = () => {
     const d = $("#defs");
     // Toggle: a second click on the same control closes what it opened.

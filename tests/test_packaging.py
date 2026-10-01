@@ -575,7 +575,13 @@ def test_one_archiver_builds_and_opens_the_windows_zip():
     cbuild = code[code.index("\n  build:"):code.index("\n  release:")]
     assert "Compress-Archive" not in cbuild, "the fragile archiver is back"
     assert "Expand-Archive" not in cbuild, "the fragile extractor is back"
-    i = build.index("package (Windows .zip)")
-    step = build[i:i + 1200]
-    assert "tar -a -c -f" in step, "the Windows zip is not built with tar"
+    code = _workflow_code()
+    i = code.index("package (Windows .zip)")
+    step = code[i:i + 900]
+    assert "make_zip.py write" in step, "the Windows zip is not built by the helper"
     assert "Windows-x64.zip" in step, "the published name changed"
+    # And the helper itself refuses a stored archive, which is the regression that
+    # doubled the download without failing anything.
+    h = open(os.path.join(REPO, "packaging", "make_zip.py"), encoding="utf-8").read()
+    assert "ZIP_DEFLATED" in h
+    assert "not compressed" in h, "the helper does not check that compression happened"
