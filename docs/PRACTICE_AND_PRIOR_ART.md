@@ -142,3 +142,64 @@ Rule: the primary screen answers "how much cracking, measured over how much mate
 **Words to delete now:** the `?` hint tooltips on Arm, Orientation, Size distribution, Mask and Cracks currently carry 60–90 words of rationale each. Move them to a single `README`-linked "How these numbers are defined" page and leave one sentence per card. Tooltip text also is not read text — measure the page with `innerText`, not `textContent`, when checking this.
 
 **One-file map of the work:** `analysis/probes.py` (new, scanlines → items 2/4/6/10) · `analysis/segments.py` (new, skeleton→segments → items 7/8/9) · `measure.py` (frame summary rewrite, drops) · `batch.py` (specimen CI, physical area roll-up) · `app.js` `FCOLS`/`CCOLS` (column cuts) · `index.html` (specimen card + details disclosure).
+---
+
+## Round 6: identification **and** analysis in one tool — asked directly, 2026-09-30
+
+The question put to the search was the owner's own: *is this unique, and are there papers
+or tools that do both identification and analysis?* Five literature neighbourhoods, one
+searcher each, and every claimed gap handed to a separate agent whose job was to find what
+already fills it.
+
+**57 works do both. 20 of 20 gap claims came back owned. None survived.** That takes this
+project's running tally to **43 of 43 novelty framings refuted**.
+
+### The strongest overlap, and it was missing from this file
+
+**MIPAR** — Sosa, Huber, Welk & Fraser, *Integrating Materials and Manufacturing
+Innovation* 3:10 (2014); product at mipar.us. A commercial cross-platform standalone
+desktop application, no programming required, sold to materials scientists. It ships
+recipe-based *and* deep-learning segmentation followed by a measurement library (area, size
+distribution, roundness, fibre thickness, porosity, orientation, aspect ratio, grain size),
+batch processing over many images, integrated statistics and reports, and claims ASTM
+conformance with E112 named.
+
+Its own product page advertises **"quantify additive manufacturing crack density, size
+distribution, localized density"**.
+
+That is this app's pitch, in this app's material system, already shipping commercially. It
+is the single most damaging prior art found in six rounds and it was absent from this
+record until now.
+
+### Others doing identification + measurement in one end-user tool
+
+| Work | Form | What it already covers |
+|---|---|---|
+| **CIAS / PCAS** — Liu, Tang, Shi & Suo, *Computers & Geosciences* 57:77–80 (2013); PCAS from Liu et al. (2011) | Free Windows desktop GUI, no runtime | Segmentation → crack identification → measurement: node count, crack count, per-segment length, width, direction, crack area, area ratio, fractal dimension. Widely used **on SEM micrographs**. Ships crack-gap fusion as a default — the pixel operation this app deliberately refuses |
+| **Arena, Delle Piane & Sarout**, *Computers & Geosciences* 66:106–120 (2014) | MATLAB research code | Closest published method analogue: automatic separation of individual cracks from a connected mask, then per-crack width, length, area, **aspect ratio** and orientation, from SEM micrographs |
+| **Patzelt & Erfurt**, *Journal of Microscopy* 286:154–159 (2022) | Fiji + Python scripts | Skeleton length, area, and mean/max/min width from the distance transform **taken on the skeleton** — the same implementation detail this app uses — plus a width *distribution*. Already publishes the honest-limits result: automatic crack length **differs** from manual |
+| **FracPaQ** — Healy, Rizzo, Cornwell et al. | MATLAB toolbox with GUI, open source | Pij densities and orientation statistics from traces |
+| **DiameterJ** — Hotaling, Bharti, Kriel & Simon, *Biomaterials* 61:327–338 (2015) | Fiji plugin, GUI, batch | **This file mis-described it.** It was recorded as owning the measurement set only. It also ships 16 segmentation algorithms (`Segment SRM` / `Segment Mixed`), so it does identification **and** measurement in one GUI — it is not a measurement-only plugin |
+| **ilastik**, **CellProfiler**, **QuPath**, **MorphoLibJ**, **AngioTool**, **Ridge Detection** (Steger 1998) | Free desktop apps / Fiji plugins | Pixel classification or ridge detection followed by object measurement, skeleton length, junctions, orientation |
+| **ZEN core + Intellesis**, **Clemex Vision**, **Leica LAS X Phase/Steel Expert**, **Buehler OmniMet**, **Olympus/Evident Stream**, **Dragonfly**, **Avizo/Amira** | Commercial desktop, microscope-bundled | ML segmentation feeding standards modules. **Stream, Clemex, Buehler, Claravision and Leica each ship an ASTM E562 routine** — so the E562 statistic is also not a gap |
+| **CrackDect** — Drvoderic et al., *SoftwareX* 16:100832 (2021) · **CrackPy** (DLR) · **CrackIT** — Oliveira & Correia, ICIP 2014 | Python / MATLAB | Crack detection plus density; CrackIT adds crack-type classification **and** a built-in detector-evaluation module |
+
+### On "a tool that refuses questions and states its own limits"
+
+Not a gap either, and the clearest refutation of the framing I had most hope for. It is an
+existing category with at least six independent names in six fields — **HistoQC**
+(Janowczyk et al. 2019) for slide QC, **CellProfiler's FlagImage**, **statcheck** (Nuijten
+& Epskamp) for reported statistics, **MIL-HDBK-1823A** for NDE probability-of-detection,
+and the reporting standards STARD / MIQE / REFLECT. At least three of those are packaged
+end-user tools that combine identification, measurement and refusal in one application.
+
+### What actually survives
+
+Nothing as a capability. Every metric, every statistic, and the refusal layer are each
+owned by named shipping software. What survives is the **integration** claim the README
+already makes conditionally: the search did not find one tool applying the *metallographic
+sampling discipline* (E562 between-field interval, % relative accuracy, specimen as the
+inferential unit, one magnification per determination, arms never pooled) to a *crack
+network* measured from a micrograph, with each refusal stated on screen. That is a claim
+about an arrangement, not about a method, and it is worth much less than a capability
+claim. It should be stated that way or not at all.

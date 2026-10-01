@@ -28,9 +28,15 @@ AnalyzeSkeleton**, shipped since about 2008. The density taxonomy (P10/P20/P21) 
 **Dershowitz & Herda (1992)**. The projected-length roughness parameter is **Underwood &
 Banerji**. The sampling, counting and confidence-interval layer is **ASTM E562, E1382,
 E1245, E2283** and **ISO 643**. The censoring machinery is rock-mechanics window sampling.
-Twenty-three separate novelty framings were tested against the literature over this
-project's life and all twenty-three were already owned; see
-`docs/PRACTICE_AND_PRIOR_ART.md` for the list and the citations that killed each one.
+Forty-three separate novelty framings were tested against the literature over this
+project's life and all forty-three were already owned; see
+`docs/PRACTICE_AND_PRIOR_ART.md` for the list and the citations that killed each one. The
+closest prior art is **MIPAR** (Sosa et al. 2014), a commercial desktop application whose
+own product page advertises quantifying additive-manufacturing crack density, size
+distribution and localized density — this app's pitch, in this app's material system. Free
+tools cover the same ground: **PCAS/CIAS** (Liu et al. 2013) does identification and
+per-crack measurement on SEM micrographs in a Windows GUI, and **DiameterJ** ships 16
+segmentation algorithms alongside its measurement set.
 
 **What this is, then:** those established metrics computed with the sampling discipline the
 standards actually require, on a corpus where that discipline changes the answer. Frames
