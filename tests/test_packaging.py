@@ -308,6 +308,22 @@ def _workflow():
     return open(os.path.join(REPO, ".github", "workflows", "build.yml"), encoding="utf-8").read()
 
 
+def _workflow_code():
+    """The workflow with its # comments removed.
+
+    SIX assertions in this suite have now failed against correct code by matching the
+    comment written to explain the thing they forbid. The comment naming Compress-Archive,
+    in the step that replaced it, was the sixth. Any scan for a forbidden token goes
+    through this.
+
+    Note it strips only whole-line comments: a '#' inside a shell command (a colour code,
+    a fragment identifier) is code, not a comment, and removing from '#' to end-of-line
+    would corrupt the very commands being checked.
+    """
+    return "\n".join(L for L in _workflow().split("\n")
+                      if not L.lstrip().startswith("#"))
+
+
 def test_every_platform_produces_a_single_downloadable_file():
     """dist/ was uploaded raw as a CI artifact: a folder, 14-day retention, reachable only
     by someone logged into GitHub who knows to open a workflow run. That is not a download.
@@ -542,3 +558,24 @@ def test_the_ui_check_asserts_behaviour_rather_than_pixels():
     for probe in ("#tabs button", "#figout svg", "#fsel dt", "naturalWidth", "pageerror"):
         assert probe in src, f"the UI check does not verify {probe}"
     assert "expected.png" not in src and "compare" not in src.lower().split("screenshot")[0][-200:]
+
+
+def test_one_archiver_builds_and_opens_the_windows_zip():
+    """Compress-Archive wrote an archive that Expand-Archive could not faithfully restore:
+    the dist/ binary started and the copy unpacked from the zip died with RecursionError
+    before answering /api/health. A PyInstaller onedir tree is thousands of files deep
+    inside _internal/, which is where those cmdlets are weakest -- and earlier releases'
+    zips passed the same check, so it was marginal rather than always broken.
+
+    bsdtar ships on the runner, picks the format from the extension, and is already what
+    builds the Linux archive, so there is one archiver to reason about."""
+    w = _workflow()
+    build = w[w.index("\n  build:"):w.index("\n  release:")]
+    code = _workflow_code()
+    cbuild = code[code.index("\n  build:"):code.index("\n  release:")]
+    assert "Compress-Archive" not in cbuild, "the fragile archiver is back"
+    assert "Expand-Archive" not in cbuild, "the fragile extractor is back"
+    i = build.index("package (Windows .zip)")
+    step = build[i:i + 1200]
+    assert "tar -a -c -f" in step, "the Windows zip is not built with tar"
+    assert "Windows-x64.zip" in step, "the published name changed"
