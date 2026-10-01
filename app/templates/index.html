@@ -155,6 +155,14 @@ main{flex:1 1 auto;display:grid;grid-template-columns:minmax(260px,348px) minmax
    should be able to stop after the first line and not have missed the worst thing. */
 /* The marking tool, embedded. It is a separate Flask app in the SEM repo on its own port;
    an iframe is the honest way to reach it without reimplementing a painting canvas. */
+/* The Export menu, a plain stack rather than a native <select>: the SEM tool's is a
+   dropdown of actions, and a select would make them look like a value to choose. */
+.edmenu{display:flex;flex-direction:column;gap:2px;margin:0 0 var(--sp2);
+  border:1px solid var(--rule);border-radius:8px;padding:var(--sp1);
+  background:var(--surface-2);width:max-content}
+.edmenu button{text-align:left;border:0;background:none;padding:var(--sp2) var(--sp3)}
+.edmenu button:hover{background:var(--surface-3)}
+#edzoomval{min-width:3.2em;text-align:center;font-variant-numeric:tabular-nums}
 .edbar{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-bottom:9px}
 #edcanvas{max-width:100%;border:1px solid var(--rule);border-radius:8px;background:#fff;
   cursor:crosshair;touch-action:none;display:block}

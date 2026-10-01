@@ -1501,10 +1501,23 @@ function editorHTML(frame) {
       <label class="u" for="edbrush">Brush</label>
       <input id="edbrush" type="range" min="2" max="120" value="${ED.brush}">
       <span class="u" id="edbrushval">${ED.brush}</span>
+      <button data-ed="region" title="Click a crack to take it or drop it whole">Whole region</button>
       <button id="edundo" disabled title="Undo the last stroke (\u2318Z)">Undo</button>
       <label class="u"><input type="checkbox" id="edshow" checked> Show result</label>
       <span class="spacer"></span>
-      <button id="edsave" disabled title="Saves on its own ${AUTOSAVE_HINT}; this forces it now">Save now</button>
+      <button id="edzoomout" title="Zoom out">\u2212</button>
+      <span class="u" id="edzoomval">fit</span>
+      <button id="edzoomin" title="Zoom in">+</button>
+      <button id="edfit">Fit</button>
+      <button id="edexport">Export \u25be</button>
+      <button id="edreset" title="Discard local edits and reload the mask from disk">Reset image</button>
+      <span class="u" id="edstatus"></span>
+      <button id="edsave" hidden>Save now</button>
+    </div>
+    <div class="edmenu" id="edexportmenu" hidden>
+      <button data-x="mask">Black &amp; white mask</button>
+      <button data-x="overlay">Overlay image</button>
+      <button data-x="csv">Measurements (CSV)</button>
     </div>
     <p class="note" id="edout">Black is crack. Edits apply at the image's own resolution.</p>
     <canvas id="edcanvas"></canvas>`;
@@ -1559,6 +1572,51 @@ async function openEditor(frame) {
     // editable and still correct, so this is a fallback and not an error.
     ED.bg = null;
   }
+
+  //: WHOLE REGION, the SEM tool's flood fill. Takes or drops one connected crack in a
+  //: click, which is how a reader accepts or rejects a whole feature rather than tracing
+  //: around it. Scanline fill on a typed array, iterative rather than recursive -- a
+  //: 5039 x 3703 TXM mask is 18.7 M pixels and a recursive fill would blow the stack on
+  //: the first long crack.
+  //:
+  //: It fills the region of whatever is UNDER THE CLICK: click crack with Erase active
+  //: and the whole crack goes; click matrix with Add crack active and the enclosed
+  //: not-crack area fills. The mode decides the direction, the pixel decides the extent.
+  ED.fillRegion = (px, py) => {
+    const w = ED.off.width, h = ED.off.height;
+    const g = ED.off.getContext("2d");
+    const d = g.getImageData(0, 0, w, h);
+    const a = d.data;
+    const at = (x, y) => (y * w + x) * 4;
+    const isCrack = (x, y) => a[at(x, y)] < 128;
+    const x0 = Math.max(0, Math.min(w - 1, Math.round(px)));
+    const y0 = Math.max(0, Math.min(h - 1, Math.round(py)));
+    const target = isCrack(x0, y0);
+    const paintCrack = ED.mode === "add";
+    // Clicking a region that is already in the state the mode would set it to is a no-op;
+    // say so rather than spending a second filling it with its own colour.
+    if (target === paintCrack) return 0;
+    const seen = new Uint8Array(w * h);
+    const stack = [x0 + y0 * w];
+    const v = paintCrack ? 0 : 255;
+    let n = 0;
+    while (stack.length) {
+      const i = stack.pop();
+      const y = (i / w) | 0, x = i - y * w;
+      if (seen[i]) continue;
+      seen[i] = 1;
+      if (isCrack(x, y) !== target) continue;
+      const o = at(x, y);
+      a[o] = a[o + 1] = a[o + 2] = v; a[o + 3] = 255;
+      n++;
+      if (x > 0) stack.push(i - 1);
+      if (x < w - 1) stack.push(i + 1);
+      if (y > 0) stack.push(i - w);
+      if (y < h - 1) stack.push(i + w);
+    }
+    g.putImageData(d, 0, 0);
+    return n;
+  };
 
   //: UNDO, which the SEM tool has had all along and this one had not -- a user asked for
   //: the two to offer the same controls. A bounded stack of mask snapshots: each is a
@@ -1641,8 +1699,27 @@ async function openEditor(frame) {
   };
   // Snapshot BEFORE the stroke starts, so one undo step is one stroke rather than one
   // pointermove segment.
-  cv.onpointerdown = (e) => { drawing = true; ED.pushUndo(); last = toNat(e);
-                              stroke(last, last); cv.setPointerCapture(e.pointerId); };
+  cv.onpointerdown = (e) => {
+    if (ED.mode === "region") {
+      const [x, y] = toNat(e);
+      ED.pushUndo();
+      const n = ED.fillRegion(x, y);
+      if (n) {
+        ED.paint();
+        ED.dirty = true;
+        if (ED.scheduleSave) ED.scheduleSave();
+        $("#edstatus").textContent = `${n.toLocaleString()} px`;
+      } else {
+        // Nothing filled: the region was already in the state this mode sets. Undo would
+        // otherwise leave a step that changes nothing.
+        ED.undo.pop();
+        $("#edstatus").textContent = "already that";
+      }
+      return;
+    }
+    drawing = true; ED.pushUndo(); last = toNat(e);
+    stroke(last, last); cv.setPointerCapture(e.pointerId);
+  };
   cv.onpointermove = (e) => { if (!drawing) return; const n = toNat(e); stroke(last, n); last = n; };
   cv.onpointerup = () => { drawing = false; };
   cv.onpointerleave = () => { drawing = false; };
@@ -1679,6 +1756,79 @@ async function openEditor(frame) {
 
   ED.showResult = true;
   $("#edshow").onchange = (e) => { ED.showResult = e.target.checked; ED.paint(); };
+
+  //: ZOOM. `null` means fit-to-pane, which is the default and what Fit returns to; a
+  //: number is a multiple of the natural pixel size. Kept separate from the fitted width
+  //: so Fit is a state to return to rather than a width to recompute.
+  ED.zoom = null;
+  const applyZoom = () => {
+    const natural = Math.min(host.clientWidth - 4, img.naturalWidth);
+    const w = ED.zoom == null ? natural
+      : Math.max(120, Math.round(img.naturalWidth * ED.zoom));
+    cv.width = w;
+    cv.height = Math.round(w * img.naturalHeight / img.naturalWidth);
+    cv.style.width = w + "px";
+    $("#edzoomval").textContent = ED.zoom == null
+      ? "fit" : `${Math.round(ED.zoom * 100)}%`;
+    ED.paint();
+  };
+  const curZoom = () => ED.zoom != null ? ED.zoom
+    : Math.min(host.clientWidth - 4, img.naturalWidth) / img.naturalWidth;
+  $("#edzoomin").onclick = () => { ED.zoom = Math.min(4, curZoom() * 1.5); applyZoom(); };
+  $("#edzoomout").onclick = () => { ED.zoom = Math.max(0.02, curZoom() / 1.5); applyZoom(); };
+  $("#edfit").onclick = () => { ED.zoom = null; applyZoom(); };
+
+  //: EXPORT, the tool's three items. The CSV comes from the app's own endpoint; the two
+  //: images are rendered here from what is on screen, so the overlay a reader exports is
+  //: the overlay they were looking at.
+  const menu = $("#edexportmenu");
+  $("#edexport").onclick = () => { menu.hidden = !menu.hidden; };
+  menu.querySelectorAll("[data-x]").forEach((b) => {
+    b.onclick = async () => {
+      menu.hidden = true;
+      const kind = b.dataset.x;
+      if (kind === "csv") {
+        const q = new URLSearchParams({ arm: state.arm, level: "cracks" });
+        return download(`/api/export.csv?${q}`, `${frame}_cracks.csv`);
+      }
+      // A full-resolution render, not the on-screen canvas: an exported figure should not
+      // inherit the width of the pane it happened to be viewed in.
+      const out = document.createElement("canvas");
+      out.width = ED.off.width; out.height = ED.off.height;
+      const og = out.getContext("2d");
+      if (kind === "mask") {
+        og.drawImage(ED.off, 0, 0);
+      } else {
+        if (ED.bg) og.drawImage(ED.bg, 0, 0, out.width, out.height);
+        else og.fillStyle = "#fff", og.fillRect(0, 0, out.width, out.height);
+        const lay = og.getImageData(0, 0, out.width, out.height);
+        const mg = ED.off.getContext("2d").getImageData(0, 0, out.width, out.height);
+        for (let i = 0; i < lay.data.length; i += 4) {
+          if (mg.data[i] < 128) {
+            lay.data[i] = 214; lay.data[i + 1] = 40; lay.data[i + 2] = 40;
+          }
+        }
+        og.putImageData(lay, 0, 0);
+      }
+      const blob = await new Promise((r) => out.toBlob(r, "image/png"));
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${frame}_${kind}.png`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    };
+  });
+
+  //: RESET IMAGE. Back to what is on disk, which after an autosave is the last saved
+  //: state -- so this is "undo everything since the last save", not "undo everything".
+  //: Said in the confirm, because the two differ now that saving is automatic.
+  $("#edreset").onclick = async () => {
+    if (ED.dirty && !confirm("Discard unsaved edits and reload the mask from disk?")) return;
+    ED.frame = null;
+    ED.dirty = false;
+    await openEditor(frame);
+  };
 
   //: SAVING IS AUTOMATIC. The SEM tool writes a stroke into the paint layer as it is
   //: drawn, and this editor made the reader press a button -- so correcting a TXM frame
