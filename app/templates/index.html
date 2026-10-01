@@ -327,7 +327,7 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
        could a reader publish without this" returned load-bearing on all three -- so they
        are moved, not removed. The count is on the button so their existence is never a
        surprise, and one click shows every one of them in full. -->
-  <button id="limitsbtn" title="What these numbers do not cover"><span id="limitsn">0</span> limits</button>
+  <button id="limitsbtn" title="What this data establishes, and what it does not cover"><span id="limitsn">0</span> findings</button>
   <button id="defsbtn" title="What each number means, and when it lies">Definitions</button>
   <button id="csv">&darr; CSV</button>
   <button id="setupbtn" title="Where the app reads from">Setup</button>
@@ -381,7 +381,12 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
            it, then the charts. The four answered questions are reference rather than
            per-frame findings -- they do not change when you pick a different frame -- so
            they moved to the end, where reference belongs. -->
-      <div id="armro"></div>
+      <!-- THE STATEMENT SECTIONS ARE NOT ON THIS PAGE. "What this arm establishes" and
+           "This frame" opened the Results page with up to seven green-dotted sentences
+           above the figure, and a user said they could not see the point of them there.
+           They are not deleted: the header's Conclusions drawer holds every one, findings
+           first, with the basis and the hedge that make them checkable. The page leads
+           with the figure and the numbers instead. -->
 
       <!-- THE PICTURE COMES BEFORE THE TABLES. With the specimen card open, the image sat
            2,240 px down the pane: past two blocks of prose and nine rows of numbers. The
@@ -392,8 +397,9 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
         <div id="specbody"></div>
       </details>
 
-      <h3 class="sect">This frame</h3>
-      <div class="ro" id="readout"></div>
+      <!-- Re-measure / set-scale. These lived inside the read-out that was removed; they
+           are controls, not prose, and the page still needs them. -->
+      <div id="frameacts"></div>
 
       <!-- ONE RESULTS PAGE. Analysis and Figure were two tabs answering the same
            question -- "what do these images show?" -- so a reader had to know that the

@@ -97,6 +97,10 @@ let FRAME_PREFIX = "";
 //: Which specimen groups the reader has opened. Kept across re-renders so a re-measure or
 //: a sort does not collapse the group they are working in.
 const GROUPS_OPEN = new Set();
+//: Groups the reader has explicitly SHUT. Separate from GROUPS_OPEN because "not opened"
+//: and "deliberately closed" are different states: the first can be overridden by the
+//: selected frame's group opening itself, the second must not be.
+const GROUPS_CLOSED = new Set();
 
 function commonPrefix(names) {
   if (names.length < 2) return "";
@@ -176,8 +180,15 @@ function renderFrames() {
   t.querySelector("tbody").innerHTML = [...groups.entries()].map(([spec, fs]) => {
     // A group holding the selected frame is always open, so re-measuring or sorting never
     // hides the row the reader is working on.
-    const open = GROUPS_OPEN.has(spec) || groups.size === 1 ||
-                 fs.some((f) => f.frame === state.frame);
+    // AN EXPLICIT CLOSE BEATS THE AUTO-OPEN. The third clause opens whichever group holds
+    // the selected frame, which is right on load and was fatal once clicking a group also
+    // selected a frame inside it: the group you just opened then permanently contained the
+    // selection, so the next click could not shut it. Reported as "you can expand but you
+    // can't unexpand". Tracking the close explicitly is what lets the reader overrule a
+    // default that is otherwise helpful.
+    const open = GROUPS_CLOSED.has(spec) ? false
+      : (GROUPS_OPEN.has(spec) || groups.size === 1
+         || fs.some((f) => f.frame === state.frame));
     const af = fs.map((f) => f.area_fraction).filter((v) => v != null).sort((x, y) => x - y);
     const med = af.length ? af[Math.floor(af.length / 2)] : null;
     const head = `<tr class="grp${state.spec === spec ? " on" : ""}" data-grp="${esc(spec)}">` +
@@ -194,7 +205,7 @@ function renderFrames() {
     state.sortDir = state.sortKey === k ? -state.sortDir : 1;
     state.sortKey = k; renderFrames();
   });
-  // ONE PLACE TO PICK A SPECIMEN, AND IT IS THIS LIST.
+  // A DISCLOSURE TRIANGLE OPENS AND SHUTS, AND THAT IS ALL IT DOES.
   //
   // There were two controls that looked like one thing and did two different things: a
   // header dropdown that SCOPED the statistics to a specimen, and these group rows, which
@@ -207,35 +218,12 @@ function renderFrames() {
   // find. The dropdown is gone.
   t.querySelectorAll("tbody tr.grp").forEach((tr) => tr.onclick = () => {
     const k = tr.dataset.grp;
-    if (state.spec === k) {
-      state.spec = "";
-      GROUPS_OPEN.delete(k);
-    } else {
-      state.spec = k;
-      GROUPS_OPEN.add(k);
-    }
-    // THE SCOPE AND THE SELECTED FRAME MUST AGREE.
-    //
-    // This used to set state.spec and leave state.frame alone, which put two different
-    // specimens on one page: the strip, the specimen card and the limits drawer described
-    // the newly scoped specimen while the mask, the frame statements and the measurements
-    // below them were still the previously selected frame's. The drawer labels its groups
-    // "About this specimen" without naming which, so a reader taking a methods caveat from
-    // it could be told their frame's specimen has no confidence interval when it has one --
-    // and the reverse, promised an interval that does not exist.
-    //
-    // Scoping a specimen therefore moves the selection into it. Nothing is lost: the frame
-    // list still holds the whole arm, so any frame is one click away.
-    if (state.spec) {
-      const first = state.frames.find((f) => f.specimen === state.spec);
-      if (first && first.frame !== state.frame) { selectFrame(first.frame); return; }
-    }
-    // NOT loadArm(): the arm's frames have not changed, only the scope over them, and
-    // refetching would be a round trip for data already held.
+    const isOpen = !GROUPS_CLOSED.has(k)
+      && (GROUPS_OPEN.has(k) || groups.size === 1
+          || groups.get(k).some((f) => f.frame === state.frame));
+    if (isOpen) { GROUPS_OPEN.delete(k); GROUPS_CLOSED.add(k); }
+    else { GROUPS_CLOSED.delete(k); GROUPS_OPEN.add(k); }
     renderFrames();
-    renderSpecimens();
-    renderReadout();
-    if (typeof window.figRenderRef === "function") window.figRenderRef();
   });
   t.querySelectorAll("tbody tr:not(.grp)").forEach((tr) =>
     tr.onclick = () => selectFrame(tr.dataset.f));
@@ -475,6 +463,19 @@ async function selectFrame(name) {
         `, ${(f.censored_share * 100).toFixed(1)}% of regions</span>`],
     ["Below 10px width envelope", f.width_below_validated_envelope_share === null ? "—"
       : `${(f.width_below_validated_envelope_share * 100).toFixed(0)}% <span class="muted">of regions</span>`],
+    // ELONGATION, the H/W ratio of the fitted ellipse, median over regions. Both axes
+    // were already measured per region and simply never divided.
+    //
+    // THE CAVEAT IS PART OF THE ROW, because this number invites a reading it does not
+    // support. Elongation was tested here as a way to tell real crack from a
+    // detector-column artefact and could not do it -- centreline wander could -- and it
+    // moves with the painted brush: a broad stroke down a thin crack lowers the ratio
+    // without the crack changing. It describes the shape of what was MARKED.
+    ["Elongation (H/W)", f.aspect_ratio_median == null ? "—"
+      : `${f.aspect_ratio_median.toFixed(2)} <span class="muted">median, `
+        + `${f.aspect_ratio_p90 != null ? f.aspect_ratio_p90.toFixed(2) + " at p90, " : ""}`
+        + `over ${f.n_regions_with_aspect ?? 0} regions \u00b7 shape of the mark, not `
+        + `evidence of what it is</span>`],
     // Cleaning, recorded per frame. The speck threshold is per frame now -- max of a pixel
     // floor (is a shape measurable) and a physical one (did two frames exclude the same
     // class of object) -- so which floor bound is part of the reading.
@@ -785,45 +786,6 @@ function specimenCard(r) {
     rows.map(([k, v]) => `<dt>${k}</dt><dd${k === "Crack area fraction" ? "" : off}>${v}</dd>`).join("") +
     extra.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("") + `</dl>`;
 }
-
-//: Set by renderReadout, rendered by renderSpecimens. Held rather than re-fetched because
-//: both are driven by loadArm and the order between them is not guaranteed.
-let ARM_STATEMENTS = [];
-//: The statements under the current figure, so the drawer can open their basis.
-let FIG_SAID = [];
-
-function armStatements() {
-  if (!ARM_STATEMENTS.length) return "";
-  // FINDINGS OUT, LIMITS IN. Seven statements of which two are results and five are
-  // caveats reads as five caveats: the useful part is outnumbered on its own line. The
-  // established findings stay open; the limits collapse to one summary the reader opens
-  // when they want to know what the findings do not cover. Not hidden -- one click, and
-  // the count is on the line, so a reader can see there are five without reading five.
-  const line = (st, i) =>
-    `<div class="ro-line ${st.level}" data-ro="arm:${i}" tabindex="0" role="button">
-       <span class="mk">${MARK[st.level] || "\u00b7"}</span>
-       <span class="tx">${esc(st.text)}</span>
-     </div>`;
-  const findings = ARM_STATEMENTS.map((st, i) => [st, i]).filter(([st]) => st.level === "good");
-  let html = "";
-  if (findings.length) {
-    html += `<h3 class="sect">What this arm establishes</h3>`
-      + `<div class="ro armro">` + findings.map(([st, i]) => line(st, i)).join("") + `</div>`;
-  }
-  // Limits live in the header's Limits drawer, not under the findings -- see openLimits().
-  return html;
-}
-
-function wireArmStatements() {
-  // Same interaction as every other read-out line: click opens the basis and the hedge in
-  // the definitions drawer, so the explanation is addressable instead of a hover tooltip.
-  document.querySelectorAll('#armro [data-ro]').forEach((el) => {
-    const open = () => openDefs(ARM_STATEMENTS[+el.dataset.ro.split(":")[1]]);
-    el.onclick = open;
-    el.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } };
-  });
-}
-
 async function renderSpecimens() {
   let rows;
   try { rows = await api(`/api/specimens?arm=${encodeURIComponent(state.arm)}`); }
@@ -1019,65 +981,26 @@ function renderStrip(rec) {
 // is unreachable on touch and undiscoverable on a laptop.
 const MARK = { good: "●", warn: "▲", bad: "✕", info: "·" };
 
-// FINDINGS OUT, LIMITS IN -- the same shape as armStatements(), and it was not that.
+// SEVERITY ORDER, used by the strip and by the drawer's limits section.
 //
-// This list used to sort severity-first and cap at five, which sounds prudent and was the
-// single worst thing in the pane. A frame typically carries two or three findings and six
-// or seven caveats; severity-first put every caveat at the top, the cap of five was then
-// filled entirely by caveats, and the findings were pushed into the collapsed "5 more".
-// So a pane that DID have conclusions displayed five failures and hid every one of them.
-// A user looking at that screen said the conclusions were all inconclusive, and they were
-// reading it correctly -- that is what it showed. Not a wording problem and not a
-// statistics problem: an ordering bug with a truncation behind it.
+// The statements used to be rendered on the Results page, sorted severity-first and capped
+// at five. That composition deleted exactly the useful half: a frame carries two or three
+// findings and six or seven caveats, so the cap filled with caveats and every finding went
+// into a collapsed "5 more". The page showed five failures and hid its conclusions.
 //
-// Findings stay open and uncapped -- there are never many, and they are the reason the
-// pane exists. Caveats collapse to one line carrying its own count, so "six limits" costs
-// one line instead of six and is still one click from being read in full.
-//
-// THE STRIP STILL LEADS WITH THE WORST THING (see RO_TOP below): a reader who never opens
-// this tab must not be able to miss a caveat. Lead with findings where there is room for
-// both, lead with severity where there is room for one.
+// They then led the page with findings and the caveats moved to a drawer. Now the findings
+// are in that drawer too -- a reader said seven green-dotted sentences above the figure
+// were not worth the space -- so this ordering survives for the one place it is still
+// right: the strip, which has room for ONE statement and must therefore show the worst.
+//: The arm-level statements from the last /api/readout. Its declaration sat above
+//: armStatements(), and removing that function by "delete the comment block before it"
+//: took the declaration with it -- so renderReadout threw ReferenceError on every frame
+//: change, which aborted it before the actions rendered and before the button count was
+//: written. Three symptoms, one missing line; found by reading the console, which is
+//: what packaging/ui_check.py exists to do automatically.
+let ARM_STATEMENTS = [];
+
 const SEV = { bad: 0, warn: 1, good: 2, info: 3 };
-
-function roRender(groups) {
-  const all = [];
-  for (const [heading, sts] of Object.entries(groups)) {
-    (sts || []).forEach((st, i) => all.push({ st, key: `${heading}:${i}`, heading }));
-  }
-  if (!all.length) return "";
-  const one = (x) =>
-    `<div class="ro-line ${x.st.level}" data-ro="${x.key}" tabindex="0" role="button">
-       <span class="mk">${MARK[x.st.level] || "\u00b7"}</span>
-       <span class="tx">${esc(x.st.text)}</span>
-       <span class="who">${x.heading}</span>
-     </div>`;
-  const findings = all.filter((x) => x.st.level === "good");
-  let html = "";
-  if (findings.length) html += `<div class="ro">` + findings.map(one).join("") + `</div>`;
-  // With nothing established, say so in one line rather than leaving the reader to infer
-  // it from a list of caveats. This is the honest case, not a hidden one.
-  if (!findings.length) {
-    html += `<div class="ro"><div class="ro-line info"><span class="mk">\u00b7</span>`
-      + `<span class="tx">Nothing is established for this frame yet.</span></div></div>`;
-  }
-  // THE LIMITS ARE NOT RENDERED HERE ANY MORE. They are reached from the header's Limits
-  // button, which reads the same RO object this does -- see openLimits(). A user looking
-  // at fourteen caveats stacked under four findings said they were useless and asked for
-  // them gone, twice.
-  //
-  // GONE FROM THE SURFACE, NOT DELETED, and that distinction was settled by measurement
-  // rather than taste. Three of them were audited against the question "what wrong number
-  // could a reader publish if this appeared nowhere", and all three came back
-  // load-bearing -- including the two I was most confident were noise. "Corrections change
-  // area 1.003x" looks like a rounding error on this frame and is the SAME template that
-  // prints 2.446x for MAR_Amb_AS on 6 of its 11 frames, where the operator's brush more
-  // than doubled the measured area. "1 of 5 fields are single-crack dominated" is the only
-  // thing stopping this frame's green "91%" line being read as the specimen's value, when
-  // the other four fields are all below the 0.90 cut. Judging a template by its mildest
-  // instance is how both of those looked deletable.
-  return html;
-}
-
 let RO = {};
 
 //: The single most severe statement, mirrored into the strip so a conclusion is never
@@ -1085,24 +1008,19 @@ let RO = {};
 let RO_TOP = {};
 
 async function renderReadout() {
-  const el = $("#readout");
+  const el = $("#frameacts");
   const f = state.frames.find((x) => x.frame === state.frame);
   const q = new URLSearchParams({ arm: state.arm });
   if (state.frame) q.set("frame", state.frame);
   if (state.spec) q.set("specimen", state.spec);
   let d;
   try { d = await api(`/api/readout?${q}`); }
-  catch (e) { el.innerHTML = `<p class="ro-empty">${e.message}</p>`; return; }
+  catch (e) { el.innerHTML = `<p class="note flag bad">${esc(e.message)}</p>`; return; }
   RO = { specimen: d.specimen || [], frame: d.frame || [] };
-  // Arm statements render in their own section (#armro) rather than in roRender's list,
-  // so "what this arm establishes" is not interleaved with this frame's findings. They go
-  // into RO as well, keyed to match the data-ro prefix armStatements() emits, which is
-  // what lets the drawer open any of them -- and what lets currentLimits() see arm-level
-  // caveats without a second fetch.
+  // Arm statements go into RO alongside the specimen and frame ones, so the Conclusions
+  // drawer sees all three scopes from a single fetch.
   ARM_STATEMENTS = d.arm_statements || [];
   RO.arm = ARM_STATEMENTS;
-  const armEl = $("#armro");
-  if (armEl) { armEl.innerHTML = armStatements(); wireArmStatements(); }
   // AFTER RO is fully populated, including .arm. Called here and nowhere else, because
   // this is the only place the statements change. Written one line earlier -- before
   // RO.arm existed -- the count silently excluded every arm-level caveat.
@@ -1110,32 +1028,15 @@ async function renderReadout() {
   // If the drawer is already open in limits mode, the frame just changed underneath it.
   if (!$("#defs").hidden && $("#defs").dataset.mode === "limits") openLimits();
 
-  const body = roRender({ specimen: RO.specimen, frame: RO.frame });
-  // Severity order is the same rule the list uses, so the strip and the list agree about
-  // which statement matters most.
+  // The strip still leads with the WORST statement, so a reader who never opens the
+  // drawer cannot miss a caveat. Same severity rule as the drawer's limits section.
   const all = [...(RO.specimen || []), ...(RO.frame || [])]
     .sort((a, b) => (SEV[a.level] ?? 9) - (SEV[b.level] ?? 9));
   RO_TOP = all.length
     ? { text: all[0].text, level: all[0].level, basis: all[0].basis, more: all.length - 1 }
     : {};
-  // THE QUESTION AND ITS ANSWER ARE ON SCREEN; the working is one click away.
-  //
-  // These were collapsed behind a single summary line reading "Not determinable here:
-  // crack mode · path roughness · ...", on the grounds that they were 51 words restating
-  // questions the reader may not have asked. That was wrong about which reader. The
-  // owner asked thrice for a transgranular/intergranular call -- most recently proposing
-  // linearity as the discriminator, which is the exact proxy the crack-mode entry
-  // refutes with measurements. The app HAD considered the question, HAD reached a
-  // conclusion, and had put it where nobody would find it. "This cannot be determined
-  // from this data, here is why, and here is the one experiment that would settle it" IS
-  // a conclusion, and for a researcher deciding what to image next it is the most
-  // actionable one here.
-  //
-  // So each question and its answer are visible, and only the why and the would-need are
-  // behind the disclosure. That is 4 questions and 4 answers, not 51 words of prose.
 
-  el.innerHTML = (body || `<p class="ro-empty">Nothing this data supports saying yet.</p>`)
-    + (state.frame
+  el.innerHTML = (state.frame
         ? `<div class="roact">
              <button id="remeasure2">Re-measure this frame</button>
              ${f && !f.scale_known
@@ -1197,25 +1098,29 @@ async function renderReadout() {
 //: and the drawer's contents cannot disagree with what the pane computed. A separate list
 //: built here would be a second source of truth for the same facts, which is how the arm
 //: and frame renderers came to disagree about ordering in the first place.
-function currentLimits() {
+function currentStatements(good) {
   const out = [];
   for (const scope of ["arm", "specimen", "frame"]) {
     (RO[scope] || []).forEach((st, i) => {
-      if (st && st.level !== "good") out.push({ st, scope, key: `${scope}:${i}` });
+      if (st && (st.level === "good") === good) out.push({ st, scope, key: `${scope}:${i}` });
     });
   }
-  return out.sort((a, b) => (SEV[a.st.level] ?? 9) - (SEV[b.st.level] ?? 9));
+  return good ? out
+              : out.sort((a, b) => (SEV[a.st.level] ?? 9) - (SEV[b.st.level] ?? 9));
 }
+
+function currentLimits() { return currentStatements(false); }
+function currentFindings() { return currentStatements(true); }
 
 function syncLimitsButton() {
   const b = $("#limitsbtn");
   if (!b) return;
-  const n = currentLimits().length;
-  $("#limitsn").textContent = String(n);
-  b.dataset.none = n ? "0" : "1";
-  b.title = n
-    ? `${n} thing${n === 1 ? "" : "s"} these numbers do not cover`
-    : "Nothing limits these numbers";
+  // The count is the FINDINGS, because that is what the drawer now leads with and what a
+  // reader is deciding whether to open it for. The limits are inside and counted there.
+  const f = currentFindings().length, n = currentLimits().length;
+  $("#limitsn").textContent = String(f);
+  b.dataset.none = (f + n) ? "0" : "1";
+  b.title = `${plural(f, "finding")}, ${plural(n, "limit")}`;
 }
 
 //: The drawer, in limits mode: every caveat in full, with its basis and its hedge, grouped
@@ -1223,35 +1128,24 @@ function syncLimitsButton() {
 //: answer the same kind of question ("when does this number lie") and a reader should not
 //: have to learn two places.
 function openLimits() {
-  const items = currentLimits();
+  const findings = currentFindings();
+  const limits = currentLimits();
   $("#defs").hidden = false;
-  // The drawer has two modes and one heading. It said "Definitions" above a list of
-  // fourteen caveats.
-  $("#defstitle").textContent = items.length
-    ? `What these numbers do not cover \u00b7 ${items.length}`
-    : "What these numbers do not cover";
+  $("#defstitle").textContent = findings.length
+    ? `Conclusions \u00b7 ${findings.length}` : "Conclusions";
   const body = $("#defsbody");
-  if (!items.length) {
-    body.innerHTML = `<div class="def"><h5>Nothing limits these numbers.</h5>`
-      + `<p class="u">No caveat applies to the current selection.</p></div>` + defsAll();
+  if (!findings.length && !limits.length) {
+    body.innerHTML = `<div class="def"><h5>Nothing to report for this selection.</h5></div>`
+      + defsAll();
     body.scrollTop = 0;
     return;
   }
-  // NAMED, not just scoped. "About this specimen" over a caveat about a specimen other
-  // than the selected frame's is how a reader takes the wrong interval into a caption.
-  // The heading now carries the subject, so the statement is self-describing even if the
-  // selection moves underneath it.
   const LABEL = {
     arm: `About the ${state.arm} arm`,
     specimen: state.spec ? `About ${state.spec}` : "About this specimen",
     frame: state.frame ? `About ${shortFrame(state.frame)}` : "About this frame",
   };
-  let html = "";
-  for (const scope of ["arm", "specimen", "frame"]) {
-    const grp = items.filter((x) => x.scope === scope);
-    if (!grp.length) continue;
-    html += `<p class="limgrp">${LABEL[scope]} &middot; ${grp.length}</p>`;
-    html += grp.map((x) => `
+  const card = (x) => `
       <div class="def">
         <h5><span class="mk ${x.st.level}">${MARK[x.st.level] || "\u00b7"}</span> ${esc(x.st.text)}</h5>
         <dl>
@@ -1259,7 +1153,18 @@ function openLimits() {
           ${x.st.hedge ? `<dt>When it lies</dt><dd class="lies">${esc(x.st.hedge)}</dd>` : ""}
           ${x.st.value != null ? `<dt>Value</dt><dd>${typeof x.st.value === "number" ? (+x.st.value).toFixed(4) : esc(x.st.value)}</dd>` : ""}
         </dl>
-      </div>`).join("");
+      </div>`;
+  const section = (title, items) => !items.length ? "" :
+    `<p class="limgrp">${title} &middot; ${items.length}</p>` + items.map(card).join("");
+
+  // FINDINGS FIRST, then what they do not cover. Both used to be on the Results page --
+  // seven green-dotted sentences above the figure -- and a reader said they could not see
+  // the point of them there. They are not deleted: a conclusion with its basis and its
+  // hedge is the thing that makes a number quotable, and it is one click from every page.
+  let html = section("Established", findings);
+  for (const scope of ["arm", "specimen", "frame"]) {
+    html += section(LABEL[scope] + " \u2014 limits",
+                    limits.filter((x) => x.scope === scope));
   }
   body.innerHTML = html;
   body.scrollTop = 0;
@@ -1589,6 +1494,8 @@ function editorHTML(frame) {
       <label class="u" for="edbrush">Brush</label>
       <input id="edbrush" type="range" min="2" max="120" value="${ED.brush}">
       <span class="u" id="edbrushval">${ED.brush}</span>
+      <button id="edundo" disabled title="Undo the last stroke (\u2318Z)">Undo</button>
+      <label class="u"><input type="checkbox" id="edshow" checked> Show result</label>
       <span class="spacer"></span>
       <button id="edsave" class="upload" disabled>Save and re-measure</button>
     </div>
@@ -1642,6 +1549,20 @@ async function openEditor(frame) {
     ED.bg = null;
   }
 
+  //: UNDO, which the SEM tool has had all along and this one had not -- a user asked for
+  //: the two to offer the same controls. A bounded stack of mask snapshots: each is a
+  //: full-size canvas, so the depth is a memory budget, not a preference. Pushed before a
+  //: stroke begins rather than after, so one entry is one stroke and not one segment.
+  ED.undo = [];
+  ED.pushUndo = () => {
+    const c = document.createElement("canvas");
+    c.width = ED.off.width; c.height = ED.off.height;
+    c.getContext("2d").drawImage(ED.off, 0, 0);
+    ED.undo.push(c);
+    if (ED.undo.length > 12) ED.undo.shift();
+    const b = $("#edundo"); if (b) b.disabled = false;
+  };
+
   //: Draw the visible canvas: micrograph, then the mask's crack pixels in red over it.
   //: ONE function, because a second copy of the composite would drift from this one the
   //: first time either changed -- and a stroke that repainted differently from the initial
@@ -1649,6 +1570,13 @@ async function openEditor(frame) {
   ED.paint = () => {
     const g = cv.getContext("2d");
     if (!ED.bg) { g.drawImage(ED.off, 0, 0, cv.width, cv.height); return; }
+    // "Show result" off = the micrograph with nothing drawn on it, which is how you check
+    // whether a boundary follows something real rather than following the previous mark.
+    if (ED.showResult === false) {
+      g.clearRect(0, 0, cv.width, cv.height);
+      g.drawImage(ED.bg, 0, 0, cv.width, cv.height);
+      return;
+    }
     g.clearRect(0, 0, cv.width, cv.height);
     g.drawImage(ED.bg, 0, 0, cv.width, cv.height);
     const lay = document.createElement("canvas");
@@ -1698,8 +1626,10 @@ async function openEditor(frame) {
     ED.paint();
     ED.dirty = true; $("#edsave").disabled = false;
   };
-  cv.onpointerdown = (e) => { drawing = true; last = toNat(e); stroke(last, last);
-                              cv.setPointerCapture(e.pointerId); };
+  // Snapshot BEFORE the stroke starts, so one undo step is one stroke rather than one
+  // pointermove segment.
+  cv.onpointerdown = (e) => { drawing = true; ED.pushUndo(); last = toNat(e);
+                              stroke(last, last); cv.setPointerCapture(e.pointerId); };
   cv.onpointermove = (e) => { if (!drawing) return; const n = toNat(e); stroke(last, n); last = n; };
   cv.onpointerup = () => { drawing = false; };
   cv.onpointerleave = () => { drawing = false; };
@@ -1712,6 +1642,30 @@ async function openEditor(frame) {
     };
   });
   $("#edbrush").oninput = (e) => { ED.brush = +e.target.value; $("#edbrushval").textContent = ED.brush; };
+
+  const undo = () => {
+    const prev = ED.undo.pop();
+    if (!prev) return;
+    const g = ED.off.getContext("2d");
+    g.clearRect(0, 0, ED.off.width, ED.off.height);
+    g.drawImage(prev, 0, 0);
+    ED.paint();
+    // NOT ED.dirty = false. Undoing the last stroke does not mean the mask matches what is
+    // on disk -- there may be earlier strokes -- and clearing the flag here would disable
+    // Save with unsaved work still on the canvas.
+    $("#edundo").disabled = !ED.undo.length;
+  };
+  $("#edundo").onclick = undo;
+  //: Cmd/Ctrl-Z, because a drawing surface without it is a drawing surface people are
+  //: afraid to use. Bound on the canvas, not the document, so it cannot eat an undo meant
+  //: for a text field elsewhere on the page.
+  cv.tabIndex = 0;
+  cv.onkeydown = (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") { e.preventDefault(); undo(); }
+  };
+
+  ED.showResult = true;
+  $("#edshow").onchange = (e) => { ED.showResult = e.target.checked; ED.paint(); };
 
   $("#edsave").onclick = async () => {
     const btn = $("#edsave"), out = $("#edout");

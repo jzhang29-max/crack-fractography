@@ -166,25 +166,37 @@ def test_the_refusal_section_is_not_in_the_ui():
     assert len(conclusions.REFUSALS) >= 4, "the reasoning itself must not have been deleted"
 
 
-def test_the_specimen_is_chosen_in_one_place():
-    """A header dropdown SCOPED the statistics to a specimen while the sidebar's group rows
-    only expanded and collapsed -- two controls that looked like one thing and did two
-    different things. Clicking a specimen's name did not select it."""
-    html = open(os.path.join(REPO, "app", "templates", "index.html"), encoding="utf-8").read()
+def test_a_group_row_only_opens_and_shuts():
+    """It used to do two things: toggle the group AND scope every statistic to that
+    specimen. Two behaviours on one click, one of them invisible, and the scoping was
+    never asked for -- a disclosure triangle opens and shuts."""
     src = open(APPJS, encoding="utf-8").read()
-    assert 'id="spec"' not in html, "the specimen dropdown survives"
-    assert '$("#spec")' not in src, "the dropdown is gone but the code still reads it"
-    grp = src[src.index('t.querySelectorAll("tbody tr.grp")'):]
-    grp = grp[:grp.index("});")]
-    # STRIP COMMENTS FIRST. The handler's own comment says "NOT loadArm(): ..." explaining
-    # why it must not call it, and a raw substring scan matched that and failed on correct
-    # code. This repo has made exactly this mistake before -- a boot guard fooled by the
-    # comment written to explain the guard.
-    code = code_only(grp)
-    assert "state.spec" in code, "the group row still does not scope the numbers"
-    assert "loadArm()" not in code, (
-        "refetching the arm on a scope change resets the selection to frames[0] and throws "
-        "away the frame the reader was looking at")
+    h = src[src.index('t.querySelectorAll("tbody tr.grp")'):]
+    h = h[:h.index("\n  });") + 6]
+    code = code_only(h)
+    assert "GROUPS_OPEN" in code and "GROUPS_CLOSED" in code
+    assert "state.spec" not in code, "the row still scopes as a side effect of expanding"
+    assert "selectFrame(" not in code, "the row still changes the selection"
+    assert "loadArm()" not in code
+
+
+def test_a_group_can_be_shut_even_when_it_holds_the_selected_frame():
+    """THE REPORTED BUG: "you can click and expand but you can't unexpand it." The open
+    condition includes "contains the selected frame", which is right on load -- and became
+    inescapable once clicking a group also selected a frame inside it, so the group you
+    just opened permanently contained the selection. An explicit close has to win."""
+    src = open(APPJS, encoding="utf-8").read()
+    i = src.index("const open = GROUPS_CLOSED")
+    stmt = src[i:src.index(";", i)]
+    assert "GROUPS_CLOSED.has(spec) ? false" in stmt, (
+        "a deliberate close does not override the auto-open")
+    assert "f.frame === state.frame" in stmt, (
+        "the group holding the selection no longer opens itself on load")
+    # And the two sets must be kept disjoint by the handler, or a group ends up in both.
+    h = src[src.index('t.querySelectorAll("tbody tr.grp")'):]
+    h = code_only(h[:h.index("\n  });") + 6])
+    assert "GROUPS_CLOSED.delete" in h and "GROUPS_OPEN.delete" in h, (
+        "opening does not clear the closed flag, or closing does not clear the open one")
 
 
 def test_changing_arm_clears_the_frame_from_the_previous_arm():
@@ -261,19 +273,6 @@ def test_the_frame_list_is_never_narrowed_to_one_specimen():
     helper = src[src.index("async function allFrames()"):]
     helper = helper[:helper.index("\n}")]
     assert "specimen" not in helper, "allFrames() filters, which defeats the point"
-
-
-def test_scoping_a_specimen_moves_the_selection_into_it():
-    """Scoping used to leave state.frame in another specimen, so the strip, specimen card
-    and limits drawer described one specimen while the mask, frame statements and
-    measurements below were another's."""
-    src = open(APPJS, encoding="utf-8").read()
-    h = src[src.index('t.querySelectorAll("tbody tr.grp")'):]
-    h = h[:h.index("\n  });") + 6]
-    code = code_only(h)
-    assert "selectFrame(" in code, "scoping does not move the selection"
-    assert "f.specimen === state.spec" in code, (
-        "the frame it selects is not required to belong to the scoped specimen")
 
 
 def test_the_limits_drawer_names_which_specimen_and_frame_it_describes():

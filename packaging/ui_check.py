@@ -136,15 +136,14 @@ def run(base):
         strip = pg.inner_text(".strip")
         if "%" not in strip:
             bad.append(f"the strip shows no percentage: {strip!r}")
-        # WAIT FOR IT, do not count and hope. The read-out is fetched separately from the
-        # figure, so counting straight after the figure appeared raced the render and
-        # reported "no statements" for a frame that has one. A timeout here is still a
-        # real failure -- it just distinguishes "not yet" from "never".
+        # THE STATEMENTS ARE IN THE DRAWER, not on the page -- checked at step 5. The page
+        # itself must carry the figure and the numbers, so what is asserted here is the
+        # per-frame actions, which are the controls that used to live beside them.
         try:
-            pg.wait_for_selector("#pane-results .ro-line", timeout=30_000)
+            pg.wait_for_selector("#frameacts button", timeout=30_000)
         except Exception:
-            bad.append("no statements rendered on the results page within 30s")
-        stmts = pg.eval_on_selector_all("#pane-results .ro-line", "els => els.length")
+            bad.append("the per-frame actions did not render within 30s")
+        stmts = pg.eval_on_selector_all("#frameacts button", "els => els.length")
         measured = pg.eval_on_selector_all("#fsel dt", "els => els.length")
         if measured < 1:
             bad.append("the measurements list is empty")
@@ -154,12 +153,21 @@ def run(base):
         if not wh or wh[0] < 1:
             bad.append(f"the mask image did not load: {wh}")
 
-        # 5. The limits drawer opens and is populated.
+        # 5. The Conclusions drawer opens and carries the statements the page does not.
+        #    This is where every finding and every caveat now lives, so an empty drawer
+        #    means the app computed conclusions and can show none of them -- the exact
+        #    failure this project has already shipped once in another shape.
         pg.click("#limitsbtn")
         pg.wait_for_selector("#defs:not([hidden])", timeout=30_000)
         defs = pg.eval_on_selector_all("#defsbody .def", "els => els.length")
         if defs < 1:
-            bad.append("the limits drawer opened empty")
+            bad.append("the conclusions drawer opened empty")
+        groups = pg.eval_on_selector_all("#defsbody .limgrp", "els => els.map(e => e.innerText)")
+        if not any("ESTABLISHED" in g.upper() for g in groups):
+            bad.append(f"the drawer has no findings section: {groups}")
+        if not pg.eval_on_selector_all("#pane-results .ro-line", "els => els.length") == 0:
+            bad.append("statements are still being rendered on the page")
+        pg.click("#defsclose")
 
         # 6. Mark renders an editable canvas for an uploaded frame.
         pg.click("#tabs button[data-tab='mark']")
@@ -187,8 +195,8 @@ def run(base):
         for b in bad:
             print("  -", b)
         return 1
-    print(f"UI OK: tabs={tabs}, {rows} frame row(s), {stmts} statement(s), "
-          f"{measured} measurement(s), mask {wh[0]}x{wh[1]}, {defs} limit(s), "
+    print(f"UI OK: tabs={tabs}, {rows} frame row(s), {stmts} action(s), "
+          f"{measured} measurement(s), mask {wh[0]}x{wh[1]}, {defs} statement(s), "
           f"mark={shown[0] if shown else '?'}, no page errors")
     return 0
 

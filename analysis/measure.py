@@ -135,12 +135,29 @@ def measure_frame(mask, stem, modality="sem", grey=None):
                 v = r.get(src)
                 r[dst] = (round(float(v) * px_um, 4)
                           if isinstance(v, (int, float)) and np.isfinite(v) else None)
+        # The H/W ratio alongside the two axes it comes from, so the per-crack CSV carries
+        # the quantity rather than asking a reader to divide two columns -- and so the
+        # division is done once, here, instead of differently in each consumer.
+        mj, mn = r.get("EllipseMajorAxis_px"), r.get("EllipseMinorAxis_px")
+        r["AspectRatio"] = (round(float(mj / mn), 4)
+                            if isinstance(mj, (int, float)) and isinstance(mn, (int, float))
+                            and mn > 0 else None)
         rows.append(r)
 
     total_px = int(mask.sum())
     areas = np.array([r["area_px"] for r in rows], float) if rows else np.zeros(0)
     lengths = np.array([r.get("SkeletonLength_px") or 0.0 for r in rows], float)
     widths = np.array([r["MeanWidth_px"] for r in rows if isinstance(r.get("MeanWidth_px"), (int, float))], float)
+    # ELONGATION, from the fitted ellipse's two axes -- the H/W ratio of a crack region.
+    # Both axes were already measured per region; nothing new is computed here, they were
+    # simply never divided. A minor axis of zero is a degenerate single-pixel-wide fit and
+    # is dropped rather than producing an infinity.
+    aspects = np.array([
+        r["EllipseMajorAxis_px"] / r["EllipseMinorAxis_px"]
+        for r in rows
+        if isinstance(r.get("EllipseMajorAxis_px"), (int, float))
+        and isinstance(r.get("EllipseMinorAxis_px"), (int, float))
+        and r["EllipseMinorAxis_px"] > 0], float)
     torts = np.array([r["Tortuosity"] for r in rows if isinstance(r.get("Tortuosity"), (int, float))], float)
     oris = np.array([r["Orientation_deg"] for r in rows if isinstance(r.get("Orientation_deg"), (int, float))], float)
     branches = np.array([r.get("BranchPointCount") or 0 for r in rows], float)
@@ -238,6 +255,21 @@ def measure_frame(mask, stem, modality="sem", grey=None):
         "cleaning_not_applied": sorted(cleaning.NOT_SHIPPED),
 
         "mean_width_px_median": _med(widths),
+
+        # ELONGATION / ASPECT RATIO, median over regions. major axis over minor axis of
+        # the fitted ellipse, so 1 is a disc and large is a sliver.
+        #
+        # REPORTED AS A MEASUREMENT, NOT AS A DISCRIMINATOR, and the distinction is load
+        # bearing. Elongation was tested in this project as a way to separate real crack
+        # from a detector-column artefact and it could not do it -- centreline wander
+        # could. It is also confounded with the painted brush: a broad stroke down a thin
+        # crack lowers the ratio without the crack changing. So it describes the shape of
+        # what was marked, which is a reasonable thing to want, and it is not evidence
+        # about what the feature is.
+        "aspect_ratio_median": _med(aspects),
+        "aspect_ratio_p90": (round(float(np.percentile(aspects, 90)), 4)
+                             if len(aspects) else None),
+        "n_regions_with_aspect": int(len(aspects)),
         # DiameterJ's D_SP = Area/Length is validated only for features >= 10 px across.
         # 84.9% of the regions here are thinner than that, so the median ships with the
         # share of regions outside the envelope rather than as a bare number.

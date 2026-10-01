@@ -1,17 +1,22 @@
 #!/usr/bin/env python3
-"""The read-out leads with findings, not with caveats.
+"""Where the app's statements live, and the rule that none of them may be lost.
 
-WHY THIS TEST EXISTS. The list used to sort severity-first and cap at five. A frame
-typically carries two or three findings and six or seven caveats, so severity-first filled
-the whole cap with caveats and pushed every finding into a collapsed "5 more" button. The
-pane therefore displayed five failures and hid the conclusions -- and a user looking at it
-said the conclusions were all inconclusive. They were reading the screen correctly. It was
-not a wording problem or a statistics problem; it was an ordering bug with a truncation
-behind it, and nothing in the suite could see it because nothing ran the renderer.
+THE HISTORY, because it is the reason these assertions are shaped the way they are.
 
-RUN IN NODE, NOT ASSERTED ON SOURCE TEXT. This repo already learnt that a test which greps
-a function for a string passes while the function misbehaves. So roRender is executed with
-a realistic mix of statements and the resulting markup is inspected.
+1. The statements were rendered on the Results page, sorted severity-first and capped at
+   five. A frame carries two or three findings and six or seven caveats, so the cap filled
+   entirely with caveats and every finding was pushed into a collapsed "5 more" button --
+   the page displayed five failures and hid each conclusion it had computed. A user read
+   that screen and said the conclusions were all inconclusive. They were reading it
+   correctly.
+2. Findings then led the page and the caveats moved to a header drawer.
+3. The findings followed them. Seven green-dotted sentences above the figure were, in a
+   user's words, not something they could see the point of.
+
+So the page carries the figure and the numbers; the drawer carries every statement,
+findings first, each with the basis and the hedge that make it checkable. What must never
+happen again is a statement that the engine produced and the interface cannot show, which
+is what every test here is about.
 """
 import json
 import os
@@ -23,9 +28,8 @@ import pytest
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 APPJS = os.path.join(REPO, "app", "static", "app.js")
 
-#: 2 findings among 9 statements -- the ratio that made the old ordering hide everything
-#: useful. The order here is deliberately caveats-first, so a renderer that merely
-#: preserves input order cannot pass.
+#: 2 findings among 9, the ratio that made the old ordering hide everything useful, and
+#: deliberately caveats-first so that merely preserving input order cannot pass.
 STATEMENTS = {
     "specimen": [
         {"level": "bad", "text": "+-31%: wider than E562's +-10% precision target."},
@@ -43,162 +47,110 @@ STATEMENTS = {
 }
 
 
-def esc(v):
-    """The same escaping app.js applies. Written out because a test that normalises only
-    &amp; silently fails on any statement containing an apostrophe -- "E562's" became
-    "E562&#39;s" and two assertions failed against correct markup."""
-    for ch, ent in (("&", "&amp;"), ("<", "&lt;"), (">", "&gt;"),
-                    ('"', "&quot;"), ("'", "&#39;")):
-        v = v.replace(ch, ent)
-    return v
-
-
-def render(groups):
-    """Execute the real roRender() from app.js in node and return its markup."""
-    node = shutil.which("node")
-    if not node:
-        pytest.skip("node is not installed")
-    src = open(APPJS, encoding="utf-8").read()
-    # Take the file's own esc(), MARK, SEV and roRender rather than restating them here: a
-    # copy of the renderer in the test would let the shipped one drift away from it.
-    start = src.index("const MARK = {")
-    end = src.index("let RO = {};")
-    harness = (
-        "const esc = (v) => String(v ?? '').replace(/[&<>\"']/g, (ch) =>"
-        "({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[ch]));\n"
-        + src[start:end]
-        + "\nprocess.stdout.write(roRender(" + json.dumps(groups) + "));\n")
-    out = subprocess.run([node, "-e", harness], capture_output=True, text=True)
-    assert out.returncode == 0, out.stderr
-    return out.stdout
-
-
-def visible_region(html):
-    """The markup a reader sees without opening anything.
-
-    NOT `html.partition("<details")[0]`. That was the first version and it was vacuous
-    against the exact renderer it was written to catch: the old one emitted no <details> at
-    all, so partition returned the WHOLE document as the "visible" part and every finding
-    was trivially found in it -- including the ones the old renderer had shipped with a
-    [hidden] attribute behind a "4 more" button. The test passed on the broken code.
-
-    So visibility is computed from what actually hides a line: everything from the first
-    <details onwards, and any element carrying [hidden].
-    """
-    visible = html.partition("<details")[0]
-    # Drop hidden lines individually -- a [hidden] div before any <details> is still hidden.
-    out, i = [], 0
-    while True:
-        j = visible.find('<div class="ro-line', i)
-        if j < 0:
-            out.append(visible[i:])
-            break
-        k = visible.find("</div>", j)
-        k = len(visible) if k < 0 else k + len("</div>")
-        chunk = visible[j:k]
-        out.append(visible[i:j])
-        if " hidden" not in chunk.split(">")[0]:
-            out.append(chunk)
-        i = k
-    return "".join(out)
-
-
-def test_every_finding_is_shown_open():
-    html = render(STATEMENTS)
-    shown = visible_region(html)
-    goods = [s for g in STATEMENTS.values() for s in g if s["level"] == "good"]
-    assert goods, "the fixture must contain findings or this test proves nothing"
-    for st in goods:
-        frag = esc(st["text"])
-        assert frag in html, f"finding vanished from the markup: {st['text']}"
-        assert frag in shown, (
-            f"finding is not visible without opening something: {st['text']}. This is the "
-            "regression: findings must not be behind a disclosure or a [hidden] attribute.")
-
-
-def test_a_frame_with_no_findings_says_so_in_one_line():
-    """The honest case. Leaving the reader to infer 'nothing established' from a list of
-    caveats is how the pane read before, and inference is not a conclusion."""
-    html = render({"frame": [s for s in STATEMENTS["frame"] if s["level"] != "good"]})
-    assert "Nothing is established for this frame yet." in html
-    head, _, _ = html.partition("<details")
-    assert "Nothing is established" in head, "the statement itself must not be collapsed"
-
-
-def test_statement_text_is_escaped():
-    """Statement text interpolates frame names, and frame names come from uploaded
-    filenames. armStatements() escaped and this renderer did not."""
-    html = render({"frame": [{"level": "good", "text": "<img onerror=x> & co"}]})
-    assert "<img" not in html and "&lt;img" in html and "&amp; co" in html
-
-
-# --- THE CAVEATS MOVED OFF THE SURFACE, AND MUST NOT HAVE BEEN LOST ---------------------
-def render_limits(groups):
-    """Execute the real currentLimits() from app.js against an RO object."""
+def _eval(ro, call):
+    """Run the real statement selectors from app.js against an RO object."""
     node = shutil.which("node")
     if not node:
         pytest.skip("node is not installed")
     src = open(APPJS, encoding="utf-8").read()
     sev = src[src.index("const SEV = {"):src.index("\n", src.index("const SEV = {"))]
-    fn = src[src.index("function currentLimits()"):src.index("function syncLimitsButton()")]
-    harness = (sev + "\nlet RO = " + json.dumps(groups) + ";\n" + fn
-               + "\nprocess.stdout.write(JSON.stringify(currentLimits()));\n")
+    fns = src[src.index("function currentStatements("):src.index("function syncLimitsButton(")]
+    harness = (sev + "\nlet RO = " + json.dumps(ro) + ";\n" + fns
+               + f"\nprocess.stdout.write(JSON.stringify({call}));\n")
     out = subprocess.run([node, "-e", harness], capture_output=True, text=True)
     assert out.returncode == 0, out.stderr
     return json.loads(out.stdout)
 
 
-def test_no_caveat_is_rendered_on_the_reading_surface():
-    """Fourteen caveats stacked under four findings, and the user asked twice for them
-    gone. The surface is findings only now."""
-    html = render(STATEMENTS)
-    for st in (s for g in STATEMENTS.values() for s in g if s["level"] != "good"):
-        assert esc(st["text"]) not in html, (
-            f"caveat is still on the reading surface: {st['text']}")
-    assert "<details" not in html, "no disclosure either -- the surface is findings only"
+def findings(ro):
+    return _eval(ro, "currentFindings()")
 
 
-def test_every_caveat_is_still_reachable_and_none_was_dropped():
-    """THE TEST THAT MATTERS. Moving the caveats off the surface must not quietly become
-    deleting them. Three were audited against "what wrong number could a reader publish if
-    this appeared nowhere" and all three came back load-bearing -- including the two that
-    looked most like noise: "Corrections change area 1.003x" is the same template that
-    prints 2.446x for MAR_Amb_AS on 6 of its 11 frames.
+def limits(ro):
+    return _eval(ro, "currentLimits()")
 
-    So the set the drawer offers must be exactly the set the engine produced: nothing lost
-    in the move, and nothing gained either, since a finding must not be filed as a caveat."""
+
+def test_no_statement_is_rendered_on_the_results_page():
+    """The page is the figure and the numbers. Both statement sections are gone from the
+    template, and the renderers that filled them are gone from the script -- a container
+    left behind would be an empty section, and a renderer left behind would be a write to
+    an element that does not exist."""
+    import re
+    raw = open(os.path.join(REPO, "app", "templates", "index.html"), encoding="utf-8").read()
+    # STRIP THE COMMENTS. The comment explaining why these sections were removed quotes
+    # their heading, so a raw scan matched the explanation and failed on a correct file --
+    # the fifth time in this project a source scan has matched its own prose.
+    html = re.sub(r"<!--.*?-->", "", raw, flags=re.S)
+    src = open(APPJS, encoding="utf-8").read()
+    for gone in ('id="armro"', 'id="readout"', "What this arm establishes"):
+        assert gone not in html, f"{gone!r} survives in the page"
+    code = "\n".join(L for L in src.split("\n") if not L.strip().startswith("//"))
+    for gone in ("function roRender(", "function armStatements(", "$(\"#armro\")"):
+        assert gone not in code, f"{gone!r} survives in the script"
+
+
+def test_every_statement_the_engine_produced_is_reachable():
+    """THE RULE. Moving statements off the page must not quietly become dropping them.
+    Findings and limits together must equal exactly what the engine emitted -- nothing
+    lost, and nothing miscategorised in either direction."""
     ro = {**STATEMENTS, "arm": [
         {"level": "bad", "text": "0 of 9 specimens reach E562's target."},
         {"level": "good", "text": "The detector changes crack LENGTH, not width."},
     ]}
-    got = render_limits(ro)
-    expected = {s["text"] for g in ro.values() for s in g if s["level"] != "good"}
-    assert {x["st"]["text"] for x in got} == expected, "the drawer's set != the engine's set"
-    findings = {s["text"] for g in ro.values() for s in g if s["level"] == "good"}
-    assert not ({x["st"]["text"] for x in got} & findings), "a finding was filed as a caveat"
+    got = {x["st"]["text"] for x in findings(ro)} | {x["st"]["text"] for x in limits(ro)}
+    expected = {s["text"] for g in ro.values() for s in g}
+    assert got == expected, f"lost: {expected - got} | invented: {got - expected}"
 
 
-def test_the_drawer_includes_arm_level_caveats():
-    """RO.arm is assigned AFTER RO.specimen and RO.frame in renderReadout. Counting one line
-    too early would silently exclude every arm-level caveat, and the button would show a
-    smaller number than the drawer lists -- a discrepancy nothing else would catch."""
-    got = render_limits({"arm": [{"level": "warn", "text": "62 of 142 frames have no scale."}],
-                         "frame": [{"level": "bad", "text": "Length unreliable."}]})
+def test_findings_and_limits_are_split_by_level_not_by_scope():
+    ro = {**STATEMENTS}
+    f = {x["st"]["text"] for x in findings(ro)}
+    L = {x["st"]["text"] for x in limits(ro)}
+    assert not (f & L), "a statement appears in both sections"
+    for g in ro.values():
+        for s in g:
+            if s["level"] == "good":
+                assert s["text"] in f, f"a finding was filed as a limit: {s['text']}"
+            else:
+                assert s["text"] in L, f"a limit was filed as a finding: {s['text']}"
+
+
+def test_arm_level_statements_are_included():
+    """RO.arm is assigned AFTER RO.specimen and RO.frame in renderReadout. Counting one
+    line too early silently excluded every arm-level statement."""
+    got = limits({"arm": [{"level": "warn", "text": "62 of 142 frames have no scale."}],
+                  "frame": [{"level": "bad", "text": "Length unreliable."}]})
     assert {x["scope"] for x in got} == {"arm", "frame"}
 
 
-def test_the_caveats_are_ordered_worst_first_in_the_drawer():
-    got = render_limits(STATEMENTS)
-    order = [x["st"]["level"] for x in got]
+def test_the_limits_are_ordered_worst_first():
+    order = [x["st"]["level"] for x in limits(STATEMENTS)]
     rank = {"bad": 0, "warn": 1, "info": 3}
     assert order == sorted(order, key=lambda L: rank[L]), order
 
 
-def test_the_drawer_heading_names_its_mode():
-    """One drawer, two modes. It read "Definitions" above a list of fourteen caveats."""
+def test_the_drawer_leads_with_findings_and_names_its_scopes():
     src = open(APPJS, encoding="utf-8").read()
-    lim = src[src.index("function openLimits()"):src.index("function openDefs(")]
-    dfs = src[src.index("function openDefs("):src.index("const DEFS = [")]
-    assert "defstitle" in lim, "limits mode does not set the heading"
-    assert "defstitle" in dfs, "definitions mode does not restore the heading"
-    assert "do not cover" in lim
+    fn = src[src.index("function openLimits()"):src.index("function openDefs(")]
+    assert fn.index("currentFindings()") < fn.index("currentLimits()")
+    assert fn.index('section("Established"') < fn.index("limits.filter"), (
+        "the limits are rendered before the findings")
+    assert "state.arm" in fn and "state.spec" in fn and "state.frame" in fn, (
+        "the drawer does not name which arm, specimen and frame it is describing")
+
+
+def test_the_button_counts_findings_and_titles_both():
+    """The count is what a reader decides to open the drawer for."""
+    src = open(APPJS, encoding="utf-8").read()
+    fn = src[src.index("function syncLimitsButton()"):src.index("function openLimits(")]
+    assert "currentFindings()" in fn and "currentLimits()" in fn
+    assert "plural(" in fn, "the tooltip would read '1 findings'"
+
+
+def test_the_strip_still_leads_with_the_worst_statement():
+    """A reader who never opens the drawer must not be able to miss a caveat. This is the
+    one place the severity ordering is still right, because there is room for one line."""
+    src = open(APPJS, encoding="utf-8").read()
+    i = src.index("RO_TOP = all.length")
+    ctx = src[max(0, i - 400):i]
+    assert "SEV[a.level]" in ctx, "the strip no longer sorts by severity"

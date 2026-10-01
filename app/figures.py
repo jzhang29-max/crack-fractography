@@ -39,6 +39,8 @@ FIELDS = {
     "largest_network_centreline_um": ("Largest network centreline", "µm", 1.0, ""),
     "tcl_um":                   ("Total crack length (TCL)", "µm", 1.0, ""),
     "mean_width_px_median":     ("Median mean-width", "px", 1.0, ""),
+    "aspect_ratio_median":      ("Elongation (H/W), median", "", 1.0, ""),
+    "aspect_ratio_p90":         ("Elongation (H/W), 90th pct", "", 1.0, ""),
     "n_junctions":              ("Junctions", "", 1.0, ""),
     # NAMED FOR THE WEIGHTING, all three of them. This was one field called "Area touching
     # frame edge" plotting censored_share, which is the share of REGIONS -- the dataset
