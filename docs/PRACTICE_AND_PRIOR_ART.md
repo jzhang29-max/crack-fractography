@@ -203,3 +203,103 @@ inferential unit, one magnification per determination, arms never pooled) to a *
 network* measured from a micrograph, with each refusal stated on screen. That is a claim
 about an arrangement, not about a method, and it is worth much less than a capability
 claim. It should be stated that way or not at all.
+
+---
+
+## Round 7: five sharpened claims, attacked on priority AND on method — 2026-10-01
+
+Round 6 killed the capability framing ("a tool that does both identification and analysis").
+Round 7 asked the next question: take the assets that are actually unusual about this corpus
+and this code, state the sharpest claim each could support, and try to kill *that*. Five
+assets, one proposer each, then two independent attackers per claim — one searching for prior
+art, one attacking the method and the numbers.
+
+**5 of 5 died. Running tally: 48 of 48 novelty framings refuted.**
+
+What makes this round different from the six before it: three of the five were killed by
+**measurements taken on this project's own files**, not by a citation. Those are defects, and
+they are listed as such below.
+
+### The prior art Round 7 added
+
+| Work | What it owns |
+|---|---|
+| **Schmies, Hemmleb & Bettge**, *Engineering Failure Analysis* **156**:107814 (2024; online Nov 2023) | SE + BSE + shape-from-shading topography on the **same annotated fatigue-fracture fields**, with an input-channel ablation concluding that the detection channel determines crack-feature segmentation. Same-field, different-channel, on cracks — so "resolution is excluded by construction" is not a new exclusion. This is the citation that killed framing 8 in an earlier round; the detector claim is that framing with a metric-family wrapper |
+| **ISO 5725-1 / -2** (2019) · **ASTM E2782** (Measurement Systems Analysis) · **AIAG MSA** 4th ed. | A change of EQUIPMENT is by definition a *reproducibility* factor, and reporting s_r against s_R with intervals is the standard's own output. "A between-field interval cannot absorb an instrument change" IS the repeatability/reproducibility distinction. The acceptance criterion exists too: %GRR bands and ndc, where "measurement-system variation exceeds part-to-part variation" is the textbook unacceptable-gauge case |
+| **Lu et al.**, "Quantifying segmentation sensitivity in OCTA: device-specific profiles across three commercial platforms", *PLOS One*, doi:10.1371/journal.pone.0343605 | 32 eyes, three commercial devices, one open analysis pipeline, and **per-device sensitivity coefficients for vessel area density, total vessel length, vessel length density, branching measures and FAZ area** — i.e. a device-indexed sensitivity profile for exactly the network-extent metric family this project reports. The broader OCTA inter-device literature already concludes these metrics are "not interchangeable" across devices |
+| **Salvato et al.**, "Impact of SEM acquisition parameters on the porosity analysis of irradiated U-Mo fuel", *Nuclear Materials and Energy* (2023), doi:10.1016/j.nme.2023.101494 | The closest materials prior art: varying SEM voltage, beam current and magnification one at a time on BSE micrographs moves **total porosity by up to 30%**, average diameter 10% and pore density 20% over 5–30 kV, with Monte Carlo probing-depth simulations for the mechanism. A segmentation-derived extent metric moving with acquisition settings is a known, published result in this exact measurement class |
+| **Paumgartner, Losa & Weibel**, *Journal of Microscopy* (1981) | The classical ordering this project thought it was contradicting: volume fraction robust to resolution, surface density fragile. Also **Scrivener (2004)** on back-scattered imaging of cementitious microstructures, and the Monte Carlo work on the BSE signal across pore/solid boundaries, for why segmented extent is detector-dependent |
+| **Dahari et al.**, "Prediction of Microstructural Representativity From A Single Image", *Advanced Science* (2025), doi:10.1002/advs.202414149, arXiv:2410.19568, code at `tldr-group/ImageRep`, app at imagerep.io | Estimates a confidence interval on a **phase fraction from one micrograph**, analytically from the two-point correlation function. This project asserted that an interval on a one-patch raster has no remedy short of imaging more patches. Scope matters in both directions: ImageRep bounds the *within-image* representativity of a phase fraction and does **not** estimate between-patch variance over a specimen surface — so it does not answer this corpus's question, but it does falsify "no remedy exists without more patches" as stated, and it is a tool this app could call |
+
+### The three internal kills — these are defects, not citations
+
+**1. "The detector changes crack LENGTH rather than WIDTH" is an algebraic identity, not a
+finding.** The global calibre estimator *is* `crack_area_px / total_skeleton_length_px`, so
+`area_ratio == width_ratio × length_ratio` holds to ~1e-16 over the 36 paired fields.
+Comparing |log length| against |log width| is therefore variance apportionment of an exact
+product. The two other "independent" calibre estimators are the same construct at different
+aggregations (per-region A/L — which is DiameterJ's D_SP — and lineal fraction over mean P10).
+The one calibre instrument that is *not* amount-over-extent, a distance transform read on the
+skeleton, reportedly moves 1.285× with CBS > ETD on 31 of 36 fields, which if it holds makes
+the "not width" half **false** rather than unproven. Two further problems with the same claim:
+the specimen-level sign test is 4/4 at **p = 0.125**, which is the p floor at n = 4 — the
+design cannot produce a smaller p, and the project's own rule is that the specimen is the
+inferential unit; and the ratio is a monotone function of how much crack is present
+(6.00× / 4.88× / 3.38× / 1.83× by ETD area-fraction stratum), which is the signature of a
+detection floor rather than a constant. *Being corrected under its own task.*
+
+**2. The shipped stage gradient was CBS-only. Fixed, and the finding survived.**
+`specimen_stats._one_frame_per_field` kept the alphabetically first frame per physical field,
+and the detector token sorts CBS before ETD on every pair here — so eight shipped records
+carried a CBS-only rank correlation on the same card as an E562 interval computed from a real
+detector mean, under a comment that claimed the values were "collapsed to fields first, like
+every other aggregate in this function". Corrected to field means:
+
+| specimen | shipped (CBS) | field mean | CBS only | ETD only | max/min |
+|---|---|---|---|---|---|
+| MAR_AmbB_AS  | +0.750 p 0.0199 | **+0.867** p 0.0025 | +0.750 p 0.0199 | +0.683 p 0.0424 | 4.9× |
+| MAR_AmbB_HIP | +0.867 p 0.0025 | **+0.883** p 0.0016 | +0.867 p 0.0025 | +0.650 p 0.0581 | 18.8× |
+| MAR_H_AS     | +0.867 p 0.0025 | **+0.867** p 0.0025 | +0.867 p 0.0025 | +0.883 p 0.0016 | 5.3× |
+| MAR_H_HIP    | +0.833 p 0.0053 | **+0.833** p 0.0053 | +0.833 p 0.0053 | +0.883 p 0.0016 | 12.4× |
+
+The gradient is **not** a property of the CBS channel: two channels of one simultaneous scan
+over the same physical fields agree in sign on all four specimens. The shipped range was
++0.750..+0.867 and the corrected range is +0.833..+0.883. `stage_gradient_by_detector` now
+ships beside it so the detector-sensitivity of the conclusion is on the record rather than in
+a comment. What does **not** survive: attribution. Stage position is rank-collinear with
+acquisition order (Spearman(StageY, timestamp) −0.650 to −0.950), so surface gradient, session
+drift and the operator's choice of raster origin are not separable here, and the card should
+not read as a spatial finding.
+
+**3. "More patches would narrow the interval" had no supporting measurement and has been
+removed.** `n_patches` is 1 on the eight positioned specimen-arms and None on the other 26,
+and never reaches 2 — so between-patch variance has never been observed in this corpus. The
+sentence appeared in `analysis/stage.py`, `analysis/conclusions.py` and
+`app/static/app.js`; all three now say the remedy is untested here and name the experiment it
+asks for. This was an assertion of exactly the class the refusal engine exists to block, in
+the file that argues for refusing such assertions.
+
+### Two prose/artifact mismatches, both now corrected in the README
+
+- **The grain-boundary positive control has no artifact.** The z = +0.62 ceiling, the
+  z = +2.0..+3.4 real-label range, the 72.8% and the +1.99 dose-response exist only as English
+  prose inside a string literal in `analysis/conclusions.py`, and the test that covers it
+  greps that prose for the substring. A search of the whole working tree finds no script that
+  computes a grain-boundary skeleton, an exclusion-radius sweep, or any z. The result may well
+  be right — it is recorded in a session note — but **the repository cannot reproduce it**, so
+  it is carried as a recorded prior finding and not as a measured one. Re-deriving it with a
+  retained artifact is the open item.
+- **"Every refusal stated on screen" was false.** Five value-level suppressions are
+  data-evaluated and rendered; the four question-level refusals travel in `/api/readout` and
+  are rendered nowhere, because the block that listed them was removed at a user's request.
+  The README now describes the two layers separately.
+
+### What Round 7 says about the project
+
+The attack was run to find something *more* unique. It found the opposite, and that is the
+useful result: the defensible residue of the detector work is a **magnitude**, not a framing —
+"on 36 physical fields of these specimens, through both detectors at 51.883 nm/px with one
+segmenter fixed, segmented crack amount and extent both scale ~2.3–2.8× CBS over ETD, so their
+quotient is within 8% of unity" — which is a technical note quantifying a qualitative result
+Schmies et al. already own. Stated at that size it is honest and still worth recording. Stated
+any larger it is refutable in one search.

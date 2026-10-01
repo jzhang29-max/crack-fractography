@@ -61,6 +61,20 @@ E562_RA_TARGET = 10.0
 #: TXM median is 0.466, i.e. a 2.1x overestimate, which is self-disqualifying either way.
 LENGTH_TRUST_RATIO = 1.5
 
+#: CBS/ETD calibre ratios on the 36 paired fields at 51.883 nm/px, from the TWO per-region
+#: instruments in cracks.json that are NOT area/length -- the distance-transform maximum
+#: inscribed width and the fitted ellipse minor axis -- each as a per-field area-weighted
+#: mean, then the median over the 36 pairs. These are stored rather than computed live
+#: because for_arm() is handed frames.json only, and loading a 40 MB region table in the
+#: request path to decorate one sentence is not worth it. They exist to stop this app
+#: asserting width INVARIANCE under the detector swap: area/length says CBS is ~8%
+#: narrower, these two say it is 26% and 67% WIDER, so the sign of the width change is a
+#: property of the estimator and the app states no width result here at all. Both move
+#: further from 1 if censored edge regions are dropped (1.34x and 1.86x), so the figures
+#: below are the conservative end. Recomputed by tests/test_conclusions.py from
+#: analysis/out/cracks.json so they cannot drift from the corpus.
+DETECTOR_CALIBRE_RATIOS = {"max_inscribed_width": 1.26, "ellipse_minor_axis": 1.67}
+
 
 def _s(text, basis, hedge=None, level="info", value=None):
     """One read-out line. `text` is what appears on screen and is capped at 15 words."""
@@ -604,19 +618,44 @@ def for_arm(records, frames=None):
                   "detector looked.",
             level="bad", value=round(med, 3)))
 
-    # --- WHAT THE DETECTOR ACTUALLY CHANGES. A POSITIVE, CONTROLLED RESULT. ----------
+    # --- WHAT THE DETECTOR SWAP MOVES. CONTROLLED, REAL, AND NOT ONE NUMBER ----------
     #
-    # This is one of exactly two properly controlled contrasts in the corpus: the SAME
-    # physical field through two detectors. The app already said the detector moves the
-    # answer; what it never said is WHICH WAY, and that turns out to be the informative
-    # part. The excess is in centreline LENGTH, not in width.
+    # The design is the sound part and it stays: the SAME physical field through two
+    # detectors is one of exactly two properly controlled contrasts in the corpus, and
+    # the centreline excess is real -- CBS carries more skeleton than ETD on 35 of 36
+    # fields. Three things this statement used to say are withdrawn.
     #
-    # The control is what makes it a finding rather than an observation. Comparing two
-    # DIFFERENT fields with the SAME detector, the area difference routes through WIDTH
-    # instead (|log length| exceeded |log width| on only 69 of 144 and 96 of 144 such
-    # pairs). So "an area difference shows up as length" is not a generic property of
-    # comparing two crack masks here -- it is specific to the detector swap, where it held
-    # on 36 of 36 fields.
+    # 1. "NOT WIDTH" WAS A PROPERTY OF THE ESTIMATOR, NOT OF THE DETECTOR. The width
+    #    term here is area/length, so log(width ratio) IS log(area ratio) minus
+    #    log(length ratio) by construction: it is pinned near 1 whenever area and length
+    #    move by similar factors, which they do here (2.72x and 2.79x). That is one
+    #    decomposition of a single area change, not an independent calibre, and
+    #    mean_width_px_median cannot referee it because it is the same construction per
+    #    region. The two instruments in cracks.json that ARE independent calibres both
+    #    disagree with the old claim: see DETECTOR_CALIBRE_RATIOS. So the app now states
+    #    no width result here in either direction -- not "narrower", not "the same".
+    #
+    # 2. THE CONTROL DID NOT SAY WHAT IT CLAIMED, and its own numbers showed it. Between
+    #    two DIFFERENT fields with the SAME detector, length still moves MORE than width
+    #    at the median (|log| 0.427 against 0.369) and on 165 of 288 such pairs -- and
+    #    the "only 69 of 144 and 96 of 144" this comment used to cite as the contrast ARE
+    #    that 165 of 288, split by detector and read as if a majority were a minority.
+    #    The ETD half alone is 96 of 144 with median |log length| 0.713 against |log
+    #    width| 0.352. The detector swap is a more extreme version of the same pattern,
+    #    not a different routing, so it is no longer offered as a control.
+    #
+    # 3. THE MEDIAN IS NOT THE EFFECT. Stratified by how much crack ETD found, the length
+    #    ratio runs 6.0x / 4.9x / 3.4x / 1.8x from the emptiest ETD fields to the fullest
+    #    (n = 4 / 6 / 18 / 8; Spearman -0.61, p = 8e-5), and inside MAR_AmbB_HIP alone --
+    #    nine fields, one stage raster, one gain pair -- it spans 0.11x to 31.1x. A single
+    #    multiplier reads as a calibration constant and there is no constant here.
+    #
+    # LEVEL IS "bad", NOT "good". What is established is that this pipeline's measured
+    # crack LENGTH depends on which detector looked -- the mechanism of the sibling
+    # statement above, not a positive result about the material. Much of it is traceable
+    # to one uncalibrated constant in the segmenter (mad_k=5.0, whose own docstring names
+    # this dataset's ETD captures as the case it exists to cap) and to the two channels
+    # having run at different amplifier gains: see docs/PRACTICE_AND_PRIOR_ART.md.
     try:
         from specimen_stats import detector_of, field_key
         pairs = {}
@@ -640,37 +679,68 @@ def for_arm(records, frames=None):
             both, modal = [], None
         if len(both) >= 8:
             import statistics as _st
-            lr, wr, length_wins = [], [], 0
+            rows = []
             for v in both:
                 c, e = v["CBS"], v["ETD"]
                 Lc, Le = c["total_skeleton_length_px"], e["total_skeleton_length_px"]
                 Ac, Ae = c.get("crack_area_px"), e.get("crack_area_px")
                 if not (Lc and Le and Ac and Ae):
                     continue
-                import math as _m
-                ll, ww = _m.log(Lc / Le), _m.log((Ac / Lc) / (Ae / Le))
-                lr.append(Lc / Le)
-                wr.append((Ac / Lc) / (Ae / Le))
-                length_wins += abs(ll) > abs(ww)
-            if len(lr) >= 8:
+                rows.append({"lr": Lc / Le, "ar": Ac / Ae,
+                             "etd_af": e.get("area_fraction"),
+                             "spec": c.get("specimen")})
+            lr = [r["lr"] for r in rows]
+            # THE RANGE, FROM THE EXTREME STRATA RATHER THAN THE EXTREME FIELDS. Binning
+            # on what the ETD channel found is the stratification that makes the spread
+            # legible instead of alarming: the single 31x field is one raster position,
+            # while "emptiest ETD fields against fullest" is a reproducible contrast.
+            # Edges are decades of ETD area fraction, not tuned.
+            strata, EDGES = [], [(0.0, 0.001), (0.001, 0.005), (0.005, 0.02), (0.02, 1.0)]
+            for lo, hi in EDGES:
+                g = [r["lr"] for r in rows
+                     if r["etd_af"] is not None and lo <= r["etd_af"] < hi]
+                if g:
+                    strata.append((lo, hi, len(g), _st.median(g)))
+            if len(lr) >= 8 and len(strata) >= 2:
+                hi_med = strata[0][3]   # emptiest ETD fields: biggest ratio
+                lo_med = strata[-1][3]  # fullest: smallest
+                worst = max(({"spec": s,
+                              "lo": min(r["lr"] for r in rows if r["spec"] == s),
+                              "hi": max(r["lr"] for r in rows if r["spec"] == s)}
+                             for s in {r["spec"] for r in rows}),
+                            key=lambda d: d["hi"] / d["lo"] if d["lo"] else 0)
                 out.append(_s(
-                    f"The detector changes crack LENGTH, not width: CBS carries "
-                    f"{_st.median(lr):.1f}× ETD's.",
+                    f"CBS carries {lo_med:.1f}× to {hi_med:.1f}× ETD's crack centreline, "
+                    f"depending how much ETD found.",
                     f"{len(lr)} physical fields imaged both ways at {modal} nm/px -- one "
                     f"magnification, because a median over pairs at different scales "
-                    f"would be the pooling this app refuses elsewhere. "
-                    f"Median centreline length ratio {_st.median(lr):.2f}×; median width "
-                    f"ratio (area/length) {_st.median(wr):.2f}×. The length term exceeds "
-                    f"the width term on {length_wins} of {len(lr)} fields. CONTROL: "
-                    f"between two DIFFERENT fields with the SAME detector the difference "
-                    f"routes through width instead, so this is a property of the detector "
-                    f"swap and not of comparing two crack masks.",
+                    f"would be the pooling this app refuses elsewhere. CBS carries the "
+                    f"longer centreline on {sum(x > 1 for x in lr)} of {len(lr)} fields, "
+                    f"so the DIRECTION is established; the SIZE is not a constant. "
+                    f"Stratified by the ETD channel's own area fraction it runs "
+                    + " / ".join(f"{m:.1f}× (ETD area fraction {lo:g}-{hi:g}, n={n})"
+                                 for lo, hi, n, m in reversed(strata)) +
+                    f". Inside {worst['spec']} alone -- one specimen, one stage raster, "
+                    f"one gain pair -- it spans {worst['lo']:.2f}× to {worst['hi']:.2f}×, "
+                    f"so the stratum medians are a trend and not an interval. The overall "
+                    f"median is {_st.median(lr):.2f}× and is reported here only as the "
+                    f"midpoint of that trend. NO WIDTH CLAIM is made: area/length width "
+                    f"is log(area)-log(length) by construction, and the two independent "
+                    f"calibres in cracks.json move the other way "
+                    f"({DETECTOR_CALIBRE_RATIOS['max_inscribed_width']:.2f}× maximum "
+                    f"inscribed width, "
+                    f"{DETECTOR_CALIBRE_RATIOS['ellipse_minor_axis']:.2f}× ellipse minor "
+                    f"axis), so the sign of any width change depends on the estimator.",
                     hedge="It does NOT say CBS sees more real crack. A binary mask cannot "
                           "say whether the extra centreline is crack ETD missed or "
                           "segmentation gain on a noisier backscatter image, and nothing "
-                          "here referees these fields. Width is not identical either -- it "
-                          "is detectably about 8% narrower, not the same.",
-                    level="good", value=round(_st.median(lr), 2)))
+                          "here referees these fields. Nor is it purely optical: the two "
+                          "channels ran at different amplifier gains (CBS ContrastDB ~45 "
+                          "against ETD ~27-37), and re-tuning ONE uncalibrated segmenter "
+                          "constant on the ETD channel alone equalises the two channels "
+                          "on every pair tried, so part of this is the pipeline rather "
+                          "than the detector. This is not a correction factor.",
+                    level="bad", value=round(_st.median(lr), 2)))
     except Exception:
         pass
 
@@ -975,7 +1045,11 @@ def for_figure(kind, x, y, rows, label_of=None):
                         hedge="A gradient means these fields are not a sample OVER a "
                               "surface, so the E562 interval on them is largely describing "
                               "a trend rather than sampling error -- and more tiles in the "
-                              "SAME patch will not narrow it. More patches would.",
+                              "SAME patch will not narrow it. Whether separated patches "
+                              "would is untested: every specimen here has one imaged "
+                              "patch, so between-patch variance has never been measured. "
+                              "That is the experiment this result asks for, not a remedy "
+                              "it supports.",
                         level="good", value=round(rhos[-1], 3)))
                 else:
                     out.append(_s(

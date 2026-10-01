@@ -260,11 +260,74 @@ def detector_sensitivity(frames):
                     "not material"}
 
 
+def _field_records(frames, key="area_fraction"):
+    """One synthetic record per physical field, carrying the MEAN of `key` over detectors.
+
+    Why this exists rather than `_one_frame_per_field`. Both answer "one point per field",
+    and only this one answers it without choosing a detector. `_one_frame_per_field` keeps
+    the alphabetically first frame per field, and on this corpus the detector token sorts
+    CBS before ETD on every pair -- so it is a CBS-only selector wearing a neutral name.
+    That mattered: CBS reads 2.29x ETD on the same physical field, the E562 interval beside
+    it is computed from `collapse_to_fields` (a real mean), and the call site's own comment
+    said "collapsed to fields first, like every other aggregate in this function" about
+    code that was selecting rather than averaging.
+
+    The stage coordinate is a property of the field, so either member's frame name resolves
+    to the same position; the name is carried through only so `stage.position` can look it
+    up. `n_detectors` goes with it because a one-detector field and a two-detector field are
+    not the same measurement, and a reader of the gradient should be able to see which they
+    have.
+    """
+    groups = {}
+    for f in frames:
+        groups.setdefault(field_key(f["frame"]), []).append(f)
+    out = []
+    for _, fs in sorted(groups.items()):
+        vals = [f.get(key) for f in fs if f.get(key) is not None]
+        if not vals:
+            continue
+        rec = dict(fs[0])
+        rec[key] = float(np.mean([float(v) for v in vals]))
+        rec["n_detectors"] = len({detector_of(f["frame"]) for f in fs if detector_of(f["frame"])})
+        out.append(rec)
+    return out
+
+
+def _gradient_by_detector(frames):
+    """The same gradient computed within each detector separately.
+
+    Reported so that the field-mean gradient cannot be read as detector-independent when it
+    is not. Two simultaneously-acquired channels of the same physical fields are the one
+    control this corpus has for free, and a trend that reverses between them is an
+    instrument trend, not a specimen one.
+    """
+    dets = {}
+    for f in frames:
+        dd = detector_of(f.get("frame", ""))
+        if dd:
+            dets.setdefault(dd, []).append(f)
+    out = {}
+    for dd, fs in sorted(dets.items()):
+        g = _gradient(fs)
+        if g:
+            out[dd] = {k: g[k] for k in ("axis", "spearman_rho", "p_value",
+                                         "n_frames_with_position", "field_max_min_ratio")
+                       if k in g}
+    return out or None
+
+
 def _one_frame_per_field(frames):
-    """One representative frame per physical field, for statistics over stage position.
+    """One representative frame per physical field, for COUNTING fields and sites.
 
     Position is a property of the field, not of the frame: two detectors imaging the same
     place report the same coordinates, so passing raw frames doubles every point.
+
+    DO NOT USE THIS FOR A STATISTIC OVER A MEASURED VALUE. It keeps the alphabetically
+    first frame per field, which on this corpus is CBS on every pair, and CBS reads 2.29x
+    ETD on the same field -- so any number computed through here is a CBS number. Use
+    `_field_records`, which averages the detector replicates the way `collapse_to_fields`
+    does. This function's remaining callers count things (patches, fields), where the
+    detector a field was represented by cannot change the answer.
     """
     seen, out = set(), []
     for f in sorted(frames, key=lambda x: x.get("frame", "")):
@@ -481,8 +544,10 @@ def summarise(arm, specimen, frames):
 
         # Are these fields a sample of a surface, or a raster across one patch? E562
         # presumes the former and the 2026-09-15 batch is the latter.
-        # COLLAPSED TO FIELDS FIRST, like every other aggregate in this function. It was
-        # the one that skipped it: CBS and ETD sit at byte-identical stage coordinates, so
+        # COLLAPSED TO FIELDS FIRST, like every other aggregate in this function -- and
+        # this comment was true of the intent and false of the code for two revisions, see
+        # the note under stage_gradient_by_detector. CBS and ETD sit at byte-identical
+        # stage coordinates, so
         # all eight shipped records read n=20 for 10 physical fields and every p-value was
         # computed on doubled data -- up to 27x too small. Corrected, the effect is
         # STRONGER and the significance weaker: rho +0.648..+0.830 at p 0.0029..0.0425,
@@ -494,7 +559,17 @@ def summarise(arm, specimen, frames):
         # much of the raster, so it has no stage position comparable to theirs. Dropping
         # it STRENGTHENS every gradient (rho +0.648..+0.830 -> +0.750..+0.867), so this is
         # not a finding manufactured by removing an inconvenient point.
-        "stage_gradient": _gradient(_one_frame_per_field(determination)),
+        "stage_gradient": _gradient(_field_records(determination)),
+
+        # AND THE SAME GRADIENT WITHIN EACH DETECTOR, because the line above used to BE a
+        # CBS-only gradient sitting next to a field-mean interval. `_one_frame_per_field`
+        # selects the alphabetically first frame per field and CBS sorts before ETD on
+        # every pair here, so the comment above -- "collapsed to fields first, like every
+        # other aggregate in this function" -- described a property the code did not have.
+        # Averaging is the fix; publishing the per-detector pair beside it is the check,
+        # since a trend that disagrees between two channels of one simultaneous scan is an
+        # instrument trend and not a specimen one.
+        "stage_gradient_by_detector": _gradient_by_detector(determination),
 
         # HOW MANY SEPARATED SITES, which is the question the gradient above cannot ask.
         # One site per specimen makes the site and the specimen the same variance

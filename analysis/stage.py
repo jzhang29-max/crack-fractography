@@ -10,18 +10,38 @@ the fields do not touch; and position() below refuses to assert that the stage u
 metre, so no extent in millimetres is quoted here or anywhere on screen.
 
 Measured on all four scaled MAR specimens, area fraction against stage Y, over the NINE
-fields of the 51.883 nm/px determination:
+fields of the 51.883 nm/px determination, as the MEAN of the two simultaneously-acquired
+detectors per field:
 
-    MAR_AmbB_AS    rho +0.750  p 0.0199   field max/min mean ratio   3.7x
-    MAR_AmbB_HIP   rho +0.867  p 0.0025                             18.8x
-    MAR_H_AS       rho +0.867  p 0.0025                              4.4x
-    MAR_H_HIP      rho +0.833  p 0.0053                              8.5x
+                   field mean          CBS only            ETD only         max/min
+    MAR_AmbB_AS    rho +0.867 p 0.0025  +0.750 p 0.0199    +0.683 p 0.0424    4.9x
+    MAR_AmbB_HIP   rho +0.883 p 0.0016  +0.867 p 0.0025    +0.650 p 0.0581   18.8x
+    MAR_H_AS       rho +0.867 p 0.0025  +0.867 p 0.0025    +0.883 p 0.0016    5.3x
+    MAR_H_HIP      rho +0.833 p 0.0053  +0.833 p 0.0053    +0.883 p 0.0016   12.4x
 
-All four are monotonic and significant. So the E562 interval on those specimens is largely
-describing a SPATIAL GRADIENT across one patch rather than sampling error -- and the
-consequence is practical: "measure more fields" is the wrong remedy there, because more
-tiles in the same patch will not narrow an interval that is tracking a trend. More patches
-would.
+THE FIELD-MEAN COLUMN IS NEW AND THE SHIPPED COLUMN WAS CBS. The caller passed
+`_one_frame_per_field`, which keeps the alphabetically first frame per field, and the
+detector token sorts CBS before ETD on every pair in this corpus -- so eight shipped
+records carried a CBS-only rank correlation (+0.750..+0.867) on the same card as an
+interval computed from a real detector mean. Corrected to field means the range is
++0.833..+0.883. The per-detector columns are published beside it as the check that matters
+here: two channels of ONE simultaneous scan over the same physical fields agree in sign on
+all four specimens, so the trend is not a property of the CBS channel -- but ETD's
+significance fails on MAR_AmbB_HIP (p 0.058) and its max/min spread reaches 294x there,
+because ETD nearly empties on the low fields.
+
+So the E562 interval on those specimens is largely describing a SPATIAL GRADIENT across one
+patch rather than sampling error, and the consequence is practical: "measure more fields"
+is the wrong remedy there, because more tiles in the same patch will not narrow an interval
+that is tracking a trend.
+
+WHAT THIS FILE MUST NOT SAY, AND SAID FOR THREE REVISIONS. "More patches would." That is an
+assertion with no supporting measurement anywhere in this corpus: n_patches is 1 on the
+eight positioned specimen-arms and None on the other 26, and never reaches 2, so no
+between-patch variance has ever been observed here. It is a hypothesis -- the one this
+result argues is worth testing, and the experiment it asks for is nine more fields at a
+second patch on each specimen -- and it is stated as such below rather than as a remedy the
+data supports.
 
 TWICE-CORRECTED, AND THIS DOCSTRING HELD THE UNCORRECTED VALUES BOTH TIMES. The figures
 above replace +0.537/+0.752/+0.755/+0.782, which were computed over 20 FRAMES rather than
@@ -146,10 +166,17 @@ def gradient(frames, field="area_fraction"):
     out["n_distinct_stage_coords"] = len(at_coord)
     out["field_max_min_ratio"] = (round(float(means.max()) / lo, 1) if lo > 0 else None)
     out["significant"] = bool(best[2] < 0.05)
+    # The note says what the trend DOES to the interval and stops there. It used to end
+    # "more patches would", which is a remedy this corpus cannot support: n_patches is 1 on
+    # every positioned arm, so between-patch variance is unobserved here. Naming it as an
+    # untested hypothesis is the same discipline the rest of the app applies to a claim it
+    # cannot measure -- and the alternative, asserting the fix, is exactly the kind of
+    # sentence the refusal engine exists to block.
     out["note"] = ("ASTM E562 presumes fields placed over a surface. A gradient means the "
                    "between-field variance is partly a trend across one patch, so more "
-                   "tiles in the same patch will not narrow the interval -- more patches "
-                   "would.")
+                   "tiles in the same patch will not narrow the interval. Whether separated "
+                   "patches would is UNTESTED here: every specimen in this corpus has one "
+                   "imaged patch, so no between-patch variance has been measured.")
     return out
 
 

@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """The E562 interval, checked against answers worked out independently of the code."""
+import io
 import os
 import sys
 
 import numpy as np
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                                "analysis"))
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(REPO, "analysis"))
 import specimen_stats as S   # noqa: E402
 
 
@@ -160,6 +161,86 @@ def test_the_stage_gradient_is_computed_over_fields_not_frames():
     assert len({S.field_key(f["frame"]) for f in kept}) == 8
 
 
+def test_the_gradient_averages_the_detectors_instead_of_picking_one():
+    """The test above counted fields and passed for the wrong code for two revisions.
+
+    `_one_frame_per_field` keeps the alphabetically first frame per field, and the detector
+    token sorts CBS before ETD on every pair in this corpus -- so it is a CBS-only selector
+    with a neutral-sounding name, and CBS reads 2.29x ETD on the same physical field. Eight
+    shipped records carried a CBS-only rank correlation beside an interval computed from a
+    real detector mean. Counting is not enough: this asserts on the VALUE.
+    """
+    frames = []
+    for i in range(1, 10):
+        frames.append({"frame": f"S_CBS_{i:04d}", "area_fraction": 0.100,
+                       "n_cracks_measured": 5, "crack_density_px_per_Mpx": 1.0,
+                       "scale_known": False})
+        frames.append({"frame": f"S_ETD_{i:04d}", "area_fraction": 0.200,
+                       "n_cracks_measured": 5, "crack_density_px_per_Mpx": 1.0,
+                       "scale_known": False})
+    recs = S._field_records(frames)
+    assert len(recs) == 9, f"18 frames are 9 fields, got {len(recs)}"
+    for r in recs:
+        assert abs(r["area_fraction"] - 0.150) < 1e-9, (
+            "the field value must be the MEAN of the two detectors, not either one; "
+            f"got {r['area_fraction']}")
+        assert r["n_detectors"] == 2, "a field's detector count travels with its mean"
+    picked = S._one_frame_per_field(frames)
+    assert {S.detector_of(f["frame"]) for f in picked} == {"CBS"}, (
+        "if this ever stops being CBS-only the comment on _one_frame_per_field is stale")
+
+
+def test_the_gradient_is_also_reported_per_detector():
+    """A trend computed from a detector mean must not be readable as detector-independent.
+
+    Two channels of ONE simultaneous scan over the same physical fields are this corpus's
+    only free control on the instrument, so the per-detector pair ships beside the mean. On
+    the real corpus they agree in sign on all four specimens -- which is the check that
+    makes the gradient worth reporting at all -- but ETD's significance fails on
+    MAR_AmbB_HIP, so the pair has to be visible rather than asserted in a comment.
+    """
+    frames = []
+    for i in range(1, 10):
+        for det, lift in (("CBS", 0.0), ("ETD", 0.05)):
+            frames.append({"frame": f"S_{det}_{i:04d}", "area_fraction": 0.01 * i + lift,
+                           "n_cracks_measured": 5, "crack_density_px_per_Mpx": 1.0,
+                           "scale_known": False})
+    out = S._gradient_by_detector(frames)
+    if out is None:
+        return  # no stage table in this checkout; the real-corpus assertion lives below
+    assert set(out) == {"CBS", "ETD"}, f"both channels must appear, got {sorted(out or {})}"
+    for det, g in out.items():
+        assert g["n_frames_with_position"] == 9, (
+            f"{det} must be 9 fields, not 18 frames; got {g['n_frames_with_position']}")
+
+
+def test_no_file_asserts_that_more_patches_would_narrow_the_interval():
+    """n_patches is 1 on the eight positioned arms and None on the other 26, never 2.
+
+    So "more patches would narrow it" has no supporting measurement anywhere in this corpus.
+    It was asserted in three places -- stage.py's note, conclusions.py's hedge and app.js's
+    tooltip -- by the same code that exists to refuse unsupported assertions. The remedy is
+    a hypothesis and has to read as one.
+    """
+    import re
+    bad = []
+    for rel in ("analysis/stage.py", "analysis/conclusions.py", "app/static/app.js",
+                "app/templates/index.html", "README.md"):
+        path = os.path.join(REPO, rel)
+        if not os.path.exists(path):
+            continue
+        text = io.open(path, encoding="utf-8").read()
+        for m in re.finditer(r"[Mm]ore patches would", text):
+            line = text[:m.start()].count("\n") + 1
+            ctx = text[max(0, m.start() - 160):m.start()]
+            # the explanatory paragraphs that RECORD the removal quote the old sentence;
+            # they are identifiable because they say so.
+            if re.search(r"MUST NOT SAY|used to|it used to end|removed|untested", ctx):
+                continue
+            bad.append(f"{rel}:{line}")
+    assert not bad, ("these still assert the untested remedy: " + ", ".join(bad))
+
+
 # --- ONE MAGNIFICATION PER DETERMINATION ------------------------------------------------
 def _raster(n=9, nm=51.883, af=0.02, start=1, spec="MAR_X"):
     """n fields at one scale, area fractions spread a little so s is non-zero."""
@@ -263,16 +344,30 @@ def test_the_gradient_is_computed_over_the_determination_too():
     frames = _raster(n=6) + [{"frame": "MAR_X_CBS_0007", "area_fraction": 0.09,
                               "n_cracks_measured": 5, "crack_density_px_per_Mpx": 1.0,
                               "scale_known": True, "nm_per_px": 337.2396}]
-    seen = {}
+    calls = []
 
     import stage
     real = stage.gradient
-    stage.gradient = lambda fs, **kw: seen.setdefault("n", len(fs))
+
+    def _spy(fs, **kw):
+        calls.append(len(fs))
+        # A stub has to return the real shape. This one returned an int, so the day a
+        # second caller appeared it raised inside the module instead of failing an
+        # assertion here -- and a stub that cannot be called twice is a stub that pins the
+        # number of callers, which is not what this test is about.
+        return {"n_frames_with_position": len(fs), "axis": "stage_y",
+                "spearman_rho": 0.0, "p_value": 1.0, "field_max_min_ratio": 1.0,
+                "significant": False}
+
+    stage.gradient = _spy
     try:
         S.summarise("sem/gated", "MAR_X", frames)
     finally:
         stage.gradient = real
-    assert seen["n"] == 6, f"the 337 nm/px field must not reach stage.gradient, got {seen}"
+    assert calls, "stage.gradient was never called"
+    assert calls[0] == 6, f"the 337 nm/px field must not reach stage.gradient, got {calls}"
+    assert all(n <= 6 for n in calls), (
+        f"no call may see the excluded overview field, got {calls}")
 
 
 def test_the_corpus_values_this_rule_was_written_for():

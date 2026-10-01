@@ -438,6 +438,114 @@ def test_the_discordance_rate_matches_the_dataset():
             f"{flips}/{len(pairs)} = {flips / len(pairs):.4f}")
 
 
+def test_the_detector_calibre_ratios_match_the_dataset():
+    """DETECTOR_CALIBRE_RATIOS is stored, not computed live, because for_arm() is handed
+    frames.json only. Stored means it can drift from the corpus, which is exactly how
+    REGIME_DISCORDANCE shipped wrong, so it is recomputed here from the region table.
+
+    These two exist to stop the app asserting width invariance under the detector swap.
+    The test therefore checks the VALUES and, separately, the DIRECTION that is the whole
+    reason they are quoted: both independent calibres must disagree in sign with the
+    area/length width ratio, or the sentence quoting them is making the opposite point."""
+    import json, math, statistics
+    from collections import Counter, defaultdict
+    fp = os.path.join(REPO, "analysis", "out", "frames.json")
+    cp = os.path.join(REPO, "analysis", "out", "cracks.json")
+    if not (os.path.exists(fp) and os.path.exists(cp)):
+        pytest.skip("no dataset built")
+    from specimen_stats import detector_of, field_key
+    frames = [f for f in json.load(open(fp, encoding="utf-8"))
+              if f.get("arm") == "sem/gated"]
+    byframe = defaultdict(list)
+    for c in json.load(open(cp, encoding="utf-8")):
+        byframe[c["frame"]].append(c)
+
+    pairs = {}
+    for f in frames:
+        if not f.get("nm_per_px") or not f.get("total_skeleton_length_px"):
+            continue
+        d = detector_of(f.get("frame", ""))
+        if d in ("CBS", "ETD"):
+            pairs.setdefault((field_key(f["frame"]), f["nm_per_px"]), {})[d] = f
+    ready = [(k, v) for k, v in pairs.items() if len(v) == 2]
+    if not ready:
+        pytest.skip("no detector pairs")
+    modal = Counter(k[1] for k, _ in ready).most_common(1)[0][0]
+    both = [v for k, v in ready if k[1] == modal]
+
+    def area_weighted(frame_name, key):
+        """Per-field area-weighted mean of a per-region calibre. PER FIELD, because
+        pooling regions across fields breaks the pairing that is the whole design -- and
+        it is not a cosmetic difference: pooled, both ratios come out BELOW 1."""
+        rg = [x for x in byframe[frame_name]
+              if x.get(key) is not None and x.get("Area_px")]
+        if not rg:
+            return None
+        tot = sum(x["Area_px"] for x in rg)
+        return sum(x[key] * x["Area_px"] for x in rg) / tot
+
+    for key, name in (("MaxWidth_px", "max_inscribed_width"),
+                      ("EllipseMinorAxis_px", "ellipse_minor_axis")):
+        rs = []
+        for v in both:
+            a = area_weighted(v["CBS"]["frame"], key)
+            b = area_weighted(v["ETD"]["frame"], key)
+            if a and b:
+                rs.append(a / b)
+        got = statistics.median(rs)
+        assert C.DETECTOR_CALIBRE_RATIOS[name] == pytest.approx(got, abs=0.02), (
+            f"{name}: constant is {C.DETECTOR_CALIBRE_RATIOS[name]}, dataset gives "
+            f"{got:.4f} over {len(rs)} pairs at {modal} nm/px")
+        assert got > 1.0, (
+            f"{name} no longer exceeds 1 ({got:.4f}): the statement quotes these as "
+            f"calibres that move the OPPOSITE way to area/length width, and that is the "
+            f"only reason they are there")
+
+    # The area/length width ratio must still sit below 1, i.e. on the other side of the
+    # two calibres above. If this ever flips, the estimators agree and the sentence's
+    # "the sign depends on the estimator" is no longer true.
+    wr = [((v["CBS"]["crack_area_px"] / v["CBS"]["total_skeleton_length_px"]) /
+           (v["ETD"]["crack_area_px"] / v["ETD"]["total_skeleton_length_px"]))
+          for v in both
+          if v["CBS"].get("crack_area_px") and v["ETD"].get("crack_area_px")]
+    assert statistics.median(wr) < 1.0, (
+        f"area/length width ratio is {statistics.median(wr):.4f}, no longer below 1; the "
+        f"estimators now agree in sign and the statement must be re-worded")
+
+
+def test_the_detector_statement_asserts_no_width_invariance():
+    """The statement used to say the detector changes "LENGTH, not width". The width term
+    it rested on is area/length, which is log(area) - log(length) by construction and so
+    cannot referee width independently. Three phrasings of that claim are forbidden, and
+    the statement must still carry the range and the direction that survived."""
+    import json
+    fp = os.path.join(REPO, "analysis", "out", "frames.json")
+    sp = os.path.join(REPO, "analysis", "out", "specimens.json")
+    if not (os.path.exists(fp) and os.path.exists(sp)):
+        pytest.skip("no dataset built")
+    frames = json.load(open(fp, encoding="utf-8"))
+    specs = json.load(open(sp, encoding="utf-8"))
+    said = C.for_arm([r for r in specs if r["arm"] == "sem/gated"],
+                     [f for f in frames if f["arm"] == "sem/gated"])
+    st = next((s for s in said if "crack centreline" in s["text"]), None)
+    assert st, "the detector-swap statement is gone entirely; it was meant to be re-worded"
+    whole = " ".join(filter(None, (st["text"], st["basis"], st["hedge"]))).lower()
+    for banned in ("not width", "not in width", "width is unchanged",
+                   "same width", "width is not identical"):
+        assert banned not in whole, (
+            f"the width-invariance claim is back as {banned!r}: {whole!r}")
+    # It must not offer the between-field comparison as a control either -- at the median
+    # length moves more than width there too (0.427 vs 0.369, 165 of 288 pairs).
+    assert "control" not in whole, (
+        f"the between-field control is back; it does not hold: {whole!r}")
+    # And what survived must still be there: a range, not a single multiplier.
+    assert "\u00d7 to " in st["text"] or "x to " in st["text"], (
+        f"the statement quotes a single multiplier again: {st['text']!r}")
+    assert st["level"] != "good", (
+        "the detector-swap statement is a positive finding again; what it establishes is "
+        "that measured length depends on the detector, which is a limit")
+
+
 def test_no_fixed_orientation_null_range_is_quoted():
     """The null is per-frame and spans 0.04–1.00 on this corpus; only 31% of frames fall in
     the 0.16–0.29 that was being quoted as though it were the null, and 12 frames exceed 0.29
@@ -605,8 +713,14 @@ def test_a_calibrated_finding_is_not_asserted_for_an_arm_it_was_not_measured_on(
     assert "resolution artefact" not in joined, (
         "the coarse-pixel calibration is being asserted for txm, which it was not "
         "measured on")
-    assert "LENGTH, not width" not in joined, (
+    # The phrase this used to look for ("LENGTH, not width") was withdrawn from the
+    # statement, which would have left this guard passing while measuring nothing. Key on
+    # what the statement says NOW, and on the arm-independent fact that txm has no
+    # detector pair at all, so the line cannot be rebuilt around a new phrasing either.
+    assert "crack centreline" not in joined, (
         "the detector finding is being asserted for txm, which has no detector pair")
+    assert "CBS" not in joined and "ETD" not in joined, (
+        f"a detector is named in the txm read-out, which has no detector pair: {joined!r}")
 
 
 # --- THE OTHER ARM GETS FINDINGS TOO ---------------------------------------------------

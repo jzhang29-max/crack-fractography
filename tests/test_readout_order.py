@@ -95,7 +95,7 @@ def test_every_statement_the_engine_produced_is_reachable():
     lost, and nothing miscategorised in either direction."""
     ro = {**STATEMENTS, "arm": [
         {"level": "bad", "text": "0 of 9 specimens reach E562's target."},
-        {"level": "good", "text": "The detector changes crack LENGTH, not width."},
+        {"level": "bad", "text": "CBS carries 1.8x to 6.0x ETD's crack centreline."},
     ]}
     got = {x["st"]["text"] for x in findings(ro)} | {x["st"]["text"] for x in limits(ro)}
     expected = {s["text"] for g in ro.values() for s in g}

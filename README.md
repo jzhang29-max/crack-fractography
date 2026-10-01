@@ -28,9 +28,11 @@ AnalyzeSkeleton**, shipped since about 2008. The density taxonomy (P10/P20/P21) 
 **Dershowitz & Herda (1992)**. The projected-length roughness parameter is **Underwood &
 Banerji**. The sampling, counting and confidence-interval layer is **ASTM E562, E1382,
 E1245, E2283** and **ISO 643**. The censoring machinery is rock-mechanics window sampling.
-Forty-three separate novelty framings were tested against the literature over this
-project's life and all forty-three were already owned; see
-`docs/PRACTICE_AND_PRIOR_ART.md` for the list and the citations that killed each one. The
+Forty-eight separate novelty framings were tested against the literature over this
+project's life and all forty-eight were already owned. `docs/PRACTICE_AND_PRIOR_ART.md`
+carries the running tally, the named owner for each framing recorded there, and the full
+detail for the last two rounds; it is NOT a per-framing ledger of all forty-eight, and this
+sentence used to say it was. The
 closest prior art is **MIPAR** (Sosa et al. 2014), a commercial desktop application whose
 own product page advertises quantifying additive-manufacturing crack density, size
 distribution and localized density — this app's pitch, in this app's material system. Free
@@ -44,8 +46,15 @@ collapsed to fields, because a field imaged through two detectors is one field. 
 magnification per determination, because a 6.5× coarser pixel measures a different
 population. Arms never pooled. Specimens never ranked, because one imaged site per specimen
 makes the between-field and between-specimen variance the same parameter. Every statistic
-carrying its null or its interval, and every refusal stated on screen rather than left as a
-silence. The measured results it does assert — the detector changes crack length rather than
+carrying its null or its interval. Refusals come in two layers and only one of them is on
+screen: the five VALUE-level suppressions are evaluated against the loaded data and
+rendered (no interval below three fields; micrometres withheld when N of M frames have no
+scale; the rose verdict against a 1000-draw null; the E562 comparison; the determination
+gated to the modal magnification), while the four QUESTION-level refusals -- crack mode,
+tortuosity, ductile/brittle, crack depth -- travel in `/api/readout` and are deliberately
+not rendered, because the block that listed them opened a findings page with what the app
+cannot do and was removed at a user's request. Their budget figures are carried as recorded
+prose in `analysis/conclusions.py` and are not recomputed for a loaded dataset. The measured results it does assert — the detector changes crack length rather than
 width; crack area survives a 6× coarser pixel — each survived an adversarial attempt to kill
 them, and the ones that did not survive are recorded as killed.
 

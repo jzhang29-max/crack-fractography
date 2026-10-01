@@ -706,7 +706,8 @@ function raBadge(ci, rec) {
   const tip = "ASTM E562 relative accuracy: the 95% interval as a percentage of the mean. "
     + "The usual target is 10% or better. " + (grad
       ? "These fields trend across one patch, so more tiles in the SAME patch will not "
-        + "narrow it — more patches would."
+        + "narrow it. Whether separated patches would is untested here — every specimen "
+        + "has one imaged patch, so between-patch variance has never been measured."
       : "Above it, more fields narrow the interval on this site — they do not make it "
         + "comparable to another specimen.");
   return `<span class="ra${v > 10 ? " bad" : ""}" title="${esc(tip)}">±${v}%</span>`;
