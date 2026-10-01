@@ -115,10 +115,14 @@ def run(base):
         #
         # Belt and braces because the two act at different layers and the failure is only
         # reproducible on a machine I do not have.
+        # ONE proxy setting, not two. The first attempt passed BOTH
+        # proxy={"server": "direct://"} (which Playwright turns into
+        # --proxy-server=direct://) and --no-proxy-server. Those are contradictory flags
+        # and Chromium's behaviour when given both is not something to rely on; the
+        # Windows navigation still timed out. Keep the args form only.
         br = pw.chromium.launch(
-            proxy={"server": "direct://"},
             args=["--no-proxy-server", "--proxy-bypass-list=*",
-                  "--disable-dev-shm-usage"])
+                  "--no-sandbox", "--disable-dev-shm-usage"])
         pg = br.new_page(viewport={"width": 1400, "height": 1000})
         pg.on("pageerror", lambda e: errors.append(f"pageerror: {e}"))
         pg.on("console", lambda m: errors.append(f"console.{m.type}: {m.text}")
@@ -128,7 +132,36 @@ def run(base):
         # on macOS and Linux by timing luck and timed out at 120s on Windows. The real
         # readiness signal is the elements this check is about, and it waits for those
         # below, so the load condition only has to get the document parsed.
-        pg.goto(base + "/", wait_until="domcontentloaded", timeout=120_000)
+        # DIAGNOSE RATHER THAN GUESS AGAIN. This navigation has now failed twice on the
+        # Windows runner while urllib, in this same process, got /api/health and completed
+        # a multipart upload against the same URL. So the server is up and something about
+        # the BROWSER's network path is not. Two blind fixes is enough: on failure, ask the
+        # browser itself what it can reach and print that, so the next run says why.
+        try:
+            pg.goto(base + "/", wait_until="domcontentloaded", timeout=120_000)
+        except Exception as e:
+            print(f"goto failed: {type(e).__name__}")
+            try:
+                probe = pg.evaluate(
+                    """async (u) => {
+                        const out = {};
+                        try {
+                            const r = await fetch(u + '/api/health', {cache: 'no-store'});
+                            out.status = r.status;
+                            out.body = (await r.text()).slice(0, 120);
+                        } catch (err) { out.fetchError = String(err); }
+                        return out;
+                    }""", base)
+                print("in-browser fetch of /api/health:", json.dumps(probe))
+            except Exception as e2:
+                print("the in-browser probe itself failed:", type(e2).__name__, str(e2)[:160])
+            try:
+                print("server log tail:")
+                print("".join(open("_ui_server.log", encoding="utf-8",
+                                   errors="replace").readlines()[-25:]))
+            except Exception:
+                pass
+            raise
 
         # 1. The shell.
         tabs = pg.eval_on_selector_all("#tabs button", "els => els.map(e => e.textContent.trim())")
