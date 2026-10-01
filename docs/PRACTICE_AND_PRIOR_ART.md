@@ -246,7 +246,8 @@ the specimen-level sign test is 4/4 at **p = 0.125**, which is the p floor at n 
 design cannot produce a smaller p, and the project's own rule is that the specimen is the
 inferential unit; and the ratio is a monotone function of how much crack is present
 (6.00× / 4.88× / 3.38× / 1.83× by ETD area-fraction stratum), which is the signature of a
-detection floor rather than a constant. *Being corrected under its own task.*
+detection floor rather than a constant. **Corrected 2026-10-01 — see Round 8 below for what
+the statement says now, including the mechanism, which is largely one uncalibrated constant.**
 
 **2. The shipped stage gradient was CBS-only. Fixed, and the finding survived.**
 `specimen_stats._one_frame_per_field` kept the alphabetically first frame per physical field,
@@ -303,3 +304,150 @@ segmenter fixed, segmented crack amount and extent both scale ~2.3–2.8× CBS o
 quotient is within 8% of unity" — which is a technical note quantifying a qualitative result
 Schmies et al. already own. Stated at that size it is honest and still worth recording. Stated
 any larger it is refutable in one search.
+
+---
+
+## Round 8: the detector effect has a named cause inside our own pipeline — 2026-10-01
+
+Round 7 killed the *framing* of the detector result ("LENGTH, not width", one multiplier).
+Round 8 asks the next question — **where does the 2.8× come from?** — and the answer moves the
+result further from a detector finding and closer to a pipeline finding. The statement in
+`analysis/conclusions.py` has been re-worded accordingly and demoted from `good` to `bad`.
+
+### What the statement says now
+
+`CBS carries 1.8× to 6.0× ETD's crack centreline, depending how much ETD found.` The range is
+the extreme ETD area-fraction strata, not the extreme fields; the direction (CBS longer on
+**35 of 36** fields) is what is established; the overall median 2.79× is carried only as the
+midpoint of a trend. The between-field "CONTROL" sentence is **gone**, and no width claim is
+made in either direction.
+
+### Why the control sentence had to go — its own numbers refuted it
+
+It claimed that between two *different* fields with the *same* detector, an area difference
+routes through width instead, citing "only 69 of 144 and 96 of 144". Those two counts sum to
+**165 of 288 — a majority**, i.e. length moves more than width between fields too. At the
+median, between-field |log length| is 0.427 against |log width| 0.369; the ETD half alone is
+96/144 with 0.713 against 0.352. The detector swap is a more extreme version of the same
+pattern, not a different routing. A minority was read off a majority.
+
+### No instrument here can referee width — including the two that looked like they could
+
+`area/length` width is `log(area) − log(length)` by construction (verified: maximum deviation
+3.33e-16, i.e. float64 zero), so it is pinned near 1 whenever area and length move together —
+here 2.72× and 2.79×. `mean_width_px_median` cannot referee it either: it is the **median over
+regions** of per-region `Area_px/SkeletonLength_px`, so still amount-over-extent, just at
+region level. It is **not** the global `crack_area_px/total_skeleton_length_px` — the two agree
+within 0.01 px on only **17 of 348** frames, worst case 138.6 px against 6.7 px. An earlier
+draft of this section said they were the same number; that was a verification of the per-region
+field attached in prose to the frame-level one.
+
+That leaves the two per-region instruments in `cracks.json` that are not amount-over-extent.
+**They were briefly offered here as evidence that width moves the OTHER way, and that is now
+withdrawn too.** Both are size proxies:
+
+| | `MaxWidth_px` (distance transform) | `EllipseMinorAxis_px` (fitted ellipse) |
+|---|---|---|
+| naive: per-field area-weighted, median over pairs | **1.26×** (26/36) | **1.67×** (29/36) |
+| log–log slope on region area | **0.426** (r 0.952) — it is a maximum | **0.561** (r 0.950) — a second moment |
+| size-matched: 20 equal-count area bins | **0.97×** — unity | **1.02×** — unity |
+| unweighted median over regions | 1.02× | 1.08× |
+| pooled across pairs | 0.84× — *inverts* | 0.96× — *inverts* |
+| size-only null (area + ETD's size distribution, nothing about width) | **1.53× predicted vs 1.26× observed — overshoots** | 1.54× vs 1.67× |
+
+Both instruments are strongly monotone in region area, so area-weighting them on a detector
+that marks **more and bigger** regions manufactures a ratio out of size. Size-matched strata
+put both at unity. A null that knows only each region's area and ETD's own size–calibre
+relation *overshoots* the distance-transform result. The unweighted median over regions is
+already at unity, so the area weighting was doing all the work — and an instrument whose answer
+moves 0.84× → 1.67× with the weighting choice is not measuring width. What the 1.26×/1.67×
+actually reports is the 2.72× area and 2.79× length already on the record.
+
+So **no instrument in this dataset supports a width change in either direction**, and the card
+asserts none. `conclusions.DETECTOR_CALIBRE_RATIOS` now stores the naive **and** the
+size-matched pair, and `tests/test_conclusions.py` asserts the *confound*: naive away from
+unity, size-matched at unity, and each instrument still size-monotone. The previous version of
+that test asserted the naive ratios **exceed 1**, which would have pinned the withdrawn claim
+in place — a guard on a conclusion rather than on the thing that makes it doubtful.
+
+**Discrepancies on the record.** The figures that prompted this round were 1.285× with CBS>ETD
+on 31 of 36 and 1.620×; recomputed as a per-field area-weighted mean they are 1.26×/26-of-36
+(Wilcoxon p = 1.6e-3) and 1.67×/29-of-36 (p = 1.9e-4). The exact original recipe was not
+recoverable, and every weighting gives the same direction while the decimals move — which was
+itself the clue. Also **not** reproduced: the claim that the distance-transform calibre moves
+nearly as much under the detector swap as between fields (reported 0.348 vs 0.414, ratio 1.19).
+That ratio is **unstable against choices nobody stated** — 0.40, 0.53, 1.02 or 1.43 depending
+on median-vs-mean and whether censored regions are included — so it is quoted nowhere, and the
+argument above rests on the construction identity and the size confound, neither of which
+depends on that choice.
+
+### The acquisition is clean — this is a detection-mode contrast, not a settings bundle
+
+An earlier draft of this section implied the two channels were confounded by acquisition
+settings. **They are not.** Across all 40 pairs carrying FEI metadata (the block beginning
+`[User]` in the TIFFs under `sem-crack-detector/original/`; all 72 frames of the 36 analysed
+pairs carry it, though only 80 of the 114 `MAR_*` files do), these are **bit-identical within
+every pair**: `EScan.Dwell`, `EBeam.HV`, `EBeam.BeamCurrent`, `EBeam.WD`, stigmator and source
+tilt, `EScan.HorFieldsize`, `Scan.PixelWidth`, every stage axis (`StageX/Y/Z/R/T`) **and the
+acquisition timestamp** (`User.Date`, `User.Time`). The only keys that ever differ are the
+detector name and mode, each detector's own contrast/brightness/gain block, the display
+zoom-pan, and `EBeam.EmissionCurrent` on 1 of 40 pairs.
+
+Identical timestamps confirm these are two channels of **one simultaneous scan**, which is as
+clean as a paired contrast gets. And a detector's own gain is part of what using that detector
+means, so the gain difference is not a confound to apologise for:
+
+| | CBS | ETD |
+|---|---|---|
+| `ContrastDB` | **45.28 on all 36** — one setting, never touched | median **32.32**, range 27.12–37.50 |
+| `Setting` | `A+B+C+D` — four summed quadrants | `250` — one element |
+| 16-bit frame median | 44.9k, pinned (44.5k–45.5k) | 25.8k, scattered (19.3k–38.2k) |
+
+CBS `ContrastDB` exceeds ETD's on **36 of 36** pairs. One asymmetry does survive as a caveat:
+the CBS channel ran at a single fixed gain throughout while the ETD channel was re-adjusted
+field to field, so the **ETD arm carries operator-dependent variation the CBS arm does not** —
+a second reason the ratio is not a constant, and a within-arm nuisance rather than a
+between-arm confound.
+
+### The mechanism: a large share is our own segmenter, but not one constant
+
+`sem-crack-detector/code/detect_cracks.py::segment_dark_regions` thresholds with
+
+```python
+thresh = min(otsu_thresh, median - mad_k * mad * 1.4826)   # mad_k = 5.0
+relative_mask = smooth < thresh
+return relative_mask | (img8 < absolute_dark_thresh)       # absolute_dark_thresh = 10
+```
+
+and its **own docstring names "this dataset's ETD captures"** as the low-contrast/unimodal case
+the MAD term exists to cap. So the ETD channel is the channel the fallback was written for, and
+`mad_k = 5.0` is a hand-set constant never calibrated against the CBS channel it is implicitly
+compared with. That much is readable in the source and is not in dispute.
+
+**The size of its contribution is contested, and the figure quoted here has been revised
+down.** Re-running the real pipeline (`load_as_uint8` → `find_field_of_view` →
+`flatten_background` → `segment_dark_regions`) on 8 full pairs gives a dark-fraction share of
+**44–150% of the log area-fraction gap, median ~70%** — not the "66–96%" or the three-pair
+`1.85× / 4.97× / 2.49×` an earlier draft carried, neither of which this repository reproduced
+independently. Two further corrections to that draft:
+
+- **It is not attributable to `mad_k` alone.** The absolute `img8 < 10` term supplies **13–100%
+  of each frame's dark area** and is the sole contributor on at least one pair, so the
+  relative/MAD threshold is not the single lever the earlier text implied.
+- **Re-tuning `mad_k` on ETD is a calibration to a target, not a fix.** It equalises the area
+  number, but **lowers mask agreement with the registered CBS mask on 2 of 3 pairs** —
+  equalising a summary statistic moved the masks further apart.
+
+### What this does to the result
+
+The paired design is sound and the direction is real: 36 physical fields, one simultaneous scan
+with every beam and stage parameter identical, two detectors, CBS longer on 35 of 36. What is
+*not* supported is a single multiplier, any width claim, or a reading of the effect as pure
+detector physics — a median ~70% of the gap is reproduced by this repository's own segmentation
+before detector response is invoked, which is why the card is a limit rather than a finding.
+
+It is also **not a correction factor.** `mad_k` was re-tuned per pair on three pairs only, it
+lowers mask agreement where it was checked, and equalising dark fraction is not evidence that
+the equalised answer is right, since nothing here referees which pixels are crack. The open
+item is a calibration of both threshold terms against labelled data on both channels, which
+would decide whether CBS over-segments, ETD under-segments, or both.

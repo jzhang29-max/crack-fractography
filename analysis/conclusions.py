@@ -61,19 +61,43 @@ E562_RA_TARGET = 10.0
 #: TXM median is 0.466, i.e. a 2.1x overestimate, which is self-disqualifying either way.
 LENGTH_TRUST_RATIO = 1.5
 
-#: CBS/ETD calibre ratios on the 36 paired fields at 51.883 nm/px, from the TWO per-region
-#: instruments in cracks.json that are NOT area/length -- the distance-transform maximum
-#: inscribed width and the fitted ellipse minor axis -- each as a per-field area-weighted
-#: mean, then the median over the 36 pairs. These are stored rather than computed live
-#: because for_arm() is handed frames.json only, and loading a 40 MB region table in the
-#: request path to decorate one sentence is not worth it. They exist to stop this app
-#: asserting width INVARIANCE under the detector swap: area/length says CBS is ~8%
-#: narrower, these two say it is 26% and 67% WIDER, so the sign of the width change is a
-#: property of the estimator and the app states no width result here at all. Both move
-#: further from 1 if censored edge regions are dropped (1.34x and 1.86x), so the figures
-#: below are the conservative end. Recomputed by tests/test_conclusions.py from
-#: analysis/out/cracks.json so they cannot drift from the corpus.
-DETECTOR_CALIBRE_RATIOS = {"max_inscribed_width": 1.26, "ellipse_minor_axis": 1.67}
+#: WHY THIS APP STATES NO WIDTH RESULT UNDER THE DETECTOR SWAP, in numbers, on the 36
+#: paired fields at 51.883 nm/px. Three instruments, none of which can answer the question:
+#:
+#:   "naive"        per-field area-weighted mean of a per-region calibre, median over pairs.
+#:                  Reads 1.26x and 1.67x -- which LOOKS like the opposite sign to
+#:                  area/length's 0.92x, and shipped briefly as exactly that argument.
+#:   "size_matched" the same comparison inside 20 equal-count region-area bins, geometric
+#:                  mean over bins. Both collapse to unity.
+#:
+#: The naive figures are SIZE, not width. Both instruments are strongly monotone in region
+#: area -- log-log slope 0.426 (r 0.952) for the distance transform, which is a maximum, and
+#: 0.561 (r 0.950) for the ellipse minor axis, which is a second moment -- so area-weighting
+#: them on a detector that marks bigger regions manufactures a ratio. Measured: size-matched
+#: strata put both at unity, and a size-only null (each CBS region handed the calibre an ETD
+#: region of the same area had, knowing nothing about width) OVERSHOOTS the distance
+#: transform, 1.53x null against 1.26x observed.
+#:
+#: THE TWO INSTRUMENTS ARE NOT EQUALLY ACCOUNTED FOR, and flattening them into one verdict
+#: would overstate the case. That same null lands 1.54x against the ellipse's 1.67x
+#: observed, i.e. slightly UNDER -- so size alone does not fully explain the ellipse, and
+#: for it the decisive facts are the size-matched unity and the near-unity unweighted
+#: median rather than the null. Neither instrument supports a width claim; they fail to
+#: support it for partly different reasons. The unweighted median over regions is
+#: already 1.02x and 1.08x, so the area weighting was doing all of the work, and pooling
+#: regions across pairs inverts both below 1 (0.84x, 0.96x). An instrument whose answer
+#: moves 0.84x -> 1.67x with the weighting choice is not measuring width.
+#:
+#: So: area/length is log(area)-log(length) by construction, and the two non-area/length
+#: instruments are size proxies. NO instrument in this dataset can referee a width change
+#: here, in either direction, and the statement below asserts none. Stored rather than
+#: computed live because for_arm() is handed frames.json only and the region table is 40 MB;
+#: tests/test_conclusions.py recomputes all four from analysis/out/cracks.json, and fails if
+#: the size-matched pair stops straddling unity or the naive pair stops being confounded.
+DETECTOR_CALIBRE_RATIOS = {
+    "naive": {"max_inscribed_width": 1.26, "ellipse_minor_axis": 1.67},
+    "size_matched": {"max_inscribed_width": 0.97, "ellipse_minor_axis": 1.02},
+}
 
 
 def _s(text, basis, hedge=None, level="info", value=None):
@@ -664,17 +688,39 @@ def for_arm(records, frames=None):
                 continue
             d = detector_of(f.get("frame", ""))
             if d in ("CBS", "ETD"):
-                pairs.setdefault((field_key(f["frame"]), f["nm_per_px"]), {})[d] = f
+                # ARM IS PART OF THE KEY. for_arm() takes no arm argument and reads
+                # f["arm"] nowhere else: it scopes nothing internally and trusts its
+                # caller, which today is app/server.py's /api/readout and does filter to
+                # one arm before calling. So this is DEFENSIVE and changes no current
+                # number -- gated-only, machine-only and all-arms-mixed all give 36 pairs
+                # at 51.883 nm/px with median length 2.788x and area 2.722x. Without the
+                # arm in the key, a caller that passed two arms would have one record per
+                # (field, detector) silently overwrite the other.
+                #
+                # It is not luck that the numbers agree. All 142 frame stems appear in
+                # both SEM arms; 98 are byte-identical on area and length and 44 differ
+                # under operator correction. The 72 frames behind these 36 pairs contain
+                # ZERO of the 44, because the paired specimens (MAR_AmbB_AS/HIP,
+                # MAR_H_AS/HIP, 9 fields each) and the operator-corrected ones
+                # (260708_316_H_b2, MAR_Amb_HIP, MAR_Amb_AS, ...) are DISJOINT SETS --
+                # note MAR_AmbB_HIP and MAR_Amb_HIP are different specimens. Add a
+                # corrected specimen to the paired set and the collision becomes live.
+                pairs.setdefault(
+                    (f.get("arm"), field_key(f["frame"]), f["nm_per_px"]), {})[d] = f
         # ONE MAGNIFICATION ACROSS ALL THE PAIRS, not one per pair. Keying on
-        # (field, nm_per_px) already guarantees both members of a pair share a scale, but
-        # taking a median over pairs at DIFFERENT scales is the pooling this app forbids
+        # (arm, field, nm_per_px) already guarantees both members of a pair share a scale,
+        # but taking a median over pairs at DIFFERENT scales is the pooling this app forbids
         # everywhere else -- and it moves the answer: including the 337.2396 nm/px overview
         # pairs, where the ratio is about 1.0, pulled 2.79x down to 2.5x. Modal scale only.
         from collections import Counter as _C
         ready = [(k, v) for k, v in pairs.items() if len(v) == 2]
         if ready:
-            modal = _C(k[1] for k, _ in ready).most_common(1)[0][0]
-            both = [v for k, v in ready if k[1] == modal]
+            # nm_per_px is key[NM], named rather than indexed: it was k[1] until the arm
+            # went in front of it, and a stale literal index here would have silently
+            # taken the modal FIELD NAME as the magnification and dropped every pair.
+            NM = 2
+            modal = _C(k[NM] for k, _ in ready).most_common(1)[0][0]
+            both = [v for k, v in ready if k[NM] == modal]
         else:
             both, modal = [], None
         if len(both) >= 8:
@@ -695,15 +741,21 @@ def for_arm(records, frames=None):
             # legible instead of alarming: the single 31x field is one raster position,
             # while "emptiest ETD fields against fullest" is a reproducible contrast.
             # Edges are decades of ETD area fraction, not tuned.
-            strata, EDGES = [], [(0.0, 0.001), (0.001, 0.005), (0.005, 0.02), (0.02, 1.0)]
+            strata, EDGES = [], [(0.0, 0.001), (0.001, 0.005), (0.005, 0.02),
+                                 (0.02, float("inf"))]
             for lo, hi in EDGES:
                 g = [r["lr"] for r in rows
                      if r["etd_af"] is not None and lo <= r["etd_af"] < hi]
                 if g:
                     strata.append((lo, hi, len(g), _st.median(g)))
             if len(lr) >= 8 and len(strata) >= 2:
-                hi_med = strata[0][3]   # emptiest ETD fields: biggest ratio
-                lo_med = strata[-1][3]  # fullest: smallest
+                # min/max of the stratum medians, NOT the first and last stratum. The
+                # trend is currently monotone (6.0x down to 1.8x), but keying the headline
+                # on position would print the range backwards as "6.0x to 1.8x" the moment
+                # a rebuilt corpus broke that monotonicity, and a reversed range is the
+                # kind of thing a reader corrects rather than disbelieves.
+                lo_med = min(s[3] for s in strata)
+                hi_med = max(s[3] for s in strata)
                 worst = max(({"spec": s,
                               "lo": min(r["lr"] for r in rows if r["spec"] == s),
                               "hi": max(r["lr"] for r in rows if r["spec"] == s)}
@@ -718,28 +770,39 @@ def for_arm(records, frames=None):
                     f"longer centreline on {sum(x > 1 for x in lr)} of {len(lr)} fields, "
                     f"so the DIRECTION is established; the SIZE is not a constant. "
                     f"Stratified by the ETD channel's own area fraction it runs "
-                    + " / ".join(f"{m:.1f}× (ETD area fraction {lo:g}-{hi:g}, n={n})"
+                    + " / ".join(f"{m:.1f}× (ETD area fraction "
+                                 + (f"over {lo:g}" if hi == float("inf")
+                                    else f"{lo:g}-{hi:g}") + f", n={n})"
                                  for lo, hi, n, m in reversed(strata)) +
                     f". Inside {worst['spec']} alone -- one specimen, one stage raster, "
                     f"one gain pair -- it spans {worst['lo']:.2f}× to {worst['hi']:.2f}×, "
                     f"so the stratum medians are a trend and not an interval. The overall "
                     f"median is {_st.median(lr):.2f}× and is reported here only as the "
-                    f"midpoint of that trend. NO WIDTH CLAIM is made: area/length width "
-                    f"is log(area)-log(length) by construction, and the two independent "
-                    f"calibres in cracks.json move the other way "
-                    f"({DETECTOR_CALIBRE_RATIOS['max_inscribed_width']:.2f}× maximum "
-                    f"inscribed width, "
-                    f"{DETECTOR_CALIBRE_RATIOS['ellipse_minor_axis']:.2f}× ellipse minor "
-                    f"axis), so the sign of any width change depends on the estimator.",
+                    f"midpoint of that trend. NO WIDTH CLAIM is made, in either direction: "
+                    f"area/length width is log(area)-log(length) by construction, and the "
+                    f"two per-region instruments that are not area/length (maximum "
+                    f"inscribed width, ellipse minor axis) are each strongly monotone in "
+                    f"region area, so on a detector that marks bigger regions they read as "
+                    f"width change when they are reporting size -- a size-only null "
+                    f"overshoots them and size-matched strata put both at unity "
+                    f"({DETECTOR_CALIBRE_RATIOS['size_matched']['max_inscribed_width']:.2f}×"
+                    f" and "
+                    f"{DETECTOR_CALIBRE_RATIOS['size_matched']['ellipse_minor_axis']:.2f}×)."
+                    f" No instrument here can referee width.",
                     hedge="It does NOT say CBS sees more real crack. A binary mask cannot "
                           "say whether the extra centreline is crack ETD missed or "
                           "segmentation gain on a noisier backscatter image, and nothing "
-                          "here referees these fields. Nor is it purely optical: the two "
-                          "channels ran at different amplifier gains (CBS ContrastDB ~45 "
-                          "against ETD ~27-37), and re-tuning ONE uncalibrated segmenter "
-                          "constant on the ETD channel alone equalises the two channels "
-                          "on every pair tried, so part of this is the pipeline rather "
-                          "than the detector. This is not a correction factor.",
+                          "here referees these fields. What it is NOT confounded by is "
+                          "acquisition: across the 40 pairs carrying FEI metadata, dwell, "
+                          "HV, beam current, working distance, field size, pixel width, "
+                          "every stage axis and the timestamp are bit-identical, so this "
+                          "is a clean detection-mode contrast and each detector's own gain "
+                          "is part of what using it means. Two real caveats remain: ETD's "
+                          "own gain was re-adjusted field to field (ContrastDB 27.1-37.5) "
+                          "while CBS sat fixed at 45.3, so the ETD arm carries operator "
+                          "variation the CBS arm does not; and a large share of the gap is "
+                          "reproduced by this repository's own segmenter before any "
+                          "detector physics is invoked. This is not a correction factor.",
                     level="bad", value=round(_st.median(lr), 2)))
     except Exception:
         pass

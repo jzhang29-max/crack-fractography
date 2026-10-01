@@ -441,12 +441,16 @@ def test_the_discordance_rate_matches_the_dataset():
 def test_the_detector_calibre_ratios_match_the_dataset():
     """DETECTOR_CALIBRE_RATIOS is stored, not computed live, because for_arm() is handed
     frames.json only. Stored means it can drift from the corpus, which is exactly how
-    REGIME_DISCORDANCE shipped wrong, so it is recomputed here from the region table.
+    REGIME_DISCORDANCE shipped wrong, so all four are recomputed here from the region table.
 
-    These two exist to stop the app asserting width invariance under the detector swap.
-    The test therefore checks the VALUES and, separately, the DIRECTION that is the whole
-    reason they are quoted: both independent calibres must disagree in sign with the
-    area/length width ratio, or the sentence quoting them is making the opposite point."""
+    THE POINT OF THE SIZE-MATCHED PAIR. An earlier version of this test asserted that the
+    two naive ratios EXCEED 1, on the reasoning that they were independent calibres moving
+    opposite to area/length. They are not independent: both are monotone in region area, so
+    area-weighting them on a detector that marks bigger regions manufactures the ratio. That
+    test would now be pinning a confounded number in place. What is asserted instead is the
+    confound itself -- naive away from unity, size-matched AT unity -- because that pair of
+    facts is what licenses the statement's "no instrument here can referee width".
+    """
     import json, math, statistics
     from collections import Counter, defaultdict
     fp = os.path.join(REPO, "analysis", "out", "frames.json")
@@ -472,11 +476,12 @@ def test_the_detector_calibre_ratios_match_the_dataset():
         pytest.skip("no detector pairs")
     modal = Counter(k[1] for k, _ in ready).most_common(1)[0][0]
     both = [v for k, v in ready if k[1] == modal]
+    names = [v[d]["frame"] for v in both for d in ("CBS", "ETD")]
 
     def area_weighted(frame_name, key):
-        """Per-field area-weighted mean of a per-region calibre. PER FIELD, because
-        pooling regions across fields breaks the pairing that is the whole design -- and
-        it is not a cosmetic difference: pooled, both ratios come out BELOW 1."""
+        """Per-field area-weighted mean of a per-region calibre. PER FIELD, because pooling
+        regions across fields breaks the pairing -- and it is not cosmetic: pooled, both
+        ratios come out BELOW 1, which is part of why neither is a width measurement."""
         rg = [x for x in byframe[frame_name]
               if x.get(key) is not None and x.get("Area_px")]
         if not rg:
@@ -484,33 +489,196 @@ def test_the_detector_calibre_ratios_match_the_dataset():
         tot = sum(x["Area_px"] for x in rg)
         return sum(x[key] * x["Area_px"] for x in rg) / tot
 
-    for key, name in (("MaxWidth_px", "max_inscribed_width"),
-                      ("EllipseMinorAxis_px", "ellipse_minor_axis")):
-        rs = []
-        for v in both:
-            a = area_weighted(v["CBS"]["frame"], key)
-            b = area_weighted(v["ETD"]["frame"], key)
-            if a and b:
-                rs.append(a / b)
-        got = statistics.median(rs)
-        assert C.DETECTOR_CALIBRE_RATIOS[name] == pytest.approx(got, abs=0.02), (
-            f"{name}: constant is {C.DETECTOR_CALIBRE_RATIOS[name]}, dataset gives "
-            f"{got:.4f} over {len(rs)} pairs at {modal} nm/px")
-        assert got > 1.0, (
-            f"{name} no longer exceeds 1 ({got:.4f}): the statement quotes these as "
-            f"calibres that move the OPPOSITE way to area/length width, and that is the "
-            f"only reason they are there")
+    KEYS = (("MaxWidth_px", "max_inscribed_width"),
+            ("EllipseMinorAxis_px", "ellipse_minor_axis"))
 
-    # The area/length width ratio must still sit below 1, i.e. on the other side of the
-    # two calibres above. If this ever flips, the estimators agree and the sentence's
-    # "the sign depends on the estimator" is no longer true.
-    wr = [((v["CBS"]["crack_area_px"] / v["CBS"]["total_skeleton_length_px"]) /
-           (v["ETD"]["crack_area_px"] / v["ETD"]["total_skeleton_length_px"]))
-          for v in both
-          if v["CBS"].get("crack_area_px") and v["ETD"].get("crack_area_px")]
-    assert statistics.median(wr) < 1.0, (
-        f"area/length width ratio is {statistics.median(wr):.4f}, no longer below 1; the "
-        f"estimators now agree in sign and the statement must be re-worded")
+    # --- the naive figures, and the assertion that they are STILL confounded -------------
+    for key, name in KEYS:
+        rs = [area_weighted(v["CBS"]["frame"], key) / area_weighted(v["ETD"]["frame"], key)
+              for v in both
+              if area_weighted(v["CBS"]["frame"], key)
+              and area_weighted(v["ETD"]["frame"], key)]
+        got = statistics.median(rs)
+        assert C.DETECTOR_CALIBRE_RATIOS["naive"][name] == pytest.approx(got, abs=0.02), (
+            f"naive {name}: constant is {C.DETECTOR_CALIBRE_RATIOS['naive'][name]}, "
+            f"dataset gives {got:.4f} over {len(rs)} pairs at {modal} nm/px")
+        # Each instrument must still be size-monotone, or the whole withdrawal is moot.
+        xs, ys = [], []
+        for n in names:
+            for x in byframe[n]:
+                if x.get(key) and x.get("Area_px"):
+                    xs.append(math.log(x["Area_px"]))
+                    ys.append(math.log(x[key]))
+        mx, my = statistics.fmean(xs), statistics.fmean(ys)
+        slope = (sum((a - mx) * (b - my) for a, b in zip(xs, ys))
+                 / sum((a - mx) ** 2 for a in xs))
+        assert slope > 0.2, (
+            f"{key} is no longer strongly size-monotone (log-log slope {slope:.3f}); the "
+            f"size confound is the stated reason the naive ratio was withdrawn")
+
+    # --- size-matched: equal-count area bins, geometric mean of within-bin ratios --------
+    for key, name in KEYS:
+        allr = [(x["Area_px"], x[key], ("CBS" if "_CBS_" in n else "ETD"))
+                for n in names for x in byframe[n]
+                if x.get(key) and x.get("Area_px")]
+        srt = sorted(a for a, _, _ in allr)
+        edges = sorted({srt[min(len(srt) - 1, round(i * len(srt) / 20))]
+                        for i in range(21)})
+        logs = []
+        for lo, hi in zip(edges, edges[1:]):
+            c = [w for a, w, d in allr if lo <= a < hi and d == "CBS"]
+            e = [w for a, w, d in allr if lo <= a < hi and d == "ETD"]
+            if len(c) >= 5 and len(e) >= 5:
+                logs.append(math.log(statistics.median(c) / statistics.median(e)))
+        assert len(logs) >= 10, f"only {len(logs)} usable area bins for {key}"
+        got = math.exp(statistics.fmean(logs))
+        assert C.DETECTOR_CALIBRE_RATIOS["size_matched"][name] == pytest.approx(
+            got, abs=0.03), (
+            f"size-matched {name}: constant is "
+            f"{C.DETECTOR_CALIBRE_RATIOS['size_matched'][name]}, dataset gives {got:.4f} "
+            f"over {len(logs)} area bins")
+        assert abs(math.log(got)) < math.log(1.15), (
+            f"size-matched {name} is {got:.4f}, no longer at unity -- the statement says "
+            f"size-matched strata put both at unity and would need re-wording")
+        naive = C.DETECTOR_CALIBRE_RATIOS["naive"][name]
+        assert abs(math.log(naive)) > abs(math.log(got)), (
+            f"{name}: the naive ratio {naive} is no further from unity than the "
+            f"size-matched {got:.4f}, so there is no confound left to report")
+
+
+#: Every arm-level finding this app ships on the real corpus, as (arm, phrase that must
+#: appear in exactly one statement). NOT a wording test -- each phrase is a fragment chosen
+#: to survive re-wording -- it is a CENSUS, and its job is to fail when a finding silently
+#: stops being produced.
+ARM_FINDINGS_CENSUS = {
+    "sem/gated": ["one edge of the raster", "resolution artefact", "E562", "Detector alone",
+                  "crack centreline", "cannot be ordered", "no scale", "Operator corrections"],
+    "sem/machine": ["one edge of the raster", "resolution artefact", "E562", "Detector alone",
+                    "crack centreline", "cannot be ordered", "no scale",
+                    "Operator corrections"],
+    # "Operator corrections" appeared on both TXM arms the day txm/machine was built. It
+    # could not appear before: paired_arm_ratio had no TXM counterpart to pair against, so
+    # the corrections block returned None and the statement was absent -- not swallowed, but
+    # genuinely unanswerable. The census is the record of that, which is why the entry is
+    # added here rather than the count being relaxed.
+    "txm": ["one magnification", "Crack width separates", "E562", "cannot be ordered",
+            "Operator corrections"],
+    # THE MACHINE ARM SAYS THE SAME FIVE THINGS, and that is the point rather than an
+    # oversight: the corrections statement is a property of the PAIR, so it is true of
+    # whichever side you are looking at, and a reader on the model-only arm needs to know
+    # how far the other arm sits from it just as much.
+    "txm/machine": ["one magnification", "Crack width separates", "E562",
+                    "cannot be ordered", "Operator corrections"],
+}
+
+
+def test_no_arm_level_finding_disappears_silently():
+    """for_arm() wraps each of its five finding blocks in a bare `except Exception: pass`.
+    That is deliberate -- /api/readout must not 500 because one statement cannot be built
+    for one arm -- but it means ANY error inside ~100 lines of pairing, stratification and
+    formatting deletes a shipped finding from the card with nothing to show it happened.
+
+    THIS IS THE FAILURE MODE THAT IS WORSE THAN A WRONG NUMBER, because nothing looks
+    broken: the card simply has one fewer sentence and still reads as complete. Exactly one
+    of the five blocks previously had its existence pinned anywhere (by the width-invariance
+    test, as a side effect). A stale positional index, a renamed field in frames.json or a
+    changed dict shape would silently retire any of the other four.
+
+    So: census, not wording. Each phrase is a short fragment chosen to survive re-wording,
+    and the count is asserted too, so a finding cannot vanish and be replaced unnoticed.
+    """
+    import json
+    fp = os.path.join(REPO, "analysis", "out", "frames.json")
+    sp = os.path.join(REPO, "analysis", "out", "specimens.json")
+    if not (os.path.exists(fp) and os.path.exists(sp)):
+        pytest.skip("no dataset built")
+    frames = json.load(open(fp, encoding="utf-8"))
+    specs = json.load(open(sp, encoding="utf-8"))
+    for arm, phrases in ARM_FINDINGS_CENSUS.items():
+        said = C.for_arm([r for r in specs if r.get("arm") == arm],
+                         [f for f in frames if f.get("arm") == arm])
+        texts = [s["text"] for s in said]
+        for phrase in phrases:
+            hits = [t for t in texts if phrase in t]
+            assert len(hits) == 1, (
+                f"{arm}: expected exactly one statement containing {phrase!r}, got "
+                f"{len(hits)}. Either a finding was silently swallowed by one of the bare "
+                f"`except Exception: pass` blocks in for_arm(), or it was re-worded past "
+                f"this fragment. Statements present: {texts}")
+        assert len(said) == len(phrases), (
+            f"{arm}: the read-out has {len(said)} statements, the census expects "
+            f"{len(phrases)}. If a finding was added on purpose, add it to "
+            f"ARM_FINDINGS_CENSUS; if one vanished, a swallowed exception is the first "
+            f"place to look. Statements present: {texts}")
+
+
+def test_the_detector_pairing_key_does_not_collide_across_arms():
+    """for_arm() takes no arm argument and reads f["arm"] nowhere in its body -- it scopes
+    nothing and trusts its caller. The pairing key therefore has to carry the arm itself,
+    or two arms' records for one physical field overwrite each other per (field, detector).
+
+    THIS WAS UNOBSERVABLE ON THE REAL CORPUS AND ON THE OLD FIXTURES. All 142 SEM frame
+    stems appear in both arms, but the 72 frames behind the 36 modal pairs contain zero of
+    the 44 stems that differ between arms, because the paired specimens and the
+    operator-corrected ones are disjoint sets -- so gated-only, machine-only and all-arms
+    give byte-identical statements. The other fixtures do not differ across arms at all.
+    This one does: same field, two arms, deliberately different area and length, with the
+    WRONG arm carrying a 1.0 ratio that would drag the median if it won the key.
+    """
+    import statistics
+    frames = []
+    for i in range(10):
+        # ETD area fraction straddles two stratification bins (0.001-0.005 and
+        # 0.005-0.02), because the statement needs at least two strata to fire. The
+        # length ratio is 3.0 in BOTH strata, so the headline range is 3.0x to 3.0x and
+        # the median is unambiguous.
+        etd_af = 0.003 if i < 5 else 0.01
+        # sem/gated: CBS is 3x ETD in length. This is the arm being summarised.
+        frames.append({"arm": "sem/gated", "specimen": "S", "scale_known": True,
+                       "nm_per_px": 51.883, "frame": f"S_CBS_{i:04d}",
+                       "crack_area_px": 30000.0, "total_skeleton_length_px": 3000.0,
+                       "area_fraction": etd_af * 3})
+        frames.append({"arm": "sem/gated", "specimen": "S", "scale_known": True,
+                       "nm_per_px": 51.883, "frame": f"S_ETD_{i:04d}",
+                       "crack_area_px": 10000.0, "total_skeleton_length_px": 1000.0,
+                       "area_fraction": etd_af})
+        # sem/machine: SAME field stems, ratio 1.0. If the arm is missing from the key
+        # these overwrite the gated records and the statement reports 1.0x.
+        frames.append({"arm": "sem/machine", "specimen": "S", "scale_known": True,
+                       "nm_per_px": 51.883, "frame": f"S_CBS_{i:04d}",
+                       "crack_area_px": 10000.0, "total_skeleton_length_px": 1000.0,
+                       "area_fraction": etd_af})
+        frames.append({"arm": "sem/machine", "specimen": "S", "scale_known": True,
+                       "nm_per_px": 51.883, "frame": f"S_ETD_{i:04d}",
+                       "crack_area_px": 10000.0, "total_skeleton_length_px": 1000.0,
+                       "area_fraction": etd_af})
+    recs = [{"specimen": "S", "arm": "sem/gated"}]
+
+    def ratio(fr):
+        st = next((x for x in C.for_arm(recs, fr) if "crack centreline" in x["text"]), None)
+        return st
+
+    # Each arm alone is unambiguous: 10 pairs, and the ratio each arm was built with.
+    for arm, expect in (("sem/gated", 3.0), ("sem/machine", 1.0)):
+        st = ratio([f for f in frames if f["arm"] == arm])
+        assert st, f"{arm} alone produced no detector statement"
+        assert st["value"] == pytest.approx(expect), f"{arm}: {st['value']} != {expect}"
+        assert "10 physical fields" in st["basis"], st["basis"][:90]
+
+    # THE DISCRIMINATING OBSERVABLE IS THE PAIR COUNT. Handed both arms, a correct key
+    # yields 20 distinct pairs -- 10 per arm. A key without the arm yields 10, because
+    # each (field, detector) is written twice and the last arm read wins. The median then
+    # silently becomes that arm's ratio instead of a figure covering both.
+    got = ratio(frames)
+    assert got, "mixed arms produced no detector statement at all"
+    assert "20 physical fields" in got["basis"], (
+        f"expected 20 pairs across two arms; a colliding key would report 10. Basis says: "
+        f"{got['basis'][:120]!r}")
+    # With 10 pairs at 3.0x and 10 at 1.0x, the median sits between them. A collision
+    # would pin it to exactly one arm's value, which is the failure this guards.
+    assert 1.0 < got["value"] < 3.0, (
+        f"mixed-arm median is {got['value']}, i.e. exactly one arm's ratio: the pairing "
+        f"key is colliding across arms and one arm's records were overwritten")
 
 
 def test_the_detector_statement_asserts_no_width_invariance():
@@ -530,8 +698,14 @@ def test_the_detector_statement_asserts_no_width_invariance():
     st = next((s for s in said if "crack centreline" in s["text"]), None)
     assert st, "the detector-swap statement is gone entirely; it was meant to be re-worded"
     whole = " ".join(filter(None, (st["text"], st["basis"], st["hedge"]))).lower()
+    # "move the other way" / "opposite sign" shipped for part of one session as the
+    # REPLACEMENT for "not width", quoting 1.26x and 1.67x as independent calibres. They
+    # are size proxies, so that phrasing asserted a direction too and is banned with the
+    # rest. Anything claiming a width DIRECTION here is wrong, whichever way it points.
     for banned in ("not width", "not in width", "width is unchanged",
-                   "same width", "width is not identical"):
+                   "same width", "width is not identical",
+                   "move the other way", "moves the other way", "opposite sign",
+                   "wider", "narrower"):
         assert banned not in whole, (
             f"the width-invariance claim is back as {banned!r}: {whole!r}")
     # It must not offer the between-field comparison as a control either -- at the median
