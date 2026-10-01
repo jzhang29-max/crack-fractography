@@ -106,7 +106,19 @@ def run(base):
     bad, errors = [], []
 
     with sync_playwright() as pw:
-        br = pw.chromium.launch()
+        # NO PROXY, EXPLICITLY. The server answered /api/health and accepted the seed
+        # upload over urllib, and Chromium still could not navigate to the same
+        # 127.0.0.1 -- Page.goto timed out at 120s on the Windows runner only. urllib
+        # ignores the system proxy for loopback; Chromium honours the system proxy
+        # configuration, and on that runner it routes loopback into a proxy that does not
+        # answer. `direct://` plus --no-proxy-server says do not.
+        #
+        # Belt and braces because the two act at different layers and the failure is only
+        # reproducible on a machine I do not have.
+        br = pw.chromium.launch(
+            proxy={"server": "direct://"},
+            args=["--no-proxy-server", "--proxy-bypass-list=*",
+                  "--disable-dev-shm-usage"])
         pg = br.new_page(viewport={"width": 1400, "height": 1000})
         pg.on("pageerror", lambda e: errors.append(f"pageerror: {e}"))
         pg.on("console", lambda m: errors.append(f"console.{m.type}: {m.text}")
