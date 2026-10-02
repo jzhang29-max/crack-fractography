@@ -294,8 +294,32 @@ def _frames_from_disk(arm):
 
 
 def _positioned():
-    """Real frames from the arm that actually recorded stage coordinates."""
-    return _frames_from_disk("sem/gated")
+    """Real frames from the arm that recorded stage coordinates -- or a NAMED skip.
+
+    THE FRAMES AND THE POSITIONS COME FROM DIFFERENT PLACES, and only the first was
+    guarded. frames.json is found in the per-user data directory, which exists on a
+    developer machine; the stage coordinates are read by analysis/stage.py from a metadata
+    table inside the SEM checkout, reached through the data/sem symlink. data/ is gitignored
+    -- deliberately, because committing those links would bake one machine's sibling layout
+    into the repo -- so a fresh clone or a detached worktree has the frames and NOT the
+    positions.
+
+    Five tests in this file then failed with "no specimen produced raster cells" instead of
+    skipping, which reads as a regression in the figure code and is not one. It cost a peer
+    session a wrong conclusion about a commit. A skip that names the missing input says so
+    immediately.
+    """
+    rows = _frames_from_disk("sem/gated")
+    try:
+        import stage
+    except Exception as e:                                        # noqa: BLE001
+        pytest.skip(f"analysis/stage.py is not importable here ({type(e).__name__}), so no "
+                    "frame can resolve a stage position")
+    if not any(stage.position(r.get("frame", "")) for r in rows):
+        pytest.skip(f"none of the {len(rows)} sem/gated frames resolves a stage position: the "
+                    "coordinate table lives in the SEM checkout, reached through the "
+                    "gitignored data/sem symlink, so this needs a configured SEM repo")
+    return rows
 
 
 def test_a_three_by_three_raster_is_drawn_as_three_by_three():
