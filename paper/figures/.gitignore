@@ -1,0 +1,7 @@
+# Derived by stage 1 (sem_fullframe.py, sem_specificity.py, txm_full.py, sem_ladder.py).
+# Large, regenerable, and not the record -- the *_stats.json beside them are the record.
+*.npy
+*_thumb.png
+
+# Stage 2 output; the figures as published live with the paper, not here.
+out/

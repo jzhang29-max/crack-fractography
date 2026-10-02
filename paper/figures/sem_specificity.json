@@ -1,0 +1,65 @@
+{
+ "frame": "AS_24hr_BSE_Side_008",
+ "full": [
+  6144,
+  4096
+ ],
+ "n_candidates": 1299,
+ "held_rows": 1295,
+ "held_neg": 1016,
+ "train_neg_left": 84,
+ "rows": [
+  {
+   "model": "LogisticRegression",
+   "auc": 0.8868,
+   "recall": 0.8996,
+   "spec": 0.5807,
+   "tp": 251,
+   "fp": 426,
+   "tn": 590,
+   "fn": 28,
+   "kept": 667,
+   "candidates": 1299,
+   "area_pct": 3.5943
+  },
+  {
+   "model": "RandomForest",
+   "auc": 0.5925,
+   "recall": 1.0,
+   "spec": 0.001,
+   "tp": 279,
+   "fp": 1015,
+   "tn": 1,
+   "fn": 0,
+   "kept": 1298,
+   "candidates": 1299,
+   "area_pct": 4.0406
+  },
+  {
+   "model": "GradientBoosting",
+   "auc": 0.5423,
+   "recall": 0.9964,
+   "spec": 0.003,
+   "tp": 278,
+   "fp": 1013,
+   "tn": 3,
+   "fn": 1,
+   "kept": 1295,
+   "candidates": 1299,
+   "area_pct": 3.9024
+  },
+  {
+   "model": "SVC (RBF)",
+   "auc": 0.9227,
+   "recall": 1.0,
+   "spec": 0.0,
+   "tp": 279,
+   "fp": 1016,
+   "tn": 0,
+   "fn": 0,
+   "kept": 1299,
+   "candidates": 1299,
+   "area_pct": 4.041
+  }
+ ]
+}

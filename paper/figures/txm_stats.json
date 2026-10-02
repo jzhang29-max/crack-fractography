@@ -1,0 +1,120 @@
+{
+ "frame": "Average_mosaic_260619_HC_316L_fatigue_1200_cycles_idx00000_mosaictileAA_img001of010.xrm.bim.bim.tif",
+ "crop": [
+  960,
+  360,
+  1100
+ ],
+ "full": [
+  4376,
+  2363
+ ],
+ "megapixels": 10.34,
+ "nm_per_px": 29.24,
+ "display": "destitched+flatfielded",
+ "model": "mean-probability ensemble: 17-feature MLP + SAM+17 hybrid (273d)",
+ "model_key": "20260824_232220",
+ "sam_model": "facebook/sam-vit-huge",
+ "sam_tiles": 15,
+ "sam_tile": 1024,
+ "sam_stride": 896,
+ "emb_shape": [
+  15,
+  256,
+  64,
+  64
+ ],
+ "emb_stride": 16,
+ "emb_pca3_var": 0.5585020184516907,
+ "emb_pc1_sep_sd": 0.770092248916626,
+ "n_features": 17,
+ "hybrid_dim": 273,
+ "threshold": 0.6,
+ "feature_sep": [
+  [
+   "texture_s8",
+   1.83
+  ],
+  [
+   "texture_s2",
+   1.52
+  ],
+  [
+   "gradmag_s4",
+   1.42
+  ],
+  [
+   "gradmag_s2",
+   1.34
+  ],
+  [
+   "gradmag_s8",
+   1.25
+  ],
+  [
+   "gradmag_s1",
+   1.04
+  ],
+  [
+   "laplacian_s8",
+   0.88
+  ],
+  [
+   "laplacian_s4",
+   0.29
+  ],
+  [
+   "intensity",
+   0.26
+  ],
+  [
+   "smooth_s2",
+   0.26
+  ],
+  [
+   "smooth_s4",
+   0.26
+  ],
+  [
+   "smooth_s8",
+   0.24
+  ],
+  [
+   "smooth_s16",
+   0.19
+  ],
+  [
+   "laplacian_s2",
+   0.09
+  ],
+  [
+   "smooth_s64",
+   0.09
+  ],
+  [
+   "smooth_s32",
+   0.08
+  ],
+  [
+   "laplacian_s1",
+   0.02
+  ]
+ ],
+ "frame_iou": 0.5031934675398173,
+ "frame_recall": 0.616708146576596,
+ "frame_fp_on_not": 0.005400741987194121,
+ "corpus_median_iou": 0.507,
+ "corpus_q1": 0.36,
+ "corpus_q3": 0.712,
+ "corpus_n": 58,
+ "crop_label_pct": 9.350826446280992,
+ "crop_mask_pct": 8.270826446280992,
+ "crop_iou": 0.5160404994169676,
+ "p17_iou": 0.10432464659961087,
+ "ph_iou": 0.5215097084263294,
+ "ens_iou": 0.5092380919292638,
+ "recompute_mean_abs_diff": 0.0,
+ "raw_sep_sd": 0.17364001274108887,
+ "disp_sep_sd": 0.5622132089907018,
+ "seconds": 13.0
+}
