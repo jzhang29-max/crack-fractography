@@ -138,7 +138,7 @@ def arms():
     for a in out.values():
         a["n_specimens"] = len(a.pop("specimens"))
         a["has_originals"] = (a["arm"].startswith("sem/") and have_sem) or \
-                             (a["arm"] == "txm" and have_txm)
+                             (a["arm"].startswith("txm") and have_txm)
     return sorted(out.values(), key=lambda a: a["arm"])
 
 
@@ -186,11 +186,14 @@ def mask(arm: str, frame: str):
             raise HTTPException(503, "no SEM repo is configured, so its masks cannot be "
                                      "shown. Set one in Setup.")
         p = os.path.join(root, frame + suf)
-    elif arm == "txm":
-        tx = P.txm_export()
+    elif arm.startswith("txm"):
+        # Both TXM arms share one layout across two trees: the gated archive and the
+        # model-only one. Resolved per arm rather than by a single txm_export() call, which
+        # is what made "txm" the only TXM arm whose mask could be fetched.
+        tx = P.txm_export_machine() if arm == "txm/machine" else P.txm_export()
         if not tx:
-            raise HTTPException(503, "no TXM export is configured, so its masks cannot be "
-                                     "shown. Set one in Setup.")
+            raise HTTPException(503, f"no mask tree is configured for {arm}, so its masks "
+                                     "cannot be shown. Set one in Setup.")
         p = os.path.join(tx, frame, f"{frame}_crack_mask.png")
     else:
         raise HTTPException(400, f"unknown arm {arm!r}")
@@ -252,7 +255,11 @@ def original(arm: str, frame: str):
     Image.MAX_IMAGE_PIXELS = None
 
     path = None
-    if arm == "txm":
+    if arm.startswith("txm"):
+        # BOTH TXM arms draw on the same micrographs. The masks differ; the specimen does
+        # not. Keying this on `arm == "txm"` is what would have left the model-only arm
+        # rendering a bare black-and-white mask -- the exact complaint that produced the
+        # originals lookup in the first place.
         d = P.txm_images()
         if not d:
             raise HTTPException(503, "no TXM image directory is configured, so the "
@@ -721,8 +728,8 @@ def _mask_path(arm, frame):
     if arm in src:
         root, suf = src[arm]
         return os.path.join(root, frame + suf) if root else None
-    if arm == "txm":
-        tx = P.txm_export()
+    if arm.startswith("txm"):
+        tx = P.txm_export_machine() if arm == "txm/machine" else P.txm_export()
         return os.path.join(tx, frame, f"{frame}_crack_mask.png") if tx else None
     return None
 
@@ -979,8 +986,9 @@ def _rebuild_specimen(arm, specimen):
     by_arm = {}
     for f in frames:
         by_arm.setdefault(f["arm"], []).append(f)
-    rec["arm_sensitivity"] = (specimen_stats.paired_arm_ratio(by_arm, specimen)
-                              if arm.startswith("sem/") else None)
+    pair = specimen_stats.pair_for(arm)
+    rec["arm_sensitivity"] = (specimen_stats.paired_arm_ratio(by_arm, specimen, *pair)
+                              if pair else None)
     others = []
     if os.path.exists(sp):
         try:

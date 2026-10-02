@@ -589,8 +589,28 @@ def summarise(arm, specimen, frames):
     return rec
 
 
+#: The gated/machine pair for each modality. TXM gained one when the model-only export was
+#: built: before that, "how much of this mask is the operator?" was answerable for SEM and
+#: not for TXM, even though the TXM archive is gated in exactly the same sense.
+ARM_PAIRS = {"sem": ("sem/gated", "sem/machine"),
+             "txm": ("txm", "txm/machine")}
+
+
+def pair_for(arm):
+    """The (gated, machine) pair this arm belongs to, or None if it has no counterpart.
+
+    Keyed on the arm itself rather than on a prefix, because the TXM gated arm is called
+    "txm" and not "txm/gated" -- renaming it would invalidate every stored record and every
+    saved mode in a user's config, so the pair is declared instead of inferred.
+    """
+    for pair in ARM_PAIRS.values():
+        if arm in pair:
+            return pair
+    return None
+
+
 def paired_arm_ratio(frames_by_arm, specimen, a="sem/gated", b="sem/machine"):
-    """Segmentation sensitivity: the two SEM arms on the SAME frames.
+    """Segmentation sensitivity: a gated arm against its machine arm, on the SAME frames.
 
     Paired on the frame stem rather than compared as specimen means, so the number is not
     contaminated by the two arms covering different frames.
@@ -615,4 +635,5 @@ def paired_arm_ratio(frames_by_arm, specimen, a="sem/gated", b="sem/machine"):
             "gated_over_machine_median": round(float(np.median(r)), 3),
             "gated_over_machine_where_corrected": (round(float(np.median(rc)), 3)
                                                    if rc else None),
+            "arms": [a, b],
             "note": "same frames; the operator's strokes against the detector alone"}

@@ -27,9 +27,17 @@ const state = { arm: null, spec: "", frames: [], frame: null, cracks: null, minA
 //: before any editor can open.
 let ARM_HAS_ORIGINALS = {};
 
+//: txm/machine IS offered, where sem/machine is not, and the asymmetry is deliberate.
+//: For SEM the uncorrected masks are reachable another way and browsing them invited
+//: picking them by accident. For TXM there was no other way at all: the "txm" archive is
+//: built with corrections="gate", 61 of its 71 frames carry crack strokes and 70 carry
+//: erase strokes, so a user who asked "what does the model alone say?" had nowhere to look.
+//: The labels name the difference rather than the storage layout, so the two cannot be
+//: confused in a screenshot.
 const MODES = [
   { arm: "sem/gated", label: "SEM" },
   { arm: "txm", label: "TXM" },
+  { arm: "txm/machine", label: "TXM \u00b7 model only, no operator strokes" },
   { arm: "uploads", label: "Your images" },
 ];
 

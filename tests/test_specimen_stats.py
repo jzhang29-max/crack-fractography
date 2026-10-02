@@ -146,6 +146,29 @@ def test_uploads_get_no_e562_interval():
     assert real["area_fraction_ci"] is not None
 
 
+def _real_raster(specimen, arm="sem/gated", nm=51.883):
+    """The nine fine fields of one real raster, both detectors, or None without the table.
+
+    Real frame names, because stage.position reads a metadata table keyed on them and
+    returns None for anything else -- which is how the per-detector test below came to
+    assert nothing at all.
+    """
+    import json
+    path = os.path.join(REPO, "analysis", "out", "frames.json")
+    if not os.path.exists(path):
+        return None
+    try:
+        import stage
+    except Exception:
+        return None
+    rows = json.load(io.open(path, encoding="utf-8"))
+    out = [f for f in rows
+           if f.get("arm") == arm and f.get("frame", "").startswith(specimen + "_")
+           and (f.get("nm_per_px") or 0) and abs(f["nm_per_px"] - nm) < 1
+           and stage.position(f["frame"])]
+    return out if len(out) >= 2 * stage.MIN_FIELDS else None
+
+
 def test_the_stage_gradient_is_computed_over_fields_not_frames():
     """Two detectors imaging one place report the SAME stage coordinates, so passing raw
     frames doubles every point. All eight shipped records read n=20 for 10 fields, making
@@ -185,33 +208,57 @@ def test_the_gradient_averages_the_detectors_instead_of_picking_one():
             "the field value must be the MEAN of the two detectors, not either one; "
             f"got {r['area_fraction']}")
         assert r["n_detectors"] == 2, "a field's detector count travels with its mean"
+    # THE HAZARD, NOT THE ACCIDENT. An earlier version asserted this set equals {"CBS"},
+    # which pins the alphabetical accident rather than the thing that makes the selector
+    # unsafe: that it collapses a two-detector field to ONE detector's number. Renaming a
+    # detector would have failed that assertion while leaving the bug untouched.
     picked = S._one_frame_per_field(frames)
-    assert {S.detector_of(f["frame"]) for f in picked} == {"CBS"}, (
-        "if this ever stops being CBS-only the comment on _one_frame_per_field is stale")
+    dets = {S.detector_of(f["frame"]) for f in picked}
+    assert len(dets) == 1, (
+        "_one_frame_per_field is documented as unsafe for a measured value because it "
+        f"represents every field by a single detector; it chose {sorted(dets)}, so either "
+        "the function changed or that documentation is now wrong")
+    only = next(iter(dets))
+    assert all(abs(f["area_fraction"] - (0.100 if only == "CBS" else 0.200)) < 1e-9
+               for f in picked), (
+        "the selected frames must carry that one detector's value, which is what makes "
+        "passing them to a statistic a detector choice")
 
 
 def test_the_gradient_is_also_reported_per_detector():
-    """A trend computed from a detector mean must not be readable as detector-independent.
+    """A trend computed from a detector mean must not read as detector-independent.
 
-    Two channels of ONE simultaneous scan over the same physical fields are this corpus's
-    only free control on the instrument, so the per-detector pair ships beside the mean. On
-    the real corpus they agree in sign on all four specimens -- which is the check that
-    makes the gradient worth reporting at all -- but ETD's significance fails on
-    MAR_AmbB_HIP, so the pair has to be visible rather than asserted in a comment.
+    THE FIRST VERSION OF THIS TEST ASSERTED NOTHING, and it was written in the same commit
+    that replaced a test for passing against the wrong code. It built frames named
+    S_CBS_0001..S_ETD_0009 and bailed out on `if out is None: return`. Stage positions come
+    from a metadata table keyed on REAL frame names, so `stage.position("S_CBS_0001")` is
+    None, so `_gradient_by_detector` returned None, so the early return fired on every run
+    and the three assertions below it were unreachable. Its own docstring pointed at "the
+    real-corpus assertion" in a test that did not exist.
+
+    Two changes: real frame names, so the code path actually engages; and an explicit skip
+    naming the missing table, so a checkout without the SEM repo reports a SKIP rather than
+    a silent pass.
     """
-    frames = []
-    for i in range(1, 10):
-        for det, lift in (("CBS", 0.0), ("ETD", 0.05)):
-            frames.append({"frame": f"S_{det}_{i:04d}", "area_fraction": 0.01 * i + lift,
-                           "n_cracks_measured": 5, "crack_density_px_per_Mpx": 1.0,
-                           "scale_known": False})
+    frames = _real_raster("MAR_H_AS")
+    if frames is None:
+        pytest.skip("no stage-coordinate table in this checkout (needs the SEM repo)")
     out = S._gradient_by_detector(frames)
-    if out is None:
-        return  # no stage table in this checkout; the real-corpus assertion lives below
-    assert set(out) == {"CBS", "ETD"}, f"both channels must appear, got {sorted(out or {})}"
+    assert out is not None, "positions resolved, so both channels must produce a gradient"
+    assert set(out) == {"CBS", "ETD"}, f"both channels must appear, got {sorted(out)}"
     for det, g in out.items():
         assert g["n_frames_with_position"] == 9, (
             f"{det} must be 9 fields, not 18 frames; got {g['n_frames_with_position']}")
+        for key in ("axis", "spearman_rho", "p_value"):
+            assert key in g, f"{det} is missing {key}, so the pair cannot be read"
+    # The point of publishing the pair is that the two channels can DISAGREE. Assert that
+    # the mean is not simply one of them -- otherwise the per-detector report is decoration.
+    mean_g = S._gradient(S._field_records(frames))
+    assert mean_g is not None
+    per = {d: g["spearman_rho"] for d, g in out.items()}
+    assert len(set(per.values()) | {mean_g["spearman_rho"]}) >= 2, (
+        "every channel and the mean agree exactly, so this fixture cannot show the "
+        f"disagreement the pair exists to expose: {per} against {mean_g['spearman_rho']}")
 
 
 def test_no_file_asserts_that_more_patches_would_narrow_the_interval():
@@ -219,26 +266,67 @@ def test_no_file_asserts_that_more_patches_would_narrow_the_interval():
 
     So "more patches would narrow it" has no supporting measurement anywhere in this corpus.
     It was asserted in three places -- stage.py's note, conclusions.py's hedge and app.js's
-    tooltip -- by the same code that exists to refuse unsupported assertions. The remedy is
-    a hypothesis and has to read as one.
+    tooltip -- by the same code that exists to refuse unsupported assertions.
+
+    PARSED, NOT GREPPED, and the first version of this test did grep. A raw file scan has to
+    exempt the paragraphs that RECORD the removal, because they quote the sentence they are
+    removing -- and an exemption keyed on nearby words ("used to", "removed", "untested") is
+    an escape hatch a future edit walks straight through. This project has already recorded
+    four source scans that matched their own explanatory prose. So: for Python, walk the AST
+    and test only string literals that are NOT docstrings, which is where a user-facing claim
+    can live and where a comment or a docstring cannot reach. For app.js, which carries no
+    explanatory prose on this subject, test the file text with no exemption at all.
     """
-    import re
+    import ast
+    PHRASE = "more patches would"
     bad = []
-    for rel in ("analysis/stage.py", "analysis/conclusions.py", "app/static/app.js",
-                "app/templates/index.html", "README.md"):
+    for rel in ("analysis/stage.py", "analysis/conclusions.py", "analysis/specimen_stats.py"):
+        path = os.path.join(REPO, rel)
+        tree = ast.parse(io.open(path, encoding="utf-8").read(), filename=rel)
+        docstrings = set()
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef,
+                                 ast.AsyncFunctionDef)):
+                body = getattr(node, "body", None)
+                if (body and isinstance(body[0], ast.Expr)
+                        and isinstance(body[0].value, ast.Constant)
+                        and isinstance(body[0].value.value, str)):
+                    docstrings.add(id(body[0].value))
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Constant) and isinstance(node.value, str)
+                    and id(node) not in docstrings
+                    and PHRASE in node.value.lower()):
+                bad.append(f"{rel}:{node.lineno} (string literal)")
+    for rel in ("app/static/app.js", "app/templates/index.html"):
         path = os.path.join(REPO, rel)
         if not os.path.exists(path):
             continue
-        text = io.open(path, encoding="utf-8").read()
-        for m in re.finditer(r"[Mm]ore patches would", text):
-            line = text[:m.start()].count("\n") + 1
-            ctx = text[max(0, m.start() - 160):m.start()]
-            # the explanatory paragraphs that RECORD the removal quote the old sentence;
-            # they are identifiable because they say so.
-            if re.search(r"MUST NOT SAY|used to|it used to end|removed|untested", ctx):
-                continue
-            bad.append(f"{rel}:{line}")
-    assert not bad, ("these still assert the untested remedy: " + ", ".join(bad))
+        text = io.open(path, encoding="utf-8").read().lower()
+        if PHRASE in text:
+            bad.append(f"{rel} (file text)")
+    assert not bad, (
+        "these assert a remedy this corpus has never measured -- n_patches never reaches 2: "
+        + ", ".join(bad))
+
+
+def test_the_patch_count_that_makes_that_remedy_untestable():
+    """The measurement behind the test above, so it cannot rot into a style rule.
+
+    If a future corpus ever carries two patches on one specimen, this fails and the sentence
+    becomes assertable -- which is the point. A prose ban with no measurement attached is the
+    same kind of unsupported rule it was written to remove.
+    """
+    import json
+    path = os.path.join(REPO, "analysis", "out", "specimens.json")
+    if not os.path.exists(path):
+        pytest.skip("no measured output in this checkout")
+    rows = json.load(io.open(path, encoding="utf-8"))
+    vals = [r.get("n_patches") for r in rows]
+    assert vals, "specimens.json carried no records"
+    seen = sorted({v for v in vals if v is not None})
+    assert seen and max(seen) < 2, (
+        "a specimen now has two or more imaged patches, so between-patch variance is "
+        f"measurable and the remedy may be stated: n_patches values {seen}")
 
 
 # --- ONE MAGNIFICATION PER DETERMINATION ------------------------------------------------
@@ -501,3 +589,76 @@ def test_no_physical_aggregate_is_written_as_a_median_over_raw_frames():
     assert not offenders, (
         "computed as a median over frames rather than over determination fields: "
         + ", ".join(offenders) + " -- use collapse_to_fields(det_scaled, ...)")
+
+# --- THE TXM ARM PAIR -------------------------------------------------------------------
+def test_pair_for_knows_every_arm_and_refuses_the_ones_with_no_counterpart():
+    """The gated/machine pair is DECLARED, not inferred from the arm name.
+
+    It has to be: the TXM gated arm is called "txm", not "txm/gated", because renaming it
+    would invalidate every stored record and every saved mode in a user's config. A prefix
+    rule would therefore pair "txm" with nothing and silently drop the comparison -- which
+    is the state this corpus was in until the model-only export existed.
+    """
+    assert S.pair_for("sem/gated") == ("sem/gated", "sem/machine")
+    assert S.pair_for("sem/machine") == ("sem/gated", "sem/machine")
+    assert S.pair_for("txm") == ("txm", "txm/machine")
+    assert S.pair_for("txm/machine") == ("txm", "txm/machine")
+    # An arm with no counterpart must return None rather than a half-pair: paired_arm_ratio
+    # is called with *pair, so a one-element answer would raise inside the endpoint.
+    assert S.pair_for("uploads") is None
+    assert S.pair_for("nonsense") is None
+    for arm, pair in ((a, S.pair_for(a)) for a in ("sem/gated", "txm", "uploads")):
+        assert pair is None or len(pair) == 2, f"{arm} -> {pair}"
+
+
+def test_the_two_txm_trees_are_not_the_same_directory():
+    """THE MISTAKE THIS GUARDS is pointing both TXM arms at one tree.
+
+    Both arms read `<stem>/<stem>_crack_mask.png`, so the layouts are identical and a
+    resolver that returned the gated tree for both would produce a complete, plausible
+    second arm whose every number equalled the first. Nothing downstream would complain:
+    the frames would measure, the comparison would read exactly 1.000x on every specimen,
+    and "the operator changed nothing" is a sentence the card is willing to print.
+    """
+    from app import paths as P
+    gated, machine = P.txm_export(), P.txm_export_machine()
+    if not (gated and machine):
+        pytest.skip("no TXM export configured in this checkout")
+    assert os.path.realpath(gated) != os.path.realpath(machine), (
+        "both TXM arms resolve to the same directory, so the model-only arm is a copy of "
+        f"the gated one: {gated}")
+
+
+def test_the_machine_arm_carries_no_operator_input():
+    """The model-only masks must DIFFER from the gated ones, and differ in the right places.
+
+    Measured on the real export rather than a fixture, because the property at issue is a
+    property of the two trees. The operator touched 65 of 71 frames; on those the two masks
+    must disagree, and on the untouched remainder they must agree exactly -- any other
+    pattern means the corrections were applied to the wrong arm, or to both, or to neither.
+    """
+    import json
+    fp = os.path.join(REPO, "analysis", "out", "frames.json")
+    if not os.path.exists(fp):
+        pytest.skip("no dataset built")
+    rows = json.load(io.open(fp, encoding="utf-8"))
+    g = {f["frame"]: f for f in rows if f["arm"] == "txm"}
+    m = {f["frame"]: f for f in rows if f["arm"] == "txm/machine"}
+    if not (g and m):
+        pytest.skip("the TXM arms are not both measured in this checkout")
+    both = sorted(set(g) & set(m))
+    assert len(both) == len(g) == len(m), (
+        f"the two TXM arms cover different frames: {len(g)} gated, {len(m)} machine, "
+        f"{len(both)} shared")
+    same = [k for k in both if g[k]["crack_area_px"] == m[k]["crack_area_px"]]
+    assert len(same) < len(both), (
+        "every frame has identical crack area on both TXM arms, so either the model-only "
+        "export was built with corrections applied or both arms read one tree")
+    # And it must not be the degenerate opposite either -- a machine arm that disagrees
+    # everywhere, including on frames with no strokes at all, would mean the two trees were
+    # built from different models or different thresholds rather than differing only in
+    # whether the human was applied.
+    assert same, (
+        "no frame agrees between the two TXM arms. They should differ ONLY where the "
+        "operator drew, so total disagreement means the two exports differ in something "
+        "else -- model, threshold, pruning or tightening.")

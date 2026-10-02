@@ -4,7 +4,8 @@
 Sources, and the reason each is a separate arm rather than one pooled pile:
   sem/gated    the SEM detector plus the operator's strokes, boundaries drawn by the image
   sem/machine  the SEM detector alone, no human input
-  txm          the TXM export
+  txm          the TXM export -- which is GATED, see txm/machine
+  txm/machine  the TXM model alone, no human input
 
 They are kept apart because they are different instruments and, for the two SEM arms,
 different definitions of the object. Pooling them would produce an average of things nobody
@@ -54,8 +55,18 @@ SEM_DERIVED = P.sem_derived() or os.path.join(_HERE, "__no_sem_repo__")
 ARMS = {
     "sem/gated": (os.path.join(SEM_DERIVED, "gated_masks"), "*_gated.png", "sem"),
     "sem/machine": (os.path.join(SEM_DERIVED, "machine_masks"), "*_machine.png", "sem"),
+    # NAMED "txm" FOR COMPATIBILITY AND GATED IN FACT. The pipeline's export is built with
+    # corrections="gate", so a hand-painted stroke lowers the model's threshold inside it
+    # and an erase stroke removes area absolutely: 61 of its 71 frames carry crack strokes
+    # and 70 carry erase strokes. It is the TXM analogue of sem/gated. The key stays "txm"
+    # because renaming it would invalidate every stored record and every saved mode.
     "txm": (P.txm_export() or os.path.join(_HERE, "__no_txm_export__"),
             "*/*_crack_mask.png", "txm"),
+    # THE SAME FRAMES WITHOUT THE OPERATOR, so "how much of this is the brush?" is
+    # answerable for TXM as it already was for SEM. Same deployed model, same threshold,
+    # pruning, hole-filling and tightening; corrections="none" is the only difference.
+    "txm/machine": (P.txm_export_machine() or os.path.join(_HERE, "__no_txm_machine__"),
+                    "*/*_crack_mask.png", "txm"),
     # Uploads are a first-class arm, not an append-only side channel. They used to be
     # written straight into frames.json by the upload endpoint, which meant a batch re-run
     # silently deleted every uploaded frame -- the masks stayed on disk and the rows
@@ -130,9 +141,12 @@ def main():
     specimens = []
     for (arm, s), fs in sorted(spec.items()):
         rec = specimen_stats.summarise(arm, s, fs)
-        # Segmentation sensitivity, on identical frames. Only meaningful for the SEM arms.
-        rec["arm_sensitivity"] = (specimen_stats.paired_arm_ratio(by_arm, s)
-                                  if arm.startswith("sem/") else None)
+        # Segmentation sensitivity, on identical frames. Was SEM-only because TXM had no
+        # machine arm to pair against; now it is asked of whichever pair this arm belongs
+        # to, and is still None for an arm with no counterpart (uploads).
+        pair = specimen_stats.pair_for(arm)
+        rec["arm_sensitivity"] = (specimen_stats.paired_arm_ratio(by_arm, s, *pair)
+                                  if pair else None)
         specimens.append(rec)
 
     # MERGE, do not replace. Writing the whole file on every run made --arm a data-loss

@@ -6,6 +6,7 @@ __pycache__/
 data/sem
 data/txm
 data/txm_export
+data/txm_export_machine
 # Derived measurements. Regenerable with analysis/batch.py, and large.
 analysis/out/
 # PyInstaller output. The .app is 152 MB of rebuilt dependencies -- a release artifact,

@@ -110,6 +110,37 @@ def txm_export():
     return _resolved("txm_export", "txm_export")
 
 
+def txm_export_machine():
+    """The TXM MODEL-ONLY mask tree, or None.
+
+    WHY THERE ARE TWO TXM TREES. txm_export() holds the archive the pipeline's own
+    api_export_all writes, and that archive is built with corrections="gate": inside a
+    hand-painted crack stroke the model's threshold drops to CORRECTION_FLOOR, and an erase
+    stroke is absolute in every mode. 61 of its 71 frames carry crack strokes and 70 carry
+    erase strokes, so the archive is a HUMAN-GATED mask -- the TXM analogue of the SEM
+    repo's gated_masks, not of its machine_masks.
+
+    A user looking at the TXM masks saw the brush in them and asked for the model's own
+    output. There was no TXM analogue of machine_masks anywhere, so the question could not
+    be asked of this corpus from outside the pipeline app. This tree is that arm: the same
+    deployed model, the same threshold, pruning, hole-filling and tightening, with
+    corrections="none" as the single difference.
+
+    Resolution mirrors txm_export, plus one convenience: a sibling of the gated tree whose
+    name is the gated tree's name with "_machine" appended, which is where
+    rebuild_export.py --corrections none writes by default.
+    """
+    p = _resolved("txm_export_machine", "txm_export_machine")
+    if p:
+        return p
+    tx = txm_export()
+    if tx:
+        sib = tx.rstrip("/") + "_machine"
+        if os.path.isdir(sib):
+            return os.path.realpath(sib)
+    return None
+
+
 def txm_images():
     """The directory of TXM ORIGINAL .tif mosaics, or None.
 
