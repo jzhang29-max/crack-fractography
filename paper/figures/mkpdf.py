@@ -192,13 +192,12 @@ for _n, _sec, _anchor in [
  (1, "2-materials.md",
      "read from the shipped model files rather than from documentation — in **Figure 2**."),
  (2, "2-materials.md",
-     "In total the TXM arm applies 46,658 fitted parameters (3,265 + 43,393) on top of "
-     "637.0 M frozen pretrained ones."),
+     'oundary, while reaching past a tile edge invents data and raised false positives on crack-free specimens 6.2×.'),
  (3, "4-benchmark.md",
      "The order is alphabetical and is not a ranking."),
  (4, "6-labels.md",
-     "so the two medians differ in denominator, not in the frame's standing: it sits just "
-     "below the median on either."),
+     "(Figure 1 quotes 0.507 over the 58 frames in `txm_stats.json`: the denominator "
+     "differs, not the frame's standing.)"),
  (5, "6-labels.md",
      "(Those agreements are region-set overlaps weighted by region area, computed over the "
      "frame's 1,295 labelled regions; they are model-against-model, not scores against the "
@@ -308,7 +307,10 @@ def fig_block(n, avail_w, avail_h, split=False):
     return KeepTogether([im, Spacer(1, 6)] + head), tail
 
 def _norm(s):
-    return re.sub(r"\s+", " ", s or "").strip()
+    # emphasis markers are stripped too: an anchor that happened to end in "**Figure 2**"
+    # broke the moment bold was removed from the sections, which is a silly way to lose a
+    # figure. Match on the words.
+    return re.sub(r"\s+", " ", (s or "").replace("**", "").replace("*", "")).strip()
 
 PLACED = set()
 
