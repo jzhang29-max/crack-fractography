@@ -351,15 +351,25 @@ _key = ("Colour says what kind of stage it is, keyed along the top: input; deter
         "scoring every **pixel**, with 46,658 fitted parameters on top of 637 M frozen ones. "
         "Stage by stage: ")
 def _join(ls):
+    """Join a box's drawn lines back into prose.
+
+    An earlier version inserted "; " whenever a line did not end in punctuation, on the
+    theory that each drawn line was a clause. Most are not: a wrapped sentence ends
+    mid-phrase, and the rule produced "A databar, if present, is detected; by two
+    independent signals". The case it was actually for is a coefficient list wrapped
+    across lines -- "... MeanVesselness +1.364" / "LogArea -1.125 ..." -- which is the one
+    place a separator is needed. So: separate only where a value is followed by a new
+    term, and otherwise just rejoin the wrap.
+    """
     out = ""
     for ln in ls:
         ln = ln.strip()
         if not out:
             out = ln
-        elif out[-1] in ".;:,\u2014":
-            out += " " + ln
-        else:
+        elif out[-1].isdigit() and ln[:1].isupper():
             out += "; " + ln
+        else:
+            out += " " + ln
     return out
 _key += " ".join(f"**{h}** \u2014 {_join(ls)}" for h, ls in BOXPROSE)
 _key += " " + CO_TEXT

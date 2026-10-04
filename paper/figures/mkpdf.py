@@ -451,7 +451,7 @@ doc.addPageTemplates([
 
 story = []
 story.append(Paragraph("Crack quantification from micrographs of additively manufactured 316L: "
-                       "the segmenter is not the limiting factor", S["title"]))
+                       "the segmenter is not the limiting term at this sampling", S["title"]))
 story.append(Paragraph("Jiaming Zhang", S["author"]))
 story.append(Paragraph("Stanford University &mdash; jzhang29@stanford.edu", S["author"]))
 story.append(HRFlowable(width="100%", thickness=0.8, color=INK, spaceBefore=8, spaceAfter=8))
