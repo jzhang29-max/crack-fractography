@@ -191,7 +191,7 @@ y = box(bx, y, bw, "fit", "PASS 2  ·  interior fill, 11 features",
 arrow(cx, y, y+26); y += 26
 y = box(bx, y, bw, "hum", "Operator reviews whole regions",
         ["Add or remove a region before anything is measured; every change is written to a ledger",
-         "(44 of 156 frames carry one). Not a brush — the unit of correction is the unit of decision."],
+         "(44 of the 142 SEM frame-records carry one). Not a brush — the unit of correction is the unit of decision."],
         rhs="auditable")
 arrow(cx, y, y+26); y += 26
 y_sem_end = box(bx, y, bw, "meas", "Measurement",
@@ -376,7 +376,8 @@ CAPTION = dict(
     "SAM is used here as a frozen **dense feature** source, so the only question that matters "
     "is whether a newer encoder's features are more discriminative. Prompted the way SAM is "
     "designed to be prompted \u2014 zero-shot, from a box or a point \u2014 it measures 0.23\u20130.36 IoU "
-    "on this data against 0.82 for the trained hybrid. SAM 3's headline capability, "
+    "on the four external reference frames, against 0.819 for the two-member ensemble on the "
+    "same four. SAM 3's headline capability, "
     "open-vocabulary segmentation from a text prompt, is therefore the part of it this project "
     "can use least: there is no noun phrase for a hairline fatigue crack in a grayscale X-ray "
     "of 316L that a web-trained model holds a prior on. All three generations emit 256 "

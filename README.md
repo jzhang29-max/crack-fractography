@@ -351,10 +351,12 @@ MCL 26.5 µm (was 15.2 — the pool had included two overview frames whose MCL a
 The app's worst SEM relative accuracy is `MAR_Amb_AS` at 138.0%, which has no recoverable
 scale at all and is untouched by this.
 
-**Specimens are not ranked, and the app says so.** One site per specimen makes the
-between-field and the between-specimen variance the same component, so no ordering of these
-specimens is estimable at all — spatial pseudoreplication in Hurlbert's sense (1984). Three
-consequences, shipped together:
+**Specimens are not ranked, and the app says so.** On the four specimens whose imaged
+site is recorded, one site per specimen makes the between-field and the between-specimen
+variance the same component, so no ordering of those specimens is estimable at all —
+spatial pseudoreplication in Hurlbert's sense (1984). `n_patches` is null on the other
+fifteen, where the site count is unknown rather than one. Three consequences, shipped
+together:
 
 * The comparison table is sorted by **name**. It used to sort by area fraction, under a
   comment saying so, which made one render path emit a ranking and the refusal to rank in

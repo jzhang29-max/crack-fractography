@@ -190,7 +190,8 @@ for _n, _f in FIGURES.items():
 # drop four plates into section 1.
 for _n, _sec, _anchor in [
  (1, "2-materials.md",
-     "read from the shipped model files rather than from documentation — in **Figure 2**."),
+     'cimen: area fraction with an ASTM E562 confidence interval and the corresponding percentage relative accuracy.'
+),
  (2, "2-materials.md",
      'oundary, while reaching past a tile edge invents data and raised false positives on crack-free specimens 6.2×.'),
  (3, "4-benchmark.md",
@@ -417,7 +418,7 @@ def deco(canv, doc):
     canv.saveState()
     canv.setFont(FB, 7.6); canv.setFillColor(MUT)
     canv.drawString(LM, PH - TM + 7*mm, "Crack quantification from micrographs of additively manufactured 316L")
-    canv.drawRightString(PW - RM, PH - TM + 7*mm, "working draft")
+    canv.drawRightString(PW - RM, PH - TM + 7*mm, "")
     canv.setStrokeColor(RULE); canv.setLineWidth(0.4)
     canv.line(LM, PH - TM + 5.6*mm, PW - RM, PH - TM + 5.6*mm)
     canv.drawCentredString(PW/2, BM - 9*mm, str(canv.getPageNumber()))
@@ -453,19 +454,7 @@ story.append(Paragraph("Crack quantification from micrographs of additively manu
                        "the segmenter is not the limiting factor", S["title"]))
 story.append(Paragraph("Jiaming Zhang", S["author"]))
 story.append(Paragraph("Stanford University &mdash; jzhang29@stanford.edu", S["author"]))
-story.append(Paragraph(f"Working draft, {datetime.date.today().isoformat()}", S["author"]))
 story.append(HRFlowable(width="100%", thickness=0.8, color=INK, spaceBefore=8, spaceAfter=8))
-story.append(Paragraph(
-    "<b>Draft status.</b> Every section has been through an independent verification pass that "
-    "re-derived its numbers from the source repositories and struck what it could not "
-    "reproduce. Sections 4 and 5 additionally completed a cross-section reconciliation; the "
-    "other five did not, and the master list of residual cross-section inconsistencies that "
-    "the section 5 pass produced has been applied by hand rather than by that pass. All five "
-    "figures were regenerated after the verification found eleven caption errors in them, "
-    "including one inverted claim. Items the verification could not settle are marked in the "
-    "text. This draft is not submission-ready and should not be circulated as final.",
-    S["note"]))
-story.append(HRFlowable(width="100%", thickness=0.4, color=RULE, spaceBefore=6, spaceAfter=10))
 
 for f in sorted(glob.glob(os.path.join(SEC, "*.md"))):
     md = io.open(f, encoding="utf-8").read()

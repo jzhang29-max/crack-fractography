@@ -318,8 +318,7 @@ def txm_panels():
         f"predict() returns (A + B) / 2, thresholded at {TH:.2f} — chosen jointly with speck pruning rather",
         "than on threshold alone — then prune_specks; the red outline is the resulting mask.",
         "Averaging beat BOTH members in every single fold (0.811 against 0.786 and 0.726), which is",
-        "the property worth having, because a mean can be carried by one fold. A third, SAM-only",
-        "member added +0.009 IoU — below the measured 0.0070 retrain-noise floor — so it was left out."]),
+        "the property worth having, because a mean can be carried by one fold."]),
       ("8", "Against the operator", tag(over(d8, [(mask & lbl, RED, 0.70), (lbl & ~mask, BLU, 0.70),
                                                  (mask & ~lbl, AMB, 0.70)]),
           "red   both\nblue  painted, missed\namber model only", corner="bl"), [

@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Editing a mask in the app: what it may touch, and at what resolution."""
 import os
+import os as _os
+REPO_ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
 import sys
 
 import pytest
@@ -93,11 +95,18 @@ def test_the_first_edit_of_a_frame_diffs_against_the_frame_it_copied(tmp_path):
     from PIL import Image
     from liveserver import Server
 
-    seed = os.path.join(
-        "/private/tmp/claude-501/-Users-jiamingzhang-Desktop-APP",
-        "48e14b5c-6bee-4570-a55e-3f87da7069da/scratchpad/auditseed")
-    if not os.path.isdir(seed):
-        pytest.skip("no seeded reference corpus on this machine")
+    # The seed is the repository's own built dataset. This used to be an absolute path
+    # into one session's scratch directory, complete with that session's UUID: it could
+    # never run on another machine, and when the scratch directory was emptied the test
+    # went on reporting success by skipping. analysis/out/ holds exactly the three files
+    # Server(seed=...) copies, and FRACTOGRAPHY_ANALYSIS_OUT overrides it.
+    seed = os.environ.get("FRACTOGRAPHY_ANALYSIS_OUT",
+                          os.path.join(REPO_ROOT, "analysis", "out"))
+    missing = [n for n in ("frames.json", "cracks.json", "specimens.json")
+               if not os.path.exists(os.path.join(seed, n))]
+    if missing:
+        pytest.skip(f"no built dataset at {seed} (missing {', '.join(missing)}); "
+                    f"run the analysis or set FRACTOGRAPHY_ANALYSIS_OUT")
 
     with Server(tmp_path / "d", seed=seed) as s:
         st, frames = s.json("/api/frames?arm=sem%2Fgated")
