@@ -1,0 +1,684 @@
+{
+ "what": "IoU ceiling of a physically correct crack trace against these labels, and the SHIPPED detector scored the same way on the same frames. Run 2026-09-21.",
+ "why": "out/txm_iou_ceiling.json pairs a still-correct ceiling with a model column whose per-frame values are byte-identical to the pre-clip run, so its 10.1x ratio compares a current ceiling against a superseded mask.",
+ "generator": "code/audit/measure_iou_ceiling.py",
+ "iou_convention": "intersection over union restricted to the labelled domain (painted crack OR painted not-crack)",
+ "trace_construction": "skeletonize(label) dilated by disk((w-1)//2). The 3 px and 5 px ceilings reproduce the earlier run exactly (0.0498, 0.0822); the 11 px and 21 px values differ (0.1957 vs 0.1754, 0.3431 vs 0.3140) because the earlier run's structuring element is not recorded. The 3 px figure is the one quoted, and it is unaffected.",
+ "n_frames": 61,
+ "ceiling": {
+  "perfect_3px_trace": 0.049770263797477336,
+  "perfect_5px_trace": 0.08219433234289769,
+  "perfect_11px_trace": 0.195706152563716,
+  "perfect_21px_trace": 0.3430686704792304
+ },
+ "shipped_detector_iou": 0.6748000339306119,
+ "shipped_over_3px_ceiling": 13.558297313361136,
+ "median_label_width_px": 53.85164807134504,
+ "supersedes": {
+  "file": "out/txm_iou_ceiling.json",
+  "stale_keys": [
+   "headline.deployed_model_IoU_same_frames",
+   "headline.model_over_ceiling",
+   "per_specimen.*.model_iou"
+  ],
+  "reason": "model column measured before clip_to_measured_width shipped"
+ },
+ "per_group": {
+  "B2": {
+   "n": 14,
+   "ceiling_3px": 0.033886407419907796,
+   "shipped": 0.7835746429377625,
+   "label_width_px": 52.20462469713945
+  },
+  "B3": {
+   "n": 10,
+   "ceiling_3px": 0.02906810419792434,
+   "shipped": 0.9063204059397241,
+   "label_width_px": 118.85699070343416
+  },
+  "AM": {
+   "n": 25,
+   "ceiling_3px": 0.07317087386562997,
+   "shipped": 0.5468238375900458,
+   "label_width_px": 32.2490309931942
+  },
+  "WR": {
+   "n": 12,
+   "ceiling_3px": 0.03428007127661009,
+   "shipped": 0.7720496653852111,
+   "label_width_px": 65.36568055487916
+  }
+ },
+ "per_frame": [
+  {
+   "id": "Average_mosaic_260618_B2_333_75_um_zoom_idx00000_mosaictileAA_img001of010_xrm_bi__250c5bf6",
+   "group": "B2",
+   "label_width_px": 23.366603700410227,
+   "iou_w3": 0.0930030798594543,
+   "iou_w5": 0.154860538758513,
+   "iou_w11": 0.3581312627423763,
+   "iou_w21": 0.6272936277274107,
+   "iou_shipped": 0.7952570080009209
+  },
+  {
+   "id": "Average_mosaic_260618_B2_3_1_lbf_idx00000_mosaictileAA_img001of010_xrm_bim_bim__71292b96",
+   "group": "B2",
+   "label_width_px": 16.492422502470642,
+   "iou_w3": 0.13121097814776275,
+   "iou_w5": 0.21884755463059313,
+   "iou_w11": 0.514730749219563,
+   "iou_w21": 0.8320759625390218,
+   "iou_shipped": 0.3947385535900104
+  },
+  {
+   "id": "Average_mosaic_260618_B2_3_2_lbf_idx00000_mosaictileAA_img001of010_xrm_bim_bim__b0112039",
+   "group": "B2",
+   "label_width_px": 12.0,
+   "iou_w3": 0.1722828666350261,
+   "iou_w5": 0.2751232921012208,
+   "iou_w11": 0.5599190329700491,
+   "iou_w21": 0.7239995315710468,
+   "iou_shipped": 0.6520069440791204
+  },
+  {
+   "id": "Average_mosaic_260618_b2_335_31um_FRFR_idx00000_mosaictileAA_img001of010_xrm_bim__37d5f720",
+   "group": "B2",
+   "label_width_px": 32.31098884280702,
+   "iou_w3": 0.05431387694787748,
+   "iou_w5": 0.08997178936055884,
+   "iou_w11": 0.20895184040838258,
+   "iou_w21": 0.37170563788254063,
+   "iou_shipped": 0.7961512884455528
+  },
+  {
+   "id": "Average_mosaic_260618_b2_336_25_idx00000_mosaictileAA_img001of010_xrm_bim_bim__ab7335a5",
+   "group": "B2",
+   "label_width_px": 63.56099432828282,
+   "iou_w3": 0.02464768311778693,
+   "iou_w5": 0.041350113089369596,
+   "iou_w11": 0.10189642173635678,
+   "iou_w21": 0.20448877805486285,
+   "iou_shipped": 0.812503624659282
+  },
+  {
+   "id": "Average_mosaic_260618_b2_337_19_idx00000_mosaictileAA_img001of010_xrm_bim_bim__6261f4a6",
+   "group": "B2",
+   "label_width_px": 56.0357029044876,
+   "iou_w3": 0.031923637891822405,
+   "iou_w5": 0.053198852961534655,
+   "iou_w11": 0.12359710273904875,
+   "iou_w21": 0.23871354498204672,
+   "iou_shipped": 0.8157272545121068
+  },
+  {
+   "id": "Average_mosaic_260618_b2_338_13_idx00000_mosaictileAA_img001of010_xrm_bim_bim__cea4b1d0",
+   "group": "B2",
+   "label_width_px": 47.476267830268824,
+   "iou_w3": 0.029870818238765043,
+   "iou_w5": 0.049692705983362756,
+   "iou_w11": 0.11459460406600579,
+   "iou_w21": 0.21350863669808345,
+   "iou_shipped": 0.7848486043038163
+  },
+  {
+   "id": "Average_mosaic_260618_b2_339_06_idx00000_mosaictileAA_img001of010_xrm_bim_bim__c0d2117b",
+   "group": "B2",
+   "label_width_px": 48.373546489791295,
+   "iou_w3": 0.028830491723114325,
+   "iou_w5": 0.04802556588277023,
+   "iou_w11": 0.10961578858557718,
+   "iou_w21": 0.21088065237080172,
+   "iou_shipped": 0.8131075550729667
+  },
+  {
+   "id": "Average_mosaic_260618_b2_340_00_idx00000_mosaictileAA_img001of010_xrm_bim_bim__9866c456",
+   "group": "B2",
+   "label_width_px": 65.5133574166368,
+   "iou_w3": 0.03584917694799318,
+   "iou_w5": 0.059538318591545895,
+   "iou_w11": 0.14209002977088314,
+   "iou_w21": 0.26473675954193865,
+   "iou_shipped": 0.800167790427006
+  },
+  {
+   "id": "Average_mosaic_260618_b2_340_94_idx00000_mosaictileAA_img001of010_xrm_bim_bim__3000138d",
+   "group": "B2",
+   "label_width_px": 74.24284477308234,
+   "iou_w3": 0.06861173276083303,
+   "iou_w5": 0.11158986880486574,
+   "iou_w11": 0.2701819361317681,
+   "iou_w21": 0.43398656663197954,
+   "iou_shipped": 0.6582851985890665
+  },
+  {
+   "id": "Average_mosaic_260618_b2_341_88_take2_idx00000_mosaictileAA_img001of010_xrm_bim___a66b1ab0",
+   "group": "B2",
+   "label_width_px": 106.57390768339046,
+   "iou_w3": 0.03121907014787485,
+   "iou_w5": 0.051870943445078,
+   "iou_w11": 0.125174030987225,
+   "iou_w21": 0.23684018509888102,
+   "iou_shipped": 0.76049292524022
+  },
+  {
+   "id": "Average_mosaic_260618_b2_342_81_idx00000_mosaictileAA_img001of010_xrm_bim_bim__ea67efab",
+   "group": "B2",
+   "label_width_px": 174.0,
+   "iou_w3": 0.020243882426271703,
+   "iou_w5": 0.03361552601993151,
+   "iou_w11": 0.07800437324289348,
+   "iou_w21": 0.1473371154158971,
+   "iou_shipped": 0.7823006815717086
+  },
+  {
+   "id": "Average_mosaic_260618_b2_343_75_LARGE_idx00000_mosaictileAA_img001of010_xrm_bim___56d03fa7",
+   "group": "B2",
+   "label_width_px": 168.0,
+   "iou_w3": 0.06445732995590765,
+   "iou_w5": 0.10500089123242753,
+   "iou_w11": 0.2601549948135505,
+   "iou_w21": 0.4106338880594652,
+   "iou_shipped": 0.6318983020129462
+  },
+  {
+   "id": "Average_mosaic_260618_b2_343_75_idx00000_mosaictileAA_img001of010_xrm_bim_bim__f36e4ce8",
+   "group": "B2",
+   "label_width_px": 46.8187996428785,
+   "iou_w3": 0.014038735285257791,
+   "iou_w5": 0.023267160062137113,
+   "iou_w11": 0.05431681659509873,
+   "iou_w21": 0.10171113329356243,
+   "iou_shipped": 0.7207731806645813
+  },
+  {
+   "id": "Average_mosaic_260619_HC_316L_fatigue_1000_cycles_idx00000_mosaictileAA_img001of__09ed91ba",
+   "group": "AM",
+   "label_width_px": 10.198039027185569,
+   "iou_w3": 0.24976378585931688,
+   "iou_w5": 0.41473172104617734,
+   "iou_w11": 0.8906246874562439,
+   "iou_w21": 0.8502975420439844,
+   "iou_shipped": 0.3167949298325034
+  },
+  {
+   "id": "Average_mosaic_260619_HC_316L_fatigue_1100_cycles_idx00000_mosaictileAA_img001of__9d0bf16b",
+   "group": "AM",
+   "label_width_px": 28.0,
+   "iou_w3": 0.1007177573991577,
+   "iou_w5": 0.1672527154236061,
+   "iou_w11": 0.3814631829528934,
+   "iou_w21": 0.7200988220046749,
+   "iou_shipped": 0.3173698993278
+  },
+  {
+   "id": "Average_mosaic_260619_HC_316L_fatigue_1200_cycles_idx00000_mosaictileAA_img001of__4296df23",
+   "group": "AM",
+   "label_width_px": 40.0,
+   "iou_w3": 0.07317087386562997,
+   "iou_w5": 0.12202386156329958,
+   "iou_w11": 0.2824147195785081,
+   "iou_w21": 0.5402996197984291,
+   "iou_shipped": 0.4450916257377523
+  },
+  {
+   "id": "Average_mosaic_260619_HC_316L_fatigue_1250_cycles_idx00000_mosaictileAA_img001of__081042c6",
+   "group": "AM",
+   "label_width_px": 14.422205101855956,
+   "iou_w3": 0.1273532668881506,
+   "iou_w5": 0.21223306090166094,
+   "iou_w11": 0.47512385369452936,
+   "iou_w21": 0.6707213176826959,
+   "iou_shipped": 0.3812141018023371
+  },
+  {
+   "id": "Average_mosaic_260619_HC_316L_fatigue_1300_cycles_2_idx00000_mosaictileAA_img001__51b19943",
+   "group": "AM",
+   "label_width_px": 49.678969393496885,
+   "iou_w3": 0.058230947542430286,
+   "iou_w5": 0.09651679458098997,
+   "iou_w11": 0.2266310426245806,
+   "iou_w21": 0.42114677531551226,
+   "iou_shipped": 0.6555874322459982
+  },
+  {
+   "id": "Average_mosaic_260619_HC_316L_fatigue_1350_cycles_idx00000_mosaictileAA_img001of__83c0413c",
+   "group": "AM",
+   "label_width_px": 40.0,
+   "iou_w3": 0.06896210873146623,
+   "iou_w5": 0.11453768684172955,
+   "iou_w11": 0.269464957311884,
+   "iou_w21": 0.5086170014370811,
+   "iou_shipped": 0.5151948334327972
+  },
+  {
+   "id": "Average_mosaic_260619_HC_316L_fatigue_1400_cycles_idx00000_mosaictileAA_img001of__95dd4588",
+   "group": "AM",
+   "label_width_px": 42.637849951901245,
+   "iou_w3": 0.06954942656588382,
+   "iou_w5": 0.11474580984402255,
+   "iou_w11": 0.2607091720710857,
+   "iou_w21": 0.444253038568284,
+   "iou_shipped": 0.6140829390481491
+  },
+  {
+   "id": "Average_mosaic_260619_HC_316L_fatigue_1400_cycles_tip_idx00000_mosaictileAA_img0__d71eab68",
+   "group": "AM",
+   "label_width_px": 24.08318915758459,
+   "iou_w3": 0.09294269393771881,
+   "iou_w5": 0.15544499723604202,
+   "iou_w11": 0.4043117744610282,
+   "iou_w21": 0.8015545568407868,
+   "iou_shipped": 0.3462099125364432
+  },
+  {
+   "id": "Average_mosaic_260619_HC_316L_fatigue_1450_cycles_idx00000_mosaictileAA_img001of__df1e43e7",
+   "group": "AM",
+   "label_width_px": 72.02777242147643,
+   "iou_w3": 0.032966435657018615,
+   "iou_w5": 0.05494292702812882,
+   "iou_w11": 0.12991235222176925,
+   "iou_w21": 0.2504314444897405,
+   "iou_shipped": 0.5083539594303139
+  },
+  {
+   "id": "Average_mosaic_260619_HC_316L_fatigue_1450_cycles_tip_idx00000_mosaictileAA_img0__b6661578",
+   "group": "AM",
+   "label_width_px": 98.32598842625484,
+   "iou_w3": 0.028517408946361917,
+   "iou_w5": 0.047504509921828024,
+   "iou_w11": 0.11014168692441378,
+   "iou_w21": 0.2061991267317126,
+   "iou_shipped": 0.6098361440528084
+  },
+  {
+   "id": "Average_mosaic_260619_HC_316L_fatigue_1500_cycles_idx00000_mosaictileAA_img001of__d30ef8fa",
+   "group": "AM",
+   "label_width_px": 53.85164807134504,
+   "iou_w3": 0.0537995273098118,
+   "iou_w5": 0.08926944853820105,
+   "iou_w11": 0.21502561666096734,
+   "iou_w21": 0.40359934513343965,
+   "iou_shipped": 0.6548310359629876
+  },
+  {
+   "id": "Average_mosaic_260619_HC_316L_fatigue_1600_cycles_idx00000_mosaictileAA_img001of__4cb30dc6",
+   "group": "AM",
+   "label_width_px": 54.405882034941776,
+   "iou_w3": 0.055082970600032685,
+   "iou_w5": 0.09102630374978461,
+   "iou_w11": 0.21119530967202121,
+   "iou_w21": 0.38559661180139815,
+   "iou_shipped": 0.6717463705232545
+  },
+  {
+   "id": "Average_mosaic_260619_HC_316L_fatigue_1650_cycles_idx00000_mosaictileAA_img001of__f73d8dda",
+   "group": "AM",
+   "label_width_px": 62.80127387243033,
+   "iou_w3": 0.04490115611478514,
+   "iou_w5": 0.0741935402134005,
+   "iou_w11": 0.1743726733504007,
+   "iou_w21": 0.3238899202247755,
+   "iou_shipped": 0.5912244826182856
+  },
+  {
+   "id": "Average_mosaic_260619_HC_316L_fatigue_1650_cycles_tip_idx00000_mosaictileAA_img0__6610c8eb",
+   "group": "AM",
+   "label_width_px": 76.10519036176179,
+   "iou_w3": 0.03622926354713675,
+   "iou_w5": 0.060333718732968986,
+   "iou_w11": 0.14288333575253825,
+   "iou_w21": 0.27278627936100674,
+   "iou_shipped": 0.6748000339306119
+  },
+  {
+   "id": "Average_mosaic_260619_HC_316L_fatigue_1750_cycles_idx00000_mosaictileAA_img001of__6a0a53d0",
+   "group": "AM",
+   "label_width_px": 65.29931086925804,
+   "iou_w3": 0.04154135278268735,
+   "iou_w5": 0.06890462751966352,
+   "iou_w11": 0.16093074232835763,
+   "iou_w21": 0.29504051894901334,
+   "iou_shipped": 0.5765029620448822
+  },
+  {
+   "id": "Average_mosaic_260619_HC_316L_fatigue_1750_tip_zoom_idx00000_mosaictileAA_img001__2695b632",
+   "group": "AM",
+   "label_width_px": 23.323807579381203,
+   "iou_w3": 0.10305753848800206,
+   "iou_w5": 0.17179035170693954,
+   "iou_w11": 0.44423923547728983,
+   "iou_w21": 0.7798874233386541,
+   "iou_shipped": 0.39717151029344255
+  },
+  {
+   "id": "Average_mosaic_260619_HC_316L_fatigue_1760_tip_zoom_idx00000_mosaictileAA_img001__a365650e",
+   "group": "AM",
+   "label_width_px": 31.304951684997057,
+   "iou_w3": 0.07644648354018391,
+   "iou_w5": 0.1269646253079683,
+   "iou_w11": 0.30665256229431126,
+   "iou_w21": 0.5762235761520506,
+   "iou_shipped": 0.4960417140084632
+  },
+  {
+   "id": "Average_mosaic_260619_HC_316L_fatigue_1770_tip_zoom_idx00000_mosaictileAA_img001__30787019",
+   "group": "AM",
+   "label_width_px": 12.0,
+   "iou_w3": 0.20491357016469308,
+   "iou_w5": 0.34007077718796785,
+   "iou_w11": 0.8236014699877501,
+   "iou_w21": 0.9981625153123724,
+   "iou_shipped": 0.39755066517468607
+  },
+  {
+   "id": "Average_mosaic_260619_HC_316L_fatigue_1780_tip_zoom_2_idx00000_mosaictileAA_img0__9e44d44b",
+   "group": "AM",
+   "label_width_px": 16.1245154965971,
+   "iou_w3": 0.14643986267626122,
+   "iou_w5": 0.24390480439125628,
+   "iou_w11": 0.615357759373121,
+   "iou_w21": 0.9769187501212251,
+   "iou_shipped": 0.5468238375900458
+  },
+  {
+   "id": "Average_mosaic_260619_HC_316L_fatigue_1790_cycles_idx00000_mosaictileAA_img001of__061e601b",
+   "group": "AM",
+   "label_width_px": 38.2099463490856,
+   "iou_w3": 0.058388430895208586,
+   "iou_w5": 0.09712121998028943,
+   "iou_w11": 0.23769939106409907,
+   "iou_w21": 0.4532167887779764,
+   "iou_shipped": 0.6392732707933074
+  },
+  {
+   "id": "Average_mosaic_260619_HC_316L_fatigue_1790_tip_zoom_2_idx00000_mosaictileAA_img0__5b53f617",
+   "group": "AM",
+   "label_width_px": 12.165525060596439,
+   "iou_w3": 0.19397554428869668,
+   "iou_w5": 0.317804950790337,
+   "iou_w11": 0.7516254100805249,
+   "iou_w21": 0.8694690265486725,
+   "iou_shipped": 0.4595153962645129
+  },
+  {
+   "id": "Average_mosaic_260619_HC_316L_fatigue_600_cycles_idx00000_mosaictileAA_img001of0__6b5a8408",
+   "group": "AM",
+   "label_width_px": 14.422205101855956,
+   "iou_w3": 0.11512990320937341,
+   "iou_w5": 0.19165858708691436,
+   "iou_w11": 0.4695577867976928,
+   "iou_w21": 0.7572675135161784,
+   "iou_shipped": 0.5496730093003385
+  },
+  {
+   "id": "Average_mosaic_260619_HC_316L_fatigue_700_cycles_idx00000_mosaictileAA_img001of0__9379d383",
+   "group": "AM",
+   "label_width_px": 26.0,
+   "iou_w3": 0.07781591470593112,
+   "iou_w5": 0.12966063761003996,
+   "iou_w11": 0.3107501779830792,
+   "iou_w21": 0.5952294666095609,
+   "iou_shipped": 0.5484008140205935
+  },
+  {
+   "id": "Average_mosaic_260619_HC_316L_fatigue_800_cycles_idx00000_mosaictileAA_img001of0__96ccb451",
+   "group": "AM",
+   "label_width_px": 14.422205101855956,
+   "iou_w3": 0.12803844764841515,
+   "iou_w5": 0.21243436953079423,
+   "iou_w11": 0.5110703669750257,
+   "iou_w21": 0.8013473591209034,
+   "iou_shipped": 0.6693718848673051
+  },
+  {
+   "id": "Average_mosaic_260619_HC_316L_fatigue_900_cycles_FRFR_idx00000_mosaictileAA_img0__56a1f4c1",
+   "group": "AM",
+   "label_width_px": 32.2490309931942,
+   "iou_w3": 0.06133730747206601,
+   "iou_w5": 0.10193953809335037,
+   "iou_w11": 0.23354606807511738,
+   "iou_w21": 0.43782858897769067,
+   "iou_shipped": 0.33746929015608257
+  },
+  {
+   "id": "Average_mosaic_260620_b3_362_50um_idx00000_mosaictileAA_img001of010_xrm_bim_bim__2deda36a",
+   "group": "B3",
+   "label_width_px": 329.30526659102173,
+   "iou_w3": 0.010462415073288368,
+   "iou_w5": 0.01736962744228222,
+   "iou_w11": 0.0411471892771736,
+   "iou_w21": 0.07666571127619755,
+   "iou_shipped": 0.7935753463901027
+  },
+  {
+   "id": "Average_mosaic_260620_b3_380_00um_4_idx00000_mosaictileAA_img001of010_xrm_bim_bi__4b09d210",
+   "group": "B3",
+   "label_width_px": 123.27204724086943,
+   "iou_w3": 0.014091590619808858,
+   "iou_w5": 0.02344912950618083,
+   "iou_w11": 0.05447732617090587,
+   "iou_w21": 0.10359361853601709,
+   "iou_shipped": 0.8933252109207148
+  },
+  {
+   "id": "Average_mosaic_260620_b3_380_00um_ZOOM_idx00000_mosaictileAA_img001of010_xrm_bim__42d31c46",
+   "group": "B3",
+   "label_width_px": 138.10141201305655,
+   "iou_w3": 0.017537349868176937,
+   "iou_w5": 0.029274484913582657,
+   "iou_w11": 0.06702470461868958,
+   "iou_w21": 0.13009471731276243,
+   "iou_shipped": 0.9193156009587332
+  },
+  {
+   "id": "Average_mosaic_260620_b3_380_00um_idx00000_mosaictileAA_img001of010_xrm_bim_bim__7e5607f2",
+   "group": "B3",
+   "label_width_px": 134.7145129523913,
+   "iou_w3": 0.016872194448936128,
+   "iou_w5": 0.02795716906611054,
+   "iou_w11": 0.06715288348748165,
+   "iou_w21": 0.12488451190103707,
+   "iou_shipped": 0.8753727863984061
+  },
+  {
+   "id": "Average_mosaic_260620_b3_380_94um_ZOOM_idx00000_mosaictileAA_img001of010_xrm_bim__9f79af8d",
+   "group": "B3",
+   "label_width_px": 103.24727599312246,
+   "iou_w3": 0.029874084437494855,
+   "iou_w5": 0.04967257251019904,
+   "iou_w11": 0.11700389150804755,
+   "iou_w21": 0.22325029098134191,
+   "iou_shipped": 0.957007999819976
+  },
+  {
+   "id": "Average_mosaic_260620_b3_381_88um_ZOOM_idx00000_mosaictileAA_img001of010_xrm_bim__4c28fcd7",
+   "group": "B3",
+   "label_width_px": 85.81349545327853,
+   "iou_w3": 0.049770263797477336,
+   "iou_w5": 0.08219433234289769,
+   "iou_w11": 0.195706152563716,
+   "iou_w21": 0.3430686704792304,
+   "iou_shipped": 0.9541399651996775
+  },
+  {
+   "id": "Average_mosaic_260620_b3_383_75um_ZOOM_idx00000_mosaictileAA_img001of010_xrm_bim__74e56e11",
+   "group": "B3",
+   "label_width_px": 99.6393496566492,
+   "iou_w3": 0.032965953111181216,
+   "iou_w5": 0.05476568520462785,
+   "iou_w11": 0.13152246432653567,
+   "iou_w21": 0.2472291325103051,
+   "iou_shipped": 0.9643050270125486
+  },
+  {
+   "id": "Average_mosaic_260620_b3_385_63um_ZOOM_idx00000_mosaictileAA_img001of010_xrm_bim__d4fafaac",
+   "group": "B3",
+   "label_width_px": 69.31089380465383,
+   "iou_w3": 0.0522705434740457,
+   "iou_w5": 0.08603804476615179,
+   "iou_w11": 0.2042302970254378,
+   "iou_w21": 0.36534023388388476,
+   "iou_shipped": 0.8144311747438066
+  },
+  {
+   "id": "Average_mosaic_260620_b3_388_13um_LARGE_2_idx00000_mosaictileAA_img001of010_xrm___5397bc81",
+   "group": "B3",
+   "label_width_px": 116.40446441521615,
+   "iou_w3": 0.02826212395835383,
+   "iou_w5": 0.04608665812591508,
+   "iou_w11": 0.11008037684506591,
+   "iou_w21": 0.1917498195541582,
+   "iou_shipped": 0.8559031265025144
+  },
+  {
+   "id": "Average_mosaic_260620_b3_388_13um_ZOOM_idx00000_mosaictileAA_img001of010_xrm_bim__2a8e0a9d",
+   "group": "B3",
+   "label_width_px": 121.30951699165217,
+   "iou_w3": 0.03256599692525119,
+   "iou_w5": 0.054027221290757224,
+   "iou_w11": 0.1290275199619122,
+   "iou_w21": 0.2399731587810035,
+   "iou_shipped": 0.9238061696112392
+  },
+  {
+   "id": "Average_mosaic_260620_wrought_316L_fatigue_1000_cycles_idx00000_mosaictileAA_img__e4928d15",
+   "group": "WR",
+   "label_width_px": 32.802438933713454,
+   "iou_w3": 0.0717068829113924,
+   "iou_w5": 0.1186807753164557,
+   "iou_w11": 0.26891171730554375,
+   "iou_w21": 0.4649561890900508,
+   "iou_shipped": 0.7740137922018498
+  },
+  {
+   "id": "Average_mosaic_260620_wrought_316L_fatigue_1100_cycles_crack_idx00000_mosaictile__b604e4b1",
+   "group": "WR",
+   "label_width_px": 62.0,
+   "iou_w3": 0.048848087277238314,
+   "iou_w5": 0.08055243131412465,
+   "iou_w11": 0.18606869667116166,
+   "iou_w21": 0.32191136837848927,
+   "iou_shipped": 0.7700855385685725
+  },
+  {
+   "id": "Average_mosaic_260620_wrought_316L_fatigue_1100_cycles_idx00000_mosaictileAA_img__fd88ea0a",
+   "group": "WR",
+   "label_width_px": 73.53910524340094,
+   "iou_w3": 0.033859795459490825,
+   "iou_w5": 0.05605642997026184,
+   "iou_w11": 0.12635816348734316,
+   "iou_w21": 0.2072967288024951,
+   "iou_shipped": 0.6924243408938281
+  },
+  {
+   "id": "Average_mosaic_260620_wrought_316L_fatigue_1200_cycles_crack_idx00000_mosaictile__dc137639",
+   "group": "WR",
+   "label_width_px": 30.066592756745816,
+   "iou_w3": 0.06262649750116263,
+   "iou_w5": 0.10364233259924517,
+   "iou_w11": 0.23255893903998245,
+   "iou_w21": 0.4316870953332319,
+   "iou_shipped": 0.749776069720995
+  },
+  {
+   "id": "Average_mosaic_260620_wrought_316L_fatigue_1250_cycles_crack_idx00000_mosaictile__9e764cf5",
+   "group": "WR",
+   "label_width_px": 68.73136110975832,
+   "iou_w3": 0.02492036851556085,
+   "iou_w5": 0.04143136372505563,
+   "iou_w11": 0.09411987565243571,
+   "iou_w21": 0.17917563410594162,
+   "iou_shipped": 0.8157222294006782
+  },
+  {
+   "id": "Average_mosaic_260620_wrought_316L_fatigue_1260_cycles_crack_idx00000_mosaictile__aee1a727",
+   "group": "WR",
+   "label_width_px": 34.92849839314596,
+   "iou_w3": 0.03470034709372935,
+   "iou_w5": 0.057326782617939456,
+   "iou_w11": 0.13103469715826072,
+   "iou_w21": 0.24401279116290683,
+   "iou_shipped": 0.8563697272626775
+  },
+  {
+   "id": "Average_mosaic_260620_wrought_316L_fatigue_1270_cycles_crack_idx00000_mosaictile__ac4f59b7",
+   "group": "WR",
+   "label_width_px": 148.05404418657398,
+   "iou_w3": 0.024333733074083992,
+   "iou_w5": 0.0401679057268955,
+   "iou_w11": 0.09270659096289455,
+   "iou_w21": 0.16756296116350383,
+   "iou_shipped": 0.8281257335031533
+  },
+  {
+   "id": "Average_mosaic_260620_wrought_316L_fatigue_1280_cycles_crack_idx00000_mosaictile__f2896a3b",
+   "group": "WR",
+   "label_width_px": 76.6550715869472,
+   "iou_w3": 0.021466682864775117,
+   "iou_w5": 0.03570812669877866,
+   "iou_w11": 0.08312685144265039,
+   "iou_w21": 0.15795998888657747,
+   "iou_shipped": 0.8265775085983639
+  },
+  {
+   "id": "Average_mosaic_260620_wrought_316L_fatigue_1290_cycles_crack_idx00000_mosaictile__e8b7c17d",
+   "group": "WR",
+   "label_width_px": 20.591260281974,
+   "iou_w3": 0.025593444165962553,
+   "iou_w5": 0.04265378634418966,
+   "iou_w11": 0.09854754497837437,
+   "iou_w21": 0.1756185244413926,
+   "iou_shipped": 0.8653593042205958
+  },
+  {
+   "id": "Average_mosaic_260620_wrought_316L_fatigue_1300_cycles_crack_idx00000_mosaictile__161c4589",
+   "group": "WR",
+   "label_width_px": 314.66807909287525,
+   "iou_w3": 0.010541370430352694,
+   "iou_w5": 0.017544275891128974,
+   "iou_w11": 0.041859893490163995,
+   "iou_w21": 0.0796299345500237,
+   "iou_shipped": 0.7369211426644041
+  },
+  {
+   "id": "Average_mosaic_260620_wrought_316L_fatigue_800_cycles_idx00000_mosaictileAA_img0__7fbb94ed",
+   "group": "WR",
+   "label_width_px": 18.439088914585774,
+   "iou_w3": 0.13607063208382977,
+   "iou_w5": 0.22289395743641416,
+   "iou_w11": 0.5014736714168515,
+   "iou_w21": 0.7851591950356667,
+   "iou_shipped": 0.47291499887103067
+  },
+  {
+   "id": "Average_mosaic_260620_wrought_316L_fatigue_900_cycles_idx00000_mosaictileAA_img0__33a185d3",
+   "group": "WR",
+   "label_width_px": 74.43117626371358,
+   "iou_w3": 0.03655312267371717,
+   "iou_w5": 0.06104166131889006,
+   "iou_w11": 0.13612444490078804,
+   "iou_w21": 0.26447108350232307,
+   "iou_shipped": 0.487088545670557
+  }
+ ],
+ "label_width_discrepancy": {
+  "this_run_px": 53.85164807134504,
+  "previously_quoted_px": 73.0,
+  "per_group_this_run": {
+   "AM": 31.8,
+   "B2": 52.2,
+   "B3": 116.4,
+   "WR": 65.4
+  },
+  "per_group_previously": {
+   "B2": 88,
+   "B3": 126,
+   "WR": 97,
+   "AM": 36
+  },
+  "measured_here": "2 * distance_transform_edt(label) sampled AT SKELETON POINTS, i.e. the local full width of the stroke at its medial axis, then the per-frame median.",
+  "note": "A first attempt sampled the distance transform over ALL label pixels and read 41.2 px, about 60% low, because most label pixels sit near an edge. Fixing that gives 53.9 px, which is still not the 73.0 px this project has quoted since the earlier run. That run's width definition is not recorded anywhere and could not be reproduced. AM (32 vs 36) and B3 (116 vs 126) are close; B2 (52 vs 88) and Wrought (65 vs 97) are not. FLAGGED, NOT RESOLVED -- whichever is adopted must be stated with its definition.",
+  "does_it_affect_the_ceiling": "No. The ceiling is computed from the skeleton, the dilated trace and the label area, none of which use this statistic. The 3 px and 5 px ceilings reproduce the earlier run exactly."
+ },
+ "grouping_correction_2026-09-22": "same one-frame fix as txm_unlabelled_area_per_frame.json; corpus figures unchanged"
+}
