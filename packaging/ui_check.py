@@ -56,7 +56,18 @@ def serve(binary, port):
     One code path, no shell in it.
     """
     import subprocess
-    env = dict(os.environ, PORT=str(port))
+    # FRACTOGRAPHY_NO_WINDOW, and it is the cause of the hang the docstring above
+    # describes. "The server never answered" on Windows was not Git Bash and not the seed
+    # upload: windows-latest ships WebView2, so pywebview does not raise there, the
+    # launcher's browser fallback is never reached, and the process sits inside
+    # webview.start() throwing ICoreWebView2Controller E_NOINTERFACE from a non-UI thread
+    # while the server behind it fails to answer. smoke_check.py "launched the same binary
+    # without trouble" because it raced the same bug and happened to win; it later began
+    # losing, which is what made the shared cause visible.
+    #
+    # This check drives the page through playwright over HTTP. It has no use for a native
+    # window on any platform, so it asks not to have one.
+    env = dict(os.environ, PORT=str(port), FRACTOGRAPHY_NO_WINDOW="1")
     env.setdefault("FRACTOGRAPHY_DATA", os.path.abspath("_ui_data"))
     log = open("_ui_server.log", "wb")
     proc = subprocess.Popen([binary], env=env, stdout=log, stderr=subprocess.STDOUT)
@@ -202,6 +213,18 @@ def run(base):
         #    This is where every finding and every caveat now lives, so an empty drawer
         #    means the app computed conclusions and can show none of them -- the exact
         #    failure this project has already shipped once in another shape.
+        # WAIT FOR THE READ-OUT, THEN OPEN. openLimits() renders synchronously from the
+        # module-level RO object, which is filled by an async fetch, so clicking before
+        # that lands draws the drawer from whatever has arrived. On a slow runner this
+        # check read a drawer holding one LIMITS group and no findings and called it an
+        # empty findings section -- a race in the check, not a defect in the app, which
+        # renders correctly on the next open. The button's own counter is the signal the
+        # app already publishes for "the read-out is in", so wait on that rather than on
+        # a fixed sleep. If the findings genuinely never arrive this still fails, as a
+        # timeout here instead of a wrong assertion below.
+        pg.wait_for_function("document.querySelector('#limitsn')"
+                             "&& +document.querySelector('#limitsn').textContent > 0",
+                             timeout=60_000)
         pg.click("#limitsbtn")
         pg.wait_for_selector("#defs:not([hidden])", timeout=30_000)
         defs = pg.eval_on_selector_all("#defsbody .def", "els => els.length")
