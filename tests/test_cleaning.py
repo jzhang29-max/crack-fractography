@@ -136,7 +136,15 @@ def test_tiff_metadata_is_actually_parsed():
         os.path.abspath(__file__))), "analysis"))
     import scale
     assert hasattr(scale, "from_tiff")
-    sem = os.path.expanduser("~/Desktop/APP/sem-crack-detector/original")
+    # Resolve it the way the app does, not from one developer's home. Hardcoding
+    # ~/Desktop/APP/... meant this skipped silently on every machine that keeps the
+    # checkout anywhere else, so the TIFF-metadata parser was untested there and looked
+    # covered. paths.sem_repo() honours the configured location and the data/ dev symlink.
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "app"))
+    import paths as _P
+    _repo = _P.sem_repo() or os.path.expanduser("~/Desktop/APP/sem-crack-detector")
+    sem = os.path.join(_repo, "original")
     cand = os.path.join(sem, "MAR_H_AS_CBS_0001.tif")
     if not os.path.exists(cand):
         pytest.skip("no SEM corpus here")

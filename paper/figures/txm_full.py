@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _paths
 import os, sys, json, time
 import numpy as np
-R = _paths.TXM_REPO
+R = _paths.require(_paths.TXM_REPO, "the TXM_Crack_Detection_Pipeline checkout", "TXM_REPO")
 sys.path.insert(0, f"{R}/code"); sys.path.insert(0, f"{R}/app")
 from PIL import Image
 import txm_features as T

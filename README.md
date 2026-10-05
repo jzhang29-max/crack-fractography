@@ -316,9 +316,12 @@ proxy end to end and the real `paint/` directory came out byte-identical.
 |---|---|
 | `sem/gated` | the SEM detector plus the operator's strokes, boundaries drawn by the image |
 | `sem/machine` | the SEM detector alone |
-| `txm` | the TXM export |
+| `txm` | the TXM export, operator-gated |
+| `txm/machine` | the TXM model's own masks, before the operator's gate |
+| `uploads` | whatever you add yourself; never mixed with the reference corpus |
 
-Different instruments, and for the two SEM arms a different definition of the object. The API
+Different instruments, and for each of the two modalities a different definition of the
+object. The API
 requires an arm and refuses to aggregate across them. Gated yields 34,348 crack regions
 against machine's 26,075, so the operator's contribution is visible rather than blended away.
 

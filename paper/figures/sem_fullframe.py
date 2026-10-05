@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _paths
 import os, sys, json, time
 import numpy as np
-S = _paths.SEM_REPO
+S = _paths.require(_paths.SEM_REPO, "the sem-crack-detector checkout", "SEM_REPO")
 sys.path.insert(0, os.path.join(S, "code"))
 import detect_cracks as D
 import joblib

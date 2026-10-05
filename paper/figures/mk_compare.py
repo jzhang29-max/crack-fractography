@@ -15,7 +15,8 @@ import json, os
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-B = os.path.join(_paths.SEM_REPO, "crack_export", "analysis", "sam3")
+B = os.path.join(_paths.require(_paths.SEM_REPO, "the sem-crack-detector checkout",
+                                "SEM_REPO"), "crack_export", "analysis", "sam3")
 OUT = _paths.FIG_DIR
 mb = json.load(open(f"{B}/methods_bench.json"))
 om = json.load(open(f"{B}/omnicrack_eval.json"))

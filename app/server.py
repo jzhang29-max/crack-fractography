@@ -1141,9 +1141,17 @@ def health():
 
 
 @app.post("/api/config")
-def set_config(sem_repo: str | None = None, txm_export: str | None = None):
+def set_config(sem_repo: str | None = None, txm_export: str | None = None,
+               txm_export_machine: str | None = None, txm_images: str | None = None):
     """Point the app at the repos. Validated before it is saved, so a wrong folder is
-    rejected here with the reason instead of accepted and failing later."""
+    rejected here with the reason instead of accepted and failing later.
+
+    txm_export_machine and txm_images are here because paths.py READS both out of the
+    config -- _resolved("txm_export_machine", ...) and _resolved("txm_images", ...) -- and
+    until now nothing could write either. They resolved through the data/ dev symlinks on
+    this machine and were unreachable anywhere else, so an installed copy could not reach
+    the txm/machine arm at all and could not show a TXM original. A key with a reader and
+    no writer is dead on every machine except the one it was developed on."""
     if sem_repo is not None:
         sem_repo = os.path.expanduser(sem_repo.strip())
         ok, findings = P.check_sem_repo(sem_repo)
@@ -1155,7 +1163,14 @@ def set_config(sem_repo: str | None = None, txm_export: str | None = None):
         txm_export = os.path.expanduser(txm_export.strip())
         if not os.path.isdir(txm_export):
             raise HTTPException(400, "that folder does not exist")
-    P.set_config(sem_repo=sem_repo, txm_export=txm_export)
+    for name, val in (("txm_export_machine", txm_export_machine), ("txm_images", txm_images)):
+        if val is not None and not os.path.isdir(os.path.expanduser(val.strip())):
+            raise HTTPException(400, f"{name}: that folder does not exist")
+    P.set_config(sem_repo=sem_repo, txm_export=txm_export,
+                 txm_export_machine=(os.path.expanduser(txm_export_machine.strip())
+                                     if txm_export_machine is not None else None),
+                 txm_images=(os.path.expanduser(txm_images.strip())
+                             if txm_images is not None else None))
     _CACHE.clear()
     # Which measurement implementation answers depends on this setting, and it is resolved
     # once and cached. Without this, configuring a repo leaves the process measuring with

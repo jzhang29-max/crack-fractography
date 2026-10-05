@@ -1,6 +1,6 @@
 # Figure and PDF generators
 
-Section 7.8 of the paper stated that no generator for its figures was checked into any of
+Section 7.9 of the paper stated that no generator for its figures was checked into any of
 the three repositories. This directory closes that: the full source chain is here, and it
 reproduces all five figures byte-for-byte.
 
