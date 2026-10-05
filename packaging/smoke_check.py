@@ -115,11 +115,18 @@ def main():
     if not os.path.exists(binary):
         sys.exit(f"no binary at {binary}")
 
+    # ASK FOR NO WINDOW; DO NOT ASSUME ONE CANNOT OPEN. This used to read "no display on a
+    # CI runner, so the native window cannot open -- the launcher falls back and the server
+    # still comes up". That was an assumption, it was never checked, and it is false on
+    # windows-latest, which ships WebView2: pywebview started a real window, the runner's
+    # non-UI-thread COM access threw ICoreWebView2Controller E_NOINTERFACE in a loop, and
+    # this check timed out waiting for /api/health. Intermittently, so it read as a flake.
+    # The launcher honours FRACTOGRAPHY_NO_WINDOW by serving and never touching a GUI,
+    # which is the half this gate can actually verify, on all three platforms, every time.
     env = dict(os.environ, PORT=port,
-               FRACTOGRAPHY_DATA=os.path.abspath("_smoke_data"))
+               FRACTOGRAPHY_DATA=os.path.abspath("_smoke_data"),
+               FRACTOGRAPHY_NO_WINDOW="1")
     log = open("_smoke.log", "wb")
-    # No display on a CI runner, so the native window cannot open. The launcher falls back
-    # and the server still comes up -- the half this can actually verify.
     proc = subprocess.Popen([binary], env=env, stdout=log, stderr=subprocess.STDOUT)
 
     url = f"http://127.0.0.1:{port}/api/health"

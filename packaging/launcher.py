@@ -137,6 +137,31 @@ def main():
     if not ready.wait(timeout=60):
         log("the server did not come up within 60s")
 
+    # FRACTOGRAPHY_NO_WINDOW: serve, and do not try to put anything on screen.
+    #
+    # This exists because the fallback below does not cover Windows, and the release gate
+    # assumed it did. packaging/smoke_check.py launched the packaged binary on a CI runner
+    # under the comment "no display on a CI runner, so the native window cannot open" --
+    # true on Linux, true enough on a headless mac, and FALSE on windows-latest, which
+    # ships WebView2. There pywebview does not raise, so this never reaches the fallback:
+    # it enters webview.start(), and the runner's non-UI-thread COM access floods
+    # ICoreWebView2Controller E_NOINTERFACE errors, one of which recursed far enough to
+    # print "maximum recursion depth exceeded". The server behind it never answered
+    # /api/health and the gate timed out after four minutes. It failed intermittently --
+    # a race against the server thread binding -- which is why it read as a flake across
+    # several releases rather than as the platform bug it is.
+    #
+    # So the gate now asks for what it is actually checking, instead of relying on a
+    # window failing to open. Nothing about a normal launch changes: the variable is unset
+    # for every real user, and the native window is still the preferred face of the
+    # program. What CI covers is the server and the measurement; the window itself is
+    # covered by packaging/ui_check.py, through a browser, and is untested natively on
+    # every platform -- which was already true before this change.
+    if os.environ.get("FRACTOGRAPHY_NO_WINDOW"):
+        log("FRACTOGRAPHY_NO_WINDOW set -- serving without a native window")
+        threading.Event().wait()
+        return
+
     # The window is the preferred face of this program and it is not the only one. Any
     # failure to put it on screen falls back to the system browser, because a server that
     # is already running and answering is worth more than a matching window.
