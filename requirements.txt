@@ -1,14 +1,21 @@
 # Pinned with floors, and the reason each is here.
 #
-# The measurement itself is IMPORTED from the SEM repo through data/sem, so this app needs the
-# same scientific stack that repo needs -- numpy/scipy/scikit-image -- plus a server. It does
-# NOT need pandas, torch or the detector: nothing here runs a model.
+# The measurement itself is the SEM repo's code. It is preferred live through data/sem when a
+# checkout is configured and otherwise read from the hash-checked copy in analysis/_vendor/,
+# so this app needs the same scientific stack that repo needs -- numpy/scipy/scikit-image --
+# plus a server, whether or not a SEM checkout is present. It does NOT need pandas, torch or
+# the detector: nothing here runs a model.
 #
-# scikit-image >=0.26: extended_features.crack_shape_measurements uses regionprops and
+# scikit-image >=0.26,<2: extended_features.crack_shape_measurements uses regionprops and
 # morphology.skeletonize; earlier releases differ in the deprecated-property names it touches.
+# The upper bound is not caution. That function reads props.convex_image, which 0.26 already
+# warns is "deprecated ... and will be removed in version 2.0" -- the FutureWarning the test
+# suite prints on every run. With no ceiling, the first machine to resolve scikit-image 2.0
+# gets an app whose measurement raises, and the floor-only pin would have let it. Lift this
+# when the vendored copy moves to props.image_convex, and re-vendor rather than editing it.
 numpy>=2.3
 scipy>=1.16
-scikit-image>=0.26
+scikit-image>=0.26,<2
 Pillow>=11
 # The web layer. FastAPI because the front end is a single page talking to a JSON API, and
 # uvicorn because it is the reference server for it.

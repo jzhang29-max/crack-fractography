@@ -207,8 +207,10 @@ every build.
 
 **A count is not a mass.** 305 components once read as a fragmented network until the largest
 was found to hold 97.45% of the area. So `largest_share_of_area` and `top1pct_share_of_area`
-are reported beside `n_cracks`, always, and the orientation rose is weighted by **area** —
-count-weighting lets a thousand specks outvote the one crack that holds the frame.
+are reported beside `n_cracks`, always, and the orientation rose is weighted by **segment
+length** — count-weighting lets a thousand specks outvote the one crack that holds the frame.
+It was area-weighted per component once, which is a width-weighted rose over a per-component
+axis that means nothing; `analysis/measure.py` records why that was replaced.
 
 **Length is censored at the frame edge.** A crack running out of view is longer than measured.
 Regions touching the border are flagged `length_is_censored` and their share reported.

@@ -1,6 +1,6 @@
 # Crack metrics: what to add, what to cut, and the honest novelty answer
 
-Grounded on the current code (`/Users/jiamingzhang/Desktop/APP/crack-fractography/analysis/measure.py`, `batch.py`, `app/static/app.js`) and the 357 frames / 60,893 regions already in `analysis/out/`.
+Grounded on the current code (`analysis/measure.py`, `analysis/batch.py`, `app/static/app.js`) and the 357 frames / 60,893 regions already in `analysis/out/`.
 
 Four numbers from the existing dataset set the agenda:
 

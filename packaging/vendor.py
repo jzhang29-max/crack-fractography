@@ -16,7 +16,7 @@ So: a byte copy, never an edit, with three things keeping it honest.
   2. The hash is recorded here and checked at runtime. If the SEM repo's copy changes and
      this one is not re-vendored, the app says so instead of quietly measuring with an old
      implementation -- which is exactly the failure the "never copy" rule is guarding.
-  3. tests/test_vendor.py fails on drift, so it is caught where it is introduced.
+  3. tests/test_packaging.py fails on drift, so it is caught where it is introduced.
 
 Run after any change to the upstream file:  python3 packaging/vendor.py
 """
