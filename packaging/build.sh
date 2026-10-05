@@ -15,8 +15,21 @@ echo "==> build dependencies"
 # Re-vendor before every build. The bundled copy of the shared measurement code is what a
 # downloaded app measures with, so a build that skipped this would ship the previous
 # version's implementation while the tests passed against the current one.
+#
+# --if-available, for the same reason the CI workflow passes it. Plain `vendor.py` exits 1
+# when no SEM repo is reachable, which is right for a person who typed it deliberately and
+# wrong here: this is the command the README tells a reader to run, and `set -e` turned
+# that exit into "the documented build aborts at step two on any machine without a second
+# checkout". That is every clone of this repository, and it is the only repository a user
+# of the app needs.
+#
+# What is given up is nothing that was being enforced. The drift check is a LOCAL
+# guarantee: where a repo IS reachable this still re-copies and rewrites the manifest, so
+# the build keeps it; where none is, there is no second implementation to drift from and
+# the committed copy is the only one there is. The hash is verified separately, at runtime
+# and in the test suite, against whatever copy ships.
 echo "==> vendoring the shared measurement code"
-"$PY" packaging/vendor.py
+"$PY" packaging/vendor.py --if-available
 
 echo "==> tests (a build from failing code is a build nobody can trust)"
 "$PY" -m pytest -q tests/ || { echo "  tests failed -- not building"; exit 1; }
