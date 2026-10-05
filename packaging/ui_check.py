@@ -222,9 +222,22 @@ def run(base):
         # app already publishes for "the read-out is in", so wait on that rather than on
         # a fixed sleep. If the findings genuinely never arrive this still fails, as a
         # timeout here instead of a wrong assertion below.
-        pg.wait_for_function("document.querySelector('#limitsn')"
-                             "&& +document.querySelector('#limitsn').textContent > 0",
-                             timeout=60_000)
+        # The signal is that syncLimitsButton() has RUN, not that it found anything. The
+        # first version of this waited for #limitsn to go above zero, which is wrong twice:
+        # index.html ships that span as a literal 0, so the test cannot tell "not synced
+        # yet" from "synced, no findings", and a selection that legitimately has only
+        # limits would hang it. It did -- it turned a passing macOS run into a 60s timeout.
+        # syncLimitsButton() overwrites the button's static title with "N findings, M
+        # limits", so the word "limit" appearing there means the read-out is in, at any
+        # count. Best-effort: on timeout, fall through and let the assertions below report
+        # what the drawer actually held. A check must not be able to fail a build on its
+        # own waiting condition.
+        try:
+            pg.wait_for_function(
+                "(document.querySelector('#limitsbtn')?.title || '').includes('limit')",
+                timeout=60_000)
+        except Exception:
+            print("  note: the findings counter never synced; opening the drawer anyway")
         pg.click("#limitsbtn")
         pg.wait_for_selector("#defs:not([hidden])", timeout=30_000)
         defs = pg.eval_on_selector_all("#defsbody .def", "els => els.length")
@@ -232,7 +245,11 @@ def run(base):
             bad.append("the conclusions drawer opened empty")
         groups = pg.eval_on_selector_all("#defsbody .limgrp", "els => els.map(e => e.innerText)")
         if not any("ESTABLISHED" in g.upper() for g in groups):
-            bad.append(f"the drawer has no findings section: {groups}")
+            # Carry the counter's own state into the message. When this fired on a runner
+            # the groups list alone could not say whether the read-out was absent or just
+            # late, which cost a full diagnostic round trip.
+            seen = pg.eval_on_selector("#limitsbtn", "e => e.title")
+            bad.append(f"the drawer has no findings section: {groups} (button says {seen!r})")
         if not pg.eval_on_selector_all("#pane-results .ro-line", "els => els.length") == 0:
             bad.append("statements are still being rendered on the page")
         pg.click("#defsclose")
