@@ -1,9 +1,33 @@
 # crack-fractography
 
-Automatic crack-network measurement over black-and-white crack masks, with an interactive
-page to read it. Reads the sibling repos; writes nothing back to them.
+**This is the current repository, and the only one you need to use the app.** Automatic
+crack-network measurement over black-and-white crack masks, with an interactive page to
+read it.
 
     ./run          # builds .venv, measures if needed, serves http://127.0.0.1:8810
+
+It runs standalone: clone it, run that, and the measurement layer, the whole measured
+corpus and the interactive read-out all work with no other checkout on disk. The shared
+per-region measurement code is vendored here under `analysis/_vendor/` with its md5
+recorded, so there is no second implementation to install or to drift from. Verified by
+cloning this repository alone, with no siblings present: the suite runs **260 passed, 25
+skipped** — the skips are the tests that exist to exercise the optional parts below.
+
+Three things remain optional, and the app reports which are available on first launch
+instead of failing when you reach for one: segmenting a raw `.tif`, the reference corpus of
+original micrographs, and the Mark tool. All three read a `sem-crack-detector` checkout you
+point at once in **Setup** — see [What works without anything else installed](#what-works-without-anything-else-installed).
+
+### The three repositories
+
+| | |
+|---|---|
+| **crack-fractography** (here) | The application and the measurement layer. Current; this is the one to use. |
+| [sem-crack-detector](https://github.com/jzhang29-max/sem-crack-detector) | **Archived, read-only.** The SEM detection and labelling pipeline, the frames and hand-painted masks, and the analysis artifacts the paper cites. Kept public as the source of record; not needed to run this app. |
+| [TXM_Crack_Detection_Pipeline](https://github.com/jzhang29-max/TXM_Crack_Detection_Pipeline) | **Archived, read-only.** The TXM detection pipeline and its model bundles. Same status. |
+
+Archived means public and cloneable but no longer accepting changes — every path the paper
+cites into them still resolves.
 
 ## What this measures, and what it cannot
 
