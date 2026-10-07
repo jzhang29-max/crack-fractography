@@ -24,6 +24,27 @@ MACOS = sys.platform == "darwin"
 
 REPO = os.path.abspath(os.path.join(SPECPATH, ".."))
 
+
+#: ONE VERSION, FROM THE TAG. make_dmg.sh reads CFBundleShortVersionString out of the built
+#: Info.plist to label the READ ME FIRST, and the workflow passes the tag separately for the
+#: download's filename -- so a hardcoded literal here meant a tag of v1.24.0 could publish
+#: CrackFractography-1.24.0-macOS-arm64.dmg wrapping an app whose About box said 1.23.0.
+#: GITHUB_REF_NAME is set on every tagged CI build; FRACTOGRAPHY_VERSION is the manual
+#: override; the literal is the fallback for a local build off a branch, where there is no
+#: tag to read and a wrong-but-obvious number beats a crash.
+FALLBACK_VERSION = "1.24.0"
+
+
+def _version():
+    import os as _os
+    v = _os.environ.get("FRACTOGRAPHY_VERSION") or ""
+    if not v:
+        ref = _os.environ.get("GITHUB_REF_NAME") or ""
+        if ref.startswith("v") and ref[1:2].isdigit():
+            v = ref[1:]
+    return v or FALLBACK_VERSION
+
+
 # pywebview loads its macOS backend by name at runtime, so the module graph never sees it.
 # Without these the app starts and falls back to the browser -- which looks like it works.
 hidden = (collect_submodules("webview")
@@ -144,7 +165,7 @@ if MACOS:
                  icon=os.path.join(REPO, "packaging", "AppIcon.icns"),
                  bundle_identifier="edu.stanford.crack-fractography",
                  info_plist={
-                     "CFBundleShortVersionString": "1.23.0",
+                     "CFBundleShortVersionString": _version(),
                      "NSHighResolutionCapable": True,
                      # It has a window, so it belongs in the Dock and quits like an app.
                      "LSBackgroundOnly": False,

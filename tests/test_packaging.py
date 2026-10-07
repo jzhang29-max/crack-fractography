@@ -585,3 +585,43 @@ def test_one_archiver_builds_and_opens_the_windows_zip():
     h = open(os.path.join(REPO, "packaging", "make_zip.py"), encoding="utf-8").read()
     assert "ZIP_DEFLATED" in h
     assert "not compressed" in h, "the helper does not check that compression happened"
+
+
+def test_the_bundle_version_is_not_a_hardcoded_literal():
+    """make_dmg.sh labels the download and the READ ME FIRST from the bundle's
+    CFBundleShortVersionString, while the workflow passes the tag separately for the
+    filename. A literal in the spec therefore let a tag of v1.24.0 publish a
+    CrackFractography-1.24.0 DMG wrapping an app whose About box said 1.23.0."""
+    s = open(os.path.join(REPO, "packaging", "fractography.spec"), encoding="utf-8").read()
+    assert '"CFBundleShortVersionString": _version()' in s, (
+        "the bundle version is a literal again; it must be read from the tag")
+    assert "GITHUB_REF_NAME" in s, "nothing reads the tag"
+    assert "FRACTOGRAPHY_VERSION" in s, "there is no manual override"
+
+
+def test_the_version_helper_prefers_the_tag_over_the_fallback():
+    """Exercised rather than asserted on: the helper is three lines and all three have been
+    wrong in this repo at some point."""
+    import types
+    s = open(os.path.join(REPO, "packaging", "fractography.spec"), encoding="utf-8").read()
+    start = s.index("FALLBACK_VERSION =")
+    end = s.index("\n\n", s.index("return v or FALLBACK_VERSION"))
+    mod = types.ModuleType("verhelper")
+    exec(compile(s[start:end], "spec-fragment", "exec"), mod.__dict__)
+    import os as _os
+    keep = {k: _os.environ.get(k) for k in ("FRACTOGRAPHY_VERSION", "GITHUB_REF_NAME")}
+    try:
+        for k in keep:
+            _os.environ.pop(k, None)
+        assert mod._version() == mod.FALLBACK_VERSION
+        _os.environ["GITHUB_REF_NAME"] = "v9.9.9"
+        assert mod._version() == "9.9.9", "a tag must win over the fallback"
+        _os.environ["GITHUB_REF_NAME"] = "main"
+        assert mod._version() == mod.FALLBACK_VERSION, "a branch name is not a version"
+        _os.environ["FRACTOGRAPHY_VERSION"] = "7.7.7"
+        assert mod._version() == "7.7.7", "the explicit override must win over everything"
+    finally:
+        for k, v in keep.items():
+            _os.environ.pop(k, None)
+            if v is not None:
+                _os.environ[k] = v
