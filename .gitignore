@@ -20,3 +20,8 @@ dist/
 ui_check.png
 _ui_server.log
 _smoke.log
+
+# smoke_check.py's scratch: a throwaway data dir and log it writes beside the repo
+# when the release gate runs the packaged binary by hand.
+_smoke_data/
+_smoke.log
