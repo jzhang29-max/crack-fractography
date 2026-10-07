@@ -113,35 +113,19 @@ S = dict(
 MIN_FIG_PT = 6.0
 
 FIGCAP = {
- 1: "What each filter and model stage does. Every panel is real output from the shipped code: "
-    "each stage function was imported from the pipeline and called. The SEM row is one 1200 px "
-    "window of a 25 MP frame; the TXM row one 1100 px window of a 10.3 MP mosaic, whose "
-    "ensemble panel was verified bit-identical to the application's own cached probability map.",
- 2: "What the two models are made of. Every layer shape, parameter count, coefficient and "
-    "threshold was read out of the shipped model files and SAM's own configuration rather than "
-    "from documentation. Colour encodes the kind of stage; the two arms differ in composition "
-    "more than in their scores.",
- 3: "Eleven crack-detection methods on identical data. The same 15 leak-gated 1024 x 1024 "
-    "tiles from the same 9 SEM frames, one leave-one-frame-out budget so train and test never "
-    "share an image. Bars are the median per-tile score, whiskers the frame-clustered bootstrap "
-    "95% interval, dots the 15 tiles. The dashed line is what a geometrically correct 3 px "
-    "crack trace scores against these hand-painted labels. Bar order is alphabetical and is "
-    "not a ranking.",
- 4: "TXM: what each stage of the detector adds. The window is from the frame whose "
-    "full-resolution agreement with the operator (0.503) is the corpus median (0.507 over 58 "
-    "labelled frames), so it is typical rather than flattering. Red is the model, blue the "
-    "operator.",
- 5: "SEM: where the deployed model differs. On a crack-rich frame the four classifier families "
-    "are indistinguishable; this is the one frame carrying enough not-crack labels for the "
-    "question to be answerable. Each family was fitted without it and applied to it. The "
-    "family with the highest AUC accepts every candidate region in the frame.",
+    # DEAD VALUES, KEYS ONLY. Each is overwritten from the `lead` of the caption JSON that
+    # the figure's own generator writes beside its PNG, so a caption cannot drift from the
+    # figure. A real caption here would be shadowed silently; a placeholder cannot be.
+    n: "placeholder -- overwritten from the caption json beside the png"
+    for n in (1, 2, 3, 4, 5, 6)
 }
 FIGFILE = {
  1: "1 - what each stage does.png",
  2: "2 - what the models are made of.png",
  3: "3 - method comparison, identical data.png",
- 4: "4 - TXM, what each stage adds.png",
- 5: "5 - SEM, where the model differs.png",
+ 4: "4 - transfer, the class list does not say.png",
+ 5: "5 - TXM, what each stage adds.png",
+ 6: "6 - SEM, where the model differs.png",
 }
 
 # Each figure is placed inline, immediately after the paragraph that first cites it.
@@ -156,7 +140,7 @@ FIGURES = {
  for n in FIGFILE
 }
 
-# All five figures now set in the text column. Two were reflowed to get there rather than
+# All six figures now set in the text column. Two were reflowed to get there rather than
 # being shrunk into it: Figure 1 from 8 panels per row to 4 (2,782 -> 1,382 px, and LARGER
 # panels than a landscape page would have given it), and Figure 2 from two side-by-side
 # arms to one stacked column (2,782 -> 1,448 px). The required source type size scales with
@@ -189,17 +173,24 @@ for _n, _f in FIGURES.items():
 # Figures 1-4 are name-checked in the intro's claim summary, and honouring that would
 # drop four plates into section 1.
 for _n, _sec, _anchor in [
+ # Figure 1 is anchored at the FIRST paragraph that discusses it, which is also the one
+ # that forward-references Figure 2. Its previous anchor sat at paragraph 28 of that file
+ # while Figure 2's sits at paragraph 23, so the two plates came out of order: Figure 2
+ # landed on page 9 and Figure 1 on page 12. Numbering was never wrong -- first citation is
+ # Figure 1 then Figure 2, here and in the intro -- but the PLATES were reversed, and
+ # nothing in the build checks that placement order matches numbering.
  (1, "2-materials.md",
-     'cimen: area fraction with an ASTM E562 confidence interval and the corresponding percentage relative accuracy.'
-),
+     'read from the shipped model files rather than from documentation — in Figure 2.'),
  (2, "2-materials.md",
      'oundary, while reaching past a tile edge invents data and raised false positives on crack-free specimens 6.2×.'),
  (3, "4-benchmark.md",
      "The order is alphabetical and is not a ranking."),
- (4, "6-labels.md",
+ (4, "4-benchmark.md",
+     "A published micrograph segmenter cannot be transferred by reading its class list."),
+ (5, "6-labels.md",
      "(Figure 1 quotes 0.507 over the 58 frames in `txm_stats.json`: the denominator "
      "differs, not the frame's standing.)"),
- (5, "6-labels.md",
+ (6, "6-labels.md",
      "(Those agreements are region-set overlaps weighted by region area, computed over the "
      "frame's 1,295 labelled regions; they are model-against-model, not scores against the "
      "labels.)"),
@@ -314,6 +305,12 @@ def _norm(s):
     return re.sub(r"\s+", " ", (s or "").replace("**", "").replace("*", "")).strip()
 
 PLACED = set()
+#: Emission order, which PLACED (a set) cannot record. Figures are NUMBERED in order of
+#: first citation but PLACED wherever their anchor paragraph sits, and nothing compared the
+#: two. That shipped twice: Figure 2's plate came out on page 9 and Figure 1's on page 12,
+#: and a sixth figure anchored in section 4 landed ahead of the two anchored in section 6.
+#: Both builds were clean and both printed a reassuring placement line.
+EMIT_ORDER = []
 
 def parse(md, width, section="", page_h=None):
     """Markdown -> flowables, with each figure inserted after the paragraph that cites it.
@@ -336,6 +333,7 @@ def parse(md, width, section="", page_h=None):
                 continue
             if _norm(txt).endswith(a):
                 PLACED.add(n)
+                EMIT_ORDER.append(n)
                 if FIGURES[n]["orient"] == "land":
                     g, tail = fig_block(n, LTW, LTH, split=True)
                     out.extend([NextPageTemplate("land"), PageBreak(), g,
@@ -481,6 +479,13 @@ if _unplaced:
         else:
             print(f"             section file not found: {src}")
     raise SystemExit("refusing to build: a figure would silently revert to the back")
+if EMIT_ORDER != sorted(EMIT_ORDER):
+    print("figure emission order is", EMIT_ORDER, "but numbering is", sorted(EMIT_ORDER))
+    for _a, _b in zip(EMIT_ORDER, EMIT_ORDER[1:]):
+        if _b < _a:
+            print(f"  Figure {_b} is placed after Figure {_a}: its anchor is in "
+                  f"{FIGURES[_b]['section']}, reached later than {FIGURES[_a]['section']}")
+    raise SystemExit("refusing to build: the plates are out of numerical order")
 print("figure placement:", ", ".join(
     f"Fig {n} after {FIGURES[n]['section']} ({FIGURES[n]['orient']}, "
     f"{FIG_SCALE[n][2]:.1f} pt min type)" for n in sorted(PLACED)))

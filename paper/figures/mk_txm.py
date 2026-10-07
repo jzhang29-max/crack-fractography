@@ -79,7 +79,7 @@ d.rectangle([xx, ly+6, xx+22, ly+24], fill=BLU)
 d.text((xx+32, ly+2), "operator", font=F_B, fill=(66, 66, 72))
 img = img.crop((0, 0, W, ly + 40))
 os.makedirs(OUT, exist_ok=True)
-p = os.path.join(OUT, "4 - TXM, what each stage adds.png")
+p = os.path.join(OUT, "5 - TXM, what each stage adds.png")
 img.save(p); print("wrote", p, img.size, "min_px", MIN_PX)
 
 # ---------------------------------------------------------------- caption

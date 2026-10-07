@@ -5,3 +5,7 @@
 
 # Stage 2 output; the figures as published live with the paper, not here.
 out/
+
+# The 293 MB published checkpoint transfer_imranlabs.py scores. Downloaded, not ours,
+# and far too large to vendor; the runner's docstring says where it comes from.
+imranlabs/

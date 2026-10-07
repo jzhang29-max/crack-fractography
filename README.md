@@ -23,11 +23,12 @@ point at once in **Setup** — see [What works without anything else installed](
 | | |
 |---|---|
 | **crack-fractography** (here) | The application and the measurement layer. Current; this is the one to use. |
-| [sem-crack-detector](https://github.com/jzhang29-max/sem-crack-detector) | **Archived, read-only.** The SEM detection and labelling pipeline, the frames and hand-painted masks, and the analysis artifacts the paper cites. Kept public as the source of record; not needed to run this app. |
+| [sem-crack-detector](https://github.com/jzhang29-max/sem-crack-detector) | **Archived, read-only.** The SEM detection and labelling pipeline, the frames and hand-painted masks, and most of the analysis artifacts the paper cites. Kept public as the source of record; not needed to run this app. Because it takes no new commits, artifacts produced after it was archived — the §4.8 transfer arms — are deposited here instead, under `paper/figures/`. |
 | [TXM_Crack_Detection_Pipeline](https://github.com/jzhang29-max/TXM_Crack_Detection_Pipeline) | **Archived, read-only.** The TXM detection pipeline and its model bundles. Same status. |
 
 Archived means public and cloneable but no longer accepting changes — every path the paper
-cites into them still resolves.
+cites into them still resolves. It does not mean everything the paper cites is in them:
+new artifacts can only land here.
 
 ## What this measures, and what it cannot
 
@@ -427,6 +428,9 @@ threshold is attached to it and nothing consumes it; it is there to be read.
     app/server.py         JSON API; does no measurement, only serves the dataset
     app/templates, static the single page
     data/{sem,txm,txm_export}  relative symlinks, gitignored
+    paper/figures/        the paper's figure generators, its typesetter, and the small
+                          JSON artifacts its captions quote. Deposited here because this
+                          is the only one of the three repositories still writable.
 
 Charts are inline SVG with no CDN: this is meant to run on an offline lab machine, and a chart
 that silently fails to render is worse than a table. Both palettes were run through a

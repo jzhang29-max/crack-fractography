@@ -1,4 +1,4 @@
-"""Figure 5: on the only frame with negatives, the deployed model is visibly better.
+"""Figure 6: on the only frame with negatives, the deployed model is visibly better.
 
 Chosen crop: the window with the most candidate regions that the OPERATOR rejected, because
 that is where a specificity difference can be seen at all. Measured, not eyeballed.
@@ -73,7 +73,7 @@ for lab, col in (("kept, operator agrees", RED), ("kept, operator marked not-cra
     MG += 32 + int(d.textlength(lab, font=F_B)) + 60
 img = img.crop((0, 0, W, ly + 40))
 os.makedirs(OUT, exist_ok=True)
-p = os.path.join(OUT, "5 - SEM, where the model differs.png")
+p = os.path.join(OUT, "6 - SEM, where the model differs.png")
 img.save(p); print("wrote", p, img.size, "min_px", MIN_PX)
 
 # ---------------------------------------------------------------- caption
