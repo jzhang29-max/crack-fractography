@@ -24,6 +24,11 @@ from . import paths as P
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 RES = P.RES
+#: Warn that an uploaded mask looks inverted above this area fraction. Above the 0.414
+#: maximum of the 357-frame reference corpus, and below the 0.5 at which 'crack'
+#: becomes the majority phase.
+POLARITY_WARN_ABOVE = 0.5
+
 OUT = P.OUT
 
 app = FastAPI(title="crack fractography")
@@ -516,6 +521,29 @@ async def upload(file: UploadFile = File(...), nm_per_px: float | None = None):
     _rebuild_uploads_specimen()
     _CACHE.clear()
 
+    # POLARITY. This app's convention is CRACK = BLACK, because that is how a crack looks
+    # in a micrograph and how every mask in the corpus is stored. A mask saved the other way
+    # round is the single most likely mistake a new user makes with a black-and-white image,
+    # and without this check the app answers it confidently and exactly backwards: a test
+    # mask with 1.46% of its pixels marked, inverted, measured as 98.54% of the frame in ONE
+    # crack of mean width 102 px, with no warning and an "ok": true. The two readings summed
+    # to 1.000000, which is the signature.
+    #
+    # The threshold is not a guess. Over the 357 measured frames in the reference corpus the
+    # area fraction runs from near zero to 0.414 with a median of 0.028, so nothing real
+    # comes close to half a frame; and above 0.5 the "crack" is the majority phase and the
+    # background is the minority one, which inverts the meaning of every number returned.
+    # This warns and still returns the measurement -- it is not the app's place to refuse a
+    # mask a user insists on -- but it refuses to stay silent.
+    polarity_warning = None
+    if not detected and summ["area_fraction"] > POLARITY_WARN_ABOVE:
+        polarity_warning = (
+            f"{summ['area_fraction'] * 100:.1f}% of this image measured as crack. This app "
+            f"reads CRACK = BLACK on a white background. The highest area fraction anywhere "
+            f"in the reference corpus is 41.4% over 357 frames, so a value this high almost "
+            f"always means the mask is inverted. Invert it and upload again, and every "
+            f"number here will change.")
+
     return {"ok": True, "frame": summ["frame"], "arm": "uploads",
             "renamed_from": (raw_stem if raw_stem != summ["frame"] else None),
             "segmented_here": detected,
@@ -523,6 +551,7 @@ async def upload(file: UploadFile = File(...), nm_per_px: float | None = None):
             "n_cracks": summ["n_cracks_measured"], "n_specks": summ["speck_count"],
             "area_fraction": summ["area_fraction"],
             "scale_note": scale_note,
+            "polarity_warning": polarity_warning,
             "note": ("segmented here with the SEM detector, then measured"
                      if detected else "measured as a mask, as uploaded")}
 

@@ -2002,7 +2002,7 @@ async function loadArm() {
     const lbl = document.querySelector(".upload[for=up]") || document.querySelector(".upload");
     const was = lbl.textContent;
     lbl.setAttribute("aria-busy", "true");
-    const done = [], failed = [];
+    const done = [], failed = [], warned = [];
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
       lbl.textContent = files.length > 1
@@ -2014,6 +2014,10 @@ async function loadArm() {
         const d = await r.json();
         if (!r.ok) throw new Error(d.detail || r.status);
         done.push(d.frame);
+        // A mask saved crack-white instead of crack-black measures the BACKGROUND, and
+        // every number comes back exactly inverted with no other symptom. The server
+        // decides when that is likely; this is the only place a user would ever see it.
+        if (d.polarity_warning) warned.push([d.frame, d.polarity_warning]);
       } catch (err) {
         failed.push(`${f.name}: ${err.message}`);
       }
@@ -2032,7 +2036,25 @@ async function loadArm() {
     // that refuses: the count looks right and a measurement is missing.
     $("#listcount").innerHTML = failed.length
       ? `<span class="flag bad">${done.length} added, ${failed.length} refused</span>`
-      : "";
+      : (warned.length
+         ? `<span class="flag bad">${plural(warned.length, "mask")} may be inverted</span>`
+         : "");
+    // Loud, and next to the frame it is about. An inverted mask is not an error -- it
+    // measures, it returns ok, and it is wrong -- so a warning that scrolls away with the
+    // upload toast is no warning at all.
+    if (warned.length) {
+      // `banner bad` is this page's own style for a warning -- var(--bad) text inside a
+      // var(--bad) border. The first version of this used `note bad`, and `.note` is
+      // var(--text-muted) by design, so the warning rendered in body grey on a transparent
+      // background: present, correct, and easy to read straight past.
+      const box = document.createElement("div");
+      box.className = "banner bad";
+      box.style.cssText = "display:block;margin:8px 0;padding:8px 10px;line-height:1.45";
+      box.innerHTML = warned.map(([fr, msg]) =>
+        `<div><b>${esc(fr)}</b> — ${esc(msg)}</div>`).join("");
+      const host = $("#listcount");
+      if (host && host.parentNode) host.parentNode.insertBefore(box, host.nextSibling);
+    }
     if (failed.length) console.warn("uploads refused:\n" + failed.join("\n"));
   };
 
