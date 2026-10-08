@@ -1376,12 +1376,7 @@ async function renderMark() {
   // the app shows THAT in an iframe and hides the canvas, so there is no #edcanvas to drag
   // on. Offering the button anyway would arm a mode that can never produce a box. It is
   // shown or hidden with the editor, and says which tool is in front when it is hidden.
-  if (typeof sendRowFor === "function") sendRowFor(ED.frame || state.frame);
-  const cropRow = $("#croprow");
-  if (cropRow) {
-    cropRow.hidden = canUseTool;
-    if (canUseTool && typeof cropReset === "function") cropReset();
-  }
+  if (canUseTool && typeof cropReset === "function") cropReset();
 
   if (canUseTool) {
     const fr = $("#markframe");
@@ -1405,50 +1400,19 @@ async function renderMark() {
     ED.frame = null;
     return;
   }
-  //: The full tool can be started from here when it would help THIS frame.
-  //:
-  //: THE IMAGE-LIST CONJUNCT WAS DEAD. The first version read
-  //: `paint.available && !paint.running && (await markImages()).size === 0`, and
-  //: markImages() can only return names by asking a tool that is RUNNING -- so whenever
-  //: !paint.running the set is empty and that third test is always true. It excluded
-  //: nothing, and the button it was meant to withhold appeared on TXM frames the tool
-  //: cannot open: exactly the dead control the modes used to be, reintroduced by the guard
-  //: written to prevent it.
-  //:
-  //: The arm is the test that can actually be made before the tool exists. It reads the
-  //: SEM originals, so it can only ever help a sem/* frame.
-  const startable = paint.available && !paint.running
-    && TOOL_ARMS.some((a) => state.arm === a || state.arm.startsWith(a + "/"));
-  // (startable deliberately does NOT consult markImages() either: see the note on
-  //  toolCanOpen. An image list can only come from a tool that is already up.)
+  // NO "START THE FULL TOOL" BUTTON. It offered to launch the SEM repo's paint server
+  // from here, which is a second program with its own window, its own undo and its own
+  // idea of which image is open -- and it writes the same correction masks this app does,
+  // under a lock that does not reach across processes. The editor in this window does the
+  // marking; the proxy at /mark/ still shows the tool when it is already running.
   await openEditor(state.frame);
-  // ONE BAR, NOT ONE PER VISIT. openEditor early-returns when the frame has not changed,
-  // which is exactly what a Mark -> Results -> Mark round trip looks like, so an
-  // unconditional prepend added another "Start the full tool" bar every time: three
-  // visits, three bars, three elements with id="markstart".
-  const existing = $("#markstart");
-  if (startable && !existing) {
-    const bar = document.createElement("p");
-    bar.className = "note";
-    bar.innerHTML = `<button id="markstart" class="upload">Start the full tool</button>
-      <span class="u">— whole-region flip, undo, reapply, retrain, export, on the SEM
-      originals.</span> <span id="markstartout"></span>`;
-    edit.prepend(bar);
-    $("#markstart").onclick = async (e) => {
-      const b = e.currentTarget;
-      b.disabled = true; b.textContent = "Starting…";
-      try {
-        await api("/api/paint", { method: "POST" });
-        MARK_IMAGES = null;              // re-read: the tool now has a list
-        ED.frame = null;                 // so a return to the editor re-mounts
-        await renderMark();
-      } catch (err) {
-        b.disabled = false; b.textContent = "Start the full tool";
-        $("#markstartout").innerHTML = `<span class="flag bad">${esc(err.message)}</span>`;
-      }
-    };
-  }
+  // The toolbar these live in is rebuilt by editorHTML() on every mount, so they are
+  // bound here rather than once at startup.
+  wireCrop();
+  wireSend();
+  sendRowFor(ED.frame || state.frame);
 }
+
 
 async function syncMarkFrame() {
   const fr = $("#markframe");
@@ -1524,6 +1488,9 @@ async function remeasure(btn, where) {
 // size. Painting on the scaled copy and uploading that would silently resample the user's
 // mask, changing every measurement by more than their correction did.
 const ED = { img: null, off: null, mode: "add", brush: 24, dirty: false, frame: null };
+//: Set by openEditor so ED.setView can re-apply the current zoom without a second
+//: copy of the sizing rule.
+let applyZoomRef = null;
 
 //: Shown in the Save button's tooltip, so the automatic behaviour is discoverable from
 //: the one control that used to be mandatory.
@@ -1545,6 +1512,11 @@ function editorHTML(frame) {
       <span class="u" id="edzoomval">fit</span>
       <button id="edzoomin" title="Zoom in">+</button>
       <button id="edfit">Fit</button>
+      <button id="cropmode" title="Drag a box to work on part of this image">Crop</button>
+      <button id="cropreset" hidden title="Show the whole image again">Whole image</button>
+      <span class="u" id="cropinfo"></span>
+      <button id="sendparent" hidden>Send strokes to corrections</button>
+      <span class="u" id="sendinfo"></span>
       <button id="edexport">Export \u25be</button>
       <button id="edreset" title="Discard local edits and reload the mask from disk">Reset image</button>
       <span class="u" id="edstatus"></span>
@@ -1680,20 +1652,28 @@ async function openEditor(frame) {
   //: render is the kind of thing nobody notices until a correction looks wrong.
   ED.paint = () => {
     const g = cv.getContext("2d");
-    if (!ED.bg) { g.drawImage(ED.off, 0, 0, cv.width, cv.height); return; }
+    const v = ED.view || { x: 0, y: 0, w: ED.off.width, h: ED.off.height };
+    // The background is served at a smaller width than the mask, so the same region is a
+    // different rectangle in each. Scale the view into the background's own pixels rather
+    // than assuming the two share a coordinate system.
+    const k = ED.bg ? ED.bg.naturalWidth / ED.off.width : 1;
+    const bgRect = [v.x * k, v.y * k, v.w * k, v.h * k];
+    if (!ED.bg) {
+      g.drawImage(ED.off, v.x, v.y, v.w, v.h, 0, 0, cv.width, cv.height); return;
+    }
     // "Show result" off = the micrograph with nothing drawn on it, which is how you check
     // whether a boundary follows something real rather than following the previous mark.
     if (ED.showResult === false) {
       g.clearRect(0, 0, cv.width, cv.height);
-      g.drawImage(ED.bg, 0, 0, cv.width, cv.height);
+      g.drawImage(ED.bg, ...bgRect, 0, 0, cv.width, cv.height);
       return;
     }
     g.clearRect(0, 0, cv.width, cv.height);
-    g.drawImage(ED.bg, 0, 0, cv.width, cv.height);
+    g.drawImage(ED.bg, ...bgRect, 0, 0, cv.width, cv.height);
     const lay = document.createElement("canvas");
     lay.width = cv.width; lay.height = cv.height;
     const lg = lay.getContext("2d");
-    lg.drawImage(ED.off, 0, 0, cv.width, cv.height);
+    lg.drawImage(ED.off, v.x, v.y, v.w, v.h, 0, 0, cv.width, cv.height);
     const d = lg.getImageData(0, 0, cv.width, cv.height);
     const px = d.data;
     for (let i = 0; i < px.length; i += 4) {
@@ -1704,9 +1684,24 @@ async function openEditor(frame) {
     g.drawImage(lay, 0, 0);
   };
 
+  // THE VIEW IS A WINDOW ON THE MASK, NOT A COPY OF IT. Cropping used to cut a new frame
+  // and file it in uploads, which put a second entry in the sidebar for what the user
+  // thinks of as the same picture. ED.off stays the WHOLE mask at full resolution -- so
+  // saving, measuring and undo are untouched and a stroke is still written at the image's
+  // own scale -- and only what is drawn on screen is restricted.
+  ED.view = { x: 0, y: 0, w: ED.off.width, h: ED.off.height };
+  ED.setView = (v) => {
+    ED.view = v || { x: 0, y: 0, w: ED.off.width, h: ED.off.height };
+    const whole = ED.view.w === ED.off.width && ED.view.h === ED.off.height;
+    const rb = $("#cropreset"); if (rb) rb.hidden = whole;
+    const ci = $("#cropinfo");
+    if (ci) ci.textContent = whole ? "" :
+      `showing ${ED.view.w} × ${ED.view.h} of ${ED.off.width} × ${ED.off.height} px`;
+    if (typeof applyZoomRef === "function") applyZoomRef(); else fit();
+  };
   const fit = () => {
-    const w = Math.min(host.clientWidth - 4, img.naturalWidth);
-    cv.width = w; cv.height = Math.round(w * img.naturalHeight / img.naturalWidth);
+    const w = Math.min(host.clientWidth - 4, ED.view.w);
+    cv.width = w; cv.height = Math.round(w * ED.view.h / ED.view.w);
     ED.paint();
   };
   fit();
@@ -1724,14 +1719,15 @@ async function openEditor(frame) {
   // in the saved mask whatever the window is.
   const toNat = (e) => {
     const r = cv.getBoundingClientRect();
-    return [(e.clientX - r.left) / r.width * ED.off.width,
-            (e.clientY - r.top) / r.height * ED.off.height];
+    const v = ED.view || { x: 0, y: 0, w: ED.off.width, h: ED.off.height };
+    return [v.x + (e.clientX - r.left) / r.width * v.w,
+            v.y + (e.clientY - r.top) / r.height * v.h];
   };
   let drawing = false, last = null;
   const stroke = (a, b) => {
     const g = ED.off.getContext("2d");
     g.strokeStyle = ED.mode === "add" ? "#000" : "#fff";
-    g.lineWidth = ED.brush * (ED.off.width / cv.width);
+    g.lineWidth = ED.brush * ((ED.view ? ED.view.w : ED.off.width) / cv.width);
     g.lineCap = "round"; g.lineJoin = "round";
     g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke();
     ED.paint();
@@ -1804,18 +1800,19 @@ async function openEditor(frame) {
   //: so Fit is a state to return to rather than a width to recompute.
   ED.zoom = null;
   const applyZoom = () => {
-    const natural = Math.min(host.clientWidth - 4, img.naturalWidth);
-    const w = ED.zoom == null ? natural
-      : Math.max(120, Math.round(img.naturalWidth * ED.zoom));
+    const v = ED.view || { x: 0, y: 0, w: ED.off.width, h: ED.off.height };
+    const natural = Math.min(host.clientWidth - 4, v.w);
+    const w = ED.zoom == null ? natural : Math.max(120, Math.round(v.w * ED.zoom));
     cv.width = w;
-    cv.height = Math.round(w * img.naturalHeight / img.naturalWidth);
+    cv.height = Math.round(w * v.h / v.w);
     cv.style.width = w + "px";
     $("#edzoomval").textContent = ED.zoom == null
       ? "fit" : `${Math.round(ED.zoom * 100)}%`;
     ED.paint();
   };
+  applyZoomRef = applyZoom;
   const curZoom = () => ED.zoom != null ? ED.zoom
-    : Math.min(host.clientWidth - 4, img.naturalWidth) / img.naturalWidth;
+    : Math.min(host.clientWidth - 4, (ED.view || ED.off).w) / (ED.view || ED.off).w;
   $("#edzoomin").onclick = () => { ED.zoom = Math.min(4, curZoom() * 1.5); applyZoom(); };
   $("#edzoomout").onclick = () => { ED.zoom = Math.max(0.02, curZoom() / 1.5); applyZoom(); };
   $("#edfit").onclick = () => { ED.zoom = null; applyZoom(); };
@@ -2220,8 +2217,8 @@ async function loadArm() {
 
   await wireSetup();
   wireGroups();
-  wireCrop();
-  wireSend();
+  // Crop and send are bound per editor mount (see renderMark), not here: their
+  // buttons do not exist until a frame is open.
   try { await health(); } catch (e) { /* the page still works without it */ }
 
   let arms;
@@ -2426,134 +2423,87 @@ function wireGroups() {
 
 // ============================================================ CROP
 //
-// Drag a box on the mask you are editing, and make that box a NEW frame. A crop is a
-// frame, not a viewport, so every tool downstream -- the brush, the measurement, the
-// retrain -- works on it unchanged and none of them had to learn about cropping.
+// Drag a box and work on that part of the image. It is a VIEW, not a new frame.
 //
-// The box is drawn in SCREEN pixels over the canvas and converted to IMAGE pixels on
-// submit, using the same transform the brush uses, so a crop is the same region of the
-// saved mask whatever the zoom or the window size.
-const CROP = { on: false, box: null, el: null };
+// It used to cut the region out, measure it, and file it in uploads as its own frame --
+// which put a second entry in the sidebar for what the user thinks of as the same
+// picture, and made "crop" mean "make a copy". ED.off stays the whole mask at full
+// resolution, so saving, measuring, undo and the brush scale are all untouched; only what
+// is drawn on screen is restricted. Cropping is now instant and costs no server call.
+const CROP = { on: false, el: null, drag: false, start: null, box: null };
 
 function cropReset() {
-  CROP.on = false; CROP.box = null; CROP.frame = null; CROP.drag = false;
+  CROP.on = false; CROP.box = null; CROP.drag = false;
   CROP.el?.remove(); CROP.el = null;
-  const b = $("#cropmode"); if (b) { b.textContent = "Crop a region"; b.className = "btn"; }
-  $("#cropgo")?.setAttribute("hidden", "");
-  $("#cropcancel")?.setAttribute("hidden", "");
-  const i = $("#cropinfo"); if (i) i.textContent = "drag a box on the image, then confirm";
+  const b = $("#cropmode"); if (b) { b.textContent = "Crop"; b.className = ""; }
 }
+
+// THE BUTTONS ARE REBUILT ON EVERY EDITOR MOUNT, THE LISTENERS ARE NOT. #cropmode now
+// lives inside editorHTML(), so it is a different element each time a frame is opened --
+// binding it once at startup bound a node that is thrown away on the first frame change.
+// The document-level drag handlers are the opposite: bound twice, every drag runs twice.
+let CROP_WIRED = false;
 
 function wireCrop() {
   const btn = $("#cropmode");
-  if (!btn) return;
-  btn.onclick = () => {
+  if (btn) btn.onclick = () => {
     if (CROP.on) { cropReset(); return; }
-    const cv0 = $("#edcanvas");
-    // ED.frame IS THE ONLY PROOF THE CANVAS SHOWS WHAT WE THINK IT DOES. Four code paths
-    // set ED.frame = null to force a re-mount and none of them clear ED.off, so the
-    // offscreen canvas outlives the frame it was built from. Arming on ED.off alone lets
-    // a drag be measured against the PREVIOUS image's width and height and then posted
-    // against state.frame -- a box of the right shape cut out of the wrong picture.
-    if (!ED.frame || !ED.off || !cv0 || !(cv0.getBoundingClientRect().width > 0)) {
-      $("#cropinfo").textContent = "open an image in Mark first"; return;
-    }
+    if (!ED.off || !$("#edcanvas")) return;
     CROP.on = true;
-    btn.textContent = "Cropping — click to cancel"; btn.className = "btn primary";
-    $("#cropcancel")?.removeAttribute("hidden");
-    $("#cropinfo").textContent = "drag a box on the image";
+    btn.textContent = "drag a box"; btn.className = "upload";
   };
-  $("#cropcancel")?.addEventListener("click", cropReset);
+  const rb = $("#cropreset");
+  if (rb) rb.onclick = () => { cropReset(); ED.setView(null); };
 
-  // Captured on the wrapper, not the canvas, so the drag survives the pointer leaving the
-  // canvas mid-gesture -- which is the common case when cropping right up to an edge.
+  if (CROP_WIRED) return;
+  CROP_WIRED = true;
+
   const host = () => $("#edcanvas")?.parentElement;
   document.addEventListener("pointerdown", (e) => {
     if (!CROP.on) return;
     const cv = $("#edcanvas"); if (!cv || !cv.contains(e.target)) return;
     e.preventDefault(); e.stopPropagation();
-    const r = cv.getBoundingClientRect();
     CROP.start = [e.clientX, e.clientY];
     CROP.el?.remove();
     CROP.el = document.createElement("div");
     CROP.el.className = "cropbox";
     host().style.position = host().style.position || "relative";
     host().appendChild(CROP.el);
-    CROP.rect = r;
-    CROP.frame = ED.frame;   // pinned: the box belongs to THIS frame, not to whatever is open at submit
     CROP.drag = true;
   }, true);
+
   document.addEventListener("pointermove", (e) => {
     if (!CROP.on || !CROP.drag || !CROP.el) return;
-    const [sx, sy] = CROP.start;
+    const cv = $("#edcanvas"), r = cv.getBoundingClientRect();
     const hr = host().getBoundingClientRect();
+    const [sx, sy] = CROP.start;
     const x = Math.min(sx, e.clientX), y = Math.min(sy, e.clientY);
     const w = Math.abs(e.clientX - sx), h = Math.abs(e.clientY - sy);
     Object.assign(CROP.el.style, { left: (x - hr.left) + "px", top: (y - hr.top) + "px",
                                    width: w + "px", height: h + "px" });
-    const cv = $("#edcanvas"), r = cv.getBoundingClientRect();
-    // A CANVAS WITH NO LAYOUT DIVIDES BY ZERO. If the pane is hidden, or the editor has
-    // not finished sizing, getBoundingClientRect is 0x0 and every coordinate below comes
-    // out NaN -- which serialises to null, posts a box of nulls, and fails server-side
-    // with a message about integers that says nothing about the real cause. Refuse here,
-    // where the cause is known.
-    if (!(r.width > 0 && r.height > 0) || !ED.off) {
-      CROP.box = null;
-      $("#cropinfo").textContent = "the image is not on screen yet — open it in Mark first";
-      return;
-    }
-    if (ED.frame !== CROP.frame) {
-      CROP.box = null;
-      $("#cropinfo").textContent = "the image changed while you were dragging — start the crop again";
-      return;
-    }
-    const toNat = (cx, cy) => [Math.round((cx - r.left) / r.width * ED.off.width),
-                               Math.round((cy - r.top) / r.height * ED.off.height)];
+    // A CANVAS WITH NO LAYOUT DIVIDES BY ZERO and every coordinate comes out NaN.
+    if (!(r.width > 0 && r.height > 0) || !ED.off) { CROP.box = null; return; }
+    const v = ED.view || { x: 0, y: 0, w: ED.off.width, h: ED.off.height };
+    const toNat = (cx, cy) => [Math.round(v.x + (cx - r.left) / r.width * v.w),
+                               Math.round(v.y + (cy - r.top) / r.height * v.h)];
     const [ix0, iy0] = toNat(x, y), [ix1, iy1] = toNat(x + w, y + h);
-    CROP.box = { x: ix0, y: iy0, w: ix1 - ix0, h: iy1 - iy0 };
-    $("#cropinfo").textContent =
-      `${CROP.box.w} × ${CROP.box.h} px of ${ED.off.width} × ${ED.off.height}`;
+    const bx = Math.max(0, Math.min(ix0, ED.off.width - 1));
+    const by = Math.max(0, Math.min(iy0, ED.off.height - 1));
+    CROP.box = { x: bx, y: by,
+                 w: Math.max(1, Math.min(ix1, ED.off.width) - bx),
+                 h: Math.max(1, Math.min(iy1, ED.off.height) - by) };
   }, true);
+
   document.addEventListener("pointerup", () => {
     if (!CROP.on || !CROP.drag) return;
     CROP.drag = false;
-    if (CROP.box && CROP.box.w >= 64 && CROP.box.h >= 64) {
-      $("#cropgo")?.removeAttribute("hidden");
-    } else {
-      $("#cropinfo").textContent = "too small — a crop must be at least 64 px on a side";
-      $("#cropgo")?.setAttribute("hidden", "");
-    }
+    const box = CROP.box;
+    CROP.el?.remove(); CROP.el = null;
+    cropReset();
+    // A FLICK IS NOT A CROP. Under about 16 px on a side the user almost certainly meant
+    // to click, and zooming into a 3-pixel window looks like the editor broke.
+    if (box && box.w >= 16 && box.h >= 16) ED.setView(box);
   }, true);
-
-  $("#cropgo")?.addEventListener("click", async () => {
-    // Not `ED.frame || state.frame`: the fallback is what would silently send the box to
-    // a frame the canvas was not showing. If the editor re-mounted mid-gesture, refuse.
-    const frame = CROP.frame;
-    if (!CROP.box || !frame) { $("#cropinfo").textContent = "no image open"; return; }
-    if (frame !== ED.frame) {
-      $("#cropinfo").textContent = "the image changed since you drew the box — start the crop again";
-      return;
-    }
-    const info = $("#cropinfo");
-    info.textContent = "cropping and measuring…";
-    try {
-      // Strokes still inside the autosave delay would otherwise not be in the file the
-      // crop is cut from, so the crop would come from the pre-edit mask.
-      if (ED.dirty && ED.flushSave) await ED.flushSave();
-      const d = await gPost("/api/crop", { arm: state.arm, frame, ...CROP.box });
-      cropReset();
-      info.textContent = `made ${d.frame} — ${plural(d.n_cracks, "crack")}, ` +
-        `${(d.area_fraction * 100).toFixed(2)}% area. ${d.note}` +
-        (d.original_note ? ` ${d.original_note}.` : "");
-      // Show it: the point of cropping is to draw on the crop next.
-      state.arm = "uploads";
-      const sel = $("#arm"); if (sel) sel.value = "uploads";
-      await loadArm();
-      selectFrame(d.frame);
-    } catch (err) {
-      info.textContent = `crop failed: ${err.message}`;
-    }
-  });
 }
 
 // ============================================================ SEND STROKES TO THE PARENT
@@ -2567,16 +2517,21 @@ function wireCrop() {
 // copy, so a preview is not politeness -- it is the only chance to notice that a stroke
 // went somewhere unintended while noticing is still free.
 function sendRowFor(frame) {
-  const row = $("#sendrow");
-  if (!row) return;
+  const b = $("#sendparent");
+  if (!b) return;
+  // A frame can reach a correction mask two ways: as a crop (cropped_from) or as the
+  // copy that painting a research frame produces (copied_from). Cropping is a view now,
+  // so the second is the ordinary case.
   const rec = state.frames.find((x) => x.frame === frame);
   const cf = rec && rec.cropped_from;
-  const sem = cf && typeof cf.arm === "string" && cf.arm.startsWith("sem/");
-  row.hidden = !(state.arm === "uploads" && sem);
+  const cp = rec && rec.copied_from;
+  const sem = (cf && typeof cf.arm === "string" && cf.arm.startsWith("sem/"))
+           || (typeof cp === "string" && cp.startsWith("sem/"));
+  b.hidden = !(state.arm === "uploads" && sem);
   SEND.frame = frame;
   SEND.confirmed = false;
-  const b = $("#sendparent");
-  if (b) { b.textContent = "Send my strokes to the parent frame"; b.className = "btn"; }
+  b.textContent = "Send strokes to corrections";
+  b.className = "";
   const i = $("#sendinfo"); if (i) i.textContent = "";
 }
 
@@ -2585,7 +2540,7 @@ const SEND = { frame: null, confirmed: false };
 function wireSend() {
   const btn = $("#sendparent");
   if (!btn) return;
-  btn.addEventListener("click", async () => {
+  btn.onclick = async () => {
     const info = $("#sendinfo");
     if (!SEND.frame) { info.textContent = "no crop is open"; return; }
     info.textContent = SEND.confirmed ? "writing…" : "checking…";
@@ -2600,8 +2555,8 @@ function wireSend() {
           return;
         }
         SEND.confirmed = true;
-        btn.textContent = `Write ${n.toLocaleString()} px into ${d.parent}`;
-        btn.className = "btn primary";
+        btn.textContent = `Write ${n.toLocaleString()} px \u2192 ${d.parent}`;
+        btn.className = "upload";
         info.textContent =
           `${d.crack_px.toLocaleString()} crack, ${d.not_crack_px.toLocaleString()} ` +
           `not-crack. ${d.contested_existing_verdicts.toLocaleString()} land on a verdict ` +
@@ -2611,8 +2566,8 @@ function wireSend() {
           `. Click again to write.`;
       } else {
         SEND.confirmed = false;
-        btn.textContent = "Send my strokes to the parent frame";
-        btn.className = "btn";
+        btn.textContent = "Send strokes to corrections";
+        btn.className = "";
         info.innerHTML = esc(
           `wrote ${d.wrote.toLocaleString()} px into ${d.parent} ` +
           `(${d.crack_px.toLocaleString()} crack, ${d.not_crack_px.toLocaleString()} ` +
@@ -2621,9 +2576,9 @@ function wireSend() {
       }
     } catch (err) {
       SEND.confirmed = false;
-      btn.textContent = "Send my strokes to the parent frame";
-      btn.className = "btn";
+      btn.textContent = "Send strokes to corrections";
+      btn.className = "";
       info.textContent = err.message;
     }
-  });
+  };
 }

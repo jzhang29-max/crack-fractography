@@ -102,7 +102,7 @@ def test_a_frame_that_is_not_a_crop_is_refused(sandbox, tmp_path):
         parent, _ = _seed_crop(s)
         st, d = _post(s, "/api/send_to_parent", {"frame": parent})
         assert st == 400, d
-        assert "not a crop" in json.dumps(d)
+        assert "neither a crop nor a marked copy" in json.dumps(d)
 
 
 @needs_sem
@@ -274,4 +274,59 @@ def test_a_crop_whose_as_cut_copy_is_missing_is_refused(sandbox, tmp_path):
         os.remove(os.path.join(up, f"{c['frame']}_ascut.png"))
         st, d = _post(s, "/api/send_to_parent", {"frame": c["frame"]})
         assert st == 409, d
-        assert "as-cut" in json.dumps(d)
+        assert "no pristine copy" in json.dumps(d)
+
+
+@needs_sem
+@needs_frame
+def test_a_marked_copy_of_a_research_frame_can_be_sent(sandbox, tmp_path):
+    """THE ORDINARY PATH, now that cropping is a view rather than a new frame.
+
+    Painting a sem/* frame writes a COPY into uploads -- the research mask is never
+    touched -- and that copy is the same size as its source. The pristine baseline is
+    therefore the source mask itself, still on disk: it cannot drift, nothing has to be
+    kept beside it, and the offset is (0, 0), so the entire class of offset bugs the crop
+    path needs guards for does not arise here at all.
+    """
+    import shutil
+    real = os.path.join(SEM, "interior_active_learning", "paint")
+    shutil.copy(os.path.join(real, f"{FRAME}_correction_mask.png"),
+                os.path.join(str(sandbox), f"{FRAME}_correction_mask.png"))
+    with Server(tmp_path / "d") as s:
+        st, raw = s.get(f"/api/mask/sem/gated/{FRAME}")
+        assert st == 200, st
+        orig = np.array(Image.open(io.BytesIO(raw)).convert("L"))
+
+        # erase a patch of what the detector marked -> not-crack evidence, the scarce kind
+        painted = orig.copy()
+        ys, xs = np.where(orig < 128)
+        if len(ys) < 500:
+            pytest.skip(f"{FRAME} has too little marked area to erase")
+        painted[ys[:500], xs[:500]] = 255
+        b = io.BytesIO(); Image.fromarray(painted, mode="L").save(b, "PNG")
+        st, raw = s.upload(f"{FRAME}.png", b.getvalue(),
+                           path=f"/api/mask_edit?arm=sem/gated&frame={FRAME}")
+        assert st == 200, raw[:300]
+        copy_frame = json.loads(raw)["frame"]
+        rec = next(r for r in s.dataset("frames") if r["frame"] == copy_frame)
+        assert rec.get("copied_from") == f"sem/gated/{FRAME}", rec.get("copied_from")
+
+        before = np.array(Image.open(os.path.join(str(sandbox),
+                                                  f"{FRAME}_correction_mask.png")))
+        st, d = _post(s, "/api/send_to_parent", {"frame": copy_frame})
+        assert st == 200, d
+        assert d["parent"] == FRAME
+        assert d["box_px"] == [0, 0, orig.shape[1], orig.shape[0]], d["box_px"]
+        assert d["not_crack_px"] > 0, "erasing produced no not-crack evidence"
+        assert d["crack_px"] == 0, d["crack_px"]
+
+        after = np.array(Image.open(os.path.join(str(sandbox),
+                                                 f"{FRAME}_correction_mask.png")))
+        changed = after != before
+        assert int(changed.sum()) == d["wrote"]
+        # exactly the pixels that were erased, and only where not already 'erased'(3)
+        erased = np.zeros_like(orig, dtype=bool)
+        erased[ys[:500], xs[:500]] = True
+        assert np.array_equal(changed, erased & (before != 3))
+        assert (after[changed] == 2).all(), "an erased stroke did not become not-crack"
+        assert int((after == 3).sum()) == int((before == 3).sum())

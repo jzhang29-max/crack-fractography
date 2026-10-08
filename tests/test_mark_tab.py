@@ -342,78 +342,28 @@ def test_a_one_field_specimen_does_not_read_one_fields():
     assert not bad, f"unpluralised counts: {bad}"
 
 
-def test_the_start_bar_is_added_once_not_once_per_visit():
-    """openEditor early-returns when the frame has not changed, which is exactly what a
-    Mark -> Results -> Mark round trip looks like -- so an unconditional prepend added
-    another "Start the full tool" bar on every visit: three visits, three bars, three
-    elements sharing id="markstart".
+def test_the_full_tool_is_not_launched_from_here():
+    """The "Start the full tool" button is gone, and the two tests that policed its
+    duplicate-bar bug are gone with it.
 
-    REPAIRED -- IT MEASURED NOTHING, by a superset that always contains it. The old guard
-    took every character of renderMark before `prepend(bar)` and asked that it contain
-    "markstart" and "!". Both are in that text unconditionally: "markstart" appears in the
-    bar's own `<button id="markstart">` markup and in `$("#markstart")` itself, and "!"
-    appears in `!fr.src`, `!state.frame` and `!paint.running` further up. Changing the
-    guard from `if (startable && !existing)` to `if (startable)` -- precisely the
-    unconditional prepend the docstring describes -- left this passing.
+    It launched the SEM repo's paint server: a second program, with its own window, its
+    own undo stack and its own idea of which image is open, writing the same correction
+    masks this app writes, under a threading.Lock that does not reach across processes.
+    The editor in this window does the marking. The proxy at /mark/ still displays the
+    tool when it is already running, which is a different thing from offering to start it.
 
-    It now RUNS the real statement: the `const existing = ...` line and the whole if-block
-    are lifted out of renderMark and executed three times against a DOM stub, which is what
-    three Mark -> Results -> Mark round trips do (openEditor early-returns, so #markstart
-    from visit one is still in the document on visit two). The expectation is counted by
-    hand from the behaviour in the title: three visits, ONE bar. Two further visits with
-    startable false check the other direction, that a copy with no SEM repo behind it is
-    not offered the button at all."""
+    Asserted as absence rather than deleted outright, because the bug those tests caught
+    -- one bar prepended per visit, three elements sharing one id -- can only come back
+    with the button."""
     src = open(APPJS, encoding="utf-8").read()
-    rm = src[src.index("async function renderMark()"):src.index("async function syncMarkFrame()")]
-    code = code_only(rm)
-    assert "prepend(bar)" in code, "the start bar is no longer prepended"
-    block = js_block(code, 'const existing = $("#markstart");')
-    assert "prepend(bar)" in block, (
-        f"the prepend is not inside the extracted statement: {block!r}")
-    r = js(NODE_DOM + r"""
-DOM.markedit = mkEl("markedit");
-const edit = DOM.markedit;
-function visit(startable) {
-""" + block + r"""
-}
-visit(true); visit(true); visit(true);
-const after_three = { bars: PREPENDS, present: !!$("#markstart") };
-PREPENDS = 0; delete DOM.markstart;          // a fresh page, no SEM repo behind it
-visit(false); visit(false);
-process.stdout.write(JSON.stringify({
-  bars_after_three_visits: after_three.bars,
-  bar_present: after_three.present,
-  bars_when_not_startable: PREPENDS,
-}));
-""")
-    assert r["bar_present"] is True, "the bar was never added at all"
-    assert r["bars_after_three_visits"] == 1, (
-        f"three visits to Mark added {r['bars_after_three_visits']} start bars; each one "
-        'carries id="markstart", so the page ends up with duplicate ids')
-    assert r["bars_when_not_startable"] == 0, (
-        "a bar is offered even when the arm cannot be served -- the dead control the "
-        "modes used to be")
-
-
-def test_the_start_button_is_not_offered_on_an_arm_the_tool_cannot_serve():
-    """The guard read `... && (await markImages()).size === 0`, and markImages() can only
-    return names from a RUNNING tool -- so whenever the tool is not running the set is
-    empty and that conjunct is always true. It excluded nothing, and the button appeared on
-    TXM frames the tool cannot open: the dead control the modes used to be, reintroduced by
-    the guard written to prevent it."""
-    src = open(APPJS, encoding="utf-8").read()
-    rm = src[src.index("async function renderMark()"):src.index("async function syncMarkFrame()")]
-    code = code_only(rm)
-    # The WHOLE statement, not its first line: the guard now wraps, and a one-line check
-    # read only `const startable = paint.available && !paint.running` and reported the arm
-    # term missing from correct code.
-    assert "startable =" in code, "the startable guard vanished"
-    stmt = code[code.index("startable ="):]
-    stmt = stmt[:stmt.index(";") + 1]
-    assert "markImages()" not in stmt, (
-        "the guard still consults an image list that is empty whenever it is consulted")
-    assert "state.arm" in stmt, "the guard does not test the arm, which is knowable"
-    assert "TOOL_ARMS" in stmt, "the served arms are hardcoded rather than named once"
+    html = open(os.path.join(REPO, "app", "templates", "index.html"),
+                encoding="utf-8").read()
+    for token in ("markstart", "Start the full tool"):
+        assert token not in src, f"the start-the-tool control is back in app.js: {token!r}"
+        assert token not in html, f"the start-the-tool control is back in the markup"
+    # and nothing POSTs to the endpoint that spawns it
+    assert '"/api/paint", { method: "POST" }' not in src
+    assert "'/api/paint', { method: 'POST' }" not in src
 
 
 def test_the_frame_list_is_never_narrowed_to_one_specimen():

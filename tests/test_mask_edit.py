@@ -61,8 +61,14 @@ def test_the_editor_draws_at_natural_resolution():
         "the offscreen canvas must be the image's own size")
     assert "ED.off.width" in fn and "cv.width" in fn, (
         "display coordinates must be mapped back to image pixels")
-    # The brush must scale with the ratio too, or a stroke is a different size per window.
-    assert "ED.brush * (ED.off.width / cv.width)" in fn
+    # THE BRUSH SCALES BY IMAGE-PIXELS-SHOWN OVER CANVAS-PIXELS, or a stroke is a
+    # different size per window. That ratio used to be ED.off.width / cv.width because the
+    # canvas always showed the whole mask; with a crop view it is the VIEW's width, which
+    # equals the mask's width when nothing is cropped. Asserted as the ratio rather than
+    # as one spelling of it.
+    assert "ED.brush * ((ED.view ? ED.view.w : ED.off.width) / cv.width)" in fn, (
+        "the brush no longer scales with the visible region")
+    assert "ED.off.width = img.naturalWidth" in fn or "ED.off.width" in fn
 
 
 def test_saving_re_measures_rather_than_just_storing():

@@ -411,19 +411,10 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
     <!-- MARK IS FIRST because that is the order the work happens in: you draw or correct
          a mask, then you ask what it measures. -->
     <div class="pane" id="pane-mark" role="tabpanel">
-      <!-- CROP. Drag a box on the image, then make it a new frame you can draw on and
-           retrain from. It lives here, next to the brush, because cropping is part of
-           preparing something to mark -- not an analysis step. -->
-      <div class="croprow" id="croprow">
-        <button id="cropmode" class="btn">Crop a region</button>
-        <span class="u" id="cropinfo">drag a box on the image, then confirm</span>
-        <button id="cropgo" class="btn primary" hidden>Make it a new image</button>
-        <button id="cropcancel" class="btn ghost" hidden>Cancel</button>
-      </div>
-      <div class="croprow" id="sendrow" hidden>
-        <button id="sendparent" class="btn">Send my strokes to the parent frame</button>
-        <span class="u" id="sendinfo"></span>
-      </div>
+      <!-- CROP AND SEND LIVE IN THE EDITOR'S OWN TOOLBAR, not in rows above it. They are
+           two more things you do to the image you are looking at, next to the brush and
+           the zoom, and giving each its own full-width bar made the controls above the
+           picture taller than they needed to be. -->
       <div id="markbody"></div>
     </div>
 
