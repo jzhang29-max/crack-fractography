@@ -11,12 +11,13 @@ import json
 import os
 import sys
 
+import numpy as np
 import pytest
 from PIL import Image
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-from liveserver import Server
+from liveserver import Server, mask_png
 
 
 def _mask(w, h, boxes):
@@ -413,28 +414,199 @@ def test_the_render_cache_does_not_look_like_a_dataset(tmp_path):
         assert st == 200 and frames
 
 
-# --- WHAT A CROP SAVES ------------------------------------------------------------------
-def test_saving_a_cropped_view_writes_the_region_not_the_whole_frame():
-    """Cropping restricts what you are working on, so what lands in Your images is that
-    region -- not the whole frame with marks somewhere in it. The reader asked for this
-    directly: "after the crop, it doesn't save on the crop but returns to the original".
 
-    The order matters and is asserted: the crop frame is cut SERVER-SIDE from the parent's
-    own mask first, which is what gives it its provenance and its slice of the micrograph,
-    and the painted bytes overwrite it after. Cut in the other order it would be an upload
-    that happens to be small, with no parent and no picture behind it."""
-    js = open(os.path.join(REPO, "app", "static", "app.js"), encoding="utf-8").read()
-    fn = js[js.index("const saveNow = async"):js.index("ED.scheduleSave = ")]
-    assert "cropKey()" in fn, "the save does not know whether a crop is active"
-    assert '"/api/crop"' in fn, "a cropped save does not create a crop frame"
-    assert fn.index('"/api/crop"') < fn.index("/api/mask_edit"), (
-        "the painted bytes are posted before the crop frame exists")
-    # the bytes must be the REGION, not the whole offscreen canvas
-    assert "drawImage(ED.off, v.x, v.y, v.w, v.h" in fn, (
-        "the whole mask is still being sent for a cropped save")
-    # and changing the crop must retarget rather than overwrite the previous region
-    assert "savedCropKey" in fn and "key !== savedCropKey" in fn, (
-        "a second, different crop would overwrite the first")
-    # going back to the whole image must save against the frame the editor opened on
-    assert "saveArm = state.arm; saveFrame = frame;" in fn, (
-        "clearing the crop does not restore the whole-frame target")
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, REPO_ROOT)
+from app import paths as _PATHS  # noqa: E402
+
+_SEM = _PATHS.sem_repo()
+needs_sem = pytest.mark.skipif(
+    not _SEM or not os.path.isdir(os.path.join(_SEM, "crack_export", "derived",
+                                               "gated_masks")),
+    reason="no sem-crack-detector checkout on this machine")
+
+
+def _first_gated_frame():
+    d = os.path.join(_SEM or "", "crack_export", "derived", "gated_masks")
+    if not os.path.isdir(d):
+        return None
+    return next((f[:-len("_gated.png")] for f in sorted(os.listdir(d))
+                 if f.endswith("_gated.png")), None)
+
+
+SEM_FRAME = _first_gated_frame()
+
+
+def _frame_of(raw):
+    """The upload reply names the frame directly for one file and under "frames" for a
+    batch. Reading only one shape made every new test here die on KeyError."""
+    up = json.loads(raw)
+    return up["frames"][0]["frame"] if "frames" in up else up["frame"]
+
+
+# --- WHAT A CROP SAVES ------------------------------------------------------------------
+def test_a_cropped_save_lands_in_the_frame_it_was_drawn_on(tmp_path):
+    """A crop is a VIEWPORT. It restricts what you are looking at; the strokes still
+    belong to the frame you opened.
+
+    IT USED TO CUT A NEW FRAME, from the autosave timer, eight seconds after the brush
+    stopped -- so a frame appeared in Your images that the reader had not asked to create.
+    That is the one thing the user has said three separate times must never happen. Their
+    earlier "save just the cropped region" was an answer to WHICH PIXELS get saved, and it
+    still is: only the box is sent. It was never an answer to "and make a new frame".
+
+    THE PREVIOUS VERSION OF THIS TEST WAS A SOURCE SCAN. It asserted that `"/api/crop"`
+    appeared in saveNow before `/api/mask_edit`, which is a statement about the text of a
+    function and not about what the server does with it -- and it would have gone on
+    passing for any rearrangement that kept those two strings in that order. It is now a
+    live server, a real region posted to a real endpoint, and the pixels are read back.
+    """
+    with Server(tmp_path / "d") as s:
+        st, raw = s.upload("vp.png", mask_png(400, 300, 0))     # all white: no crack yet
+        assert st == 200, raw[:200]
+        f = _frame_of(raw)
+        before = [r["frame"] for r in s.dataset("frames")]
+        assert before == [f], before
+
+        # paint a black bar inside a 120x90 window at (40, 30)
+        piece = np.full((90, 120), 255, np.uint8)
+        piece[20:70, 10:60] = 0
+        b = io.BytesIO(); Image.fromarray(piece, mode="L").save(b, "PNG")
+        st, raw = s.upload("vp.png", b.getvalue(),
+                           path=f"/api/mask_edit?arm=uploads&frame={f}&box=40,30,120,90")
+        assert st == 200, raw[:300]
+        d = json.loads(raw)
+
+        # 1. NOTHING WAS CREATED.
+        assert [r["frame"] for r in s.dataset("frames")] == [f], (
+            "a cropped save created a frame")
+        assert d["frame"] == f, d
+        up = os.path.join(str(tmp_path / "d"), "uploads")
+        assert sorted(os.listdir(up)) == [f"{f}_gated.png"], os.listdir(up)
+
+        # 2. THE PIXELS LANDED WHERE THEY WERE DRAWN, and nowhere else.
+        got = np.array(Image.open(os.path.join(up, f"{f}_gated.png")).convert("L"))
+        assert got.shape == (300, 400), got.shape
+        assert np.array_equal(got[30:120, 40:160], piece), "the region did not land"
+        outside = got.copy(); outside[30:120, 40:160] = 255
+        assert (outside == 255).all(), "a cropped save wrote outside its own box"
+
+        # 3. IT WAS RE-MEASURED, so the numbers follow the pixels.
+        rec = next(r for r in s.dataset("frames") if r["frame"] == f)
+        assert rec["n_cracks_measured"] >= 1, rec
+        assert rec["area_fraction"] > 0, rec
+
+
+def test_two_crops_in_different_places_both_land(tmp_path):
+    """Both regions survive on an uploaded frame.
+
+    NOTE WHAT THIS DOES NOT TEST. On an uploads frame the mask and the edit destination
+    are the SAME file, so "paste into the current mask" and "paste into the original" are
+    indistinguishable here -- I checked by making the server read the original and this
+    test still passed. The property that the base must be the CURRENT state is tested
+    below, on a research frame, where the two are different files."""
+    with Server(tmp_path / "d") as s:
+        st, raw = s.upload("two.png", mask_png(400, 300, 0))
+        f = _frame_of(raw)
+        for (x, y) in [(10, 10), (250, 200)]:
+            piece = np.full((60, 60), 255, np.uint8); piece[10:50, 10:50] = 0
+            b = io.BytesIO(); Image.fromarray(piece, mode="L").save(b, "PNG")
+            st, raw = s.upload("two.png", b.getvalue(),
+                               path=f"/api/mask_edit?arm=uploads&frame={f}&box={x},{y},60,60")
+            assert st == 200, raw[:300]
+        got = np.array(Image.open(os.path.join(str(tmp_path / "d"), "uploads",
+                                               f"{f}_gated.png")).convert("L"))
+        # box (10,10,60,60) with the bar at [10:50,10:50] -> rows 20-60, cols 20-60
+        assert (got[20:60, 20:60] == 0).all(), "the first crop was reverted by the second"
+        # box (250,200,60,60) with the same bar -> rows 210-250, cols 260-300
+        assert (got[210:250, 260:300] == 0).all(), "the second crop did not land"
+
+
+@needs_sem
+@pytest.mark.skipif(SEM_FRAME is None, reason="no gated SEM mask available")
+def test_a_second_crop_does_not_revert_the_first_on_a_research_frame(tmp_path):
+    """THE REAL TEST OF THE PASTE BASE, and the uploads version above cannot be it.
+
+    On a sem/* frame the mask on disk is the research mask -- which this app never writes
+    -- and the edit lives in the app's own store. So "paste into the mask as it stands"
+    and "paste into the original" are two different files, and only here does choosing
+    the wrong one show up. Reading the original each time would silently undo the previous
+    crop's strokes: the save would report success and the earlier work would be gone.
+
+    Verified by sabotage: changing the base to `_mask_path(arm, frame)` leaves the uploads
+    test green and fails this one.
+    """
+    with Server(tmp_path / "d") as s:
+        name = SEM_FRAME
+        st, raw = s.get(f"/api/mask/sem/gated/{name}")
+        assert st == 200, st
+        base = np.array(Image.open(io.BytesIO(raw)).convert("L"))
+        H, W = base.shape
+        boxes = [(100, 100, 80, 80), (W - 300, H - 300, 80, 80)]
+        for (x, y, w, h) in boxes:
+            piece = np.full((h, w), 255, np.uint8)
+            piece[20:60, 20:60] = 0                      # a black square inside the box
+            b = io.BytesIO(); Image.fromarray(piece, mode="L").save(b, "PNG")
+            st, raw = s.upload(f"{name}.png", b.getvalue(),
+                               path=f"/api/mask_edit?arm=sem/gated&frame={name}"
+                                    f"&box={x},{y},{w},{h}")
+            assert st == 200, raw[:300]
+        st, raw = s.get(f"/api/mask/sem/gated/{name}")
+        got = np.array(Image.open(io.BytesIO(raw)).convert("L"))
+        for i, (x, y, w, h) in enumerate(boxes):
+            assert (got[y + 20:y + 60, x + 20:x + 60] == 0).all(), (
+                f"crop {i} is not in the mask -- a later paste reverted it")
+        # and the research file itself was never written
+        import app.paths as _P
+        real = os.path.join(_P.sem_repo(), "crack_export", "derived", "gated_masks",
+                            f"{name}_gated.png")
+        on_disk = np.array(Image.open(real).convert("L"))
+        assert np.array_equal(on_disk, base), "the research mask was modified"
+
+
+@pytest.mark.parametrize("box,why", [
+    ("40,30,120", "three numbers"),
+    ("a,b,c,d", "not integers"),
+    ("-5,0,10,10", "negative origin"),
+    ("0,0,0,10", "zero width"),
+    ("350,250,120,90", "runs off the right and bottom edges"),
+])
+def test_a_box_that_cannot_be_right_is_refused(tmp_path, box, why):
+    """Pasting a region that does not fit would move the strokes somewhere other than
+    where they were drawn, and nothing downstream could tell that had happened."""
+    with Server(tmp_path / "d") as s:
+        st, raw = s.upload("bad.png", mask_png(400, 300, 0))
+        f = _frame_of(raw)
+        piece = np.full((90, 120), 255, np.uint8)
+        b = io.BytesIO(); Image.fromarray(piece, mode="L").save(b, "PNG")
+        st, raw = s.upload("bad.png", b.getvalue(),
+                           path=f"/api/mask_edit?arm=uploads&frame={f}&box={box}")
+        assert st in (400, 409), f"{box} ({why}) was accepted: {raw[:200]}"
+
+
+def test_a_region_whose_size_disagrees_with_its_box_is_refused(tmp_path):
+    """The browser scales the canvas for display. If a resampled bitmap were pasted, every
+    stroke would land at the wrong place by a factor nobody would notice."""
+    with Server(tmp_path / "d") as s:
+        st, raw = s.upload("rs.png", mask_png(400, 300, 0))
+        f = _frame_of(raw)
+        piece = np.full((45, 60), 255, np.uint8)            # half the claimed size
+        b = io.BytesIO(); Image.fromarray(piece, mode="L").save(b, "PNG")
+        st, raw = s.upload("rs.png", b.getvalue(),
+                           path=f"/api/mask_edit?arm=uploads&frame={f}&box=40,30,120,90")
+        assert st == 409, raw[:200]
+
+
+def test_a_whole_frame_save_still_replaces_the_whole_frame(tmp_path):
+    """No box means what it always meant. The box is an addition, not a change."""
+    with Server(tmp_path / "d") as s:
+        st, raw = s.upload("wh.png", mask_png(200, 150, 0))
+        f = _frame_of(raw)
+        whole = np.full((150, 200), 255, np.uint8); whole[:, 20:60] = 0
+        b = io.BytesIO(); Image.fromarray(whole, mode="L").save(b, "PNG")
+        st, raw = s.upload("wh.png", b.getvalue(),
+                           path=f"/api/mask_edit?arm=uploads&frame={f}")
+        assert st == 200, raw[:300]
+        got = np.array(Image.open(os.path.join(str(tmp_path / "d"), "uploads",
+                                               f"{f}_gated.png")).convert("L"))
+        assert np.array_equal(got, whole)

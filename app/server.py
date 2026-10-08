@@ -2389,10 +2389,68 @@ def delete_frame(payload: dict = Body(...)):
                      f"rather than deleted, so it can be put back by hand.")}
 
 
+def _paste_region(arm, frame, box, blob):
+    """Composite a crop-sized PNG into the frame's CURRENT mask and return the whole thing.
+
+    The base is the mask as it stands right now -- the app's own edit if there is one,
+    otherwise the frame's mask -- so successive crop saves accumulate instead of each one
+    reverting the last. The research file is still never opened for writing; for a sem/*
+    or txm frame the result is written to the edit store by the caller.
+
+    Every dimension is checked rather than trusted. A crop that does not fit, or a PNG
+    whose size disagrees with the box it claims to be, is refused: pasting it would move
+    the strokes somewhere other than where they were drawn, and nothing downstream could
+    tell that had happened.
+    """
+    import io
+    import numpy as np
+    from PIL import Image
+    Image.MAX_IMAGE_PIXELS = None
+
+    parts = str(box).split(",")
+    if len(parts) != 4:
+        raise HTTPException(400, f"box must be x,y,w,h -- got {box!r}")
+    try:
+        x, y, w, h = (int(v) for v in parts)
+    except ValueError:
+        raise HTTPException(400, f"box must be four integers -- got {box!r}")
+    if w <= 0 or h <= 0 or x < 0 or y < 0:
+        raise HTTPException(400, f"box {box!r} is not a region")
+
+    base_p = _edit_of(arm, frame) or _mask_path(arm, frame)
+    if not base_p or not os.path.exists(base_p):
+        raise HTTPException(404, f"no mask on disk for {frame!r} in {arm!r} to paste into")
+    with Image.open(base_p) as bim:
+        base = np.array(bim.convert("L"))
+    H, W = base.shape
+    if x + w > W or y + h > H:
+        raise HTTPException(409, f"box {x},{y},{w}x{h} runs outside the {W}x{H} mask")
+
+    with Image.open(io.BytesIO(blob)) as pim:
+        piece = np.array(pim.convert("L"))
+    if piece.shape != (h, w):
+        raise HTTPException(409, f"the painted region is {piece.shape[1]}x{piece.shape[0]} "
+                                 f"but the box says {w}x{h}; it has been resampled, so the "
+                                 f"strokes no longer line up")
+
+    base[y:y + h, x:x + w] = piece
+    out = io.BytesIO()
+    Image.fromarray(base, mode="L").save(out, "PNG", optimize=True)
+    return out.getvalue()
+
+
 @app.post("/api/mask_edit")
 async def mask_edit(arm: str = Query(...), frame: str = Query(...),
-                    file: UploadFile = File(...)):
+                    box: str | None = Query(None), file: UploadFile = File(...)):
     """Replace an UPLOADED frame's mask with an edited one, then re-measure it.
+
+    WITH `box` ("x,y,w,h") THE UPLOAD IS A REGION, NOT THE WHOLE MASK, and it is pasted
+    into the frame's current mask at that offset. That is what cropping means now: the
+    crop restricts what you are LOOKING AT, and the strokes land on the frame you were
+    already working on. It used to cut a new frame into Your images instead, from the
+    autosave timer, so a crop you drew on for eight seconds appeared in the sidebar as a
+    thing you had not asked to create -- against the user's standing rule that nothing
+    may ever be created there except by their own click.
 
     This is the correct-and-measure half of the loop, built in, so it works in a downloaded
     copy. The detect and retrain halves cannot be: the model is pickled against the SEM
@@ -2439,6 +2497,9 @@ async def mask_edit(arm: str = Query(...), frame: str = Query(...),
         raise HTTPException(400, "the edited mask must be a PNG")
     if len(blob) > MAX_UPLOAD_MB * 1024 * 1024:
         raise HTTPException(413, f"{len(blob)/1e6:.0f} MB is over the limit")
+
+    if box is not None:
+        blob = _paste_region(arm, frame, box, blob)
 
     # Write beside it and swap, so an interrupted save cannot leave a half-written mask
     # where a whole one used to be.

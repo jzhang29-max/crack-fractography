@@ -94,6 +94,14 @@ input[type=text],input[type=number]{cursor:text;background:var(--surface-1)}
 .banner{font-size:var(--t-micro);border-radius:5px;padding:2px 7px;border:1px solid var(--warn);
   color:var(--warn);white-space:nowrap}
 .banner.bad{border-color:var(--bad);color:var(--bad)}
+/* A SENTENCE IS NOT A PILL. .banner was written for the one-line status chips in the
+   specimen strip, where nowrap is right, and then reused for the comparison's fatal
+   caveat -- which is a full sentence naming the overlapping frames. Measured at a 1180 px
+   window: 2,206 px of text in a 782 px card, so 1,424 px of "THE TWO GROUPS SHARE PIXELS,
+   this comparison is invalid" ran off the right edge unread. The one message that must be
+   read was the least readable thing on the page. The pills keep nowrap; this does not. */
+.gfatal{display:block;white-space:normal;line-height:1.5;padding:7px 10px;
+  margin:var(--sp2) 0;background:rgba(232,112,95,.08)}
 
 main{flex:1 1 auto;display:grid;grid-template-columns:minmax(260px,348px) minmax(0,1fr);
   min-height:0}
@@ -317,7 +325,32 @@ tr:hover .rowdel,.rowdel:focus-visible{opacity:1}
 :root{ --ga:var(--s1); --gb:var(--s2); }
 .side-a{--side:var(--ga)} .side-b{--side:var(--gb)}
 
-.members{display:flex;gap:6px;flex-wrap:wrap;margin-top:var(--sp2)}
+/* A AND B SIDE BY SIDE. Two identical cards stacked vertically is the opposite of a
+   comparison: you cannot see both sets at once, which is the only reason to have two.
+   One column under 760px, where side-by-side would make each chip list one chip wide. */
+.gpair{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
+  gap:var(--sp3);margin-top:var(--sp3)}
+.gcol{border:1px solid var(--rule);border-top:3px solid var(--side,var(--rule));
+  border-radius:8px;padding:var(--sp3);background:var(--surface-2);min-width:0}
+.gcol header{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+.gcol header .grpname{flex:1 1 7rem;min-width:0}
+.gcount{white-space:nowrap}
+.grow{display:flex;align-items:center;gap:var(--sp2);flex-wrap:wrap;
+  margin-top:var(--sp3)}
+.grow.tight{margin-top:var(--sp2)}
+.gactions{margin-top:var(--sp3);padding-top:var(--sp3);border-top:1px solid var(--rule)}
+.ghead2{display:flex;align-items:baseline;gap:var(--sp2);flex-wrap:wrap}
+.ghead2 h2{margin:0}
+/* The empty state has to say what to do, not that there is nothing. */
+.gempty{color:var(--text-muted);font-size:var(--t-micro);line-height:1.5;display:block;
+  padding:var(--sp2) 0}
+
+.members{display:flex;gap:6px;flex-wrap:wrap;margin-top:var(--sp2);align-items:center}
+/* The part of the name every member shares, printed once so the chips can carry the
+   part that differs. */
+.gstem{flex:0 0 100%;color:var(--text-muted);font-size:var(--t-micro);
+  font-family:var(--mono,ui-monospace,monospace);overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
 .chip{background:var(--surface-2);border:1px solid var(--rule);
   border-left:3px solid var(--side,var(--rule));border-radius:5px;
   padding:4px 9px;font-size:var(--t-micro);color:var(--text-muted);cursor:pointer;
@@ -330,8 +363,12 @@ tr:hover .rowdel,.rowdel:focus-visible{opacity:1}
 
 /* The armed group is the one a click on the left lands in, so it has to be unmistakable
    rather than merely "the other shade of grey". */
-.armbtn{border:1px solid var(--rule);background:var(--surface-2);color:var(--text-secondary)}
+.armbtn{border:1px solid var(--rule);background:var(--surface-1);
+  color:var(--text-secondary);font-size:var(--t-micro);padding:4px 10px}
 .armbtn.on{background:var(--side);border-color:var(--side);color:#fff;font-weight:600}
+/* The whole column lifts when it is the armed one, so "where does my click go" is
+   answered by the thing you are looking at rather than by one small button. */
+.gcol.armed{background:var(--surface-3);border-color:var(--side)}
 
 .ghead{display:flex;align-items:baseline;gap:var(--sp2);flex-wrap:wrap}
 .gdot{width:9px;height:9px;border-radius:2px;background:var(--side);display:inline-block}
@@ -481,33 +518,64 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
          the single selected frame; this answers "what is in these frames TOGETHER",
          which is a different selection model and would have fought the frame picker. -->
     <div class="pane" id="pane-groups" role="tabpanel" hidden>
+      <!-- ONE PANEL, NOT FIVE CARDS. This was five stacked sections: an arming card,
+           then group A, then group B, then a row of buttons, then the output. Two
+           identical cards one above the other for two things you are comparing is the
+           opposite of a comparison, and the control that decided where a click landed
+           sat in a different card from the groups it armed. A and B are side by side
+           now, each one armed on itself, and the saved collections live above them
+           because that is the thing you reach for first when you come back to this. -->
       <section class="card">
-        <h2>Pick the images</h2>
-        <p class="note">While this tab is open, clicking a frame in the list on the left adds
-          it to whichever group is armed below. Click a chip to take it out again.</p>
-        <div class="grprow">
-          <span class="u">Clicking a frame adds it to:</span>
-          <button id="arm-a" class="armbtn side-a on" data-g="a">Group A</button>
-          <button id="arm-b" class="armbtn side-b" data-g="b">Group B</button>
+        <div class="ghead2">
+          <h2>Collections</h2>
+          <span class="u" id="g-saved-note">Save a set of frames under a name and it is
+            here next time you open the app.</span>
         </div>
-      </section>
-      <section class="card">
-        <h2><input id="ga-name" class="grpname" value="Group A" aria-label="name of group A">
-          <span class="u" id="ga-n"></span>
-          <button id="ga-clear" class="btn ghost">Clear</button></h2>
-        <div id="ga-members" class="members"></div>
-      </section>
-      <section class="card">
-        <h2><input id="gb-name" class="grpname" value="Group B" aria-label="name of group B">
-          <span class="u" id="gb-n"></span>
-          <button id="gb-clear" class="btn ghost">Clear</button></h2>
-        <div id="gb-members" class="members"></div>
-      </section>
-      <section class="card">
-        <div class="grprow">
-          <button id="g-run" class="btn primary">Analyse group A</button>
-          <button id="g-runb" class="btn">Analyse group B</button>
-          <button id="g-compare" class="btn">Compare A against B</button>
+        <div class="grow">
+          <select id="g-saved" aria-label="saved collections"></select>
+          <button id="g-load-a" class="btn side-a" type="button">Load into A</button>
+          <button id="g-load-b" class="btn side-b" type="button">Load into B</button>
+          <button id="g-del" class="btn ghost" type="button">Delete</button>
+        </div>
+
+        <div class="gpair">
+          <div class="gcol side-a" id="gcol-a">
+            <header>
+              <span class="gdot"></span>
+              <input id="ga-name" class="grpname" value="Group A"
+                     aria-label="name of group A">
+              <span class="u gcount" id="ga-n"></span>
+            </header>
+            <div class="grow tight">
+              <button id="arm-a" class="armbtn side-a on" data-g="a" type="button">Clicks
+                land here</button>
+              <button id="ga-save" class="btn ghost" type="button">Save</button>
+              <button id="ga-clear" class="btn ghost" type="button">Clear</button>
+            </div>
+            <div id="ga-members" class="members"></div>
+          </div>
+
+          <div class="gcol side-b" id="gcol-b">
+            <header>
+              <span class="gdot"></span>
+              <input id="gb-name" class="grpname" value="Group B"
+                     aria-label="name of group B">
+              <span class="u gcount" id="gb-n"></span>
+            </header>
+            <div class="grow tight">
+              <button id="arm-b" class="armbtn side-b" data-g="b" type="button">Clicks
+                land here</button>
+              <button id="gb-save" class="btn ghost" type="button">Save</button>
+              <button id="gb-clear" class="btn ghost" type="button">Clear</button>
+            </div>
+            <div id="gb-members" class="members"></div>
+          </div>
+        </div>
+
+        <div class="grow gactions">
+          <button id="g-run" class="btn primary" type="button">Analyse A</button>
+          <button id="g-runb" class="btn" type="button">Analyse B</button>
+          <button id="g-compare" class="btn" type="button">Compare A against B</button>
           <span class="u" id="g-status"></span>
         </div>
       </section>

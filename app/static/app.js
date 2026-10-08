@@ -2189,7 +2189,6 @@ async function openEditor(frame) {
   //: WHICH REGION THE CURRENT SAVE TARGET HOLDS. null means the whole frame; otherwise the
   //: box, so changing the crop makes a different target rather than overwriting the last
   //: one with a different region of the same parent.
-  let savedCropKey = null;
   const cropKey = () => {
     const v = ED.view;
     if (!v || !ED.off) return null;
@@ -2216,26 +2215,21 @@ async function openEditor(frame) {
         + `<span class="u">(a full frame takes a few seconds)</span></span>`;
     }
     try {
-      // A CROP SAVES THE CROP. Cropping restricts what you are working on, so what lands
-      // in Your images is that region -- not the whole frame with marks somewhere in it.
+      // A CROP IS A VIEWPORT. It restricts what you are LOOKING AT; the strokes still
+      // belong to the frame you opened. The region is sent with a box and the server
+      // pastes it into that frame's own mask.
       //
-      // The crop frame is cut SERVER-SIDE from the parent's own mask first, which is what
-      // gives it its provenance (the parent, the box, the parent's size) and its slice of
-      // the micrograph. The painted bytes then overwrite it. Doing it in that order means
-      // the crop is a first-class frame rather than an upload that happens to be small.
+      // IT USED TO CUT A NEW FRAME. The autosave fired eight seconds after the brush
+      // stopped, POSTed /api/crop, and a frame appeared in Your images that the reader
+      // had not asked to create -- which is the one thing the user has said, three
+      // separate times, must never happen. "Save just the cropped region" was their
+      // answer to WHICH PIXELS get saved, and it still is: only the box is sent. It was
+      // never an answer to "and make a new frame out of them".
+      //
+      // The old behaviour is still reachable deliberately: /api/crop is unchanged and
+      // Crop to a new frame is an explicit button, not a timer.
       const key = cropKey();
-      if (key !== savedCropKey) {
-        if (key === null) {
-          // Back to the whole image: save against the frame this editor opened on.
-          saveArm = state.arm; saveFrame = frame;
-        } else {
-          const v = ED.view;
-          const c = await gPost("/api/crop", { arm: saveArm, frame: saveFrame,
-                                               x: v.x, y: v.y, w: v.w, h: v.h });
-          saveArm = "uploads"; saveFrame = c.frame;
-        }
-        savedCropKey = key;
-      }
+      saveArm = state.arm; saveFrame = frame;
       // The bytes are the region on screen, at the mask's own resolution.
       let src = ED.off;
       if (key !== null) {
@@ -2249,6 +2243,7 @@ async function openEditor(frame) {
       const fd = new FormData();
       fd.append("file", blob, `${saveFrame}_gated.png`);
       const q = new URLSearchParams({ arm: saveArm, frame: saveFrame });
+      if (key !== null) { const v = ED.view; q.set("box", `${v.x},${v.y},${v.w},${v.h}`); }
       const r = await fetch(`/api/mask_edit?${q}`, { method: "POST", body: fd });
       const d = await r.json();
       if (!r.ok) throw new Error(d.detail || r.statusText);
@@ -2280,12 +2275,11 @@ async function openEditor(frame) {
       }
       state.frames = await allFrames();
       renderFrames(); renderSpecimens(); renderReadout();
-      // A CROP SAVE LANDS SOMEWHERE ELSE, AND MUST SAY SO. The copied_from branch above
-      // names its destination; a crop goes through here, and without this the strokes
-      // vanish into a frame the reader was never told about.
-      if (savedCropKey !== null && out) {
-        out.innerHTML = `<span class="u">Saved the cropped region as `
-          + `<b>${esc(saveFrame)}</b> in Your images.</span> ` + out.innerHTML;
+      // SAY WHERE IT WENT, which is now the frame you were already on.
+      if (key !== null && out) {
+        out.innerHTML = `<span class="u">Saved the cropped region into `
+          + `<b>${esc(shortFrame(saveFrame, ""))}</b> \u2014 nothing new was created.</span> `
+          + out.innerHTML;
       }
     } catch (e) {
       if (out) out.innerHTML = `<span class="flag bad">${esc(e.message)}</span>`;
@@ -2651,11 +2645,32 @@ function gRender() {
     const specs = new Set(G[side].map((m) => (state.frames.find(
       (f) => f.frame === m.frame && f.arm === m.arm) || {}).specimen).filter(Boolean));
     el.innerHTML = G[side].length
-      ? G[side].map((m) => `<span class="chip" data-side="${side}" data-k="${esc(gKey(m))}" ` +
-          `role="button" tabindex="0" title="${esc(m.frame)} — click to remove">` +
-          `<b>${esc(shortFrame(m.frame, pre) || m.frame)}</b>` +
-          `<span class="u">${esc(m.arm)}</span><span class="x">\u00d7</span></span>`).join("")
-      : `<span class="u">nothing yet — arm this group above, then click frames on the left</span>`;
+      // THE ARM ONLY WHEN IT TELLS YOU SOMETHING. Every chip carried "uploads", on a
+      // list where every frame was from uploads -- a word repeated down the column that
+      // took space from the one part of the name that differs.
+      ? (() => {
+          const mixed = new Set(G[side].map((m) => m.arm)).size > 1;
+          // THE SHARED STEM IS PRINTED ONCE, ABOVE, and the chips carry only the tail.
+          //
+          // shortFrame() would not trim these at all: its guard is
+          // `name.length > pre.length + 2`, and this corpus's names differ in their last
+          // ONE character (..._CBS_01 through ..._CBS_06), so every chip rendered all 28
+          // characters and each one filled the column. Two chips per row became one.
+          // The prefix is still on screen -- just not six times.
+          const useStem = pre.length >= 6;
+          const tail = (n) => useStem ? (n.slice(pre.length) || n) : (shortFrame(n, pre) || n);
+          return (useStem ? `<span class="gstem" title="shared by every frame in this group">`
+                            + `${esc(pre)}\u2026</span>` : "")
+            + G[side].map((m) =>
+            `<span class="chip" data-side="${side}" data-k="${esc(gKey(m))}" ` +
+            `role="button" tabindex="0" title="${esc(m.arm)}/${esc(m.frame)} — click to remove">` +
+            `<b>${esc(tail(m.frame))}</b>` +
+            (mixed ? `<span class="u">${esc(m.arm)}</span>` : "") +
+            `<span class="x">\u00d7</span></span>`).join("");
+        })()
+      : `<span class="gempty">Empty. ${G.armed === side
+            ? "Click any row in the list on the left and it lands here."
+            : "Press <b>Clicks land here</b> above, then click rows on the left."}</span>`;
     const n = $(`#g${side}-n`);
     if (n) {
       n.innerHTML = G[side].length
@@ -2663,13 +2678,41 @@ function gRender() {
           + (specs.size ? ` · ${plural(specs.size, "specimen")}` : "") + `</span>`
         : "";
     }
-    const h = el.closest("section")?.querySelector("h2");
-    if (h) h.classList.add(`side-${side}`);
+    // THE WHOLE COLUMN CARRIES THE ARMED STATE, not one small button inside it. "Where
+    // does my click go" was answered by a filled button in a card above the groups,
+    // which is a different place from the thing it was talking about.
+    const col = $(`#gcol-${side}`);
+    if (col) col.classList.toggle("armed", G.armed === side);
+    const btn = $(`#arm-${side}`);
+    if (btn) {
+      btn.className = `armbtn side-${side}` + (G.armed === side ? " on" : "");
+      btn.textContent = G.armed === side ? "Clicks land here" : "Send clicks here";
+    }
   }
-  const a = $("#arm-a"), b = $("#arm-b");
-  if (a && b) {
-    a.className = "armbtn side-a" + (G.armed === "a" ? " on" : "");
-    b.className = "armbtn side-b" + (G.armed === "b" ? " on" : "");
+}
+
+//: SAVED COLLECTIONS. /api/groups has been a complete persisted store -- read, save,
+//: delete, and pruning when a frame is deleted -- since it was written, and no line of
+//: this client ever called it. So every set of frames a reader assembled was lost on
+//: reload, and the Groups tab could only ever answer a question you set up again from
+//: scratch each time.
+let GSAVED = {};
+
+async function gLoadSaved(select) {
+  try { GSAVED = (await (await fetch("/api/groups")).json()).groups || {}; }
+  catch { GSAVED = {}; }
+  const sel = $("#g-saved");
+  if (!sel) return;
+  const names = Object.keys(GSAVED).sort((x, y) => x.localeCompare(y));
+  const keep = select || sel.value;
+  sel.innerHTML = names.length
+    ? names.map((n) => `<option value="${esc(n)}">${esc(n)} \u00b7 ` +
+        `${plural(GSAVED[n].length, "frame")}</option>`).join("")
+    : `<option value="">no saved collections yet</option>`;
+  if (keep && names.includes(keep)) sel.value = keep;
+  sel.disabled = !names.length;
+  for (const id of ["g-load-a", "g-load-b", "g-del"]) {
+    const b = $(`#${id}`); if (b) b.disabled = !names.length;
   }
 }
 
@@ -2756,7 +2799,7 @@ function gCompareTable(d) {
   const all = d.caveats || [];
   const fatal = (d.pixel_overlaps || []).length ? all.filter((c) => c.includes("SHARE PIXELS")) : [];
   const cav = all.filter((c) => !fatal.includes(c)).map((c) => `<li>${esc(c)}</li>`).join("");
-  const top = fatal.map((c) => `<p class="banner bad">${esc(c)}</p>`).join("");
+  const top = fatal.map((c) => `<p class="banner bad gfatal">${esc(c)}</p>`).join("");
   const na = (d.a && d.a.n_frames) || 0, nb = (d.b && d.b.n_frames) || 0;
   return `<section class="card"><h2 class="ghead">` +
     `<span class="side-a"><span class="gdot"></span> ${esc(d.label_a)}</span>` +
@@ -2779,6 +2822,65 @@ function wireGroups() {
   const busy = (m) => { if (st) st.textContent = m || ""; };
   $("#arm-a")?.addEventListener("click", () => { G.armed = "a"; gRender(); });
   $("#arm-b")?.addEventListener("click", () => { G.armed = "b"; gRender(); });
+
+  // ---- saved collections ----------------------------------------------------
+  const sel = $("#g-saved");
+  const note = (m, bad) => {
+    const n = $("#g-saved-note");
+    if (n) n.innerHTML = bad ? `<span class="bad">${esc(m)}</span>` : esc(m);
+  };
+  for (const side of ["a", "b"]) {
+    // SAVED UNDER THE NAME ALREADY ON SCREEN. A prompt() for a name when there is a
+    // name field two centimetres above it asks the same question twice, and a native
+    // dialog is the one control a reflex Enter dismisses without reading.
+    $(`#g${side}-save`)?.addEventListener("click", async () => {
+      if (!G[side].length) { note(`Group ${side.toUpperCase()} is empty.`, true); return; }
+      const box = $(`#g${side}-name`);
+      const name = (box?.value || "").trim();
+      if (!name || /^Group [AB]$/.test(name)) {
+        note("Give it a name first \u2014 type over \u201c" +
+             (name || `Group ${side.toUpperCase()}`) + "\u201d above.", true);
+        box?.focus(); box?.select();
+        return;
+      }
+      const replacing = !!GSAVED[name];
+      try {
+        await gPost("/api/groups", { name, frames: G[side] });
+        await gLoadSaved(name);
+        note(`${replacing ? "Replaced" : "Saved"} \u201c${name}\u201d \u2014 `
+             + `${plural(G[side].length, "frame")}.`);
+      } catch (e) { note(e.message, true); }
+    });
+    $(`#g-load-${side}`)?.addEventListener("click", () => {
+      const name = sel?.value;
+      if (!name || !GSAVED[name]) return;
+      // THE SAVED MEMBERS, FILTERED TO THIS ARM. A collection can hold frames from more
+      // than one arm, and the frame list only ever shows one -- loading a cross-arm set
+      // whole would put chips in the column for rows that are not on screen and cannot
+      // be removed by clicking them.
+      const mine = GSAVED[name].filter((m) => m.arm === state.arm);
+      const other = GSAVED[name].length - mine.length;
+      G[side] = mine.map((m) => ({ arm: m.arm, frame: m.frame }));
+      const nameBox = $(`#g${side}-name`); if (nameBox) nameBox.value = name;
+      gRender();
+      note(other
+        ? `Loaded ${plural(mine.length, "frame")} into ${side.toUpperCase()}. `
+          + `${other} more in this collection belong to another arm and were not loaded.`
+        : `Loaded "${name}" into ${side.toUpperCase()}.`, !!other);
+    });
+  }
+  $("#g-del")?.addEventListener("click", async () => {
+    const name = sel?.value;
+    if (!name || !GSAVED[name]) return;
+    if (!confirm(`Delete the collection "${name}"? The images themselves are not touched.`)) return;
+    try {
+      await gPost("/api/groups", { name, delete: true });
+      await gLoadSaved();
+      note(`Deleted "${name}". No image was touched.`);
+    } catch (e) { note(e.message, true); }
+  });
+  gLoadSaved();
+
   for (const side of ["a", "b"]) {
     $(`#g${side}-clear`)?.addEventListener("click", () => { G[side] = []; gRender(); });
     $(`#g${side}-members`)?.addEventListener("click", (e) => {
