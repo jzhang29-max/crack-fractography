@@ -953,6 +953,12 @@ def crop(payload: dict = Body(...)):
     if parent.get("scale_known") and parent.get("nm_per_px"):
         summ["nm_per_px"] = parent["nm_per_px"]
         summ["scale_known"] = True
+    # PER-FRAME, BECAUSE "does this frame have a micrograph" is not a property of the arm.
+    # /api/arms reports has_originals per ARM, and uploads is false there -- correctly, for
+    # an uploaded mask, which has nothing behind it. A crop DOES, and the editor was
+    # therefore refusing to load a background it could have fetched: the crop opened as a
+    # bare binary mask, which is the one thing cropping exists to avoid.
+    summ["has_original"] = original_cropped
     summ["cropped_from"] = {"arm": arm, "frame": frame,
                             "box_px": [x0, y0, x1 - x0, y1 - y0],
                             "parent_size_px": [W, H],

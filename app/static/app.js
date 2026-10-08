@@ -1593,7 +1593,13 @@ async function openEditor(frame) {
   //: hardcoded list here: the server decides it in original(), and a second copy of that
   //: rule in JavaScript would be the one that goes stale when a third modality arrives.
   ED.bg = null;
-  if (ARM_HAS_ORIGINALS[state.arm]) try {
+  //: PER-FRAME OVERRIDES PER-ARM. ARM_HAS_ORIGINALS is right about whole arms and wrong
+  //: about one frame in uploads: a crop carries its parent's micrograph, cut to the same
+  //: box, while the arm it lands in has none. Both come from the server -- the arm flag
+  //: from /api/arms, the frame flag written by the crop -- so this is still not a second
+  //: copy of the rule, it is the narrower of the two answers winning.
+  const _rec = state.frames.find((x) => x.frame === frame);
+  if (ARM_HAS_ORIGINALS[state.arm] || _rec?.has_original) try {
     const bg = new Image();
     bg.crossOrigin = "anonymous";
     await new Promise((res, rej) => {

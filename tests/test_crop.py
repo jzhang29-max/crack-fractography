@@ -309,3 +309,26 @@ def test_overlap_is_found_through_a_crop_of_a_crop(tmp_path):
         assert st == 200, d
         assert d["pixel_overlaps"], "a grandchild crop was not traced to its root"
         assert d["pixel_overlaps"][0]["share_of_smaller"] == 1.0, d["pixel_overlaps"]
+
+
+def test_a_crop_advertises_its_micrograph_per_frame(tmp_path):
+    """ARM_HAS_ORIGINALS is per-ARM and says uploads has none, which is right for an
+    uploaded mask and wrong for a crop. The editor consulted only the arm flag, so a crop
+    opened as a bare binary mask with the micrograph sitting fetchable on disk."""
+    with Server(tmp_path / "d") as s:
+        up = _seed(s, "hv", 400, 300, [(40, 40, 360, 80)])
+        f = up["frames"][0]["frame"] if "frames" in up else up.get("frame")
+        updir = os.path.join(str(tmp_path / "d"), "uploads")
+        Image.new("L", (400, 300), 90).save(os.path.join(updir, f"{f}_original.png"))
+        st, d = _crop(s, f, 0, 0, 200, 200)
+        assert st == 200, d
+        rec = next(r for r in s.dataset("frames") if r["frame"] == d["frame"])
+        assert rec.get("has_original") is True, (
+            "the crop does not advertise its micrograph, so the editor will not load it")
+        # an uploaded mask with no micrograph must NOT claim one
+        st, d2 = _crop(s, f, 200, 0, 200, 200)
+        assert st == 200, d2
+        os.remove(os.path.join(updir, f"{f}_original.png"))
+        st, d3 = _crop(s, f, 0, 100, 200, 200)
+        rec3 = next(r for r in s.dataset("frames") if r["frame"] == d3["frame"])
+        assert rec3.get("has_original") is False, rec3.get("has_original")
