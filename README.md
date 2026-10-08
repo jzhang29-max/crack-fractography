@@ -275,15 +275,19 @@ available and the tab picks per frame, because the choice was never a preference
 
 ### Crop a region, then draw on it
 
-**Crop a region** in the Mark tab turns a dragged box into a **new frame** in `uploads`.
-A crop is a frame rather than a viewport, so the brush, the measurement, the export and
-the Groups tab all work on it unchanged and none of them had to learn about cropping. The
-parent frame, the box and the parent's size are recorded on the crop, so where it came
-from is never guessed. The micrograph comes with it, cut to the same box: you cannot judge
-a crack boundary against a bare binary mask, because the mask *is* the thing whose
-boundary is in question.
+**Crop** in the editor's toolbar restricts the view to a dragged box. It is a **view on
+the image you have open**, not a copy of it: the frame list does not grow, the mask stays
+whole at its own resolution, and saving, measuring, undo and the brush scale are all
+untouched. It costs no server call, so it is instant.
 
-Two things the crop tells you, because neither is visible in the numbers:
+That is deliberate. It used to cut the region out, measure it and file it in `uploads` as
+its own frame — which put a second entry in the sidebar for what you think of as the same
+picture, and made "crop" mean "make a copy".
+
+`POST /api/crop` still exists and still does the cutting, for a caller who genuinely wants
+a sub-frame. A frame made that way records its parent, its box and its parent's size, and
+carries the micrograph cut to the same box. Two things it reports, because neither is
+visible in the numbers:
 
 * **How many cracks it newly censored.** A crack comfortably inside the parent can touch
   the edge of the crop, which turns its length into a lower bound that it was not before.
@@ -312,12 +316,16 @@ group, never get a new one.
 
 ### Sending strokes back: the version that does help
 
-**Send my strokes to the parent frame** writes what you painted on the crop into the SEM
-repo's correction mask for the **parent**, at the parent's own coordinates. The crop is
-then a magnifying glass, not a data point: the labels belong to a frame the model already
-knows, so nothing new is created and nothing can leak. That is the only route by which
-cropping improves the detector, and it works because *you* are faster at labelling when
-zoomed in — not because the crop is information.
+**Send strokes to corrections** writes what you painted into the SEM repo's correction
+mask for the **research frame it came from**, at that frame's own coordinates. Zooming in
+with Crop is then a magnifying glass, not a data point: the labels belong to a frame the
+model already knows, so nothing new is created and nothing can leak. That is the only
+route by which cropping improves the detector, and it works because *you* are faster at
+labelling when zoomed in — not because the crop is information.
+
+Painting a `sem/*` frame writes a copy into `uploads` and never touches the research mask,
+so the pristine baseline for the diff is the research mask itself, still on disk. It
+cannot drift, nothing has to be stored beside it, and the offset is zero.
 
 Only the pixels you actually changed are written, diffed against a pristine copy of the
 mask as it was cut. Everything you left alone stays `unreviewed`. Writing the whole box
