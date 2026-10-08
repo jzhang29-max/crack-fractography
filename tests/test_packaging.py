@@ -653,3 +653,29 @@ def test_the_window_opens_maximised():
     assert "fullscreen=True" not in call, (
         "fullscreen hides the menu bar and takes over the Space; maximized is the one")
     assert "min_size=" in call, "the window can be shrunk below a usable size"
+
+
+def test_health_does_not_resolve_the_measurement_implementation():
+    """/api/health must not be the thing that works out which measurement code is in use.
+
+    Doing so imports the SEM repo's extended_features.py, and that repo lives under
+    ~/Desktop -- which macOS gates behind a per-app permission. Inside the packaged app,
+    launched the way a user launches it, that read blocks: measured at 5.9 ms when the
+    same binary was started from a terminal (inheriting the terminal's own grant) and
+    never answering at all under `open -a`, past eleven minutes, while every other
+    endpoint replied in milliseconds. The page fetches health on load, so everything on it
+    waited.
+
+    Resolution belongs on the first measurement, which needs it anyway. And it must not be
+    moved to a background thread: importing skimage off-thread while a request imports it
+    on another gives "partially initialized module ... has no attribute 'skeletonize'".
+    """
+    src = open(os.path.join(REPO, "app", "server.py"), encoding="utf-8").read()
+    i = src.index('@app.get("/api/health")')
+    fn = src[i:src.index("\n@app.", i + 10)]
+    assert "from shared_impl import provenance" not in fn, (
+        "health imports the measurement module again, which blocks under a GUI launch")
+    assert "_sys.modules.get(\"shared_impl\")" in fn, (
+        "health no longer reads the already-resolved answer")
+    assert "Thread(" not in fn and "threading" not in fn, (
+        "health resolves on a background thread again, which races the import")

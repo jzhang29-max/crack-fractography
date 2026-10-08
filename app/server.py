@@ -2561,12 +2561,35 @@ def figure_svg(arm: str = Query(...), kind: str = Query("box_by_specimen"),
 @app.get("/api/health")
 def health():
     """What this install can do right now, and what is missing to do the rest."""
-    import sys as _sys
-    _sys.path.insert(0, os.path.join(RES, "analysis"))
+    # HEALTH REPORTS THE RESOLUTION; IT DOES NOT TRIGGER IT.
+    #
+    # provenance() works out which measurement implementation is in use, and doing so
+    # IMPORTS the SEM repo's extended_features.py. That repo lives under ~/Desktop, which
+    # macOS gates behind a per-app permission -- so inside the packaged app, launched the
+    # way a user launches it, that read blocks. Measured: health answered in 5.9 ms when
+    # the same binary was started from a terminal (which inherits the terminal's own
+    # grant) and never answered at all under `open -a`, past eleven minutes, while every
+    # other endpoint replied in milliseconds. The page fetches health on load, so the
+    # capabilities list, the configured paths and the version badge all waited on it.
+    #
+    # Resolution happens where it belongs: on the first measurement, which needs the
+    # implementation anyway and is already a long request. Health reads the cached answer
+    # if there is one and says so if there is not.
+    #
+    # NOT ON A BACKGROUND THREAD. That was tried: importing skimage off-thread while a
+    # request imports it on another gives "partially initialized module
+    # 'skimage.morphology' has no attribute 'skeletonize'", and 49 tests failed with
+    # measurements returning 500.
+    impl = {"source": None, "pending": True,
+            "note": "not yet determined -- it is resolved by the first measurement"}
     try:
-        from shared_impl import provenance
-        impl = provenance()
-    except Exception as e:
+        import sys as _sys
+        if os.path.join(RES, "analysis") not in _sys.path:
+            _sys.path.insert(0, os.path.join(RES, "analysis"))
+        mod = _sys.modules.get("shared_impl")
+        if mod is not None and getattr(mod, "_STATE", None):
+            impl = mod.provenance()
+    except Exception as e:                              # noqa: BLE001
         impl = {"source": None, "error": f"{type(e).__name__}: {e}"}
 
     sem = P.sem_repo()

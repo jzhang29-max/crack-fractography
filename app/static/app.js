@@ -800,7 +800,14 @@ async function health() {
   return HEALTH;
 }
 
-function showSetup(on) { $("#setup").hidden = !on; }
+function showSetup(on) {
+  $("#setup").hidden = !on;
+  // THE DRIFT WARNING LIVES IN HERE, and health no longer resolves the implementation
+  // itself -- it reports it once a measurement has. So opening this panel is exactly when
+  // to ask again; otherwise the warning could only ever appear on a page loaded AFTER a
+  // measurement, which is not when anyone looks for it.
+  if (on) health().catch(() => {});
+}
 
 async function wireSetup() {
   $("#setupbtn").onclick = () => showSetup($("#setup").hidden);
