@@ -254,3 +254,58 @@ def test_a_databar_is_trimmed_end_to_end_and_the_crop_takes_the_right_region(tmp
         assert a.getpixel((200, 40)) > 200, "the crop did not take the stripe"
         assert a.getpixel((200, 5)) < 60, "the crop is offset from the image area"
         assert a.getpixel((200, 90)) < 60, "the crop is offset from the image area"
+
+
+# --- A CROP IS NOT AN INDEPENDENT FRAME -------------------------------------------------
+def _cmp(s, fa, fb):
+    body = {"a": {"name": "A", "frames": [{"arm": "uploads", "frame": fa}]},
+            "b": {"name": "B", "frames": [{"arm": "uploads", "frame": fb}]}}
+    st, raw = s.post("/api/group_compare", json.dumps(body).encode(), "application/json")
+    return st, json.loads(raw)
+
+
+def test_comparing_a_crop_against_its_parent_is_called_out(tmp_path):
+    """The same pixels on both sides is not a comparison. It cannot fail to agree, and the
+    agreement means nothing -- the same error one level up is what makes a crop-fed retrain
+    look like an improvement."""
+    with Server(tmp_path / "d") as s:
+        up = _seed(s, "ov1", 400, 300, [(100, 100, 300, 200)])
+        f = up["frames"][0]["frame"] if "frames" in up else up.get("frame")
+        st, c = _crop(s, f, 50, 50, 300, 200)
+        assert st == 200, c
+        st, d = _cmp(s, f, c["frame"])
+        assert st == 200, d
+        assert d["pixel_overlaps"], "the overlap went unreported"
+        assert "SHARE PIXELS" in d["caveats"][0], d["caveats"]
+
+
+def test_two_crops_that_do_not_touch_are_not_called_overlapping(tmp_path):
+    """The guard must distinguish. Two disjoint boxes of one parent are different pixels,
+    and flagging them would make the warning noise that gets ignored when it matters."""
+    with Server(tmp_path / "d") as s:
+        up = _seed(s, "ov2", 400, 300, [(0, 0, 400, 300)])
+        f = up["frames"][0]["frame"] if "frames" in up else up.get("frame")
+        st, left = _crop(s, f, 0, 0, 150, 300)
+        assert st == 200, left
+        st, right = _crop(s, f, 200, 0, 150, 300)
+        assert st == 200, right
+        st, d = _cmp(s, left["frame"], right["frame"])
+        assert st == 200, d
+        assert not d["pixel_overlaps"], d["pixel_overlaps"]
+        assert not any("SHARE PIXELS" in c for c in d.get("caveats", []))
+
+
+def test_overlap_is_found_through_a_crop_of_a_crop(tmp_path):
+    """A crop of a crop is still the parent's pixels. Walking only one step up would miss
+    it, and one step is the version anyone writes first."""
+    with Server(tmp_path / "d") as s:
+        up = _seed(s, "ov3", 400, 300, [(0, 0, 400, 300)])
+        f = up["frames"][0]["frame"] if "frames" in up else up.get("frame")
+        st, a = _crop(s, f, 0, 0, 300, 300)
+        assert st == 200, a
+        st, aa = _crop(s, a["frame"], 0, 0, 100, 100)     # grandchild of f
+        assert st == 200, aa
+        st, d = _cmp(s, f, aa["frame"])
+        assert st == 200, d
+        assert d["pixel_overlaps"], "a grandchild crop was not traced to its root"
+        assert d["pixel_overlaps"][0]["share_of_smaller"] == 1.0, d["pixel_overlaps"]

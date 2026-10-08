@@ -2356,8 +2356,15 @@ function gCompareTable(d) {
       `<td class="num">${gnum(r.b)}</td><td class="num">${r.delta > 0 ? "+" : ""}${gnum(r.delta)}</td>` +
       `<td class="num">${r.ratio === null ? "—" : gnum(r.ratio, 2) + "×"}</td></tr>`).join("");
   const o = d.orientation || {};
-  const cav = (d.caveats || []).map((c) => `<li>${esc(c)}</li>`).join("");
-  return `<section class="card"><h2>${esc(d.label_a)} against ${esc(d.label_b)}</h2>` +
+  // A CAVEAT THAT INVALIDATES THE COMPARISON DOES NOT BELONG UNDER IT. The rest qualify
+  // how to read the numbers; this one says there is nothing to read, because both sides
+  // are the same pixels. Under the table, after a "Before reading the numbers above"
+  // heading, it arrives after the reader has already read them.
+  const all = d.caveats || [];
+  const fatal = (d.pixel_overlaps || []).length ? all.filter((c) => c.includes("SHARE PIXELS")) : [];
+  const cav = all.filter((c) => !fatal.includes(c)).map((c) => `<li>${esc(c)}</li>`).join("");
+  const top = fatal.map((c) => `<p class="banner bad">${esc(c)}</p>`).join("");
+  return `<section class="card"><h2>${esc(d.label_a)} against ${esc(d.label_b)}</h2>` + top +
     `<table class="gtab"><thead><tr><th>quantity</th>` +
     `<th class="num">${esc(d.label_a)}</th><th class="num">${esc(d.label_b)}</th>` +
     `<th class="num">difference</th><th class="num">ratio</th></tr></thead>` +

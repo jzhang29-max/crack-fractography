@@ -1059,6 +1059,71 @@ def group_stats(payload: dict = Body(...)):
     return out
 
 
+def _root_box(arm, frame, by_key, _seen=None):
+    """Resolve a frame to (root_arm, root_frame, x, y, w, h) in the ROOT frame's pixels.
+
+    A crop of a crop is still the parent's pixels, so the chain is walked to the end and
+    each box offset into its parent's coordinates on the way up. Returns None when the
+    frame is unknown or its provenance is incomplete.
+    """
+    _seen = _seen or set()
+    key = (arm, frame)
+    if key in _seen:            # a cycle cannot be resolved; refuse rather than loop
+        return None
+    _seen.add(key)
+    rec = by_key.get(key)
+    if rec is None:
+        return None
+    cf = rec.get("cropped_from") or {}
+    box = cf.get("box_px")
+    if not (cf.get("frame") and isinstance(box, list) and len(box) == 4):
+        w, h = rec.get("width_px"), rec.get("height_px")
+        if not (w and h):
+            return None
+        return (arm, frame, 0, 0, int(w), int(h))
+    up = _root_box(cf.get("arm"), cf["frame"], by_key, _seen)
+    if up is None:
+        return None
+    rarm, rframe, px, py, _pw, _ph = up
+    x, y, w, h = (int(v) for v in box)
+    return (rarm, rframe, px + x, py + y, w, h)
+
+
+def _pixel_overlaps(members_a, members_b):
+    """Pairs across the two groups that are literally the same pixels, with how much.
+
+    A CROP IS NOT AN INDEPENDENT FRAME. Put a crop on one side and its parent on the other
+    and the comparison is the same pixels against themselves: it cannot fail to agree, and
+    the agreement means nothing. The same error one level up is what inflates a retrained
+    model's held-out score -- on this corpus, splitting each image into four pseudo-crops
+    and letting them count as separate frames moved pooled grouped-CV from 0.8910 to
+    0.9368 with no label added and no pixel painted, which is several times the size of
+    the real differences the SEM repo's promotion gate exists to police.
+    """
+    by_key = {(f.get("arm"), f.get("frame")): f for f in (_load_quiet("frames") or [])}
+    ra = [(m, _root_box(m.get("arm"), m.get("frame"), by_key)) for m in members_a]
+    rb = [(m, _root_box(m.get("arm"), m.get("frame"), by_key)) for m in members_b]
+    out = []
+    for ma, a in ra:
+        if not a:
+            continue
+        for mb, b in rb:
+            if not b or a[0] != b[0] or a[1] != b[1]:
+                continue
+            ax0, ay0, aw, ah = a[2], a[3], a[4], a[5]
+            bx0, by0, bw, bh = b[2], b[3], b[4], b[5]
+            ix = max(0, min(ax0 + aw, bx0 + bw) - max(ax0, bx0))
+            iy = max(0, min(ay0 + ah, by0 + bh) - max(ay0, by0))
+            if ix <= 0 or iy <= 0:
+                continue
+            inter = ix * iy
+            smaller = min(aw * ah, bw * bh)
+            out.append({"a": ma.get("frame"), "b": mb.get("frame"),
+                        "root": a[1],
+                        "share_of_smaller": round(inter / smaller, 4) if smaller else None})
+    return out
+
+
 @app.post("/api/group_compare")
 def group_compare(payload: dict = Body(...)):
     """Two groups side by side, with what would make the comparison unreadable stated."""
@@ -1078,6 +1143,23 @@ def group_compare(payload: dict = Body(...)):
     a, la = side("a", "A")
     b, lb = side("b", "B")
     res = GS.compare(a, b, la, lb)
+    ov = _pixel_overlaps(payload.get("a", {}).get("frames")
+                         or saved.get((payload.get("a") or {}).get("name") or "", []),
+                         payload.get("b", {}).get("frames")
+                         or saved.get((payload.get("b") or {}).get("name") or "", []))
+    if ov:
+        worst = max(ov, key=lambda o: o["share_of_smaller"] or 0)
+        res.setdefault("caveats", [])
+        # FIRST, because it invalidates the comparison rather than qualifying it.
+        res["caveats"].insert(0, (
+            f"THE TWO GROUPS SHARE PIXELS. {len(ov)} pair"
+            f"{'' if len(ov) == 1 else 's'} of frames overlap -- "
+            f"{worst['a']} and {worst['b']} cover the same part of "
+            f"{worst['root']} ({(worst['share_of_smaller'] or 0) * 100:.0f}% of the "
+            f"smaller one). A crop is not an independent frame: comparing it against its "
+            f"own parent compares the same pixels with themselves, and they agree because "
+            f"they are the same, not because anything was measured."))
+    res["pixel_overlaps"] = ov
     res["a"], res["b"] = a, b
     return res
 
