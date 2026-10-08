@@ -147,19 +147,38 @@ def test_an_edit_measures_the_mask_once():
     assert "_measure_into_uploads(dest" not in fn, "a second measuring path is back"
 
 
-def test_a_save_in_progress_says_so_where_it_can_be_seen():
-    """The only sign a save was running was the label on #edsave, which is hidden."""
+def test_the_reader_can_always_tell_whether_their_strokes_are_saved():
+    """THE REQUIREMENT OUTLIVED ITS MECHANISM. This used to assert that something visible
+    changed while a save ran, because the only sign of one was the label on a button that
+    was hidden most of the time -- so a 13-second save of a 6144x4096 frame looked like
+    nothing happening.
+
+    The button is gone now: saving is automatic, at the user's request. That removes the
+    other thing the button did by existing -- it appeared when there was unsaved work --
+    so the state has to be stated outright. Three states, and the reader is always in
+    one: strokes held in the browser, writing, written."""
     js = open(APPJS, encoding="utf-8").read()
-    # #edsave is built by editorHTML(), and it is hidden there.
-    assert 'id="edsave" hidden' in js, "the save button is no longer hidden; re-read this"
-    fn = js[js.index("const saveNow = async"):js.index("ED.scheduleSave = ")]
-    assert 'out = $("#edout")' in fn, "the readout element is not in scope"
-    i = fn.index('btn.textContent = "Saving')
-    j = fn.index("try {", i)
-    # Between arming the (hidden) button and starting the request, something must be
-    # written to the visible readout.
-    assert "out.innerHTML" in fn[i:j], (
-        "nothing visible changes while a save runs, so a slow one reads as a broken one")
+    # `id="edsave"` with the closing quote, NOT the bare substring: the indicator that
+    # replaced the button is `id="edsaved"`, which contains "edsave" and made this
+    # assertion fail against the very change it was written for.
+    assert 'id="edsave"' not in js, "the manual save button is back; re-read this test"
+    assert '$("#edsave")' not in js, "something still reaches for the save button"
+    assert 'id="edsaved"' in js, "there is no save-state indicator in the toolbar"
+
+    fn = js[js.index("ED.setSaveState = (st, extra)"):js.index("ED.markDirty = ()")]
+    for st in ("dirty", "saving", "saved"):
+        assert f'"{st}"' in fn, f"the indicator has no {st} state"
+
+    # dirtying must show it, and every exit from a save must leave it truthful
+    md = js[js.index("ED.markDirty = () =>"):js.index("ED.undo = []")]
+    assert 'setSaveState("dirty")' in md, "drawing does not mark the work unsaved"
+    sv = js[js.index("const saveNow = async"):js.index("ED.scheduleSave = ")]
+    assert 'setSaveState("saving")' in sv, "a save in progress is not shown"
+    assert 'setSaveState(ED.dirty ? "dirty" : "saved")' in sv, (
+        "the indicator is not corrected in the finally block, so a failed save can be "
+        "left reading 'saving' for ever")
+    assert 'out = $("#edout")' in sv and "out.innerHTML" in sv, (
+        "the readout no longer says what a save did")
 
 
 def test_the_editor_does_not_wait_for_the_micrograph():
@@ -196,22 +215,37 @@ def test_the_autosave_waits_long_enough_to_think():
     because the delay is only defensible while they all hold."""
     js = open(APPJS, encoding="utf-8").read()
     import re
-    m = re.search(r"const AUTOSAVE_MS = (\d+);", js)
+    m = re.search(r"const AUTOSAVE_MIN_MS = (\d+), AUTOSAVE_MAX_MS = (\d+);", js)
     assert m, "the autosave delay is gone"
-    ms = int(m.group(1))
-    assert ms >= 5000, f"the delay is {ms} ms, short enough to fire on a thinking pause"
-    assert ms <= 60000, f"the delay is {ms} ms, long enough to hold real work at risk"
+    lo, hi = int(m.group(1)), int(m.group(2))
+    # THE DELAY SCALES WITH THE FRAME NOW, because the cost does: 0.2 s to re-measure a
+    # 600x440 upload, 13.6 s measured for a 6144x4096 SEM frame. A fixed value had to
+    # serve both and could only be wrong for one of them. The bound that matters is the
+    # one for a big frame, so it is checked by evaluating the rule, not by reading a
+    # constant.
+    rule = re.search(r"return Math\.min\(AUTOSAVE_MAX_MS, Math\.max\(AUTOSAVE_MIN_MS, "
+                     r"Math\.round\(mpx \* (\d+)\)\)\);", js)
+    assert rule, "the autosave delay is no longer computed from the frame size"
+    per_mpx = int(rule.group(1))
+    for mpx, name in ((25.2, "a 6144x4096 SEM frame"), (18.7, "a large TXM mosaic")):
+        ms = min(hi, max(lo, round(mpx * per_mpx)))
+        assert ms >= 5000, f"{name} would autosave after {ms} ms, inside a thinking pause"
+    assert lo >= 2000, f"the floor is {lo} ms, short enough to fire mid-stroke"
+    assert hi <= 60000, f"the ceiling is {hi} ms, long enough to hold real work at risk"
     # the four things that must still flush
     assert js.count("ED.flushSave") >= 5, "a flush site has gone missing"
     assert 'if (id !== "mark" && ED.dirty && ED.flushSave)' in js, "leaving the tab"
     assert 'window.addEventListener("beforeunload"' in js, "closing the window"
 
 
-def test_every_path_that_dirties_the_mask_offers_a_manual_save():
-    """With an eight-second delay the Save now button is the only way to not wait, so a
-    path that dirties the mask without revealing it leaves the reader stuck. Two paths
-    dirty it -- the brush and the whole-region fill -- and only the brush used to unhide
-    the button."""
+def test_every_path_that_dirties_the_mask_also_schedules_the_save():
+    """Two paths dirty the mask -- the brush and the whole-region fill -- and a path that
+    marks it dirty without starting the clock leaves work that is never written until the
+    reader happens to navigate away.
+
+    This used to be about revealing the Save now button, which only the brush did. The
+    button is gone; the obligation moved to scheduleSave and got stricter, because there
+    is no longer a manual way out of a missed schedule."""
     js = open(APPJS, encoding="utf-8").read()
     fn = js[js.index("async function openEditor("):js.index("async function loadArm()")]
     assert "ED.markDirty = () =>" in fn, "there is no single place that marks it dirty"

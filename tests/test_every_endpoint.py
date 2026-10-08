@@ -46,6 +46,8 @@ COVERED = {
     ("post", "/api/restore"),
     ("get", "/api/collections"), ("post", "/api/collections"),
     ("post", "/api/set_collection"),
+    ("get", "/api/reviewed"), ("post", "/api/review_region"),
+    ("get", "/api/review_scores"),
 }
 
 
@@ -399,6 +401,31 @@ def test_discard_edit_refuses_an_uploads_frame_and_an_unedited_one(srv):
     assert st >= 400
     st, _ = _json_post(srv, "/api/discard_edit", {"arm": "sem/gated", "frame": "nope"})
     assert st >= 400
+
+
+def test_the_review_endpoints_answer_and_refuse(srv):
+    """Covered in depth by tests/test_review_regions.py; here so the inventory is honest.
+    The shared module server must come out unchanged, so this records one region, scores
+    it and removes it again."""
+    st, d = srv.json("/api/reviewed")
+    assert st == 200 and d["n"] == 0, d
+    st, d = srv.json("/api/review_scores")
+    assert st == 200 and d["n_regions"] == 0 and "not estimable" in d["note"], d
+    f = _frame(srv)
+    st, d = _json_post(srv, "/api/review_region",
+                       {"arm": "uploads", "frame": f, "box": [0, 0, 64, 64]})
+    assert st == 200, d
+    rid = d["id"]
+    st, sc = srv.json("/api/review_scores")
+    # an uploads frame with no edit is the unfalsifiable case and must be refused
+    assert sc["n_regions_refused_as_circular"] == 1, sc
+    for bad in ({}, {"arm": "uploads", "frame": f},
+                {"arm": "uploads", "frame": f, "box": [0, 0, 4, 4]},
+                {"arm": "uploads", "frame": "../x", "box": [0, 0, 64, 64]}):
+        assert _json_post(srv, "/api/review_region", bad)[0] >= 400, bad
+    st, _ = _json_post(srv, "/api/review_region", {"frame": f, "delete": True, "id": rid})
+    assert st == 200
+    assert srv.json("/api/reviewed")[1]["n"] == 0
 
 
 def test_the_collection_endpoints_answer_and_refuse(srv):

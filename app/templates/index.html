@@ -348,6 +348,14 @@ tr:hover .rowdel,.rowdel:focus-visible{opacity:1}
 .members{display:flex;gap:6px;flex-wrap:wrap;margin-top:var(--sp2);align-items:center}
 /* The part of the name every member shares, printed once so the chips can carry the
    part that differs. */
+/* The save state, where the Save button used to be. Three states and nothing else:
+   amber while strokes are only in the browser, muted while writing, quiet once written.
+   Empty renders as nothing at all, so a clean frame carries no chrome. */
+.savestate{font-size:var(--t-micro);padding:2px 8px;border-radius:999px;white-space:nowrap}
+.savestate[data-s="clean"]{display:none}
+.savestate[data-s="dirty"]{color:var(--warn);border:1px solid var(--warn)}
+.savestate[data-s="saving"]{color:var(--text-muted);border:1px solid var(--rule)}
+.savestate[data-s="saved"]{color:var(--text-muted)}
 .newcol{display:inline-flex;align-items:center;gap:6px}
 /* The collection controls sit under the frame count, where the list they act on is. */
 .colrow{display:flex;align-items:center;gap:var(--sp2);flex-wrap:wrap;margin-top:6px;

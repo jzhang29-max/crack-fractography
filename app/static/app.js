@@ -1847,7 +1847,13 @@ function editorHTML(frame) {
       <button id="edexport">Export \u25be</button>
       <button id="edreset" title="Discard local edits and reload the mask from disk">Reset image</button>
       <span class="u" id="edstatus"></span>
-      <button id="edsave" hidden>Save now</button>
+      <button id="reviewed" hidden
+        title="Record that you have checked every pixel in this box, crack and not-crack">
+        Mark region reviewed</button>
+      <!-- NO SAVE BUTTON. Saving is automatic; this says which of the three states it is
+           in, because taking the button away without saying anything leaves the reader
+           with no way to know their strokes are safe. -->
+      <span id="edsaved" class="savestate" data-s="clean"></span>
     </div>
     <div class="edmenu" id="edexportmenu" hidden>
       <button data-x="mask">Black &amp; white mask</button>
@@ -1979,10 +1985,28 @@ async function openEditor(frame) {
   //: manual save. Two paths set ED.dirty -- the brush and the whole-region fill -- and
   //: only the brush unhid the button, which would have left the fill with an eight-second
   //: wait and no way to shorten it.
+  //: THREE STATES, AND THE READER IS ALWAYS IN ONE OF THEM: strokes not yet written,
+  //: writing, written. The Save button used to carry this by existing -- it appeared
+  //: when there was something to save -- so removing it without replacing the signal
+  //: would mean an eight-second gap in which nothing on screen says the work is held in
+  //: memory.
+  ED.setSaveState = (st, extra) => {
+    const el = $("#edsaved");
+    if (!el) return;
+    el.dataset.s = st;
+    el.textContent = st === "dirty" ? "unsaved\u2026"
+      : st === "saving" ? "saving\u2026"
+      : st === "saved" ? (extra || "saved") : "";
+    el.title = st === "dirty"
+      ? "Your strokes are in the browser and not yet measured. They are written "
+        + "automatically a few seconds after you stop drawing, and immediately if you "
+        + "leave this frame, this tab or the window."
+      : st === "saving" ? "Writing the mask and re-measuring it."
+      : st === "saved" ? "Written to disk and re-measured." : "";
+  };
   ED.markDirty = () => {
     ED.dirty = true;
-    const b = $("#edsave");
-    if (b) { b.disabled = false; b.hidden = false; }
+    ED.setSaveState("dirty");
   };
   ED.undo = [];
   ED.pushUndo = () => {
@@ -2071,6 +2095,10 @@ async function openEditor(frame) {
     rememberView(v);
     const whole = ED.view.w === ED.off.width && ED.view.h === ED.off.height;
     const rb = $("#cropreset"); if (rb) rb.hidden = whole;
+    // ONLY ON A CROP. "I have checked every pixel in this region" is a claim you can
+    // make about a box you are looking at and cannot honestly make about a 25-megapixel
+    // frame, so the control exists only where the claim is credible.
+    const rv = $("#reviewed"); if (rv) rv.hidden = whole;
     const ci = $("#cropinfo");
     if (ci) ci.textContent = whole ? "" :
       `showing ${ED.view.w} × ${ED.view.h} of ${ED.off.width} × ${ED.off.height} px`;
@@ -2300,7 +2328,7 @@ async function openEditor(frame) {
   //: DEBOUNCED, NOT PER STROKE, for a reason that is about the data and not about
   //: politeness: a save re-measures the frame, and a TXM mosaic is 5039 x 3703, so
   //: per-stroke saving would queue a full re-measurement behind every flick of the brush.
-  //: It fires once the brush has been still for AUTOSAVE_MS.
+  //: It fires once the brush has been still for autosaveMs(), which scales with the frame.
   //:
   //: AND IT MAY CHANGE THE ARM, which is why this is a considered default rather than an
   //: obvious one. Editing a research frame writes a COPY into uploads and follows it --
@@ -2318,7 +2346,28 @@ async function openEditor(frame) {
   // closing the window, and before strokes are sent to the correction mask. The Save now
   // button below is unhidden whenever there are unsaved strokes, so the wait is never
   // something you have to sit through.
-  const AUTOSAVE_MS = 8000;
+  //: THE DELAY SCALES WITH THE FRAME, because the cost it is protecting against does.
+  //:
+  //: A fixed eight seconds was right when Save now existed to cut it short. With
+  //: autosave as the only path -- the button is gone, at the user's request -- a fixed
+  //: delay has to serve two jobs that pull in opposite directions. A save re-measures
+  //: the whole frame: 0.2 s for a 600 x 440 upload, and 13.6 s measured today for a
+  //: 6144 x 4096 SEM frame. Firing after four seconds on the big one interrupts you for
+  //: pausing to look at what you just drew, and the in-flight guard does not rescue it
+  //: -- a stroke during a save sets `queued` and runs a SECOND thirteen-second save, so
+  //: a short delay on a large frame costs more, not less. Waiting eight seconds on a
+  //: quarter-megapixel crop is just slow.
+  //:
+  //: So: roughly 0.4 s per megapixel, floored at 2.5 s and capped at 10 s. A 25 MPx
+  //: frame keeps its ~10 s; a small upload saves in two and a half. The exposure a
+  //: longer delay carries is a hard crash and nothing else -- flushSave still runs on
+  //: leaving the frame, leaving the Mark tab, closing the window, and before strokes go
+  //: to a correction mask.
+  const AUTOSAVE_MIN_MS = 2500, AUTOSAVE_MAX_MS = 10000;
+  const autosaveMs = () => {
+    const mpx = ED.off ? (ED.off.width * ED.off.height) / 1e6 : 1;
+    return Math.min(AUTOSAVE_MAX_MS, Math.max(AUTOSAVE_MIN_MS, Math.round(mpx * 400)));
+  };
   let saving = false, queued = false, timer = null;
   // WHERE THE NEXT SAVE GOES. The first stroke on a research frame creates a copy in
   // uploads, and every save after it must target THAT -- the closure's own `frame` is the
@@ -2343,12 +2392,13 @@ async function openEditor(frame) {
     // here.
     if (saving) { queued = true; return; }
     saving = true;
-    const btn = $("#edsave"), out = $("#edout");
-    if (btn) { btn.disabled = true; btn.textContent = "Saving\u2026"; }
-    // SAY SO WHERE IT CAN BE SEEN. The only sign a save was running was the text of
-    // #edsave, which is hidden -- so a save of a 6144x4096 mask, which has to re-measure
-    // 25 megapixels and three hundred cracks, took a quarter of a minute with nothing on
-    // screen changing at all. It read as "the autosave is broken".
+    const out = $("#edout");
+    if (ED.setSaveState) ED.setSaveState("saving");
+    // SAY SO WHERE IT CAN BE SEEN. The only sign a save was running used to be the text
+    // of a button that was hidden most of the time -- so a save of a 6144x4096 mask,
+    // which re-measures 25 megapixels and three hundred cracks, took a quarter of a
+    // minute with nothing on screen changing at all. It read as "the autosave is
+    // broken". The state chip in the toolbar says it too, and this line says what moved.
     if (out) {
       out.innerHTML = `<span class="u">Saving and re-measuring\u2026 `
         + `<span class="u">(a full frame takes a few seconds)</span></span>`;
@@ -2424,8 +2474,7 @@ async function openEditor(frame) {
       if (out) out.innerHTML = `<span class="flag bad">${esc(e.message)}</span>`;
     } finally {
       saving = false;
-      const b = $("#edsave");
-      if (b) { b.textContent = "Save now"; b.disabled = !ED.dirty; b.hidden = !ED.dirty; }
+      if (ED.setSaveState) ED.setSaveState(ED.dirty ? "dirty" : "saved");
       if (queued) { queued = false; saveNow("auto"); }
     }
   };
@@ -2433,12 +2482,49 @@ async function openEditor(frame) {
   //: Called by stroke(). Restarts the clock, so a run of strokes saves once at the end.
   ED.scheduleSave = () => {
     clearTimeout(timer);
-    timer = setTimeout(() => saveNow("auto"), AUTOSAVE_MS);
+    timer = setTimeout(() => saveNow("auto"), autosaveMs());
   };
   //: Leaving the frame, the tab or the window must not strand unsaved strokes.
   ED.flushSave = () => { clearTimeout(timer); return saveNow("flush"); };
 
-  $("#edsave").onclick = () => saveNow("manual");
+  //: MARKING A REGION REVIEWED. This is the control that makes precision measurable:
+  //: without a region where BOTH classes are known, a detector pixel outside the user's
+  //: crack strokes is unjudgeable, and precision is bounded by how much was painted
+  //: rather than by how good the detector is.
+  const rvb = $("#reviewed");
+  if (rvb) rvb.onclick = async () => {
+    const v = ED.view;
+    if (!v || (v.w >= ED.off.width && v.h >= ED.off.height)) return;
+    const out = $("#edout");
+    // FLUSH FIRST. The stored verdict is read from the mask ON DISK, so recording it
+    // with strokes still in the browser would file a region that is missing exactly the
+    // corrections just made to it.
+    try {
+      if (ED.dirty) await ED.flushSave();
+      rvb.disabled = true; rvb.textContent = "recording\u2026";
+      const d = await gPost("/api/review_region",
+                            { arm: saveArm, frame: saveFrame, box: [v.x, v.y, v.w, v.h] });
+      if (out) {
+        const head = `Marked <b>${d.box[2]} \u00d7 ${d.box[3]} px</b> reviewed \u2014 `
+          + `${(100 * d.crack_fraction).toFixed(2)}% of it is crack, and every other `
+          + `pixel in it is now a recorded not-crack.`;
+        out.innerHTML = d.scorable === false
+          ? `<span class="flag">${head} <b>But it cannot be scored:</b> ${esc(d.why_not)}</span>`
+          : `<span class="u">${head}`
+            + (d.disagreement_px === 0
+                ? ` You changed nothing here, so it counts as agreement and is kept out`
+                  + ` of the discriminating total.`
+                : d.disagreement_px
+                  ? ` You disagreed with the detector on `
+                    + `${d.disagreement_px.toLocaleString()} px of it.` : ``)
+            + ` Nothing in the SEM repo was written.</span>`;
+      }
+    } catch (e) {
+      if (out) out.innerHTML = `<span class="flag bad">${esc(e.message)}</span>`;
+    } finally {
+      rvb.disabled = false; rvb.textContent = "Mark region reviewed";
+    }
+  };
 }
 
 //: THE FRAME LIST IS ALWAYS THE WHOLE ARM.

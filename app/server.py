@@ -1226,6 +1226,270 @@ def _read_groups():
         return {}
 
 
+#: A REVIEWED REGION IS THE ONLY THING THAT MAKES PRECISION MEASURABLE HERE.
+#:
+#: Measured over the 48 hand-labelled SEM frames: of the 41,265,259 pixels currently
+#: counted as detector false positives, 244,493 (0.59%) were marked not-crack by a human
+#: and 41,020,766 (99.41%) were never looked at. 35 of 48 frames carry no not-crack mark
+#: at all, and one image supplies 92.4% of every negative label in the corpus. Precision
+#: computed against that is bounded by the annotation, not by the detector: pooled it is
+#: 0.2945 counting unreviewed as wrong and 0.9860 excluding it, and neither end is a
+#: measurement of anything.
+#:
+#: The missing ingredient is not more crack strokes -- those raise the ceiling and never
+#: supply a denominator -- it is VERIFIED NEGATIVES. A reviewed region supplies them: the
+#: user crops a box, paints every crack inside it, and asserts that the box is now
+#: complete. Every pixel in it then carries a verdict, so a detector pixel inside it is
+#: a true or a false positive with a human behind the judgement either way.
+#:
+#: IT IS STORED IN THE APP'S OWN FOLDER, NOT IN THE SEM REPO. Writing a wall of 2s into
+#: interior_active_learning/paint/ would be the largest change ever made to irreplaceable
+#: hand labels, from a button. Here it is the app's own data, reversible, and the
+#: archived repo stays byte-identical. Merging it into the corpus later is a separate and
+#: deliberate act.
+REVIEW_CRACK, REVIEW_NOT = 1, 2
+
+
+def _review_dir():
+    d = os.path.join(OUT, "reviewed")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def _review_index_path():
+    return os.path.join(_review_dir(), "index.json")
+
+
+def _read_reviews():
+    p = _review_index_path()
+    if not os.path.exists(p):
+        return []
+    try:
+        with open(p, encoding="utf-8") as fh:
+            v = json.load(fh)
+        return v if isinstance(v, list) else []
+    except (ValueError, OSError):
+        return []
+
+
+def _review_id(arm, frame, box):
+    x, y, w, h = box
+    return f"{arm.replace('/', '__')}__{frame}__{x}_{y}_{w}_{h}"
+
+
+@app.get("/api/reviewed")
+def reviewed_get(arm: str | None = None, frame: str | None = None):
+    rows = _read_reviews()
+    if arm:
+        rows = [r for r in rows if r.get("arm") == arm]
+    if frame:
+        rows = [r for r in rows if r.get("frame") == frame]
+    px = sum(r["box"][2] * r["box"][3] for r in rows)
+    return {"reviewed": rows, "n": len(rows), "total_px": px}
+
+
+@app.post("/api/review_region")
+def review_region(payload: dict = Body(...)):
+    """Record that a box has been reviewed for BOTH classes, from the mask as it stands.
+
+    The ground truth is whatever the editor is showing for that frame right now -- the
+    user's edit if there is one, otherwise the arm's mask. That is the point: you look at
+    the region, correct what is wrong, and then say it is complete.
+    """
+    import numpy as np
+    from PIL import Image
+    Image.MAX_IMAGE_PIXELS = None
+
+    arm = (payload.get("arm") or "").strip()
+    frame = (payload.get("frame") or "").strip()
+    if not frame or not SAFE_FRAME.match(frame):
+        raise HTTPException(400, f"{frame!r} is not a frame name this will build a path from")
+    box = payload.get("box")
+    if payload.get("delete"):
+        rid = (payload.get("id") or "").strip()
+        if not rid or os.path.basename(rid) != rid:
+            raise HTTPException(400, "which reviewed region?")
+        with _DATASET_LOCK:
+            rows = [r for r in _read_reviews() if r.get("id") != rid]
+            _write_json(_review_index_path(), rows)
+            f = os.path.join(_review_dir(), rid + ".png")
+            if os.path.exists(f):
+                os.remove(f)
+        return {"ok": True, "deleted": rid, "n": len(rows)}
+
+    if not (isinstance(box, (list, tuple)) and len(box) == 4):
+        raise HTTPException(400, "box must be [x, y, w, h]")
+    try:
+        x, y, w, h = (int(v) for v in box)
+    except (TypeError, ValueError):
+        raise HTTPException(400, "box must be four integers")
+    if w < 16 or h < 16 or x < 0 or y < 0:
+        raise HTTPException(400, "a reviewed region must be at least 16 x 16 px")
+
+    src = _edit_of(arm, frame) or _mask_path(arm, frame)
+    if not src or not os.path.exists(src):
+        raise HTTPException(404, f"no mask on disk for {frame!r} in {arm!r}")
+    with Image.open(src) as im:
+        cur = np.array(im.convert("L"))
+    H, W = cur.shape
+    if x + w > W or y + h > H:
+        raise HTTPException(409, f"box {x},{y},{w}x{h} runs outside the {W}x{H} mask")
+
+    piece = cur[y:y + h, x:x + w]
+    verdict = np.where(piece < CRACK_BELOW, REVIEW_CRACK, REVIEW_NOT).astype(np.uint8)
+    n_crack = int((verdict == REVIEW_CRACK).sum())
+
+    # HOW MUCH OF THIS REGION IS THE HUMAN DISAGREEING WITH THE DETECTOR, recorded now
+    # rather than inferred later. A region where nothing was changed is a real verdict --
+    # "I checked this and the detector is right here" is exactly the assertion that gave
+    # AS_24hr_BSE_Side_008 its 1,016 negatives, and refusing it would recreate the rule
+    # that starved this corpus of them. But it cannot DISCRIMINATE, so it has to be
+    # countable separately or a wall of agreements reads as a perfect detector.
+    had_edit = bool(_edit_of(arm, frame))
+    changed_px = None
+    scorable, why = True, None
+    try:
+        pred_arm = "sem/machine" if arm.startswith("sem/") else arm
+        pp = _mask_path(pred_arm, frame)
+        # SAY IT NOW, NOT AT SCORING TIME. The scorer refuses a verdict copied from the
+        # file it would be scored against; discovering that only when you ask for the
+        # number means a session's worth of regions recorded and none of them usable.
+        if os.path.realpath(pp) == os.path.realpath(src):
+            scorable = False
+            why = ("this region is recorded, but it cannot be scored: the mask it was "
+                   "read from IS the one it would be compared against, so it could only "
+                   "come out perfect. Correct the frame first, or review a sem/* frame, "
+                   "whose detector output is a separate file.")
+        elif os.path.exists(pp):
+            with Image.open(pp) as pim:
+                pm = np.array(pim.convert("L"))
+            if pm.shape == cur.shape:
+                pb = pm[y:y + h, x:x + w] < CRACK_BELOW
+                changed_px = int((pb != (verdict == REVIEW_CRACK)).sum())
+    except (HTTPException, OSError, ValueError):
+        pass
+
+    rid = _review_id(arm, frame, (x, y, w, h))
+    with _DATASET_LOCK:
+        Image.fromarray(verdict, mode="L").save(
+            os.path.join(_review_dir(), rid + ".png"), optimize=True)
+        rows = [r for r in _read_reviews() if r.get("id") != rid]
+        rows.append({"id": rid, "arm": arm, "frame": frame, "box": [x, y, w, h],
+                     "n_px": w * h, "n_crack_px": n_crack,
+                     "crack_fraction": round(n_crack / (w * h), 6),
+                     "source_mask": src, "from_edit": had_edit,
+                     "disagreement_px": changed_px,
+                     "source_mtime": int(os.path.getmtime(src)),
+                     "recorded": time.strftime("%Y-%m-%d %H:%M:%S")})
+        _write_json(_review_index_path(), rows)
+    return {"ok": True, "id": rid, "arm": arm, "frame": frame, "box": [x, y, w, h],
+            "n_px": w * h, "n_crack_px": n_crack,
+            "crack_fraction": round(n_crack / (w * h), 6),
+            "scorable": scorable, "why_not": why,
+            "disagreement_px": changed_px,
+            "note": (why or
+                     "this region now carries a verdict on every pixel, so a detector "
+                     "pixel inside it is a true or a false positive either way. Nothing "
+                     "in the SEM repo was written.")}
+
+
+@app.get("/api/review_scores")
+def review_scores(arm: str | None = None):
+    """Precision and recall of the detector, inside reviewed regions only.
+
+    SCORED AGAINST THE CORRECTION-FREE DETECTOR OUTPUT. For a sem/* frame that is
+    sem/machine, not sem/gated: gated_masks.py builds its mask as
+    `(machine | (painted & darker)) & ~notc`, so it contains the human's own strokes and
+    can never fire on a pixel a human called not-crack. Scoring against it would be
+    circular and would return a precision of 1 by construction.
+    """
+    import numpy as np
+    from PIL import Image
+    Image.MAX_IMAGE_PIXELS = None
+
+    rows = [r for r in _read_reviews() if not arm or r.get("arm") == arm]
+    if not rows:
+        return {"n_regions": 0, "regions": [],
+                "note": "no region has been marked reviewed yet, so precision is not "
+                        "estimable. Crop a region, paint every crack in it, and press "
+                        "Mark region reviewed."}
+    out, TP = [], 0
+    FP = FN = TN = 0
+    uTP = uFP = uFN = uTN = 0          # the same, over regions the human changed
+    n_unchanged = n_circular = 0
+    for r in rows:
+        pred_arm = "sem/machine" if str(r["arm"]).startswith("sem/") else r["arm"]
+        try:
+            pp = _mask_path(pred_arm, r["frame"])
+        except HTTPException:
+            out.append({**r, "error": f"no prediction available for {pred_arm}"}); continue
+        # THE PREDICTION MUST NOT BE THE FILE THE VERDICT WAS COPIED FROM. On an uploads
+        # frame with no edit it is literally the same PNG, so every pixel agrees and the
+        # region returns precision 1.0 having measured nothing. That is the shape of
+        # error this project has shipped before -- a control correlated 0.9989 with the
+        # thing it was controlling for -- and a score of exactly 1.0 is its symptom, so
+        # it is refused here rather than explained in a footnote.
+        if os.path.realpath(pp) == os.path.realpath(r.get("source_mask") or ""):
+            n_circular += 1
+            out.append({**r, "circular": True, "scored_against": pred_arm,
+                        "error": "the verdict was read from the same file this would be "
+                                 "scored against, so it can only come out perfect. Review "
+                                 "a frame whose detector output is a separate artifact "
+                                 "(any sem/* frame), or edit this one first."})
+            continue
+        gp = os.path.join(_review_dir(), r["id"] + ".png")
+        if not os.path.exists(pp) or not os.path.exists(gp):
+            out.append({**r, "error": "the prediction or the stored verdict is missing"})
+            continue
+        x, y, w, h = r["box"]
+        with Image.open(pp) as im:
+            pm = np.array(im.convert("L"))
+        if y + h > pm.shape[0] or x + w > pm.shape[1]:
+            out.append({**r, "error": f"the {pred_arm} mask is {pm.shape[1]}x{pm.shape[0]}, "
+                                      f"too small for this box"})
+            continue
+        pred = pm[y:y + h, x:x + w] < CRACK_BELOW
+        with Image.open(gp) as im:
+            gt = np.array(im.convert("L")) == REVIEW_CRACK
+        tp = int((pred & gt).sum()); fp = int((pred & ~gt).sum())
+        fn = int((~pred & gt).sum()); tn = int((~pred & ~gt).sum())
+        TP += tp; FP += fp; FN += fn; TN += tn
+        silent = (fp + fn) == 0
+        if silent:
+            n_unchanged += 1
+        else:
+            uTP += tp; uFP += fp; uFN += fn; uTN += tn
+        out.append({"id": r["id"], "arm": r["arm"], "frame": r["frame"], "box": r["box"],
+                    "scored_against": pred_arm, "tp": tp, "fp": fp, "fn": fn, "tn": tn,
+                    "human_changed_nothing": silent,
+                    "precision": round(tp / (tp + fp), 4) if tp + fp else None,
+                    "recall": round(tp / (tp + fn), 4) if tp + fn else None,
+                    "iou": round(tp / (tp + fp + fn), 4) if tp + fp + fn else None})
+    scored = [o for o in out if "error" not in o]
+    pooled = {"tp": TP, "fp": FP, "fn": FN, "tn": TN,
+              "precision": round(TP / (TP + FP), 4) if TP + FP else None,
+              "recall": round(TP / (TP + FN), 4) if TP + FN else None,
+              "iou": round(TP / (TP + FP + FN), 4) if TP + FP + FN else None,
+              "reviewed_px": TP + FP + FN + TN}
+    disagreeing = {"tp": uTP, "fp": uFP, "fn": uFN, "tn": uTN,
+                   "precision": round(uTP / (uTP + uFP), 4) if uTP + uFP else None,
+                   "recall": round(uTP / (uTP + uFN), 4) if uTP + uFN else None,
+                   "iou": round(uTP / (uTP + uFP + uFN), 4) if uTP + uFP + uFN else None,
+                   "n_regions": len(scored) - n_unchanged}
+    return {"n_regions": len(out), "n_scored": len(scored), "regions": out,
+            "pooled": pooled,
+            "n_regions_human_changed_nothing": n_unchanged,
+            "n_regions_refused_as_circular": n_circular,
+            "pooled_excluding_unchanged": disagreeing,
+            "note": ("pooled over pixels, not averaged over regions: a mean of per-region "
+                     "ratios weights a 16x16 box the same as a 2000x1200 one. Every pixel "
+                     "counted here carries a human verdict. `pooled` is the number to "
+                     "quote; `pooled_excluding_unchanged` drops the regions where the "
+                     "human agreed with the detector everywhere, which are real verdicts "
+                     "but cannot discriminate, and the gap between the two says how much "
+                     "of the score is agreement rather than correction.")}
+
+
 #: A COLLECTION IS A PLACE IN THE DROPDOWN THAT THE USER MADE.
 #:
 #: Not an arm. sem/gated, txm and uploads are INSTRUMENTS -- different physical ways of
