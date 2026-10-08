@@ -273,6 +273,64 @@ available and the tab picks per frame, because the choice was never a preference
   SEM repo, and writes a marked **copy** into `uploads` so the derived research masks stay
   unwritten.
 
+### Crop a region, then draw on it
+
+**Crop a region** in the Mark tab turns a dragged box into a **new frame** in `uploads`.
+A crop is a frame rather than a viewport, so the brush, the measurement, the export and
+the Groups tab all work on it unchanged and none of them had to learn about cropping. The
+parent frame, the box and the parent's size are recorded on the crop, so where it came
+from is never guessed. The micrograph comes with it, cut to the same box: you cannot judge
+a crack boundary against a bare binary mask, because the mask *is* the thing whose
+boundary is in question.
+
+Two things the crop tells you, because neither is visible in the numbers:
+
+* **How many cracks it newly censored.** A crack comfortably inside the parent can touch
+  the edge of the crop, which turns its length into a lower bound that it was not before.
+  Cropping creates edges that were not there.
+* **A crop is not an independent frame.** It holds its parent's pixels. Put a crop on one
+  side of a group comparison and its parent on the other and you are comparing the same
+  pixels with themselves: they agree because they are the same, not because anything was
+  measured. The comparison resolves each frame's lineage to its root, intersects the boxes
+  there, and refuses with a banner above the table rather than a footnote below it.
+
+**Cropping does not improve the detector, and it is worth saying why**, because it looks
+as though it should. A crop adds no label that painting the same area on the full frame
+would not also add — but if crops are counted as *separate frames*, they land on both
+sides of a cross-validation fold. Measured on the SEM corpus's own 7,513 labelled regions,
+with identical rows, features, model family and fold count, and only the group label
+changed:
+
+| grouping | pooled grouped-CV AUC | test rows sharing an image with their training fold |
+|---|---|---|
+| by source image (correct) | 0.8910 | 0.0% |
+| crops counted as new frames | 0.9368 | 99.9% |
+| crops bound to their parent | 0.8910 | 0.0% |
+
++0.0458 AUC with no label added and no pixel painted. The SEM repo's promotion gate exists
+to catch differences of 0.0028 and 0.0063, so the artefact is seven to sixteen times the
+size of the real effects it polices. A crop must inherit its parent's group, never get a
+new one.
+
+### Groups: several frames at once, and one set against another
+
+The **Groups** tab answers a question the other two cannot be asked: not *what about this
+frame?* but *what about these frames, against those?* Pick frames into group A or B by
+clicking them in the sidebar, then Analyse either or Compare the two. It reports crack
+count, number density (per megapixel and per mm² where the scale is known), total and
+average crack area, median area, average length both with and without the censored cracks,
+aspect ratio, and a **length-weighted axial mean angle**.
+
+Angles are averaged on the **doubled** angle and halved back, which is the standard axial
+statistic and is not a refinement: an axis has no direction, so 179° and 1° are two degrees
+apart, and their arithmetic mean of 90° is perpendicular to both. The resultant length `R`
+comes with the angle, and below 0.15 the tab says there is no preferred direction rather
+than quoting a mean that describes nothing.
+
+The comparison states what would make it unreadable **before** the numbers: fewer than
+three frames a side, a specimen appearing on both sides, a pixel size known for only some
+frames, two different modalities, heavy censoring, and the pixel overlap above.
+
 That used to be a segmented pair you picked between, and the failure mode is why it is
 gone: selecting a TXM frame while the full tool was running left the SEM tool on screen,
 showing a different image than the sidebar named, with a note underneath explaining that

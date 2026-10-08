@@ -274,6 +274,16 @@ tbody tr[aria-selected=true]{background:color-mix(in oklab,var(--s1) 20%,transpa
 .grprow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:var(--sp2)}
 .grpname{background:var(--bg2);color:var(--text);border:1px solid var(--line);
   border-radius:5px;padding:5px 9px;font-size:var(--t-small);min-width:12rem}
+/* A BUTTON IN A HEADING INHERITS THE HEADING. #ga-clear sits inside the card's <h2> for
+   layout, so it rendered at the h2's 21px -- 44px tall inside a 32px heading, overflowing
+   it, while every other .btn on the page is 14px. The sibling input and count span were
+   fine because they carry their own classes; only the button fell through. */
+.card h2 .btn{font-size:var(--t-body);padding:4px 10px;line-height:1.2}
+/* ...and the heading must then size to whichever child is tallest. Under 820px every
+   control grows to a 40px touch target, which is deliberate, so pinning the h2 to its own
+   line-height just moves the overflow rather than fixing it. */
+#pane-groups .card h2{display:flex;align-items:center;gap:var(--sp2);flex-wrap:wrap;
+  min-height:0;height:auto}
 .members{display:flex;gap:6px;flex-wrap:wrap}
 .chip{background:var(--bg2);border:1px solid var(--line);border-radius:999px;
   padding:3px 10px;font-size:var(--t-micro);color:var(--text-muted)}
