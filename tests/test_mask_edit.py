@@ -247,3 +247,41 @@ def test_the_editor_does_not_wait_for_the_micrograph():
         "a late micrograph could land under a different frame's mask")
     # and the readout has ONE definition, used before and after the photo arrives
     assert "ED.edoutHTML" in fn, "the readout line is spelled twice and will disagree"
+
+
+def test_the_autosave_waits_long_enough_to_think():
+    """A save re-measures 25 megapixels and three hundred cracks -- about thirteen
+    seconds -- so a 1.8 s idle delay meant any pause to look at what you had just drawn
+    triggered one. You were interrupted for thinking.
+
+    The risk a longer delay carries is unsaved work, and that exposure is a hard crash
+    and nothing else: flushSave runs on leaving the frame, leaving the Mark tab, closing
+    the window, and before strokes go to a correction mask. Those four are asserted here
+    because the delay is only defensible while they all hold."""
+    js = open(APPJS, encoding="utf-8").read()
+    import re
+    m = re.search(r"const AUTOSAVE_MS = (\d+);", js)
+    assert m, "the autosave delay is gone"
+    ms = int(m.group(1))
+    assert ms >= 5000, f"the delay is {ms} ms, short enough to fire on a thinking pause"
+    assert ms <= 60000, f"the delay is {ms} ms, long enough to hold real work at risk"
+    # the four things that must still flush
+    assert js.count("ED.flushSave") >= 5, "a flush site has gone missing"
+    assert 'if (id !== "mark" && ED.dirty && ED.flushSave)' in js, "leaving the tab"
+    assert 'window.addEventListener("beforeunload"' in js, "closing the window"
+
+
+def test_every_path_that_dirties_the_mask_offers_a_manual_save():
+    """With an eight-second delay the Save now button is the only way to not wait, so a
+    path that dirties the mask without revealing it leaves the reader stuck. Two paths
+    dirty it -- the brush and the whole-region fill -- and only the brush used to unhide
+    the button."""
+    js = open(APPJS, encoding="utf-8").read()
+    fn = js[js.index("async function openEditor("):js.index("async function loadArm()")]
+    assert "ED.markDirty = () =>" in fn, "there is no single place that marks it dirty"
+    # nothing sets the flag directly except that helper
+    body = fn.replace("ED.markDirty = () => {\n    ED.dirty = true;", "")
+    assert "ED.dirty = true" not in body, (
+        "a path sets ED.dirty without going through markDirty, so it will not reveal the "
+        "manual save")
+    assert fn.count("ED.markDirty()") >= 2, "the fill path no longer marks dirty"

@@ -1650,6 +1650,15 @@ async function openEditor(frame) {
   //: the two to offer the same controls. A bounded stack of mask snapshots: each is a
   //: full-size canvas, so the depth is a memory budget, not a preference. Pushed before a
   //: stroke begins rather than after, so one entry is one stroke and not one segment.
+  //: ONE PLACE THAT MARKS THE MASK DIRTY, so every path that changes it also reveals the
+  //: manual save. Two paths set ED.dirty -- the brush and the whole-region fill -- and
+  //: only the brush unhid the button, which would have left the fill with an eight-second
+  //: wait and no way to shorten it.
+  ED.markDirty = () => {
+    ED.dirty = true;
+    const b = $("#edsave");
+    if (b) { b.disabled = false; b.hidden = false; }
+  };
   ED.undo = [];
   ED.pushUndo = () => {
     const c = document.createElement("canvas");
@@ -1752,8 +1761,7 @@ async function openEditor(frame) {
     g.lineCap = "round"; g.lineJoin = "round";
     g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke();
     ED.paint();
-    ED.dirty = true;
-    $("#edsave").disabled = false;
+    ED.markDirty();
     if (ED.scheduleSave) ED.scheduleSave();
   };
   // Snapshot BEFORE the stroke starts, so one undo step is one stroke rather than one
@@ -1765,7 +1773,7 @@ async function openEditor(frame) {
       const n = ED.fillRegion(x, y);
       if (n) {
         ED.paint();
-        ED.dirty = true;
+        ED.markDirty();
         if (ED.scheduleSave) ED.scheduleSave();
         $("#edstatus").textContent = `${n.toLocaleString()} px`;
       } else {
@@ -1905,7 +1913,18 @@ async function openEditor(frame) {
   //: the sem and txm masks are not this app's to modify. That already happened on the
   //: manual save; autosave only makes it happen sooner, and the message says so. The one
   //: thing it must not do is fire mid-stroke, hence the idle delay.
-  const AUTOSAVE_MS = 1800;
+  // EIGHT SECONDS, NOT ONE POINT EIGHT. The delay exists so a run of strokes saves once
+  // at the end rather than after each one -- but a save of a full frame re-measures 25
+  // megapixels and three hundred cracks, which is about thirteen seconds, so a 1.8 s
+  // delay meant any pause to look at what you had just drawn triggered one. You were
+  // interrupted for thinking.
+  //
+  // What a longer delay risks is work held in memory. That exposure is a hard crash and
+  // nothing else: flushSave() already runs on leaving the frame, leaving the Mark tab,
+  // closing the window, and before strokes are sent to the correction mask. The Save now
+  // button below is unhidden whenever there are unsaved strokes, so the wait is never
+  // something you have to sit through.
+  const AUTOSAVE_MS = 8000;
   let saving = false, queued = false, timer = null;
   // WHERE THE NEXT SAVE GOES. The first stroke on a research frame creates a copy in
   // uploads, and every save after it must target THAT -- the closure's own `frame` is the
@@ -1991,7 +2010,7 @@ async function openEditor(frame) {
     } finally {
       saving = false;
       const b = $("#edsave");
-      if (b) { b.textContent = "Save now"; b.disabled = !ED.dirty; }
+      if (b) { b.textContent = "Save now"; b.disabled = !ED.dirty; b.hidden = !ED.dirty; }
       if (queued) { queued = false; saveNow("auto"); }
     }
   };
