@@ -143,6 +143,19 @@ def arms():
     # console error per 404, which is the noise a real error hides behind. The server
     # already decides this in original(); reporting it keeps one source of that truth
     # instead of a second copy of the rule in JavaScript.
+    # YOUR IMAGES IS A PLACE, NOT A CONSEQUENCE.
+    #
+    # This list was built purely from frames.json, so an arm with no frames did not exist
+    # and the client dropped it from the dropdown. For sem/* and txm that is right -- they
+    # describe corpora this app did not make and cannot offer when they are absent. For
+    # uploads it is backwards: it is the one arm the app owns, the destination of the Add
+    # image button, and the only arm a user can put anything into. Hiding it until
+    # something is in it means the entry appears when the SYSTEM creates something there
+    # and disappears when the user deletes their last image -- the exact inversion the
+    # user objected to. It is now always offered, at zero frames if that is the truth, so
+    # going there is a choice rather than a notification.
+    out.setdefault("uploads", {"arm": "uploads", "n_frames": 0, "n_scaled": 0,
+                               "n_cracks": 0, "specimens": set()})
     have_sem = bool(P.sem_repo())
     have_txm = bool(P.txm_images())
     for a in out.values():
@@ -157,7 +170,13 @@ def frames(arm: str = Query(...), specimen: str | None = None):
     fr = [f for f in _load("frames") if f["arm"] == arm]
     if specimen:
         fr = [f for f in fr if f["specimen"] == specimen]
-    if not fr:
+    # EMPTY IS AN ANSWER FOR THE ARM THIS APP OWNS. /api/arms now always offers uploads so
+    # that going there is the user's choice rather than a side effect of something being
+    # created, and a 404 on the way in would turn that choice into "Could not load the
+    # uploads arm" -- a worse dead end than the hidden option it replaced. Every other arm
+    # still 404s: asking for sem/gated on a machine with no SEM checkout is a real error
+    # and must not render as an empty list.
+    if not fr and not (arm == "uploads" and not specimen):
         raise HTTPException(404, f"no frames for arm={arm!r} specimen={specimen!r}")
     return sorted(fr, key=lambda f: f["frame"])
 

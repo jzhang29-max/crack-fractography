@@ -159,6 +159,15 @@ function renderCount() {
   const shown = state.frames.filter((f) => !f.hidden);
   const noScale = shown.filter((f) => !f.scale_known).length;
   const n = shown.length;
+  // AN EMPTY ARM IS A STATE, NOT A STATISTIC. "all 0 frames scaled" is true and useless.
+  // Your images is now always in the dropdown -- see /api/arms -- so landing here with
+  // nothing in it is an ordinary thing to do, and the right text is the way out of it.
+  if (!n && !nHidden) {
+    el.innerHTML = state.arm === "uploads"
+      ? `No images here yet. <b>+ Add image</b> puts one in, and nothing else ever will.`
+      : `No frames in this arm.`;
+    return;
+  }
   // plural(), like every other count. The pluralise pass missed this one because its
   // guard matched `${...n_frames}` and this site interpolates a length.
   el.innerHTML = (noScale
@@ -1016,6 +1025,14 @@ function specimenCard(r) {
 }
 async function renderSpecimens() {
   let rows;
+  // AN EMPTY ARM HAS NO SPECIMENS AND THAT IS NOT AN ERROR. /api/specimens 404s with
+  // nothing in it, and reporting that 404 as a red flag made the empty Your images read
+  // as broken rather than empty.
+  if (!state.frames.length) {
+    $("#specnote").innerHTML = "";
+    renderStrip(null);
+    return;
+  }
   try { rows = await api(`/api/specimens?arm=${encodeURIComponent(state.arm)}`); }
   catch (e) {
     $("#specnote").innerHTML = `<span class="flag">${e.message}</span>`;
@@ -1149,7 +1166,12 @@ let STRIP_REC = null;
 function renderStrip(rec) {
   STRIP_REC = rec;
   const el = $("#strip");
-  if (!rec) { el.innerHTML = `<span class="who">Select a specimen.</span>`; return; }
+  // "Select a specimen" is advice you cannot take when there is nothing to select.
+  if (!rec) {
+    el.innerHTML = `<span class="who">${state.frames && state.frames.length
+      ? "Select a specimen." : "Nothing to summarise yet."}</span>`;
+    return;
+  }
   const ci = rec.area_fraction_ci;
   const ds = rec.detector_sensitivity;
   const a = rec.arm_sensitivity;
@@ -2438,6 +2460,14 @@ async function loadArm() {
   const figRender = async () => {
     const out = $("#figout");
     if (!FIG || !state.arm) return;
+    // NOTHING TO PLOT IS NOT A BAD REQUEST. /api/figure.svg 400s on an arm with no frames,
+    // and Your images is now always reachable and may legitimately be empty, so this
+    // fired a 400 and a console error on every render of the empty state -- the noise a
+    // real error hides behind.
+    if (!state.frames || !state.frames.length) {
+      out.innerHTML = `<p class="note">No frames in this arm to plot.</p>`;
+      return;
+    }
     const kind = $("#figkind").value, y = $("#figy").value, x = $("#figx").value;
     $("#figxwrap").hidden = kind !== "scatter";
     const q = new URLSearchParams({ arm: state.arm, kind, y });
