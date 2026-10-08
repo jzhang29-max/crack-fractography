@@ -1572,19 +1572,31 @@ async function openEditor(frame) {
   //: from /api/arms, the frame flag written by the crop -- so this is still not a second
   //: copy of the rule, it is the narrower of the two answers winning.
   const _rec = state.frames.find((x) => x.frame === frame);
-  if (ARM_HAS_ORIGINALS[state.arm] || _rec?.has_original) try {
+  //: THE MASK GOES UP FIRST AND THE MICROGRAPH CATCHES UP. This used to `await` the
+  //: background before building anything, so the whole editor was blocked on a download
+  //: and a decode: the first view of a frame nobody had opened before is about four
+  //: seconds of an empty pane, with no canvas, no toolbar and nothing to say why. It read
+  //: as "the image doesn't come up".
+  //:
+  //: Nothing downstream needs the background to exist -- ED.paint() already draws the
+  //: bare mask when ED.bg is null, because that is the uploads case -- so it is fetched
+  //: without blocking and painted in when it lands.
+  //:
+  //: GUARDED ON THE FRAME, because the reader can click another row inside those four
+  //: seconds and a late arrival would otherwise paint one frame's micrograph under
+  //: another frame's mask. That is the error this whole tab exists to avoid making.
+  if (ARM_HAS_ORIGINALS[state.arm] || _rec?.has_original) {
     const bg = new Image();
     bg.crossOrigin = "anonymous";
-    await new Promise((res, rej) => {
-      bg.onload = res;
-      bg.onerror = () => rej(new Error("no original"));
-      bg.src = `/api/original/${state.arm}/${encodeURIComponent(frame)}`;
-    });
-    ED.bg = bg;
-  } catch (e) {
-    // A configured arm whose file is missing for THIS frame. The mask alone is still
-    // editable and still correct, so this is a fallback and not an error.
-    ED.bg = null;
+    bg.onload = () => {
+      if (ED.frame !== frame) return;          // the reader moved on; this is not theirs
+      ED.bg = bg;
+      const out = $("#edout");
+      if (out && ED.edoutHTML) out.innerHTML = ED.edoutHTML(true, false);
+      ED.paint();
+    };
+    bg.onerror = () => { /* the mask alone is still editable and still correct */ };
+    bg.src = `/api/original/${state.arm}/${encodeURIComponent(frame)}`;
   }
 
   //: WHOLE REGION, the SEM tool's flood fill. Takes or drops one connected crack in a
@@ -1708,12 +1720,19 @@ async function openEditor(frame) {
   const isUpload = state.arm === "uploads";
   // "Black is crack" is wrong once a micrograph is behind it -- crack is RED there, and
   // the label has to follow what is on screen or it teaches the reader the wrong colour.
-  $("#edout").innerHTML = `${img.naturalWidth} × ${img.naturalHeight} px. `
-    + (ED.bg ? `Red is crack, over the micrograph <span class="u">(high-pass render, `
-             + `display only)</span>.` : `Black is crack.`) +
-    (isUpload ? "" :
-     ` <span class="u">Saving writes a copy to <b>uploads</b> — ${esc(frame)} itself is` +
-     ` not modified.</span>`);
+  // ONE definition, because the micrograph now arrives after the mask: the line is
+  // written once without it and once with, and two spellings would disagree.
+  ED.edoutHTML = (withBg, pending) =>
+    `${img.naturalWidth} \u00d7 ${img.naturalHeight} px. `
+    + (withBg ? `Red is crack, over the micrograph <span class="u">(high-pass render, `
+              + `display only)</span>.`
+              : (pending ? `Black is crack <span class="u">\u2014 loading the micrograph`
+                         + `\u2026</span>` : `Black is crack.`))
+    + (isUpload ? "" :
+       ` <span class="u">Saving writes a copy to <b>uploads</b> \u2014 ${esc(frame)} itself`
+       + ` is not modified.</span>`);
+  const _wantBg = !!(ARM_HAS_ORIGINALS[state.arm] || _rec?.has_original);
+  $("#edout").innerHTML = ED.edoutHTML(!!ED.bg, _wantBg && !ED.bg);
 
   // Display coordinates map back to the image's own pixels, so a stroke is the same size
   // in the saved mask whatever the window is.

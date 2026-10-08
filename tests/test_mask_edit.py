@@ -216,3 +216,26 @@ def test_a_save_in_progress_says_so_where_it_can_be_seen():
     # written to the visible readout.
     assert "out.innerHTML" in fn[i:j], (
         "nothing visible changes while a save runs, so a slow one reads as a broken one")
+
+
+def test_the_editor_does_not_wait_for_the_micrograph():
+    """Opening a frame used to `await` the background before building anything, so the
+    first view of a frame nobody had rendered before was several seconds of an empty pane
+    -- no canvas, no toolbar, nothing saying why. It read as "the image doesn't come up".
+
+    Nothing downstream needs the background to exist: ED.paint() already draws the bare
+    mask when ED.bg is null, because that is the uploads case. So it is fetched without
+    blocking and painted in on arrival, GUARDED ON THE FRAME -- a reader can click another
+    row inside those seconds, and a late arrival must not paint one frame's micrograph
+    under another frame's mask."""
+    js = open(APPJS, encoding="utf-8").read()
+    fn = js[js.index("async function openEditor("):js.index("async function loadArm()")]
+    i = fn.index("ARM_HAS_ORIGINALS[state.arm] || _rec?.has_original")
+    blk = fn[i:i + 1400]
+    assert "bg.onload" in blk, "the background is no longer loaded at all"
+    assert "await new Promise" not in blk, (
+        "the editor still blocks on the micrograph, so a cold frame is a blank pane")
+    assert "if (ED.frame !== frame) return;" in blk, (
+        "a late micrograph could land under a different frame's mask")
+    # and the readout has ONE definition, used before and after the photo arrives
+    assert "ED.edoutHTML" in fn, "the readout line is spelled twice and will disagree"
