@@ -12,6 +12,7 @@ definitions of the object, so the API requires an arm and refuses to aggregate a
 import json
 import io
 import os
+import re
 import threading
 import time
 
@@ -1847,6 +1848,181 @@ def group_compare(payload: dict = Body(...)):
     res["pixel_overlaps"] = ov
     res["a"], res["b"] = a, b
     return res
+
+
+# ============================================================================== DELETE
+#
+# The one endpoint that removes a frame, and the only arm it will touch is uploads.
+#
+# WHY NOT THE OTHER ARMS. sem/* and txm* read the SEM repo's derived masks and the TXM
+# export -- hand-made research data this app has never written to. A delete there would
+# either destroy something it does not own, or merely hide a row that the next corpus
+# measurement puts straight back. Neither is a delete, so it is refused rather than
+# offered and quietly broken.
+#
+# WHY TRASH RATHER THAN UNLINK. Because the author of this endpoint deleted two of this
+# user's frames by accident on the day it was written, while clearing test artifacts, and
+# they were not recoverable. A delete the user presses on purpose deserves at least the
+# safety net that mistake did not have.
+
+#: A frame name is about to be joined into filesystem paths. `arm == "uploads"` constrains
+#: the ARM, not the NAME: without this, frame="../../../sem-crack-detector/crack_export/
+#: derived/gated_masks/MAR_H_AS_CBS_0001" moves a research mask into the trash. No other
+#: uploads write path validates its name either -- this is the first.
+SAFE_FRAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._\-]*\Z")
+
+#: Everything one uploads frame can own on disk. `_ascut` and `_original` exist only for
+#: crops and marked copies; a glob of `<frame>*` would instead sweep up any frame whose
+#: name merely starts with this one's.
+UPLOAD_SUFFIXES = ("_gated.png", "_original.png", "_ascut.png")
+
+
+def _trash_dir():
+    """Beside the data, not inside uploads and not inside the render cache.
+
+    analysis/batch.py re-measures the uploads arm by globbing UPLOADS/*_gated.png and
+    replacing every uploads row wholesale, so a trashed file left as a sibling there comes
+    back as a frame on the next corpus measurement. glob's `*` does not cross a separator,
+    so a subdirectory would be safe -- but the render cache is not: _disk_cache_trim()
+    os.remove()s what it finds and breaks out of its loop on the first OSError, so a
+    directory in there silently stops the 600 MB budget being enforced at all.
+    """
+    d = os.path.join(OUT, "trash")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def _dependents_of(frame):
+    """Frames that would be orphaned by deleting this one, with how they point at it."""
+    out = []
+    for f in (_load_quiet("frames") or []):
+        cf = f.get("cropped_from") or {}
+        if cf.get("arm") == "uploads" and cf.get("frame") == frame:
+            out.append({"frame": f.get("frame"), "via": "cropped from"})
+        cp = f.get("copied_from")
+        if isinstance(cp, str) and cp == f"uploads/{frame}":
+            out.append({"frame": f.get("frame"), "via": "copied from"})
+    return out
+
+
+@app.post("/api/delete_frame")
+def delete_frame(payload: dict = Body(...)):
+    """Remove one uploaded frame: its files to the trash, its rows from every dataset."""
+    import shutil
+
+    arm = (payload.get("arm") or "").strip()
+    frame = (payload.get("frame") or "").strip()
+    # EXACT EQUALITY, NOT startswith -- "uploadsX" must not be accepted -- and BEFORE
+    # anything looks the frame up, so an unknown arm never reaches a path.
+    if arm != "uploads":
+        raise HTTPException(400, f"{arm!r} is not the uploads arm. The SEM and TXM arms are "
+                                 f"research masks this app does not own and never writes "
+                                 f"to; a frame removed from one would come back on the next "
+                                 f"corpus measurement anyway.")
+    if not frame or not SAFE_FRAME.match(frame):
+        raise HTTPException(400, f"{frame!r} is not a frame name this will build a path from")
+
+    with _DATASET_LOCK:
+        frames = _load_quiet("frames") or []
+        rec = next((f for f in frames
+                    if f.get("arm") == "uploads" and f.get("frame") == frame), None)
+        # THE RECORD IS THE AUTHORITY, not the filesystem. Requiring it to exist before a
+        # single file is touched means a name that is not a frame cannot reach os.replace
+        # whatever it is spelled like.
+        if rec is None:
+            raise HTTPException(404, f"there is no uploaded frame called {frame!r}")
+
+        kids = _dependents_of(frame)
+        if kids and not payload.get("with_dependents"):
+            raise HTTPException(409,
+                "%s was the source of %s. Deleting it would leave %s pointing at nothing: "
+                "the lineage walk that refuses to compare a crop against its own parent "
+                "would stop finding the overlap, with no error. Delete %s first, or pass "
+                "with_dependents." % (
+                    frame, ", ".join(f"{k['frame']} ({k['via']})" for k in kids),
+                    "them" if len(kids) > 1 else "it",
+                    "them" if len(kids) > 1 else "it"))
+
+        # FILES FIRST, RECORDS SECOND. In the other order an autosave landing mid-delete
+        # re-measures the surviving mask and writes the record straight back, so the delete
+        # undoes itself and leaves a frame with no files.
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        tdir = _trash_dir()
+        up_real = os.path.realpath(UPLOAD_DIR)
+        moved = []
+        for suf in UPLOAD_SUFFIXES:
+            src = os.path.join(UPLOAD_DIR, frame + suf)
+            # Belt and braces behind SAFE_FRAME: whatever the name, the file being moved
+            # must actually live in the directory this app owns.
+            if os.path.realpath(os.path.dirname(src)) != up_real:
+                raise HTTPException(400, f"refusing to touch a path outside uploads: {src}")
+            if os.path.exists(src):
+                dst = os.path.join(tdir, f"{stamp}__{frame}{suf}")
+                shutil.move(src, dst)
+                moved.append(os.path.basename(dst))
+
+        kept = [f for f in frames
+                if not (f.get("arm") == "uploads" and f.get("frame") == frame)]
+        _write_json(os.path.join(OUT, "frames.json"), kept)
+
+        cp = os.path.join(OUT, "cracks.json")
+        n_rows = 0
+        if os.path.exists(cp):
+            cr = json.load(open(cp))
+            # BY THE PAIR, never by the frame alone: cracks.json is keyed on (arm, frame)
+            # and a stem can exist in uploads AND in a research arm at the same time.
+            keep = [c for c in cr
+                    if not (c.get("arm") == "uploads" and c.get("frame") == frame)]
+            n_rows = len(cr) - len(keep)
+            _write_json(cp, keep)
+
+        # THE SCALE STORE IS KEYED BY BARE STEM WITH NO ARM, so clearing it would strip the
+        # nm/px from a research frame that happens to share the name -- and every micrometre
+        # column computed from it. Only clear when this stem belongs to nobody else.
+        scale_cleared = False
+        if not any(f.get("frame") == frame for f in kept):
+            try:
+                import sys as _sys
+                _sys.path.insert(0, os.path.join(RES, "analysis"))
+                import scale as _scale
+                # Through set_user_scale, not by rewriting the file: scale.py caches the
+                # whole dict in a module-level _USER, and a later unrelated set would dump
+                # that stale copy and put this entry back.
+                if _scale.nm_per_px(frame, "sem") or _scale.user_scales().get(frame):
+                    _scale.set_user_scale(frame, None)
+                    scale_cleared = True
+            except Exception:                           # noqa: BLE001 - never fail a delete
+                pass
+
+        # Saved groups resolve members by name at request time and nothing prunes them, so
+        # a stale member silently shrinks a group and reports it only in a `missing` field
+        # no screen renders.
+        groups, pruned = _read_groups(), []
+        for name in list(groups):
+            before = len(groups[name])
+            groups[name] = [m for m in groups[name]
+                            if not (m.get("arm") == "uploads" and m.get("frame") == frame)]
+            if len(groups[name]) != before:
+                pruned.append(name)
+            if not groups[name]:
+                groups.pop(name)
+        if pruned:
+            _write_json(_groups_path(), groups)
+
+        # _rebuild_uploads_specimen, not _rebuild_specimen: the generic one returns early
+        # when a specimen has no frames left and leaves its card describing data that is
+        # gone.
+        _rebuild_uploads_specimen()
+        _CACHE.clear()
+
+    return {"ok": True, "frame": frame, "arm": "uploads",
+            "files_trashed": moved, "trash_dir": _trash_dir(),
+            "crack_rows_removed": n_rows,
+            "scale_cleared": scale_cleared,
+            "groups_pruned": pruned,
+            "dependents_removed": [k["frame"] for k in kids] if kids else [],
+            "note": (f"moved to {os.path.basename(_trash_dir())}/ in the app's data folder "
+                     f"rather than deleted, so it can be put back by hand.")}
 
 
 @app.post("/api/mask_edit")

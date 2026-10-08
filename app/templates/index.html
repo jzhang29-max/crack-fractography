@@ -276,6 +276,14 @@ tbody tr[aria-selected=true]{background:color-mix(in oklab,var(--s1) 20%,transpa
 #sendinfo .bad{color:var(--bad)}
 #sendinfo{display:block;line-height:1.45}
 .u{color:var(--text-muted);font-size:var(--t-small)}
+/* The delete control sits inside the frame cell, out of the way until the row is under
+   the pointer -- a row of permanent crosses reads as an invitation. */
+.rowdel{opacity:0;background:none;border:0;color:var(--text-muted);cursor:pointer;
+  padding:0 4px;font-size:var(--t-body);line-height:1;border-radius:4px}
+tr:hover .rowdel,.rowdel:focus-visible,.rowdel.arm{opacity:1}
+.rowdel:hover{color:var(--bad)}
+.rowdel.arm{opacity:1;color:var(--bad);border:1px solid var(--bad);font-size:var(--t-micro);
+  padding:1px 5px}
 .cropbox{position:absolute;border:2px dashed var(--warn);background:rgba(255,190,70,.14);
   pointer-events:none;z-index:40}
 .grprow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:var(--sp2)}

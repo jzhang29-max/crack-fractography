@@ -176,7 +176,15 @@ function renderFrames() {
         // title= carries the WHOLE name, so the cell is still identifiable on hover and
         // to a screen reader even if the shortened form is itself clipped.
         if (k === "frame") return `<td class="ind" title="${esc(f[k])}">` +
-          `${esc(shortFrame(f[k], groupPrefix))}${noScale}</td>`;
+          `${esc(shortFrame(f[k], groupPrefix))}${noScale}` +
+          // INSIDE THE EXISTING CELL, not a new column. FCOLS drives the header, every
+          // <th> is a sort control keyed on its data-k, and the specimen rows hard-code
+          // colspan from FCOLS.length -- so a fourth entry would add a header that sorts
+          // on a key no frame has and leave the group rows a cell short.
+          (state.arm === "uploads"
+            ? ` <button class="rowdel" data-del="${esc(f[k])}" tabindex="-1"` +
+              ` title="Delete this image">\u00d7</button>` : "") +
+          `</td>`;
         if (k === "_cracks") {
           const sp = f.speck_count
             ? ` <span class="muted">+${f.speck_count.toLocaleString()}</span>` : "";
@@ -248,6 +256,80 @@ function renderFrames() {
       }
       selectFrame(tr.dataset.f);
     });
+
+  // DELETE. Wired here and not by id: renderFrames() rebuilds the whole tbody on every
+  // sort, group toggle, selection change and refresh, so a handler bound once at startup
+  // is bound to a node that no longer exists. Only uploads rows carry the control; the
+  // server refuses every other arm regardless, which is the guard that matters.
+  t.querySelectorAll("button.rowdel").forEach((b) => {
+    b.onclick = async (e) => {
+      // The whole <tr> is clickable -- to select, or on the Groups tab to add to a group.
+      // Without this the delete also does that.
+      e.stopPropagation();
+      e.preventDefault();
+      const name = b.dataset.del;
+      if (b.dataset.armed !== "1") {
+        // TWO CLICKS, NOT confirm(). It matches what Send-to-corrections does, it names
+        // the frame, and it cannot be dismissed by a reflex Enter on a native dialog.
+        t.querySelectorAll("button.rowdel[data-armed='1']").forEach((o) => {
+          o.dataset.armed = ""; o.textContent = "\u00d7"; o.classList.remove("arm");
+        });
+        b.dataset.armed = "1";
+        b.textContent = "delete?";
+        b.classList.add("arm");
+        setTimeout(() => {
+          if (b.isConnected && b.dataset.armed === "1") {
+            b.dataset.armed = ""; b.textContent = "\u00d7"; b.classList.remove("arm");
+          }
+        }, 4000);
+        return;
+      }
+      b.textContent = "\u2026"; b.disabled = true;
+      try {
+        const d = await gPost("/api/delete_frame", { arm: "uploads", frame: name });
+        await afterDelete(name, d);
+      } catch (err) {
+        b.disabled = false; b.dataset.armed = ""; b.textContent = "\u00d7";
+        b.classList.remove("arm");
+        const st = $("#listcount");
+        if (st) st.innerHTML = `<span class="bad">${esc(err.message)}</span>`;
+      }
+    };
+  });
+}
+
+//: WHAT THE APP STILL HOLDS AFTER A FRAME GOES.
+//:
+//: Four pieces of state keep a frame NAME, and every one of them breaks differently if it
+//: is left pointing at something deleted:
+//:   state.frame  -- selectFrame() dereferences the lookup with no null check, so
+//:                   re-selecting a deleted name is a TypeError that aborts the refresh;
+//:                   and the read-out request 404s and paints a red error.
+//:   ED.frame     -- openEditor() early-returns when the frame has not changed, so the
+//:                   deleted mask stays on the canvas.
+//:   saveFrame    -- the autosave closure would keep posting to it.
+//:   SEND.frame   -- the send button would stay pointing at it.
+async function afterDelete(name, d) {
+  if (ED.frame === name) { ED.frame = null; ED.dirty = false; }
+  if (typeof SEND !== "undefined" && SEND.frame === name) SEND.frame = null;
+  if (state.frame === name) state.frame = null;
+  state.frames = await allFrames().catch(() => []);
+  // DELETING THE LAST ONE IS A SUCCESS, NOT A FAILURE. /api/frames 404s on an empty arm,
+  // and loadArm()'s error branch would report the delete as having gone wrong.
+  if (!state.frames.length) state.frame = null;
+  else if (!state.frame) state.frame = state.frames[0].frame;
+  renderFrames(); renderSpecimens(); renderReadout();
+  if (TAB === "mark") { ED.frame = null; renderMark(); }
+  const st = $("#listcount");
+  if (st) {
+    const bits = [`deleted ${shortFrame(name, "")}`];
+    if (d && d.files_trashed && d.files_trashed.length)
+      bits.push(`${plural(d.files_trashed.length, "file")} moved to trash/`);
+    if (d && d.groups_pruned && d.groups_pruned.length)
+      bits.push(`removed from ${d.groups_pruned.join(", ")}`);
+    st.textContent = bits.join(" \u00b7 ");
+    setTimeout(() => { if (typeof renderFrames === "function") renderFrames(); }, 6000);
+  }
 }
 
 /* ---------------------------------------------------------------- rose */
@@ -1722,9 +1804,30 @@ async function openEditor(frame) {
       `showing ${ED.view.w} × ${ED.view.h} of ${ED.off.width} × ${ED.off.height} px`;
     if (typeof applyZoomRef === "function") applyZoomRef(); else fit();
   };
+  //: FIT MEANS FIT, IN BOTH DIRECTIONS. This bounded the canvas by the available WIDTH
+  //: only, so a frame whose aspect is taller than the space left under the toolbar ran off
+  //: the bottom of the window and had to be scrolled to -- on a 1500x900 window a 3:2
+  //: frame overflowed by 71 px, and the first thing you had to do after opening an image
+  //: was scroll to see it.
+  //:
+  //: The height available is whatever is left between the top of the canvas and the
+  //: bottom of the window, which already accounts for the toolbar and the read-out line
+  //: above it however those wrap. Only the FIT case is bounded this way: an explicit zoom
+  //: is a request to see detail, and clamping that to the window would make zooming in
+  //: do nothing.
+  const MIN_CANVAS_W = 180;
+  const fitWidth = () => {
+    const byWidth = Math.min(host.clientWidth - 4, ED.view.w);
+    const top = cv.getBoundingClientRect().top;
+    const avail = window.innerHeight - top - 16;
+    if (!(avail > 40)) return byWidth;
+    const byHeight = Math.floor(avail * ED.view.w / ED.view.h);
+    return Math.max(MIN_CANVAS_W, Math.min(byWidth, byHeight));
+  };
   const fit = () => {
-    const w = Math.min(host.clientWidth - 4, ED.view.w);
+    const w = fitWidth();
     cv.width = w; cv.height = Math.round(w * ED.view.h / ED.view.w);
+    cv.style.width = w + "px";
     ED.paint();
   };
   fit();
@@ -1744,6 +1847,16 @@ async function openEditor(frame) {
        + ` is not modified.</span>`);
   const _wantBg = !!(ARM_HAS_ORIGINALS[state.arm] || _rec?.has_original);
   $("#edout").innerHTML = ED.edoutHTML(!!ED.bg, _wantBg && !ED.bg);
+  // FIT AGAIN NOW THE LINE ABOVE EXISTS. fitWidth() measures the gap between the top of
+  // the canvas and the bottom of the window, and the first fit ran before this read-out
+  // was written -- so the canvas was measured sitting higher than it ends up, and still
+  // overflowed by the height of a line. The whole toolbar can wrap at a narrow width too,
+  // which moves it further.
+  fit();
+  // ...and whenever the window changes shape, since "fit" is a promise about the window.
+  if (ED.onResize) window.removeEventListener("resize", ED.onResize);
+  ED.onResize = () => { if (ED.zoom == null) fit(); };
+  window.addEventListener("resize", ED.onResize);
 
   // Display coordinates map back to the image's own pixels, so a stroke is the same size
   // in the saved mask whatever the window is.
@@ -1830,8 +1943,7 @@ async function openEditor(frame) {
   ED.zoom = null;
   const applyZoom = () => {
     const v = ED.view || { x: 0, y: 0, w: ED.off.width, h: ED.off.height };
-    const natural = Math.min(host.clientWidth - 4, v.w);
-    const w = ED.zoom == null ? natural : Math.max(120, Math.round(v.w * ED.zoom));
+    const w = ED.zoom == null ? fitWidth() : Math.max(120, Math.round(v.w * ED.zoom));
     cv.width = w;
     cv.height = Math.round(w * v.h / v.w);
     cv.style.width = w + "px";
@@ -1840,8 +1952,7 @@ async function openEditor(frame) {
     ED.paint();
   };
   applyZoomRef = applyZoom;
-  const curZoom = () => ED.zoom != null ? ED.zoom
-    : Math.min(host.clientWidth - 4, (ED.view || ED.off).w) / (ED.view || ED.off).w;
+  const curZoom = () => ED.zoom != null ? ED.zoom : fitWidth() / (ED.view || ED.off).w;
   $("#edzoomin").onclick = () => { ED.zoom = Math.min(4, curZoom() * 1.5); applyZoom(); };
   $("#edzoomout").onclick = () => { ED.zoom = Math.max(0.02, curZoom() / 1.5); applyZoom(); };
   $("#edfit").onclick = () => { ED.zoom = null; applyZoom(); };

@@ -41,7 +41,7 @@ COVERED = {
     ("get", "/api/original/{arm:path}/{frame}"), ("post", "/api/crop"),
     ("get", "/api/groups"), ("post", "/api/groups"),
     ("post", "/api/group_stats"), ("post", "/api/group_compare"),
-    ("post", "/api/send_to_parent"),
+    ("post", "/api/send_to_parent"), ("post", "/api/delete_frame"),
 }
 
 
