@@ -84,6 +84,38 @@ def serve(binary, port):
     raise RuntimeError("the app did not answer /api/health within 120s")
 
 
+def _refuse_a_real_data_dir(base):
+    """This script SEEDS A FRAME. It must never do that into a server holding real work.
+
+    Pointed at a binary it sets FRACTOGRAPHY_DATA to a throwaway directory first, so the
+    seeded frame lands in _ui_data and is thrown away with it. Pointed at a URL it did no
+    such thing and uploaded straight into whatever server was listening -- which, run
+    against the installed app to check a build, is the user's own data directory. That is
+    how a frame called "ui_check" ended up in their Your-images list, in an app whose
+    standing rule is that nothing is ever created there.
+
+    The check asks the server where it keeps its data rather than guessing from the port.
+    """
+    import urllib.error
+    try:
+        with urllib.request.urlopen(base + "/api/health", timeout=30) as r:
+            d = json.loads(r.read())
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        sys.exit(f"could not ask {base} where it keeps its data: {e}")
+    where = d.get("data_dir") or ""
+    real = os.path.join(os.path.expanduser("~"), "Library", "Application Support",
+                        "Crack Fractography")
+    if not where:
+        sys.exit("that server does not say where it keeps its data; refusing to seed it")
+    if os.path.realpath(where) == os.path.realpath(real) or "Application Support" in where:
+        sys.exit(f"refusing to seed a frame into {where}\n"
+                 f"  That is the installed app's own data directory and this script "
+                 f"uploads an image.\n"
+                 f"  Run it against the BINARY (it uses a throwaway data dir), or start a "
+                 f"server with\n"
+                 f"  FRACTOGRAPHY_DATA set somewhere disposable and point this at that.")
+
+
 def main():
     if len(sys.argv) < 2:
         sys.exit("usage: ui_check.py <base-url | path-to-binary>")
@@ -91,6 +123,7 @@ def main():
     proc = None
     if arg.startswith("http://") or arg.startswith("https://"):
         base = arg.rstrip("/")
+        _refuse_a_real_data_dir(base)
     else:
         if not os.path.exists(arg):
             sys.exit(f"no binary at {arg}")

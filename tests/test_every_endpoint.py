@@ -43,6 +43,7 @@ COVERED = {
     ("post", "/api/group_stats"), ("post", "/api/group_compare"),
     ("post", "/api/send_to_parent"), ("post", "/api/delete_frame"),
     ("post", "/api/discard_edit"), ("post", "/api/hide_frame"),
+    ("post", "/api/restore"),
 }
 
 
@@ -396,6 +397,19 @@ def test_discard_edit_refuses_an_uploads_frame_and_an_unedited_one(srv):
     assert st >= 400
     st, _ = _json_post(srv, "/api/discard_edit", {"arm": "sem/gated", "frame": "nope"})
     assert st >= 400
+
+
+def test_restore_refuses_what_it_cannot_put_back(srv):
+    """Covered in depth by tests/test_restore.py; here so the inventory is honest. The
+    shared module server must come out of this unchanged, so only the refusals run."""
+    before = len(srv.dataset("frames"))
+    for bad in ({}, {"kind": "frame"}, {"kind": "nonsense", "frame": _frame(srv)},
+                {"kind": "frame", "frame": _frame(srv), "record": "../../etc/passwd"},
+                {"kind": "frame", "frame": _frame(srv), "record": "no-such-record.json"},
+                {"kind": "edit", "arm": "sem/gated", "frame": "nope", "files": [".."]}):
+        st, d = _json_post(srv, "/api/restore", bad)
+        assert st >= 400, (bad, d)
+    assert len(srv.dataset("frames")) == before
 
 
 def test_hide_frame_takes_a_row_out_of_the_list_without_touching_it(srv):

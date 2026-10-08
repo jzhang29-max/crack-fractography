@@ -283,10 +283,15 @@ tbody tr[aria-selected=true]{background:color-mix(in oklab,var(--s1) 20%,transpa
    shout from 142 rows, solid the moment the row is under the pointer. */
 .rowdel{opacity:.38;background:none;border:0;color:var(--text-muted);cursor:pointer;
   padding:0 4px;font-size:var(--t-body);line-height:1;border-radius:4px}
-tr:hover .rowdel,.rowdel:focus-visible,.rowdel.arm{opacity:1}
+tr:hover .rowdel,.rowdel:focus-visible{opacity:1}
 .rowdel:hover{color:var(--bad)}
-.rowdel.arm{opacity:1;color:var(--bad);border:1px solid var(--bad);font-size:var(--t-micro);
-  padding:1px 5px}
+/* UNDO, not a confirmation. The cross acts on one click and this appears in the status
+   line above the list for 25 seconds. Underlined and in the accent so it reads as the
+   live control in a line that is otherwise plain text. */
+.undo{background:none;border:0;color:var(--accent,#5a9ffb);cursor:pointer;padding:0;
+  font:inherit;text-decoration:underline;font-weight:600}
+.undo:hover{color:var(--text)}
+.undo:disabled{color:var(--text-muted);text-decoration:none;cursor:default}
 .linky{background:none;border:0;color:var(--accent,#5a9ffb);cursor:pointer;padding:0;
   font-size:inherit;text-decoration:underline}
 .cropbox{position:absolute;border:2px dashed var(--warn);background:rgba(255,190,70,.14);

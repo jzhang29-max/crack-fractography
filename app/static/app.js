@@ -142,8 +142,8 @@ function shortFrame(name, prefix) {
 //: WHAT A ROW'S CROSS DOES. Three different acts, because three different things are
 //: removable: the app's own uploads, a correction the reader drew, and a row in a list.
 const DEL_TITLE = {
-  frame: "Delete this image (moved to the trash folder)",
-  edit: "Discard your correction and go back to the detector's mask",
+  frame: "Delete this image \u2014 one click, with Undo above the list",
+  edit: "Discard your correction \u2014 one click, with Undo above the list",
   hide: "Hide this row from the list (the image itself is not touched)",
 };
 const delMode = (f) =>
@@ -324,44 +324,32 @@ function renderFrames() {
       const name = b.dataset.del;
       const mode = b.dataset.mode;
       const isEdit = mode === "edit";
-      if (b.dataset.armed !== "1") {
-        // TWO CLICKS, NOT confirm(). It matches what Send-to-corrections does, it names
-        // the frame, and it cannot be dismissed by a reflex Enter on a native dialog.
-        t.querySelectorAll("button.rowdel[data-armed='1']").forEach((o) => {
-          o.dataset.armed = ""; o.textContent = "\u00d7"; o.classList.remove("arm");
-        });
-        // HIDING NEEDS NO CONFIRMATION. It destroys nothing and the list offers to put
-        // it back; a second click to remove a row from a view is friction for its own
-        // sake. Deleting and discarding both still take two.
-        if (mode === "hide") {
-          try {
-            await gPost("/api/hide_frame", { arm: state.arm, frame: name });
-            await afterHide(name);
-          } catch (err) {
-            const st = $("#listcount");
-            if (st) st.innerHTML = `<span class="bad">${esc(err.message)}</span>`;
-          }
-          return;
-        }
-        b.dataset.armed = "1";
-        b.textContent = isEdit ? "discard?" : "delete?";
-        b.classList.add("arm");
-        setTimeout(() => {
-          if (b.isConnected && b.dataset.armed === "1") {
-            b.dataset.armed = ""; b.textContent = "\u00d7"; b.classList.remove("arm");
-          }
-        }, 4000);
-        return;
-      }
+      // ONE CLICK, AND A WAY BACK -- not two clicks and no way back.
+      //
+      // The cross used to arm itself and wait for a second click. That is a tax on every
+      // correct delete to catch the rare wrong one, and it is a tax that does not work:
+      // a control that always asks is a control people click twice without reading. It
+      // also made the common case -- clearing out a few test crops -- eight clicks.
+      //
+      // Undo is the better trade and it is honest here, because the server never
+      // destroyed anything in the first place: a deleted frame's files AND its record go
+      // to trash/, a discarded correction goes to trash/, and /api/restore puts either
+      // back exactly as it was. The offer stays on screen for 25 seconds, which is
+      // longer than the half-second an arming click gave.
+      const arm = state.arm;
       b.textContent = "\u2026"; b.disabled = true;
       try {
+        if (mode === "hide") {
+          await gPost("/api/hide_frame", { arm, frame: name });
+          await afterHide(name);
+          return;
+        }
         const d = isEdit
-          ? await gPost("/api/discard_edit", { arm: state.arm, frame: name })
+          ? await gPost("/api/discard_edit", { arm, frame: name })
           : await gPost("/api/delete_frame", { arm: "uploads", frame: name });
-        await afterDelete(name, d, isEdit);
+        await afterDelete(name, d, isEdit, arm);
       } catch (err) {
-        b.disabled = false; b.dataset.armed = ""; b.textContent = "\u00d7";
-        b.classList.remove("arm");
+        b.disabled = false; b.textContent = "\u00d7";
         const st = $("#listcount");
         if (st) st.innerHTML = `<span class="bad">${esc(err.message)}</span>`;
       }
@@ -399,7 +387,32 @@ async function afterHide(name) {
 }
 
 
-async function afterDelete(name, d, wasEdit) {
+//: THE STATUS LINE, WITH A WAY BACK ON IT.
+//:
+//: One token, not one timer per call: two deletes in quick succession would otherwise
+//: leave the first one's 25-second timeout alive, and it would wipe the second one's
+//: undo offer off the screen partway through its own window.
+let UNDO_N = 0;
+function undoBar(msg, onUndo) {
+  const st = $("#listcount");
+  if (!st) return;
+  const mine = ++UNDO_N;
+  st.innerHTML = `<span class="undotxt"></span><button class="undo" type="button">Undo</button>`;
+  st.querySelector(".undotxt").textContent = msg + " \u00b7 ";
+  const btn = st.querySelector("button.undo");
+  btn.onclick = async () => {
+    btn.disabled = true; btn.textContent = "\u2026";
+    try { await onUndo(); }
+    catch (err) {
+      const now = $("#listcount");
+      if (now) now.innerHTML = `<span class="bad">${esc(err.message)}</span>`;
+    }
+  };
+  setTimeout(() => { if (UNDO_N === mine) renderCount(); }, 25000);
+}
+
+
+async function afterDelete(name, d, wasEdit, arm) {
   if (ED.frame === name) { ED.frame = null; ED.dirty = false; }
   if (typeof SEND !== "undefined" && SEND.frame === name) SEND.frame = null;
   // A DISCARDED EDIT LEAVES THE FRAME THERE. Only a deleted frame loses its selection;
@@ -412,17 +425,26 @@ async function afterDelete(name, d, wasEdit) {
   else if (!state.frame) state.frame = state.frames[0].frame;
   renderCount(); renderFrames(); renderSpecimens(); renderReadout();
   if (TAB === "mark") { ED.frame = null; renderMark(); }
-  const st = $("#listcount");
-  if (st) {
-    const bits = [wasEdit ? `discarded the correction on ${shortFrame(name, "")}`
-                          : `deleted ${shortFrame(name, "")}`];
-    if (d && d.files_trashed && d.files_trashed.length)
-      bits.push(`${plural(d.files_trashed.length, "file")} moved to trash/`);
-    if (d && d.groups_pruned && d.groups_pruned.length)
-      bits.push(`removed from ${d.groups_pruned.join(", ")}`);
-    st.textContent = bits.join(" \u00b7 ");
-    setTimeout(() => { if (typeof renderFrames === "function") renderFrames(); }, 6000);
-  }
+  const bits = [wasEdit ? `discarded the correction on ${shortFrame(name, "")}`
+                        : `deleted ${shortFrame(name, "")}`];
+  if (d && d.files_trashed && d.files_trashed.length)
+    bits.push(`${plural(d.files_trashed.length, "file")} moved to trash/`);
+  if (d && d.groups_pruned && d.groups_pruned.length)
+    bits.push(`removed from ${d.groups_pruned.join(", ")}`);
+  undoBar(bits.join(" \u00b7 "), async () => {
+    await gPost("/api/restore", wasEdit
+      ? { kind: "edit", arm, frame: name, files: [d.trashed_to] }
+      : { kind: "frame", arm: "uploads", frame: name, record: d.record });
+    state.frames = await allFrames().catch(() => []);
+    // Back to the row that came back, not to wherever the delete left the cursor.
+    if (state.frames.some((f) => f.frame === name)) state.frame = name;
+    renderCount(); renderFrames(); renderSpecimens(); renderReadout();
+    if (TAB === "mark") { ED.frame = null; renderMark(); }
+    const now = $("#listcount");
+    if (now) now.textContent = `${shortFrame(name, "")} is back`;
+    const mine = ++UNDO_N;
+    setTimeout(() => { if (UNDO_N === mine) renderCount(); }, 5000);
+  });
 }
 
 /* ---------------------------------------------------------------- rose */

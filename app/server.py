@@ -1966,6 +1966,173 @@ def _dependents_of(frame):
     return out
 
 
+@app.post("/api/restore")
+def restore(payload: dict = Body(...)):
+    """Put back what a delete or a discard just moved to the trash.
+
+    WHY THIS EXISTS RATHER THAN A CONFIRMATION. Deleting used to take two clicks: one to
+    arm the control and one to mean it. A confirmation taxes every correct action in order
+    to catch the rare wrong one, and it does not even work -- people learn to click
+    through it. Acting at once and offering the way back costs nothing when the click was
+    meant, and is the better remedy when it was not, because it is still there a minute
+    later instead of half a second before.
+
+    It is only possible because neither path destroys anything in the first place: both
+    move files into trash/ rather than unlinking them.
+    """
+    import shutil
+    kind = (payload.get("kind") or "").strip()
+    arm = (payload.get("arm") or "").strip()
+    frame = (payload.get("frame") or "").strip()
+    if kind not in ("frame", "edit"):
+        raise HTTPException(400, f"restore what? {kind!r}")
+    if not frame or not SAFE_FRAME.match(frame):
+        raise HTTPException(400, f"{frame!r} is not a frame name this will build a path from")
+    tdir = _trash_dir()
+
+    def _in_trash(name):
+        """Resolve a trash entry, refusing anything that is not a plain name inside it.
+
+        "" AND ".." BOTH SURVIVE A BASENAME CHECK. os.path.basename("..") is "..", and
+        both join to a path whose dirname IS the trash directory, so a realpath comparison
+        passes them too -- and os.path.exists() then says yes, because the thing they name
+        is the directory itself. Both reached open() and returned a 500. The entry has to
+        be a plain name AND a regular file.
+        """
+        if (not isinstance(name, str) or not name or name in (".", "..")
+                or os.sep in name or (os.altsep and os.altsep in name)
+                or os.path.basename(name) != name):
+            raise HTTPException(400, f"not a trash entry: {name!r}")
+        src = os.path.join(tdir, name)
+        if os.path.realpath(os.path.dirname(src)) != os.path.realpath(tdir):
+            raise HTTPException(400, f"not a trash entry: {name!r}")
+        return src
+
+    if kind == "edit":
+        dst = _edit_path(arm, frame)
+        if not dst:
+            raise HTTPException(400, f"no edit location for {arm!r}/{frame!r}")
+        names = payload.get("files") or ([payload["record"]] if payload.get("record") else [])
+        if not names:
+            raise HTTPException(400, "which trashed correction?")
+        src = _in_trash(names[0])
+        if not os.path.isfile(src):
+            raise HTTPException(404, "that correction is not in the trash any more")
+        # UNDO PUTS BACK WHAT WAS THERE; IT DOES NOT OVERWRITE WHAT IS THERE NOW. The
+        # offer stands for 25 seconds, which is long enough to discard a correction and
+        # start painting a new one before thinking better of it -- and that restore would
+        # have replaced the new strokes with the old ones and said "is back".
+        if _edit_of(arm, frame):
+            raise HTTPException(409, f"{frame} has a correction on it again -- undoing "
+                                     f"would throw that one away. The discarded one is "
+                                     f"still in the app's trash folder.")
+        with _DATASET_LOCK:
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            shutil.move(src, dst)
+            fp = os.path.join(OUT, "frames.json")
+            if os.path.exists(fp):
+                with open(fp, encoding="utf-8") as fh:
+                    cur = json.load(fh)
+                for r in cur:
+                    if r.get("arm") == arm and r.get("frame") == frame:
+                        r["edited"] = True
+                _write_json(fp, cur)
+            _CACHE.clear()
+        # Measured from the restored strokes. Safe here where it is not for a frame: the
+        # research record was never removed, so remeasure still finds the prior it needs
+        # for modality, specimen and lineage.
+        out = remeasure(arm=arm, frame=frame)
+        out["restored"] = [os.path.basename(dst)]
+        out["note"] = f"the correction on {frame} is back."
+        return out
+
+    # A FRAME IS RESTORED FROM ITS RECORD, NOT BY MEASURING IT AGAIN -- see the comment
+    # beside where delete_frame writes the record for what re-measuring would lose.
+    if arm not in ("", "uploads"):
+        raise HTTPException(400, "only an uploaded frame is deleted, so only one is restored")
+    rp = _in_trash(payload.get("record") or "")
+    if not os.path.isfile(rp):
+        raise HTTPException(404, "that frame is not in the trash any more")
+    with open(rp, encoding="utf-8") as fh:
+        rec = json.load(fh)
+    if (rec.get("frame") or {}).get("frame") != frame:
+        raise HTTPException(400, "that trash record is for a different frame")
+
+    moved = []
+    with _DATASET_LOCK:
+        # SAME RULE AS FOR AN EDIT: 25 seconds is long enough to delete a frame and upload
+        # a new one under the same name, and the restore would have moved the old PNG over
+        # the new one and replaced its record with the old measurements.
+        if any(f.get("arm") == "uploads" and f.get("frame") == frame
+               for f in (_load_quiet("frames") or [])):
+            raise HTTPException(409, f"there is an uploaded frame called {frame} again -- "
+                                     f"undoing would overwrite it. The deleted one is "
+                                     f"still in the app's trash folder.")
+        os.makedirs(UPLOAD_DIR, exist_ok=True)
+        up_real = os.path.realpath(UPLOAD_DIR)
+        for name in rec.get("files") or []:
+            src = _in_trash(name)
+            if not os.path.isfile(src):
+                continue
+            # "<stamp>__<frame><suffix>" -- the stamp carries no "__", so one split takes
+            # it off and leaves a frame name that may contain its own.
+            tail = name.split("__", 1)[1] if "__" in name else name
+            dst = os.path.join(UPLOAD_DIR, tail)
+            if os.path.realpath(os.path.dirname(dst)) != up_real:
+                raise HTTPException(400, f"refusing to restore outside uploads: {dst}")
+            shutil.move(src, dst)
+            moved.append(os.path.basename(dst))
+        if not moved:
+            raise HTTPException(404, "that frame's files are not in the trash any more")
+
+        fp = os.path.join(OUT, "frames.json")
+        cur = json.load(open(fp)) if os.path.exists(fp) else []
+        cur = [f for f in cur
+               if not (f.get("arm") == "uploads" and f.get("frame") == frame)]
+        _write_json(fp, cur + [rec["frame"]])
+
+        if rec.get("cracks"):
+            cp = os.path.join(OUT, "cracks.json")
+            cr = json.load(open(cp)) if os.path.exists(cp) else []
+            cr = [c for c in cr
+                  if not (c.get("arm") == "uploads" and c.get("frame") == frame)]
+            _write_json(cp, cr + rec["cracks"])
+
+        if rec.get("groups"):
+            groups = _read_groups()
+            for name, members in rec["groups"].items():
+                if name in groups:
+                    # THE MEMBER BACK, NOT THE OLD LIST BACK. Writing the saved list
+                    # wholesale would silently drop anything added to that group since the
+                    # delete -- an undo that undoes someone else's work as well as its own.
+                    have = {(m.get("arm"), m.get("frame")) for m in groups[name]}
+                    groups[name] = groups[name] + [
+                        m for m in members if (m.get("arm"), m.get("frame")) not in have]
+                else:
+                    # The group emptied and was popped, so there is nothing to merge into
+                    # and the saved list is the only record of what it held.
+                    groups[name] = members
+            _write_json(_groups_path(), groups)
+
+        if rec.get("scale"):
+            try:
+                import sys as _sys
+                _sys.path.insert(0, os.path.join(RES, "analysis"))
+                import scale as _scale
+                _scale.set_user_scale(frame, rec["scale"])
+            except Exception:                           # noqa: BLE001 - never fail a restore
+                pass
+
+        _rebuild_uploads_specimen()
+        _CACHE.clear()
+    os.remove(rp)
+    return {"ok": True, "arm": "uploads", "frame": frame, "restored": moved,
+            "crack_rows_restored": len(rec.get("cracks") or []),
+            "groups_restored": sorted(rec.get("groups") or {}),
+            "scale_restored": bool(rec.get("scale")),
+            "note": f"{frame} is back, with the numbers it had when it was deleted."}
+
+
 @app.post("/api/hide_frame")
 def hide_frame(payload: dict = Body(...)):
     """Take a frame out of the sidebar without destroying anything.
@@ -2119,19 +2286,22 @@ def delete_frame(payload: dict = Body(...)):
 
         cp = os.path.join(OUT, "cracks.json")
         n_rows = 0
+        gone_cracks = []
         if os.path.exists(cp):
             cr = json.load(open(cp))
             # BY THE PAIR, never by the frame alone: cracks.json is keyed on (arm, frame)
             # and a stem can exist in uploads AND in a research arm at the same time.
-            keep = [c for c in cr
-                    if not (c.get("arm") == "uploads" and c.get("frame") == frame)]
-            n_rows = len(cr) - len(keep)
+            keep, gone_cracks = [], []
+            for c in cr:
+                (gone_cracks if (c.get("arm") == "uploads"
+                                 and c.get("frame") == frame) else keep).append(c)
+            n_rows = len(gone_cracks)
             _write_json(cp, keep)
 
         # THE SCALE STORE IS KEYED BY BARE STEM WITH NO ARM, so clearing it would strip the
         # nm/px from a research frame that happens to share the name -- and every micrometre
         # column computed from it. Only clear when this stem belongs to nobody else.
-        scale_cleared = False
+        scale_cleared, saved_scale = False, None
         if not any(f.get("frame") == frame for f in kept):
             try:
                 import sys as _sys
@@ -2141,6 +2311,7 @@ def delete_frame(payload: dict = Body(...)):
                 # whole dict in a module-level _USER, and a later unrelated set would dump
                 # that stale copy and put this entry back.
                 if _scale.nm_per_px(frame, "sem") or _scale.user_scales().get(frame):
+                    saved_scale = _scale.user_scales().get(frame)
                     _scale.set_user_scale(frame, None)
                     scale_cleared = True
             except Exception:                           # noqa: BLE001 - never fail a delete
@@ -2149,17 +2320,36 @@ def delete_frame(payload: dict = Body(...)):
         # Saved groups resolve members by name at request time and nothing prunes them, so
         # a stale member silently shrinks a group and reports it only in a `missing` field
         # no screen renders.
-        groups, pruned = _read_groups(), []
+        groups, pruned, gone_groups = _read_groups(), [], {}
         for name in list(groups):
-            before = len(groups[name])
-            groups[name] = [m for m in groups[name]
+            was = groups[name]
+            groups[name] = [m for m in was
                             if not (m.get("arm") == "uploads" and m.get("frame") == frame)]
-            if len(groups[name]) != before:
+            if len(groups[name]) != len(was):
                 pruned.append(name)
+                # The WHOLE list, not just the removed member: a group that empties is
+                # popped below, so putting one member back into a group that no longer
+                # exists would resurrect it with a single row and silently drop the rest.
+                gone_groups[name] = was
             if not groups[name]:
                 groups.pop(name)
         if pruned:
             _write_json(_groups_path(), groups)
+
+        # EVERYTHING THE DELETE TOOK, written beside the files it moved.
+        #
+        # Without this, putting a frame back means measuring the restored PNG again -- and
+        # re-measuring is NOT the inverse of deleting. remeasure() reads the frame's prior
+        # record for its modality, specimen and lineage, and the delete just removed that
+        # record: a restored TXM crop would come back measured as SEM, under specimen
+        # "unparsed", with cropped_from gone -- which is the field that lets its strokes
+        # reach the parent and stops a group comparing it against the frame it was cut
+        # from. The crack rows, the scale and the group memberships have no path back at
+        # all. So the delete carries its own undo rather than leaving one to be inferred.
+        record = {"frame": rec, "cracks": gone_cracks, "groups": gone_groups,
+                  "scale": saved_scale, "files": moved}
+        recname = f"{stamp}__{frame}.record.json"
+        _write_json(os.path.join(tdir, recname), record)
 
         # _rebuild_uploads_specimen, not _rebuild_specimen: the generic one returns early
         # when a specimen has no frames left and leaves its card describing data that is
@@ -2172,7 +2362,10 @@ def delete_frame(payload: dict = Body(...)):
             "crack_rows_removed": n_rows,
             "scale_cleared": scale_cleared,
             "groups_pruned": pruned,
-            "dependents_removed": [k["frame"] for k in kids] if kids else [],
+            "record": recname,
+            # ORPHANED, not removed: nothing in this function deletes a dependent. The
+            # old key named an action that never happened.
+            "dependents_orphaned": [k["frame"] for k in kids] if kids else [],
             "note": (f"moved to {os.path.basename(_trash_dir())}/ in the app's data folder "
                      f"rather than deleted, so it can be put back by hand.")}
 
@@ -2392,8 +2585,16 @@ def remeasure(arm: str = Query(...), frame: str = Query(...)):
     # until the moment the user painted on the crop -- so the guard stopped finding the
     # overlap with no error, and the strokes became unsendable, both silently, at the one
     # moment the crop was worth anything.
+    #
+    # "edited" joins them for a third reason, found by a restore test. mask_edit sets the
+    # flag AFTER this function runs, so it survived there by luck of ordering -- but every
+    # OTHER caller re-measures an already-edited frame and dropped it: setting a scale on
+    # a corrected research frame silently cleared the flag, and the flag is what makes the
+    # sidebar offer "discard your correction" instead of "hide this row", and what marks
+    # the row as corrected at all. discard_edit pops the key before it re-measures rather
+    # than setting it False, so a genuine discard is still not carried back.
     for k in ("source_filename", "was_segmented_here", "copied_from",
-              "cropped_from", "has_original"):
+              "cropped_from", "has_original", "edited"):
         if prior and prior.get(k) is not None and summ.get(k) is None:
             summ[k] = prior[k]
     for r in rows:

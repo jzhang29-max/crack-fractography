@@ -140,3 +140,57 @@ def test_a_non_finite_scale_is_refused_before_it_reaches_the_dataset(tmp_path):
         # A finite value still works.
         st, _ = s.post(f"/api/scale?arm=uploads&frame={frame}&nm_per_px=52")
         assert st == 200
+
+
+def test_re_measuring_a_corrected_research_frame_keeps_it_marked_as_corrected(tmp_path):
+    """`edited` used to survive only by the order mask_edit happened to write it in.
+
+    remeasure() rebuilds a frame's record from the mask alone and carries a short list of
+    identity fields across from the prior record. `edited` was not on that list. mask_edit
+    sets the flag AFTER calling remeasure, so the flag looked durable -- but every other
+    caller re-measures a frame that is ALREADY edited, and dropped it: setting a scale on a
+    corrected SEM frame cleared the mark with no error. The flag is what makes the sidebar
+    offer "discard your correction" rather than "hide this row", so losing it leaves a
+    correction on disk that the UI gives no way to remove.
+
+    Found while testing restore, which hit it from the third direction.
+    """
+    import io
+    import numpy as np
+    from PIL import Image
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from liveserver import Server
+    from app import paths as P
+    sem = P.sem_repo()
+    gated = os.path.join(sem or "", "crack_export", "derived", "gated_masks")
+    if not sem or not os.path.isdir(gated):
+        pytest.skip("no sem-crack-detector checkout on this machine")
+    name = next((f[:-len("_gated.png")] for f in sorted(os.listdir(gated))
+                 if f.endswith("_gated.png")), None)
+    if not name:
+        pytest.skip("no gated mask available")
+
+    with Server(tmp_path / "d") as s:
+        st, raw = s.get(f"/api/mask/sem/gated/{name}")
+        assert st == 200, st
+        orig = np.array(Image.open(io.BytesIO(raw)).convert("L"))
+        ys, xs = np.where(orig < 128)
+        if len(ys) < 500:
+            pytest.skip(f"{name} has too little marked area to erase")
+        painted = orig.copy()
+        painted[ys[:500], xs[:500]] = 255
+        b = io.BytesIO(); Image.fromarray(painted, mode="L").save(b, "PNG")
+        st, raw = s.upload(f"{name}.png", b.getvalue(),
+                           path=f"/api/mask_edit?arm=sem/gated&frame={name}")
+        assert st == 200, raw[:300]
+
+        def row():
+            return next(r for r in s.dataset("frames")
+                        if r.get("arm") == "sem/gated" and r.get("frame") == name)
+        assert row().get("edited") is True, "the edit did not mark the frame"
+
+        # ANY re-measure, by the route a reader actually takes: set a scale.
+        st, raw = s.post(f"/api/scale?arm=sem/gated&frame={name}&nm_per_px=12.5")
+        assert st == 200, raw[:200]
+        assert row().get("edited") is True, (
+            "setting a scale cleared the correction mark")
