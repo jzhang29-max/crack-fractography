@@ -2042,6 +2042,16 @@ async function openEditor(frame) {
   // research frame, and posting it again under arm=uploads is a 404. This used to be
   // handled by rebuilding the editor on the copy, which is where the jump came from.
   let saveArm = state.arm, saveFrame = frame;
+  //: WHICH REGION THE CURRENT SAVE TARGET HOLDS. null means the whole frame; otherwise the
+  //: box, so changing the crop makes a different target rather than overwriting the last
+  //: one with a different region of the same parent.
+  let savedCropKey = null;
+  const cropKey = () => {
+    const v = ED.view;
+    if (!v || !ED.off) return null;
+    if (v.w >= ED.off.width && v.h >= ED.off.height) return null;
+    return `${v.x},${v.y},${v.w},${v.h}`;
+  };
 
   const saveNow = async (why) => {
     if (!ED.dirty) return;
@@ -2062,9 +2072,38 @@ async function openEditor(frame) {
         + `<span class="u">(a full frame takes a few seconds)</span></span>`;
     }
     try {
-      const blob = await new Promise((r) => ED.off.toBlob(r, "image/png"));
+      // A CROP SAVES THE CROP. Cropping restricts what you are working on, so what lands
+      // in Your images is that region -- not the whole frame with marks somewhere in it.
+      //
+      // The crop frame is cut SERVER-SIDE from the parent's own mask first, which is what
+      // gives it its provenance (the parent, the box, the parent's size) and its slice of
+      // the micrograph. The painted bytes then overwrite it. Doing it in that order means
+      // the crop is a first-class frame rather than an upload that happens to be small.
+      const key = cropKey();
+      if (key !== savedCropKey) {
+        if (key === null) {
+          // Back to the whole image: save against the frame this editor opened on.
+          saveArm = state.arm; saveFrame = frame;
+        } else {
+          const v = ED.view;
+          const c = await gPost("/api/crop", { arm: saveArm, frame: saveFrame,
+                                               x: v.x, y: v.y, w: v.w, h: v.h });
+          saveArm = "uploads"; saveFrame = c.frame;
+        }
+        savedCropKey = key;
+      }
+      // The bytes are the region on screen, at the mask's own resolution.
+      let src = ED.off;
+      if (key !== null) {
+        const v = ED.view;
+        const sub = document.createElement("canvas");
+        sub.width = v.w; sub.height = v.h;
+        sub.getContext("2d").drawImage(ED.off, v.x, v.y, v.w, v.h, 0, 0, v.w, v.h);
+        src = sub;
+      }
+      const blob = await new Promise((r) => src.toBlob(r, "image/png"));
       const fd = new FormData();
-      fd.append("file", blob, `${frame}_gated.png`);
+      fd.append("file", blob, `${saveFrame}_gated.png`);
       const q = new URLSearchParams({ arm: saveArm, frame: saveFrame });
       const r = await fetch(`/api/mask_edit?${q}`, { method: "POST", body: fd });
       const d = await r.json();
@@ -2116,6 +2155,13 @@ async function openEditor(frame) {
       }
       state.frames = await allFrames();
       renderFrames(); renderSpecimens(); renderReadout();
+      // A CROP SAVE LANDS SOMEWHERE ELSE, AND MUST SAY SO. The copied_from branch above
+      // names its destination; a crop goes through here, and without this the strokes
+      // vanish into a frame the reader was never told about.
+      if (savedCropKey !== null && out) {
+        out.innerHTML = `<span class="u">Saved the cropped region as `
+          + `<b>${esc(saveFrame)}</b> in Your images.</span> ` + out.innerHTML;
+      }
     } catch (e) {
       if (out) out.innerHTML = `<span class="flag bad">${esc(e.message)}</span>`;
     } finally {

@@ -15,6 +15,7 @@ import pytest
 from PIL import Image
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 from liveserver import Server
 
 
@@ -410,3 +411,30 @@ def test_the_render_cache_does_not_look_like_a_dataset(tmp_path):
         # the dataset endpoints still work with it present
         st, frames = s.json("/api/frames?arm=uploads")
         assert st == 200 and frames
+
+
+# --- WHAT A CROP SAVES ------------------------------------------------------------------
+def test_saving_a_cropped_view_writes_the_region_not_the_whole_frame():
+    """Cropping restricts what you are working on, so what lands in Your images is that
+    region -- not the whole frame with marks somewhere in it. The reader asked for this
+    directly: "after the crop, it doesn't save on the crop but returns to the original".
+
+    The order matters and is asserted: the crop frame is cut SERVER-SIDE from the parent's
+    own mask first, which is what gives it its provenance and its slice of the micrograph,
+    and the painted bytes overwrite it after. Cut in the other order it would be an upload
+    that happens to be small, with no parent and no picture behind it."""
+    js = open(os.path.join(REPO, "app", "static", "app.js"), encoding="utf-8").read()
+    fn = js[js.index("const saveNow = async"):js.index("ED.scheduleSave = ")]
+    assert "cropKey()" in fn, "the save does not know whether a crop is active"
+    assert '"/api/crop"' in fn, "a cropped save does not create a crop frame"
+    assert fn.index('"/api/crop"') < fn.index("/api/mask_edit"), (
+        "the painted bytes are posted before the crop frame exists")
+    # the bytes must be the REGION, not the whole offscreen canvas
+    assert "drawImage(ED.off, v.x, v.y, v.w, v.h" in fn, (
+        "the whole mask is still being sent for a cropped save")
+    # and changing the crop must retarget rather than overwrite the previous region
+    assert "savedCropKey" in fn and "key !== savedCropKey" in fn, (
+        "a second, different crop would overwrite the first")
+    # going back to the whole image must save against the frame the editor opened on
+    assert "saveArm = state.arm; saveFrame = frame;" in fn, (
+        "clearing the crop does not restore the whole-frame target")
