@@ -364,3 +364,49 @@ def test_the_crop_keeps_a_pristine_copy_of_what_it_cut(tmp_path):
             "the pristine copy was overwritten by the edit, so the diff is now empty "
             "and every painted pixel would be invisible")
         assert after_ascut == pristine, "the pristine copy changed"
+
+
+# --- THE RENDER CACHE -------------------------------------------------------------------
+def test_a_replaced_micrograph_is_not_served_from_the_cache(tmp_path):
+    """Opening a SEM frame took 28 seconds, almost all of it high-passing a 25-megapixel
+    array and then throwing most of the result away. It is cached now, in memory and on
+    disk -- and a cache keyed on the frame NAME would serve a stale picture for the rest
+    of time the moment a micrograph was replaced. The key is the source file's mtime and
+    size, so this test replaces the file and asserts the render follows."""
+    with Server(tmp_path / "d") as s:
+        up = _seed(s, "rc", 400, 300, [(40, 40, 360, 80)])
+        f = up["frames"][0]["frame"] if "frames" in up else up.get("frame")
+        updir = os.path.join(str(tmp_path / "d"), "uploads")
+        orig = os.path.join(updir, f"{f}_original.png")
+
+        Image.new("L", (400, 300), 40).save(orig)
+        st, a = s.get(f"/api/original/uploads/{f}")
+        assert st == 200, st
+        st, a2 = s.get(f"/api/original/uploads/{f}")
+        assert a2 == a, "the second request did not come back identical (no cache?)"
+
+        # a different picture at the same path
+        import numpy as _np
+        arr = _np.zeros((300, 400), dtype="uint8")
+        arr[100:200, 100:300] = 255
+        Image.fromarray(arr, mode="L").save(orig)
+        st, b = s.get(f"/api/original/uploads/{f}")
+        assert st == 200, st
+        assert b != a, "a replaced micrograph was served from the stale cache"
+
+
+def test_the_render_cache_does_not_look_like_a_dataset(tmp_path):
+    """It lives under the app's own data directory, beside frames.json. Anything that
+    enumerates that directory expecting records must not trip over a folder of PNGs."""
+    with Server(tmp_path / "d") as s:
+        up = _seed(s, "rc2", 400, 300)
+        f = up["frames"][0]["frame"] if "frames" in up else up.get("frame")
+        updir = os.path.join(str(tmp_path / "d"), "uploads")
+        Image.new("L", (400, 300), 40).save(os.path.join(updir, f"{f}_original.png"))
+        assert s.get(f"/api/original/uploads/{f}")[0] == 200
+        d = os.path.join(str(tmp_path / "d"), "render_cache")
+        assert os.path.isdir(d) and os.listdir(d), "nothing was cached to disk"
+        assert all(n.endswith(".png") for n in os.listdir(d)), os.listdir(d)
+        # the dataset endpoints still work with it present
+        st, frames = s.json("/api/frames?arm=uploads")
+        assert st == 200 and frames

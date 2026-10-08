@@ -228,6 +228,51 @@ HIGHPASS_SIGMA = 60
 _ORIGINAL_CACHE = {}
 ORIGINAL_CACHE_N = 8
 
+#: ...and on disk, because the expensive part is reading the source at all. With the page
+#: cache warm the whole render is 0.5 s; cold it is about 3 s, and almost all of that is
+#: pulling a 48 MB TIFF off the disk for the first time. An in-memory cache only helps
+#: within one run, so the first visit to each frame paid it again after every restart.
+#: Keyed on the source's mtime and size, like the memory cache, so a replaced micrograph
+#: can never be served from a stale render.
+ORIGINAL_DISK_CACHE_MB = 600
+
+
+def _original_cache_dir():
+    d = os.path.join(OUT, "render_cache")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def _disk_cache_path(key):
+    import hashlib
+    h = hashlib.sha1(repr(key).encode()).hexdigest()[:24]
+    return os.path.join(_original_cache_dir(), f"{h}.png")
+
+
+def _disk_cache_trim():
+    """Oldest-first, by access time, to a byte budget."""
+    try:
+        d = _original_cache_dir()
+        files = []
+        for f in os.listdir(d):
+            fp = os.path.join(d, f)
+            try:
+                st = os.stat(fp)
+            except OSError:
+                continue
+            files.append((st.st_atime, st.st_size, fp))
+        total = sum(f[1] for f in files)
+        files.sort()
+        while total > ORIGINAL_DISK_CACHE_MB * 1024 * 1024 and files:
+            _, size, fp = files.pop(0)
+            try:
+                os.remove(fp)
+                total -= size
+            except OSError:
+                break
+    except Exception:                                   # noqa: BLE001 - a cache miss is fine
+        pass
+
 
 def _match_original_to_mask(oim, mask_wh):
     """Trim the instrument databar so the micrograph covers the same field as the mask.
@@ -358,6 +403,15 @@ def original(arm: str, frame: str):
         st = os.stat(src)
         ckey = (arm, frame, st.st_mtime_ns, st.st_size)
         hit = _ORIGINAL_CACHE.get(ckey)
+        if hit is None:
+            dp = _disk_cache_path(ckey)
+            if os.path.exists(dp):
+                try:
+                    with open(dp, "rb") as fh:
+                        hit = fh.read()
+                    _ORIGINAL_CACHE[ckey] = hit
+                except OSError:
+                    hit = None
         if hit is not None:
             return Response(hit, media_type="image/png",
                             headers={"Cache-Control": "public, max-age=3600"})
@@ -421,9 +475,19 @@ def original(arm: str, frame: str):
     # the path between clicking a frame and seeing it.
     out.save(buf, "PNG", compress_level=6)
     blob = buf.getvalue()
-    _ORIGINAL_CACHE[ckey] = blob
-    while len(_ORIGINAL_CACHE) > ORIGINAL_CACHE_N:
-        _ORIGINAL_CACHE.pop(next(iter(_ORIGINAL_CACHE)))
+    if ckey is not None:
+        _ORIGINAL_CACHE[ckey] = blob
+        while len(_ORIGINAL_CACHE) > ORIGINAL_CACHE_N:
+            _ORIGINAL_CACHE.pop(next(iter(_ORIGINAL_CACHE)))
+        try:
+            dp = _disk_cache_path(ckey)
+            tmp = dp + ".tmp"
+            with open(tmp, "wb") as fh:
+                fh.write(blob)
+            os.replace(tmp, dp)
+            _disk_cache_trim()
+        except OSError:
+            pass
     return Response(blob, media_type="image/png",
                     headers={"Cache-Control": "public, max-age=3600"})
 
