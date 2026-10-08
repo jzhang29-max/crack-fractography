@@ -5,8 +5,8 @@
    WARN on two palette slots obliges. */
 
 const $ = (s) => document.querySelector(s);
-const state = { arm: null, spec: "", frames: [], frame: null, cracks: null, minArea: 0,
-                sortKey: "frame", sortDir: 1 };
+const state = { arm: null, spec: "", collection: null, frames: [], frame: null,
+                cracks: null, minArea: 0, sortKey: "frame", sortDir: 1 };
 // Every row here is built with innerHTML, so anything from the record that lands inside an
 // attribute has to be escaped. The definition strings are written in measure.py and contain
 // apostrophes and parentheses today; one double quote added there later would otherwise end
@@ -41,14 +41,31 @@ const MODES = [
   { arm: "uploads", label: "Your images" },
 ];
 
+//: A COLLECTION IS AN ENTRY IN THIS LIST THAT THE USER MADE.
+//:
+//: It is not an arm. SEM, TXM and Your images are INSTRUMENTS, and the app refuses to
+//: aggregate across them because the numbers are not comparable; a collection is a
+//: division within Your images, so everything in one is still an uploaded mask measured
+//: by the same code. They are indented under Your images for exactly that reason -- they
+//: are inside it, not beside it.
+const COL_PREFIX = "col:";
+
 function modeOptions(arms) {
   ARM_HAS_ORIGINALS = Object.fromEntries(
     (arms || []).map((a) => [a.arm, !!a.has_originals]));
   const have = new Map((arms || []).map((a) => [a.arm, a]));
-  return MODES.filter((m) => have.has(m.arm)).map((m) => {
+  const out = [];
+  for (const m of MODES) {
+    if (!have.has(m.arm)) continue;
     const a = have.get(m.arm);
-    return `<option value="${m.arm}">${m.label} \u00b7 ${plural(a.n_frames, "frame")}</option>`;
-  }).join("");
+    out.push(`<option value="${m.arm}">${m.label} \u00b7 ${plural(a.n_frames, "frame")}</option>`);
+    for (const c of (a.collections || [])) {
+      out.push(`<option value="${esc(COL_PREFIX + c.name)}">\u2003\u21b3 ${esc(c.name)}`
+               + ` \u00b7 ${plural(c.n_frames, "frame")}</option>`);
+    }
+  }
+  if (have.has("uploads")) out.push(`<option value="__newcol">\u2003+ New collection\u2026</option>`);
+  return out.join("");
 }
 
 //: The arm to open on: the first mode that actually has frames, so a fresh install lands
@@ -163,9 +180,14 @@ function renderCount() {
   // Your images is now always in the dropdown -- see /api/arms -- so landing here with
   // nothing in it is an ordinary thing to do, and the right text is the way out of it.
   if (!n && !nHidden) {
-    el.innerHTML = state.arm === "uploads"
-      ? `No images here yet. <b>+ Add image</b> puts one in, and nothing else ever will.`
-      : `No frames in this arm.`;
+    el.innerHTML = state.collection
+      ? `<b>${esc(state.collection)}</b> is empty. <b>+ Add image</b> puts one straight `
+        + `in here, or use <b>Move to</b> below on an image you already have.`
+      : (state.arm === "uploads"
+          ? `No images here yet. <b>+ Add image</b> puts one in, and nothing else ever will.`
+          : `No frames in this arm.`);
+    el.innerHTML += collectionControls();
+    wireCollectionControls();
     return;
   }
   // plural(), like every other count. The pluralise pass missed this one because its
@@ -175,12 +197,85 @@ function renderCount() {
     : `all ${plural(n, "frame")} scaled`)
     + (nHidden ? ` · <b>${nHidden} hidden</b> <button id="unhide" class="linky">show`
                  + ` them</button>` : "");
+  el.innerHTML += collectionControls();
   const uh = $("#unhide");
   if (uh) uh.onclick = async () => {
     await gPost("/api/hide_frame", { arm: state.arm, frame: "*", show: true });
     state.frames = await allFrames().catch(() => []);
     renderCount(); renderFrames(); renderSpecimens();
   };
+  wireCollectionControls();
+}
+
+//: FILING AN IMAGE YOU ALREADY HAVE, and unmaking a collection. Without the first, a
+//: collection could only ever hold images uploaded after it was made, which makes it
+//: useless for organising what is already there. Without the second it is a one-way
+//: control, and a list of names you cannot shorten stops being an organiser.
+let ALL_COLLECTIONS = [];
+
+function collectionControls() {
+  if (state.arm !== "uploads") return "";
+  const here = state.frame;
+  const opts = [`<option value="">\u2014 not in a collection \u2014</option>`]
+    .concat(ALL_COLLECTIONS.map((c) => {
+      const cur = here && (state.frames.find((f) => f.frame === here) || {}).collection;
+      return `<option value="${esc(c.name)}"${cur === c.name ? " selected" : ""}>`
+             + `${esc(c.name)}</option>`;
+    }));
+  const move = here && ALL_COLLECTIONS.length
+    ? `<label class="u colmove">Move <b>${esc(shortFrame(here, ""))}</b> to `
+      + `<select id="colmove">${opts.join("")}</select></label>` : "";
+  const drop = state.collection
+    ? ` <button id="coldrop" class="linky" type="button">Remove this collection</button>` : "";
+  return (move || drop) ? `<div class="colrow">${move}${drop}</div>` : "";
+}
+
+function wireCollectionControls() {
+  const mv = $("#colmove");
+  if (mv) mv.onchange = async () => {
+    try {
+      await gPost("/api/set_collection",
+                  { frame: state.frame, collection: mv.value || null });
+      await refreshArmOptions();
+      state.frames = await allFrames().catch(() => []);
+      renderCount(); renderFrames(); renderSpecimens();
+    } catch (e) {
+      const el = $("#listcount");
+      if (el) el.innerHTML = `<span class="bad">${esc(e.message)}</span>`;
+    }
+  };
+  const dr = $("#coldrop");
+  if (dr) dr.onclick = async () => {
+    const name = state.collection;
+    if (!name) return;
+    try {
+      const d = await gPost("/api/collections", { name, delete: true });
+      state.collection = null; state.frame = null;
+      await refreshArmOptions();
+      $("#arm").value = "uploads";
+      await loadArm();
+      const el = $("#listcount");
+      // THE IMAGES SURVIVE AND THE MESSAGE SAYS SO, because "remove" next to a list of
+      // your own images is a word that needs disambiguating before it is clicked, not
+      // after.
+      if (el) el.innerHTML = `Removed the collection \u201c${esc(name)}\u201d. `
+        + `${plural(d.frames_freed || 0, "image")} went back to Your images; none was deleted.`;
+    } catch (e) {
+      const el = $("#listcount");
+      if (el) el.innerHTML = `<span class="bad">${esc(e.message)}</span>`;
+    }
+  };
+}
+
+async function refreshArmOptions() {
+  const arms = await api("/api/arms").catch(() => null);
+  if (!arms) return;
+  const up = arms.find((a) => a.arm === "uploads");
+  ALL_COLLECTIONS = (up && up.collections) || [];
+  const sel = $("#arm");
+  if (!sel) return;
+  sel.innerHTML = modeOptions(arms);
+  sel.value = state.collection ? COL_PREFIX + state.collection : state.arm;
 }
 
 function renderFrames() {
@@ -633,6 +728,10 @@ async function selectFrame(name) {
   state.frame = name;
   const f = state.frames.find((x) => x.frame === name);
   renderFrames();
+  // The count line carries the "Move <this image> to..." control, which names the
+  // selected frame -- so it has to be rebuilt when the selection changes, or the control
+  // never appears at all on first selection and afterwards names the previous image.
+  renderCount();
   $("#fsel-note").textContent = f.scale_known
     ? `${f.nm_per_px} nm/px — physical units available.`
     : `No physical scale established for this frame; µm columns are empty by design.`;
@@ -1938,15 +2037,49 @@ async function openEditor(frame) {
   // thinks of as the same picture. ED.off stays the WHOLE mask at full resolution -- so
   // saving, measuring and undo are untouched and a stroke is still written at the image's
   // own scale -- and only what is drawn on screen is restricted.
+  // THE CROP IS REMEMBERED. It is a view and not a frame, which is what the user asked
+  // for -- but "not a frame" was taken to mean "not kept", and coming back to an image
+  // you had cropped showed the whole thing again. On a 6144 x 4096 mosaic that means
+  // finding your way back to the same few hundred pixels by eye, every time, and it is
+  // why cropping read as something that does not save.
+  //
+  // Per frame, in the browser's own storage: no file is written, nothing is created in
+  // Your images, and clearing the crop clears the memory of it.
+  const VIEWKEY = `cf.view.${state.arm}/${frame}`;
+  const rememberView = (v) => {
+    try {
+      if (!v || (v.w >= ED.off.width && v.h >= ED.off.height)) localStorage.removeItem(VIEWKEY);
+      else localStorage.setItem(VIEWKEY, JSON.stringify(v));
+    } catch { /* private mode, or a full quota: the crop just is not remembered */ }
+  };
+  const rememberedView = () => {
+    try {
+      const v = JSON.parse(localStorage.getItem(VIEWKEY) || "null");
+      // VALIDATED AGAINST THIS MASK, not trusted. The stored box belongs to whatever this
+      // frame was when it was stored; if the mask has since been replaced at a different
+      // size, restoring it would show a window onto nothing.
+      if (!v || ![v.x, v.y, v.w, v.h].every((n) => Number.isInteger(n) && n >= 0)) return null;
+      if (v.w < 16 || v.h < 16) return null;
+      if (v.x + v.w > ED.off.width || v.y + v.h > ED.off.height) return null;
+      return v;
+    } catch { return null; }
+  };
+
   ED.view = { x: 0, y: 0, w: ED.off.width, h: ED.off.height };
   ED.setView = (v) => {
     ED.view = v || { x: 0, y: 0, w: ED.off.width, h: ED.off.height };
+    rememberView(v);
     const whole = ED.view.w === ED.off.width && ED.view.h === ED.off.height;
     const rb = $("#cropreset"); if (rb) rb.hidden = whole;
     const ci = $("#cropinfo");
     if (ci) ci.textContent = whole ? "" :
       `showing ${ED.view.w} × ${ED.view.h} of ${ED.off.width} × ${ED.off.height} px`;
     if (typeof applyZoomRef === "function") applyZoomRef(); else fit();
+  };
+  ED.restoreView = () => {
+    const v = rememberedView();
+    if (v) ED.setView(v);
+    return !!v;
   };
   //: FIT MEANS FIT, IN BOTH DIRECTIONS. This bounded the canvas by the available WIDTH
   //: only, so a frame whose aspect is taller than the space left under the toolbar ran off
@@ -2096,6 +2229,12 @@ async function openEditor(frame) {
     ED.paint();
   };
   applyZoomRef = applyZoom;
+  // AFTER applyZoom EXISTS, because setView calls it. Restoring the crop before this
+  // point would size the canvas against the whole mask and then never correct it.
+  if (ED.restoreView && ED.restoreView()) {
+    const ci = $("#cropinfo");
+    if (ci) ci.textContent += " \u00b7 where you left it";
+  }
   const curZoom = () => ED.zoom != null ? ED.zoom : fitWidth() / (ED.view || ED.off).w;
   $("#edzoomin").onclick = () => { ED.zoom = Math.min(4, curZoom() * 1.5); applyZoom(); };
   $("#edzoomout").onclick = () => { ED.zoom = Math.max(0.02, curZoom() / 1.5); applyZoom(); };
@@ -2316,7 +2455,9 @@ async function openEditor(frame) {
 //: A scope is a view over the arm, not a different arm. Everything that depends on the
 //: scope -- the specimen card, the read-out, the figure, the CSV -- passes it per request.
 async function allFrames() {
-  return api(`/api/frames?arm=${encodeURIComponent(state.arm)}`);
+  const q = new URLSearchParams({ arm: state.arm });
+  if (state.collection) q.set("collection", state.collection);
+  return api(`/api/frames?${q}`);
 }
 
 async function loadArm() {
@@ -2389,7 +2530,12 @@ async function loadArm() {
       const fd = new FormData();
       fd.append("file", f);
       try {
-        const r = await fetch("/api/upload", { method: "POST", body: fd });
+        // INTO WHATEVER IS SELECTED. "Make a collection and add images to it" is the
+        // whole point of one; uploading into Your images and then moving the frame would
+        // be two steps for what reads as one.
+        const uq = state.collection
+          ? `?collection=${encodeURIComponent(state.collection)}` : "";
+        const r = await fetch(`/api/upload${uq}`, { method: "POST", body: fd });
         const d = await r.json();
         if (!r.ok) throw new Error(d.detail || r.status);
         done.push(d.frame);
@@ -2405,10 +2551,13 @@ async function loadArm() {
     lbl.textContent = was;
     e.target.value = "";
 
+    // UPLOADING DOES NOT MOVE YOU OUT OF WHERE YOU UPLOADED INTO. This forced the arm to
+    // uploads and the selector to "Your images", which is right when you add an image
+    // from SEM or TXM and wrong the moment collections exist: the file goes into the
+    // collection you had open and the view jumps to the one place it is not.
     state.arm = "uploads"; state.spec = "";
-    const arms = await api("/api/arms");
-    $("#arm").innerHTML = modeOptions(arms);
-    $("#arm").value = "uploads";
+    // The counts in the dropdown, and the Move list, both follow the data.
+    await refreshArmOptions();
     await loadArm();
     if (done.length) selectFrame(done[done.length - 1]);
     // Say what failed, per file. A batch that silently drops one is worse than a batch
@@ -2599,7 +2748,9 @@ async function loadArm() {
   catch (e) { firstRun(); return; }
   if (!arms || !arms.length) { firstRun(); return; }
   $("#arm").innerHTML = modeOptions(arms);
+  ALL_COLLECTIONS = ((arms || []).find((a) => a.arm === "uploads") || {}).collections || [];
   state.arm = firstMode(arms);
+  //: and after an upload, so a collection's count and the Move list both follow the data
   $("#arm").value = state.arm;
   // No total-count subtitle any more. The arm dropdown carries its own count and the strip
   // carries the number people actually cite, so a third tally of the same corpus was words
@@ -2611,13 +2762,65 @@ async function loadArm() {
     // /api/readout?arm=uploads&frame=<a TXM frame name> and took a 404 on every single
     // arm switch. Harmless in effect, because the next render corrects it, and a 404 per
     // switch in the console is the kind of noise that hides a real one.
-    state.arm = e.target.value;
+    const v = e.target.value;
+    if (v === "__newcol") { newCollection(); return; }
     state.spec = "";
     state.frame = null;
+    if (v.startsWith(COL_PREFIX)) {
+      // A collection lives inside Your images, so the arm does not change -- which is
+      // what keeps every uploads-only guard (delete, mask_edit, crop) working.
+      state.arm = "uploads";
+      state.collection = v.slice(COL_PREFIX.length);
+    } else {
+      state.arm = v;
+      state.collection = null;
+    }
     loadArm();
   };
   loadArm();
 })();
+
+//: MAKING ONE. An inline field rather than prompt(): a native dialog is the one control
+//: a reflex Enter dismisses without reading, and this one takes a name that will label
+//: the user's own data from here on.
+async function newCollection() {
+  const sel = $("#arm");
+  // Put the selector back where it was before the "+ New collection..." click, so
+  // cancelling leaves the view exactly as it was found.
+  sel.value = state.collection ? COL_PREFIX + state.collection : state.arm;
+  const host = $("#newcol");
+  if (!host) return;
+  host.hidden = false;
+  host.innerHTML = `<input id="newcolname" type="text" maxlength="60" `
+    + `placeholder="name this collection" aria-label="new collection name">`
+    + `<button id="newcolgo" class="btn primary" type="button">Create</button>`
+    + `<button id="newcolx" class="btn ghost" type="button">Cancel</button>`
+    + `<span class="u" id="newcolnote"></span>`;
+  const box = $("#newcolname"); box.focus();
+  const close = () => { host.hidden = true; host.innerHTML = ""; };
+  $("#newcolx").onclick = close;
+  const go = async () => {
+    const name = (box.value || "").trim();
+    if (!name) { $("#newcolnote").innerHTML = `<span class="bad">Give it a name.</span>`; return; }
+    try {
+      await gPost("/api/collections", { name });
+      close();
+      // ONE PLACE REBUILDS THE LIST. This used to call modeOptions() itself and leave
+      // ALL_COLLECTIONS holding whatever it held at startup -- so the collection existed
+      // in the dropdown and the "Move to" control, which reads that array, had nothing to
+      // offer and rendered as nothing at all.
+      state.arm = "uploads"; state.collection = name;
+      state.spec = ""; state.frame = null;
+      await refreshArmOptions();
+      await loadArm();
+    } catch (e) {
+      $("#newcolnote").innerHTML = `<span class="bad">${esc(e.message)}</span>`;
+    }
+  };
+  $("#newcolgo").onclick = go;
+  box.onkeydown = (e) => { if (e.key === "Enter") go(); if (e.key === "Escape") close(); };
+}
+
 
 // ============================================================ GROUPS AND COMPARE
 //

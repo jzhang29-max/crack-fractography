@@ -156,6 +156,7 @@ def arms():
     # going there is a choice rather than a notification.
     out.setdefault("uploads", {"arm": "uploads", "n_frames": 0, "n_scaled": 0,
                                "n_cracks": 0, "specimens": set()})
+    out["uploads"]["collections"] = collections_get()["collections"]
     have_sem = bool(P.sem_repo())
     have_txm = bool(P.txm_images())
     for a in out.values():
@@ -166,10 +167,16 @@ def arms():
 
 
 @app.get("/api/frames")
-def frames(arm: str = Query(...), specimen: str | None = None):
+def frames(arm: str = Query(...), specimen: str | None = None,
+           collection: str | None = None):
     fr = [f for f in _load("frames") if f["arm"] == arm]
     if specimen:
         fr = [f for f in fr if f["specimen"] == specimen]
+    if collection:
+        # An empty collection answers [] rather than 404 for the same reason an empty
+        # uploads arm does: you have to be able to go to the place before you fill it.
+        return sorted([f for f in fr if f.get("collection") == collection],
+                      key=lambda f: f["frame"])
     # EMPTY IS AN ANSWER FOR THE ARM THIS APP OWNS. /api/arms now always offers uploads so
     # that going there is the user's choice rather than a side effect of something being
     # created, and a 404 on the way in would turn that choice into "Could not load the
@@ -624,7 +631,8 @@ MAX_UPLOAD_MB = 200
 
 
 @app.post("/api/upload")
-async def upload(file: UploadFile = File(...), nm_per_px: float | None = None):
+async def upload(file: UploadFile = File(...), nm_per_px: float | None = None,
+                 collection: str | None = None):
     import shutil
     import subprocess
     import sys as _sys
@@ -751,6 +759,15 @@ async def upload(file: UploadFile = File(...), nm_per_px: float | None = None):
         raise HTTPException(500, f"measurement failed: {type(e).__name__}: {e}")
     summ["arm"] = "uploads"
     summ["specimen"] = "uploaded"
+    if collection:
+        if not SAFE_COLLECTION.match(collection.strip()):
+            raise HTTPException(400, f"{collection!r} is not a usable collection name")
+        summ["collection"] = collection.strip()
+        # REGISTER IT. Uploading into a name that is not on the list yet would file the
+        # frame somewhere the dropdown cannot offer, which is a frame you cannot reach.
+        with _DATASET_LOCK:
+            if summ["collection"] not in _read_collections():
+                _write_json(_collections_path(), _read_collections() + [summ["collection"]])
     # The filename as given, so a later upload can tell "the same file again" from "a
     # different file with a colliding name".
     summ["source_filename"] = name
@@ -1207,6 +1224,122 @@ def _read_groups():
             return json.load(fh)
     except (ValueError, OSError):
         return {}
+
+
+#: A COLLECTION IS A PLACE IN THE DROPDOWN THAT THE USER MADE.
+#:
+#: Not an arm. sem/gated, txm and uploads are INSTRUMENTS -- different physical ways of
+#: producing a mask -- and the app refuses to aggregate across them because the numbers
+#: are not comparable. A collection is a division WITHIN Your images, so every frame in
+#: one is still an uploaded mask measured by the same code, and every guard that reads
+#: `arm == "uploads"` (delete, mask_edit, crop, send-to-parent) keeps working untouched.
+#:
+#: Stored as a list of names rather than inferred from the frames that use them, for the
+#: same reason /api/arms now always offers uploads: a collection you just made and have
+#: not put anything in yet has to exist, or "make one and then add images to it" is not a
+#: thing you can do.
+SAFE_COLLECTION = re.compile(r"[^\x00-\x1f/\\]{1,60}\Z")
+
+
+def _collections_path():
+    return os.path.join(OUT, "collections.json")
+
+
+def _read_collections():
+    p = _collections_path()
+    if not os.path.exists(p):
+        return []
+    try:
+        with open(p, encoding="utf-8") as fh:
+            v = json.load(fh)
+        return [str(x) for x in v] if isinstance(v, list) else []
+    except (ValueError, OSError):
+        return []
+
+
+def _collection_counts():
+    n = {}
+    for f in (_load_quiet("frames") or []):
+        if f.get("arm") == "uploads" and f.get("collection"):
+            n[f["collection"]] = n.get(f["collection"], 0) + 1
+    return n
+
+
+@app.get("/api/collections")
+def collections_get():
+    counts = _collection_counts()
+    names = _read_collections()
+    # A name that frames still point at but the list has lost is still a real place --
+    # report it rather than stranding those frames somewhere unreachable.
+    for extra in sorted(set(counts) - set(names)):
+        names.append(extra)
+    return {"collections": [{"name": n, "n_frames": counts.get(n, 0)} for n in names]}
+
+
+@app.post("/api/collections")
+def collections_set(payload: dict = Body(...)):
+    """Make or remove one collection. Removing it never touches an image."""
+    name = (payload.get("name") or "").strip()
+    if not name:
+        raise HTTPException(400, "a collection needs a name")
+    if not SAFE_COLLECTION.match(name):
+        raise HTTPException(400, "a collection name cannot contain a slash or a control "
+                                 "character, and must be 60 characters or fewer")
+    with _DATASET_LOCK:
+        names = _read_collections()
+        if payload.get("delete"):
+            names = [n for n in names if n != name]
+            # THE IMAGES STAY. Removing a collection is removing a label, and the frames
+            # that carried it go back to being plain Your images -- deleting them would
+            # make an organising control into a destructive one.
+            fp = os.path.join(OUT, "frames.json")
+            if os.path.exists(fp):
+                cur = json.load(open(fp, encoding="utf-8"))
+                freed = 0
+                for r in cur:
+                    if r.get("arm") == "uploads" and r.get("collection") == name:
+                        r.pop("collection", None); freed += 1
+                _write_json(fp, cur)
+            _write_json(_collections_path(), names)
+            _CACHE.clear()
+            return {"ok": True, "deleted": name, "frames_freed": freed,
+                    "collections": names,
+                    "note": "the images are still in Your images; only the label is gone."}
+        if name not in names:
+            names.append(name)
+        _write_json(_collections_path(), names)
+        _CACHE.clear()
+    return {"ok": True, "collections": names}
+
+
+@app.post("/api/set_collection")
+def set_collection(payload: dict = Body(...)):
+    """Move one uploaded frame into a collection, or out of every collection."""
+    frame = (payload.get("frame") or "").strip()
+    name = payload.get("collection")
+    name = None if name in (None, "", False) else str(name).strip()
+    if not frame:
+        raise HTTPException(400, "which frame?")
+    if name is not None and not SAFE_COLLECTION.match(name):
+        raise HTTPException(400, f"{name!r} is not a usable collection name")
+    with _DATASET_LOCK:
+        fp = os.path.join(OUT, "frames.json")
+        cur = json.load(open(fp, encoding="utf-8")) if os.path.exists(fp) else []
+        hit = False
+        for r in cur:
+            if r.get("arm") == "uploads" and r.get("frame") == frame:
+                hit = True
+                if name is None:
+                    r.pop("collection", None)
+                else:
+                    r["collection"] = name
+        if not hit:
+            raise HTTPException(404, f"there is no uploaded frame called {frame!r}")
+        _write_json(fp, cur)
+        if name is not None and name not in _read_collections():
+            _write_json(_collections_path(), _read_collections() + [name])
+        _CACHE.clear()
+    return {"ok": True, "frame": frame, "collection": name}
 
 
 @app.get("/api/groups")
@@ -2674,7 +2807,7 @@ def remeasure(arm: str = Query(...), frame: str = Query(...)):
     # the row as corrected at all. discard_edit pops the key before it re-measures rather
     # than setting it False, so a genuine discard is still not carried back.
     for k in ("source_filename", "was_segmented_here", "copied_from",
-              "cropped_from", "has_original", "edited"):
+              "cropped_from", "has_original", "edited", "collection"):
         if prior and prior.get(k) is not None and summ.get(k) is None:
             summ[k] = prior[k]
     for r in rows:
@@ -3025,7 +3158,20 @@ def index():
     if os.path.exists(js):
         html = html.replace('src="/static/app.js"',
                             f'src="/static/app.js?v={int(os.path.getmtime(js))}"')
-    return HTMLResponse(html)
+    # NO-STORE, BECAUSE THIS APP REPLACES ITSELF IN PLACE.
+    #
+    # The script tag carries a cache-busting token and the static mount sends an ETag, so
+    # the JS is safe. The HTML was not: it went out with no Cache-Control and no validator
+    # at all, which leaves WKWebView free to heuristically cache it -- and a cached
+    # index.html pins BOTH the old markup AND the old `?v=` token, so an install that
+    # replaced the whole bundle could still render the previous version's interface
+    # against the new server. The user would be looking at 1.36.0 while /api/health said
+    # 1.37.0, and every UI change would read as "you did not fix it".
+    #
+    # One document per launch is nothing to re-fetch; the cost of getting this wrong is
+    # debugging a release the user never actually ran.
+    return HTMLResponse(html, headers={"Cache-Control": "no-store, must-revalidate",
+                                       "Pragma": "no-cache"})
 
 
 # Mounted last so it cannot shadow /api/*.

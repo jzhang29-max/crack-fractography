@@ -348,6 +348,13 @@ tr:hover .rowdel,.rowdel:focus-visible{opacity:1}
 .members{display:flex;gap:6px;flex-wrap:wrap;margin-top:var(--sp2);align-items:center}
 /* The part of the name every member shares, printed once so the chips can carry the
    part that differs. */
+.newcol{display:inline-flex;align-items:center;gap:6px}
+/* The collection controls sit under the frame count, where the list they act on is. */
+.colrow{display:flex;align-items:center;gap:var(--sp2);flex-wrap:wrap;margin-top:6px;
+  font-size:var(--t-micro)}
+.colrow select{font-size:var(--t-micro);padding:2px 6px;max-width:12rem}
+.colmove b{color:var(--text-primary)}
+.newcol input{min-width:14rem}
 .gstem{flex:0 0 100%;color:var(--text-muted);font-size:var(--t-micro);
   font-family:var(--mono,ui-monospace,monospace);overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap}
@@ -450,6 +457,9 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
 <header>
   <h1>Crack networks</h1>
   <select id="arm" aria-label="Arm"></select>
+  <!-- The inline name field for "+ New collection...". Hidden until asked for, so the
+       header is not carrying a control for something most sessions never do. -->
+  <span id="newcol" class="newcol" hidden></span>
   <span class="spacer"></span>
   <label class="upload" for="up">+ Add image</label>
   <input id="up" type="file" accept=".png,.bmp,.gif,.tif,.tiff" multiple hidden>

@@ -9,6 +9,7 @@ writes the right-shaped file full of the wrong pixels.
 import io
 import json
 import os
+import re
 import sys
 
 import numpy as np
@@ -610,3 +611,53 @@ def test_a_whole_frame_save_still_replaces_the_whole_frame(tmp_path):
         got = np.array(Image.open(os.path.join(str(tmp_path / "d"), "uploads",
                                                f"{f}_gated.png")).convert("L"))
         assert np.array_equal(got, whole)
+
+
+def test_the_page_is_never_served_from_the_cache(tmp_path):
+    """THIS APP REPLACES ITSELF IN PLACE, so a cached document is a cached RELEASE.
+
+    The script tag carries a cache-busting token and the static mount sends an ETag, so
+    the JS was already safe. The HTML was not: it went out with no Cache-Control and no
+    validator at all, which leaves a WebKit webview free to cache it heuristically -- and
+    a cached index.html pins BOTH the old markup AND the old `?v=` token, so an install
+    that replaced the whole bundle could still render the previous version's interface
+    against the new server. /api/health would say 1.37.0 while the window showed 1.36.0,
+    and every UI change would read as "you did not fix it".
+    """
+    with Server(tmp_path / "d") as s:
+        st, raw, hdrs = s.get_with_headers("/") if hasattr(s, "get_with_headers") else (None,)*3
+        if st is None:
+            import urllib.request
+            with urllib.request.urlopen(s.base + "/", timeout=60) as r:
+                hdrs = {k.lower(): v for k, v in r.headers.items()}
+                st = r.status
+        assert st == 200
+        cc = hdrs.get("cache-control", "")
+        assert "no-store" in cc, f"the page may be cached: Cache-Control={cc!r}"
+        # the script tag still carries its own token, which is what makes the JS safe
+        import urllib.request
+        html = urllib.request.urlopen(s.base + "/", timeout=60).read().decode()
+        assert re.search(r'src="/static/app\.js\?v=\d+"', html), (
+            "the script tag lost its cache-busting token")
+
+
+def test_a_remembered_crop_is_validated_against_the_mask_it_is_restored_onto():
+    """The stored box belongs to whatever the frame was when it was stored. If the mask
+    has since been replaced at a different size, restoring it blind would show a window
+    onto nothing -- or onto the wrong part of a different image. The guard is read here
+    rather than run, because it is three lines of arithmetic in the browser; what matters
+    is that every one of the four ways it can be wrong is checked."""
+    js = open(os.path.join(REPO, "app", "static", "app.js"), encoding="utf-8").read()
+    fn = js[js.index("const rememberedView = () =>"):]
+    fn = fn[:fn.index("\n  };") + 5]
+    assert "Number.isInteger" in fn, "a non-integer box is not rejected"
+    assert "v.w < 16 || v.h < 16" in fn, "a degenerate box is not rejected"
+    assert "ED.off.width" in fn and "ED.off.height" in fn, (
+        "the box is not checked against the mask it will be applied to")
+    # and clearing the crop must clear the memory of it
+    setv = js[js.index("ED.setView = (v) =>"):]
+    setv = setv[:setv.index("\n  };") + 5]
+    assert "rememberView(v)" in setv, "setView does not record the view"
+    rm = js[js.index("const rememberView = (v) =>"):]
+    rm = rm[:rm.index("\n  };") + 5]
+    assert "removeItem" in rm, "clearing the crop does not clear the stored one"

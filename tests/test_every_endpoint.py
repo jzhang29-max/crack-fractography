@@ -44,6 +44,8 @@ COVERED = {
     ("post", "/api/send_to_parent"), ("post", "/api/delete_frame"),
     ("post", "/api/discard_edit"), ("post", "/api/hide_frame"),
     ("post", "/api/restore"),
+    ("get", "/api/collections"), ("post", "/api/collections"),
+    ("post", "/api/set_collection"),
 }
 
 
@@ -397,6 +399,25 @@ def test_discard_edit_refuses_an_uploads_frame_and_an_unedited_one(srv):
     assert st >= 400
     st, _ = _json_post(srv, "/api/discard_edit", {"arm": "sem/gated", "frame": "nope"})
     assert st >= 400
+
+
+def test_the_collection_endpoints_answer_and_refuse(srv):
+    """Covered in depth by tests/test_collections.py; here so the inventory is honest.
+    The shared module server must come out of this unchanged, so this makes one
+    collection, reads it back and removes it again."""
+    st, d = srv.json("/api/collections")
+    assert st == 200 and "collections" in d, d
+    before = len(srv.dataset("frames"))
+    st, _ = _json_post(srv, "/api/collections", {"name": "inventory check"})
+    assert st == 200
+    assert "inventory check" in [c["name"] for c in srv.json("/api/collections")[1]["collections"]]
+    for bad in ({}, {"name": ""}, {"name": "a/b"}):
+        assert _json_post(srv, "/api/collections", bad)[0] == 400, bad
+    for bad in ({}, {"frame": "nope", "collection": "x"}, {"frame": _frame(srv), "collection": "a/b"}):
+        assert _json_post(srv, "/api/set_collection", bad)[0] >= 400, bad
+    st, _ = _json_post(srv, "/api/collections", {"name": "inventory check", "delete": True})
+    assert st == 200
+    assert len(srv.dataset("frames")) == before, "a collection endpoint changed the frames"
 
 
 def test_restore_refuses_what_it_cannot_put_back(srv):

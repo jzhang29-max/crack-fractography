@@ -528,20 +528,36 @@ process.stdout.write(JSON.stringify({
   null_arms:    modeOptions(null),
 }));
 """)
-    DOT = "·"
+    DOT = "\u00b7"
+    # THE "+ New collection..." ENTRY IS NOT AN ARM, so it is stripped before the arm
+    # comparison rather than written into every expected string. It is asserted on its
+    # own below: it must be offered exactly when uploads is, because uploads is the only
+    # arm a collection can divide.
+    NEWCOL = '<option value="__newcol">\u2003+ New collection\u2026</option>'
+    arms_only = {k: v.replace(NEWCOL, "") for k, v in r.items()}
+
     # By hand from MODES: uploads is labelled "Your images", and plural(1, "frame") is
     # "1 frame" -- one option, and not one of the other three.
-    assert r["fresh"] == f'<option value="uploads">Your images {DOT} 1 frame</option>', r["fresh"]
+    assert arms_only["fresh"] == (
+        f'<option value="uploads">Your images {DOT} 1 frame</option>'), r["fresh"]
     # By hand again, in MODES order and NOT the order the arms were handed over in.
-    assert r["configured"] == (
+    assert arms_only["configured"] == (
         f'<option value="sem/gated">SEM {DOT} 154 frames</option>'
         f'<option value="txm">TXM {DOT} 71 frames</option>'
         f'<option value="uploads">Your images {DOT} 3 frames</option>'), r["configured"]
-    assert r["sem_machine_only"] == "", (
+    assert arms_only["sem_machine_only"] == "", (
         "sem/machine is offered; it is not in MODES, and its only consumer is the "
         "corrections comparison, which reads it server-side")
-    assert r["no_arms"] == "" and r["null_arms"] == "", (
+    assert arms_only["no_arms"] == "" and arms_only["null_arms"] == "", (
         "a dataset with no arms still produces options")
+
+    # And the collection entry itself: offered with uploads, never without it. A dataset
+    # with no uploads arm has nowhere to put a collection, and offering "+ New
+    # collection..." there is a control that cannot work.
+    for k in ("fresh", "configured"):
+        assert NEWCOL in r[k], f"{k} does not offer a way to make a collection"
+    for k in ("sem_machine_only", "no_arms", "null_arms"):
+        assert NEWCOL not in r[k], f"{k} offers a collection with no Your images to hold it"
 
 
 def test_the_opening_mode_falls_back_when_sem_is_absent():
