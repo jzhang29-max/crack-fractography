@@ -279,15 +279,11 @@ def test_a_crop_whose_as_cut_copy_is_missing_is_refused(sandbox, tmp_path):
 
 @needs_sem
 @needs_frame
-def test_a_marked_copy_of_a_research_frame_can_be_sent(sandbox, tmp_path):
-    """THE ORDINARY PATH, now that cropping is a view rather than a new frame.
-
-    Painting a sem/* frame writes a COPY into uploads -- the research mask is never
-    touched -- and that copy is the same size as its source. The pristine baseline is
-    therefore the source mask itself, still on disk: it cannot drift, nothing has to be
-    kept beside it, and the offset is (0, 0), so the entire class of offset bugs the crop
-    path needs guards for does not arise here at all.
-    """
+def test_an_edited_research_frame_can_be_sent(sandbox, tmp_path):
+    """THE ORDINARY PATH. A correction is stored against the frame it was made on, so the
+    baseline for the diff is the research mask still sitting untouched on disk: same size,
+    offset zero, no lineage to resolve. Nothing is created in uploads and nothing has to
+    be kept beside the edit."""
     import shutil
     real = os.path.join(SEM, "interior_active_learning", "paint")
     shutil.copy(os.path.join(real, f"{FRAME}_correction_mask.png"),
@@ -307,26 +303,33 @@ def test_a_marked_copy_of_a_research_frame_can_be_sent(sandbox, tmp_path):
         st, raw = s.upload(f"{FRAME}.png", b.getvalue(),
                            path=f"/api/mask_edit?arm=sem/gated&frame={FRAME}")
         assert st == 200, raw[:300]
-        copy_frame = json.loads(raw)["frame"]
-        rec = next(r for r in s.dataset("frames") if r["frame"] == copy_frame)
-        assert rec.get("copied_from") == f"sem/gated/{FRAME}", rec.get("copied_from")
+        d0 = json.loads(raw)
+        assert d0["frame"] == FRAME, "the edit was filed under another name"
+        assert d0.get("edited_in_place") is True, d0
+        # NOTHING NEW ANYWHERE
+        assert not [r for r in s.dataset("frames") if r.get("arm") == "uploads"], (
+            "editing a research frame created something in uploads")
 
         before = np.array(Image.open(os.path.join(str(sandbox),
                                                   f"{FRAME}_correction_mask.png")))
-        st, d = _post(s, "/api/send_to_parent", {"frame": copy_frame})
+        st, d = _post(s, "/api/send_to_parent", {"arm": "sem/gated", "frame": FRAME})
         assert st == 200, d
         assert d["parent"] == FRAME
         assert d["box_px"] == [0, 0, orig.shape[1], orig.shape[0]], d["box_px"]
-        assert d["not_crack_px"] > 0, "erasing produced no not-crack evidence"
-        assert d["crack_px"] == 0, d["crack_px"]
+        assert d["not_crack_px"] > 0 and d["crack_px"] == 0, d
 
         after = np.array(Image.open(os.path.join(str(sandbox),
                                                  f"{FRAME}_correction_mask.png")))
         changed = after != before
-        assert int(changed.sum()) == d["wrote"]
-        # exactly the pixels that were erased, and only where not already 'erased'(3)
         erased = np.zeros_like(orig, dtype=bool)
         erased[ys[:500], xs[:500]] = True
         assert np.array_equal(changed, erased & (before != 3))
-        assert (after[changed] == 2).all(), "an erased stroke did not become not-crack"
+        assert (after[changed] == 2).all()
         assert int((after == 3).sum()) == int((before == 3).sum())
+
+
+def test_an_unedited_research_frame_has_nothing_to_send(sandbox, tmp_path):
+    with Server(tmp_path / "d") as s:
+        st, d = _post(s, "/api/send_to_parent", {"arm": "sem/gated", "frame": FRAME})
+        assert st == 400, d
+        assert "no correction on it yet" in json.dumps(d)

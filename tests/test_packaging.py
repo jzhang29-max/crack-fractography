@@ -625,3 +625,31 @@ def test_the_version_helper_prefers_the_tag_over_the_fallback():
             _os.environ.pop(k, None)
             if v is not None:
                 _os.environ[k] = v
+
+
+def test_the_window_opens_maximised():
+    """A 6144x4096 micrograph in a 1440 px window leaves the editor a few hundred pixels
+    to draw in, so the first thing anyone did on opening the app was resize it.
+
+    maximized, not fullscreen: macOS fullscreen takes over the Space and hides the title
+    bar and the menu, which is wrong for a tool you alt-tab out of to read a paper. The
+    width and height stay as the size the window returns to when un-maximised."""
+    src = open(os.path.join(REPO, "packaging", "launcher.py"), encoding="utf-8").read()
+    # BALANCE THE PARENTHESES. A slice to the first ")" after min_size stops inside
+    # min_size=(720, 560) and cuts off everything that follows -- which is where the
+    # argument this test is about lives, so the first version of it failed on correct code.
+    i = src.index("webview.create_window(")
+    depth, j = 0, i + len("webview.create_window")
+    while True:
+        if src[j] == "(":
+            depth += 1
+        elif src[j] == ")":
+            depth -= 1
+            if depth == 0:
+                break
+        j += 1
+    call = src[i:j + 1]
+    assert "maximized=True" in call, "the window no longer opens maximised"
+    assert "fullscreen=True" not in call, (
+        "fullscreen hides the menu bar and takes over the Space; maximized is the one")
+    assert "min_size=" in call, "the window can be shrunk below a usable size"

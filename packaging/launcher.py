@@ -173,8 +173,15 @@ def main():
     try:
         import webview
         api = Api()
+        # MAXIMISED, NOT 1440x940. A 6144x4096 micrograph in a 1440 px window leaves the
+        # editor a few hundred pixels to draw in, and the first thing anyone did on
+        # opening the app was resize it. maximized fills the screen while keeping the
+        # title bar and the menu -- macOS fullscreen takes over the Space and hides both,
+        # which is wrong for a tool you alt-tab out of to look at a paper.
+        # width/height stay as the size the window returns to when un-maximised.
         api.window = webview.create_window(TITLE, url, js_api=api,
-                                           width=1440, height=940, min_size=(720, 560))
+                                           width=1440, height=940, min_size=(720, 560),
+                                           maximized=True)
         # Nothing here needs a Chromium; WKWebView is what macOS already has.
         webview.start(gui="cocoa" if sys.platform == "darwin" else None,
                       private_mode=False, storage_path=os.path.join(P.DATA, "webview"))

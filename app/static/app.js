@@ -181,9 +181,18 @@ function renderFrames() {
           // <th> is a sort control keyed on its data-k, and the specimen rows hard-code
           // colspan from FCOLS.length -- so a fourth entry would add a header that sorts
           // on a key no frame has and leave the group rows a cell short.
-          (state.arm === "uploads"
+          // EDITED SHOWS, AND SO DOES ITS UNDO. A research row carries the cross only
+          // when there is a correction on it, and there it means "throw the correction
+          // away", not "delete the image" -- the image is the pipeline's and would come
+          // back on the next corpus measurement anyway. An uploads row is the app's own,
+          // so there it deletes.
+          (f.edited ? ` <span class="flag" title="you have corrected this frame">edited</span>` : "") +
+          (state.arm === "uploads" || f.edited
             ? ` <button class="rowdel" data-del="${esc(f[k])}" tabindex="-1"` +
-              ` title="Delete this image">\u00d7</button>` : "") +
+              ` data-mode="${f.edited && state.arm !== "uploads" ? "edit" : "frame"}"` +
+              ` title="${f.edited && state.arm !== "uploads"
+                  ? "Discard your correction on this image"
+                  : "Delete this image"}">\u00d7</button>` : "") +
           `</td>`;
         if (k === "_cracks") {
           const sp = f.speck_count
@@ -268,6 +277,7 @@ function renderFrames() {
       e.stopPropagation();
       e.preventDefault();
       const name = b.dataset.del;
+      const isEdit = b.dataset.mode === "edit";
       if (b.dataset.armed !== "1") {
         // TWO CLICKS, NOT confirm(). It matches what Send-to-corrections does, it names
         // the frame, and it cannot be dismissed by a reflex Enter on a native dialog.
@@ -275,7 +285,7 @@ function renderFrames() {
           o.dataset.armed = ""; o.textContent = "\u00d7"; o.classList.remove("arm");
         });
         b.dataset.armed = "1";
-        b.textContent = "delete?";
+        b.textContent = isEdit ? "discard?" : "delete?";
         b.classList.add("arm");
         setTimeout(() => {
           if (b.isConnected && b.dataset.armed === "1") {
@@ -286,8 +296,10 @@ function renderFrames() {
       }
       b.textContent = "\u2026"; b.disabled = true;
       try {
-        const d = await gPost("/api/delete_frame", { arm: "uploads", frame: name });
-        await afterDelete(name, d);
+        const d = isEdit
+          ? await gPost("/api/discard_edit", { arm: state.arm, frame: name })
+          : await gPost("/api/delete_frame", { arm: "uploads", frame: name });
+        await afterDelete(name, d, isEdit);
       } catch (err) {
         b.disabled = false; b.dataset.armed = ""; b.textContent = "\u00d7";
         b.classList.remove("arm");
@@ -309,10 +321,12 @@ function renderFrames() {
 //:                   deleted mask stays on the canvas.
 //:   saveFrame    -- the autosave closure would keep posting to it.
 //:   SEND.frame   -- the send button would stay pointing at it.
-async function afterDelete(name, d) {
+async function afterDelete(name, d, wasEdit) {
   if (ED.frame === name) { ED.frame = null; ED.dirty = false; }
   if (typeof SEND !== "undefined" && SEND.frame === name) SEND.frame = null;
-  if (state.frame === name) state.frame = null;
+  // A DISCARDED EDIT LEAVES THE FRAME THERE. Only a deleted frame loses its selection;
+  // clearing it after a discard would bounce the reader off the image they just reverted.
+  if (!wasEdit && state.frame === name) state.frame = null;
   state.frames = await allFrames().catch(() => []);
   // DELETING THE LAST ONE IS A SUCCESS, NOT A FAILURE. /api/frames 404s on an empty arm,
   // and loadArm()'s error branch would report the delete as having gone wrong.
@@ -322,7 +336,8 @@ async function afterDelete(name, d) {
   if (TAB === "mark") { ED.frame = null; renderMark(); }
   const st = $("#listcount");
   if (st) {
-    const bits = [`deleted ${shortFrame(name, "")}`];
+    const bits = [wasEdit ? `discarded the correction on ${shortFrame(name, "")}`
+                          : `deleted ${shortFrame(name, "")}`];
     if (d && d.files_trashed && d.files_trashed.length)
       bits.push(`${plural(d.files_trashed.length, "file")} moved to trash/`);
     if (d && d.groups_pruned && d.groups_pruned.length)
@@ -2116,41 +2131,22 @@ async function openEditor(frame) {
               ? ch.map(([k, v]) => `<b>${k.replace(/_/g, " ")}</b> ${fmt(v.before, 4)} \u2192 ${fmt(v.after, 4)}`).join("  \u00b7  ")
               : `<span class="u">No measurement changed.</span>`);
       }
-      if (d.copied_from) {
-        // THE EDIT BECAME A COPY, AND NOTHING ABOUT WHERE YOU ARE CHANGES.
+      if (d.edited_in_place) {
+        // THE EDIT IS THIS FRAME. Nothing is created, nothing moves, and the sidebar row
+        // you were on is the row your correction belongs to -- which is what re-opening
+        // it later will show, including after the app has been closed.
         //
-        // Drawing on a research frame cannot write to the research mask, so the first
-        // stroke saves a copy into uploads. This used to FOLLOW that copy: switch the arm
-        // to uploads, reload the list, reselect, and rebuild the editor on it. You drew a
-        // line and landed in another tab, on another row, looking at a bare mask.
-        //
-        // Two rounds of this were wrong. The first kept the canvas but still moved the
-        // arm and the selection -- which is the jump, because the jump is something the
-        // reader SEES in the sidebar, not something the DOM does. So: the arm, the
-        // specimen scope, the selected row, the frame list and the canvas are all left
-        // exactly as they were. You are still on the frame you were drawing on.
-        //
-        // The concern this replaced was that a reader would see the original's figures
-        // beside their own edit. They are not: the line under the toolbar reports the
-        // COPY's measurements and names it, and that line is directly above the canvas
-        // the strokes are on. What the sidebar shows for the research frame is that
-        // frame's own numbers, which are still true of it -- nothing was written to it.
-        saveArm = "uploads"; saveFrame = d.frame;
-        // The copy is where strokes can be sent back to the correction mask from.
-        SEND.frame = d.frame; SEND.confirmed = false;
+        // Three earlier versions of this block were wrong in the same direction. The
+        // first followed a copy into Your images and rebuilt the editor on it; the
+        // second kept the canvas but still switched the arm and the selected row; the
+        // third stopped moving but still made a second frame. None of them was what
+        // "save it on the same image" means.
         const sb = $("#sendparent");
         if (sb) { sb.hidden = false; sb.textContent = "Send strokes to corrections";
                   sb.className = ""; }
-        const si = $("#sendinfo"); if (si) si.textContent = "";
-        const ch2 = Object.entries(d.changed || {});
-        if (out) {
-          out.innerHTML = `<span class="u">Saved to <b>${esc(d.frame)}</b> in Your images`
-            + ` \u2014 ${esc(d.copied_from)} itself is untouched.</span> `
-            + (ch2.length
-                ? ch2.map(([k, v]) => `<b>${k.replace(/_/g, " ")}</b> ${fmt(v.before, 4)} `
-                    + `\u2192 ${fmt(v.after, 4)}`).join("  \u00b7  ")
-                : `<span class="u">No measurement changed.</span>`);
-        }
+        SEND.frame = saveFrame; SEND.confirmed = false;
+        state.frames = await allFrames();
+        renderFrames(); renderSpecimens(); renderReadout();
         return;
       }
       state.frames = await allFrames();

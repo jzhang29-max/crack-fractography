@@ -210,7 +210,16 @@ def _mask_path(arm: str, frame: str) -> str:
 
 @app.get("/api/mask/{arm:path}/{frame}")
 def mask(arm: str, frame: str):
-    """The mask PNG itself, so the page can show what a number was measured on."""
+    """The mask PNG itself, so the page can show what a number was measured on.
+
+    AN EDIT STANDS IN FOR IT. Correcting a research frame stores the result in the app's
+    own folder and serves it here, so re-opening that frame shows the correction rather
+    than the detector's original -- including after the app has been closed. The research
+    mask on disk is never written to; see _edit_path.
+    """
+    e = _edit_of(arm, frame)
+    if e:
+        return FileResponse(e, media_type="image/png")
     p = _mask_path(arm, frame)
     if not os.path.exists(p):
         raise HTTPException(404, f"no mask on disk for {frame!r} in {arm!r}")
@@ -1506,10 +1515,34 @@ def send_to_parent(payload: dict = Body(...)):
     if not frame:
         raise HTTPException(400, "which crop?")
 
-    by_key = {(f.get("arm"), f.get("frame")): f for f in (_load_quiet("frames") or [])}
-    rec = by_key.get(("uploads", frame))
-    if rec is None:
-        raise HTTPException(404, f"no uploaded frame called {frame!r}")
+    # AN EDITED RESEARCH FRAME IS THE ORDINARY CASE NOW, because a correction is stored
+    # against the frame it was made on rather than copied into another arm. The baseline
+    # is then the research mask still sitting untouched on disk: same size, offset zero,
+    # no lineage to resolve. It is a better reference than any snapshot -- it cannot
+    # drift, and there is nothing to keep beside it.
+    send_arm = (payload.get("arm") or "uploads").strip()
+    edit_src = _edit_of(send_arm, frame) if send_arm.startswith("sem/") else None
+    if edit_src:
+        root_arm, root_frame = send_arm, frame
+        baseline = _mask_path(send_arm, frame)
+        if not baseline or not os.path.exists(baseline):
+            raise HTTPException(404, f"no mask on disk for {frame!r} in {send_arm!r}")
+        from PIL import Image as _I0
+        _I0.MAX_IMAGE_PIXELS = None
+        with _I0.open(baseline) as _b:
+            bw, bh = _b.size
+        ox = oy = 0
+        rec = {}
+    elif send_arm.startswith("sem/"):
+        raise HTTPException(400, f"{frame!r} has no correction on it yet -- draw on it "
+                                 f"first, and the strokes are what gets sent")
+    else:
+        by_key = {(f.get("arm"), f.get("frame")): f
+                  for f in (_load_quiet("frames") or [])}
+        rec = by_key.get(("uploads", frame))
+        if rec is None:
+            raise HTTPException(404, f"no uploaded frame called {frame!r}")
+        edit_src = None
     # TWO WAYS A FRAME CAN BE DERIVED FROM A RESEARCH FRAME, and both must work.
     #
     #   copied_from  -- the normal one. Painting a sem/* frame writes a COPY into uploads
@@ -1523,7 +1556,9 @@ def send_to_parent(payload: dict = Body(...)):
     # at offset (0, 0) and the whole class of offset bugs does not arise. The crop branch
     # stays because /api/crop still exists and its frames are still sendable.
     copied = rec.get("copied_from")
-    if rec.get("cropped_from"):
+    if edit_src:
+        pass                                  # resolved above: this frame IS the target
+    elif rec.get("cropped_from"):
         box = _root_box("uploads", frame, by_key)
         if box is None:
             raise HTTPException(400, "this crop's lineage could not be resolved to a root "
@@ -1594,7 +1629,7 @@ def send_to_parent(payload: dict = Body(...)):
                                  f"probably regenerated at a different size since this crop "
                                  f"was taken; re-crop it.")
 
-    cur_p = os.path.join(UPLOAD_DIR, f"{frame}_gated.png")
+    cur_p = edit_src or os.path.join(UPLOAD_DIR, f"{frame}_gated.png")
     cut_p = baseline or os.path.join(UPLOAD_DIR, f"{frame}_ascut.png")
     if not os.path.exists(cut_p):
         raise HTTPException(409, "there is no pristine copy of what the detector proposed "
@@ -1877,6 +1912,32 @@ SAFE_FRAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._\-]*\Z")
 UPLOAD_SUFFIXES = ("_gated.png", "_original.png", "_ascut.png")
 
 
+#: AN EDIT BELONGS TO THE FRAME IT WAS MADE ON, not to a new frame beside it.
+#:
+#: Painting a research frame used to file a COPY in uploads, so correcting one image left
+#: you with two: the original in its own group and "<name>_marked" in Your images. The
+#: reader asked for the opposite -- "it should just autosave on the same file and if I
+#: leave and come back it should still be there" -- and they are right, because a
+#: correction is not a different picture, it is this picture with a mistake taken out.
+#:
+#: WHAT IS NOT DONE IS WRITING OVER THE RESEARCH MASK. Those are the SEM and TXM
+#: pipelines' own output. Overwriting one would be erased by the next pipeline run, and it
+#: would destroy the comparison between what the detector said and what a human corrected
+#: -- which is the measurement this whole project rests on. The edit is kept in the app's
+#: own folder, keyed to (arm, frame), and served in the mask's place whenever it exists.
+#: From the sidebar it is the same image; on disk the original is untouched.
+def _edit_path(arm, frame):
+    if not frame or not SAFE_FRAME.match(frame):
+        return None
+    d = os.path.join(OUT, "edits", arm.replace("/", "__"))
+    return os.path.join(d, f"{frame}_gated.png")
+
+
+def _edit_of(arm, frame):
+    p = _edit_path(arm, frame)
+    return p if (p and os.path.exists(p)) else None
+
+
 def _trash_dir():
     """Beside the data, not inside uploads and not inside the render cache.
 
@@ -1902,6 +1963,54 @@ def _dependents_of(frame):
         cp = f.get("copied_from")
         if isinstance(cp, str) and cp == f"uploads/{frame}":
             out.append({"frame": f.get("frame"), "via": "copied from"})
+    return out
+
+
+@app.post("/api/discard_edit")
+def discard_edit(payload: dict = Body(...)):
+    """Throw away the correction on a research frame and go back to the detector's mask.
+
+    This is what "delete" means on a sem/* or txm row. The frame is not the app's to
+    remove -- it is the pipeline's output and would return on the next corpus measurement
+    anyway -- but the correction drawn on top of it IS the app's, and taking it off is a
+    thing a reader needs to be able to do after a stroke goes wrong.
+
+    The edit is moved to the trash like anything else, so a discarded correction is
+    recoverable by hand. The research mask was never written to, so there is nothing to
+    restore: removing the edit IS the restore.
+    """
+    import shutil
+    arm = (payload.get("arm") or "").strip()
+    frame = (payload.get("frame") or "").strip()
+    if arm == "uploads":
+        raise HTTPException(400, "an uploaded frame has no edit to discard -- delete the "
+                                 "frame instead")
+    if not frame or not SAFE_FRAME.match(frame):
+        raise HTTPException(400, f"{frame!r} is not a frame name this will build a path from")
+    src = _edit_of(arm, frame)
+    if not src:
+        raise HTTPException(404, f"{frame!r} has no correction on it in {arm!r}")
+
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    dst = os.path.join(_trash_dir(), f"{stamp}__edit__{arm.replace('/', '__')}__"
+                                     f"{frame}_gated.png")
+    with _DATASET_LOCK:
+        shutil.move(src, dst)
+        fp = os.path.join(OUT, "frames.json")
+        if os.path.exists(fp):
+            with open(fp, encoding="utf-8") as fh:
+                cur = json.load(fh)
+            for r in cur:
+                if r.get("arm") == arm and r.get("frame") == frame:
+                    r.pop("edited", None)
+            _write_json(fp, cur)
+        _CACHE.clear()
+    # Measured back to what the detector said, so the numbers follow the pixels.
+    out = remeasure(arm=arm, frame=frame)
+    out["discarded"] = True
+    out["trashed_to"] = os.path.basename(dst)
+    out["note"] = (f"the correction on {frame} was moved to trash/ and the frame is back "
+                   f"to the detector's own mask.")
     return out
 
 
@@ -2056,12 +2165,19 @@ async def mask_edit(arm: str = Query(...), frame: str = Query(...),
             raise HTTPException(404, f"no uploaded mask for {frame!r}")
         new_frame = frame
     else:
+        # THE EDIT IS THIS FRAME, NOT A NEW ONE. It used to be filed in uploads as
+        # "<frame>_marked", so correcting one image left two in the sidebar. It now goes
+        # to the app's own edit store under the frame's own name and is served in the
+        # mask's place, so the frame you corrected is the frame you come back to -- across
+        # restarts. The research mask itself is still never opened for writing.
         src = _mask_path(arm, frame)
         if not src or not os.path.exists(src):
             raise HTTPException(404, f"no mask on disk for {frame!r} in {arm!r}")
-        new_frame = f"{frame}_marked"
-        os.makedirs(UPLOAD_DIR, exist_ok=True)
-        dest = os.path.join(UPLOAD_DIR, f"{new_frame}_gated.png")
+        new_frame = frame
+        dest = _edit_path(arm, frame)
+        if not dest:
+            raise HTTPException(400, f"refusing to build an edit path from {frame!r}")
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
 
     blob = await file.read()
     if not blob.startswith(b"\x89PNG"):
@@ -2084,63 +2200,21 @@ async def mask_edit(arm: str = Query(...), frame: str = Query(...),
         raise HTTPException(400, f"not a readable PNG: {type(e).__name__}: {e}")
     os.replace(tmp, dest)
 
-    if into_uploads:
-        out = remeasure(arm=arm, frame=new_frame)
-    else:
-        # A copy is a new frame, so it is measured from scratch and filed under uploads.
-        # Its scale is inherited: a marked copy of a scaled frame is the same field at the
-        # same magnification, and losing the scale would silently drop every micrometre.
-        import sys as _sys
-        _sys.path.insert(0, os.path.join(RES, "analysis"))
-        import scale as _scale
-        src_scale = _scale.nm_per_px(frame, "txm" if arm == "txm" else "sem")
-        if src_scale:
-            _scale.set_user_scale(new_frame, src_scale)
-        # The copy belongs to the SPECIMEN IT CAME FROM, not to the "uploaded" catch-all.
-        # A re-marked field of MAR_H_AS is still a field of MAR_H_AS -- filing it under a
-        # pseudo-specimen threw away the grouping that makes an E562 interval mean
-        # anything, and put it in a bucket with unrelated images.
-        src_rec = next((f for f in (_load_quiet("frames") or [])
-                        if f.get("arm") == arm and f.get("frame") == frame), None)
-        # MEASURED ONCE, NOT TWICE. _measure_into_uploads has just measured this mask and
-        # written the record; calling remeasure() straight after measured the SAME 25
-        # megapixels again for nothing, and measuring one of these frames costs 12.8 s --
-        # so the first save after a stroke took 27.5 s instead of 13.9, with no visible
-        # sign anything was happening. The response is assembled from the record that call
-        # already stored.
-        _measure_into_uploads(dest, new_frame, source=f"{arm}/{frame}",
-                              specimen=(src_rec or {}).get("specimen"))
-        import time as _t
-        out = {"ok": True, "arm": "uploads", "frame": new_frame, "mask_path": dest,
-               "mask_modified": _t.strftime("%Y-%m-%d %H:%M:%S",
-                                            _t.localtime(os.path.getmtime(dest))),
-               "seconds_since_mask_written": round(_t.time() - os.path.getmtime(dest)),
-               "changed": {}, "unchanged": True}
-        out["copied_from"] = f"{arm}/{frame}"
-        # DIFF AGAINST THE SOURCE, not against the row written one line above.
-        #
-        # _measure_into_uploads has just written the new frame's record FROM THIS SAME
-        # MASK, so remeasure's `prior` is that row and its diff is empty by construction.
-        # The result: the first edit of any research frame reported "No measurement
-        # changed" however large the correction was, and only the first -- a second edit
-        # of the same copy diffed correctly, which is what made it look like a quirk
-        # rather than a bug. Measured: painting a 40 px band across the full 6144 px width
-        # of MAR_H_AS_CBS_0001 moved area_fraction 0.053548 -> 0.062242 and skeleton
-        # length 111932.5 -> 117208.7 px, and the reply said {"changed": {}}.
-        #
-        # The honest comparison is against the frame the copy was made from, and the reply
-        # now names it so the reader knows what the "before" column is.
-        if src_rec:
-            fresh = next((f for f in (_load_quiet("frames") or [])
-                          if f.get("arm") == "uploads" and f.get("frame") == new_frame), {})
-            changed = {k: {"before": src_rec.get(k), "after": fresh.get(k)}
-                       for k in ("area_fraction", "n_cracks_measured",
-                                 "largest_share_of_area", "mcl_um",
-                                 "total_skeleton_length_px")
-                       if src_rec.get(k) != fresh.get(k)}
-            out["changed"] = changed
-            out["unchanged"] = not changed
-            out["changed_against"] = f"{arm}/{frame}"
+    # MEASURED IN PLACE, UNDER ITS OWN NAME. The edit is this frame, so the record that
+    # gets re-measured is this frame's -- not a new row in another arm. remeasure() reads
+    # through /api/mask's own resolution order, so it measures the edit.
+    out = remeasure(arm=arm, frame=new_frame)
+    if not into_uploads:
+        out["edited_in_place"] = True
+        out["edit_path"] = dest
+        with _DATASET_LOCK:
+            fp = os.path.join(OUT, "frames.json")
+            cur = json.load(open(fp, encoding="utf-8")) if os.path.exists(fp) else []
+            for r in cur:
+                if r.get("arm") == arm and r.get("frame") == frame:
+                    r["edited"] = True
+            _write_json(fp, cur)
+            _CACHE.clear()
     out["edited"] = True
     out["frame"] = new_frame
     return out
@@ -2232,7 +2306,11 @@ def remeasure(arm: str = Query(...), frame: str = Query(...)):
     import time as _t
     _sys.path.insert(0, os.path.join(RES, "analysis"))
 
-    path = _mask_path(arm, frame)
+    # AN EDIT IS WHAT THIS FRAME NOW IS, so it is what gets measured. Same resolution
+    # order as /api/mask: without it the numbers would describe the detector's original
+    # while the canvas showed the correction, which is the two-sources-of-truth failure
+    # this app has been bitten by before.
+    path = _edit_of(arm, frame) or _mask_path(arm, frame)
     if not path:
         raise HTTPException(400, f"no mask location known for arm {arm!r}")
     if not os.path.exists(path):

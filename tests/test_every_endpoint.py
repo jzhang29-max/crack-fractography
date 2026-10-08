@@ -42,6 +42,7 @@ COVERED = {
     ("get", "/api/groups"), ("post", "/api/groups"),
     ("post", "/api/group_stats"), ("post", "/api/group_compare"),
     ("post", "/api/send_to_parent"), ("post", "/api/delete_frame"),
+    ("post", "/api/discard_edit"),
 }
 
 
@@ -382,4 +383,12 @@ def test_send_to_parent_refuses_a_frame_that_is_not_a_crop(srv):
     st, _ = _json_post(srv, "/api/send_to_parent", {"frame": _frame(srv)})
     assert st >= 400
     st, _ = _json_post(srv, "/api/send_to_parent", {})
+    assert st >= 400
+
+
+def test_discard_edit_refuses_an_uploads_frame_and_an_unedited_one(srv):
+    """Covered in depth by tests/test_delete_frame.py; here so the inventory is honest."""
+    st, _ = _json_post(srv, "/api/discard_edit", {"arm": "uploads", "frame": _frame(srv)})
+    assert st >= 400
+    st, _ = _json_post(srv, "/api/discard_edit", {"arm": "sem/gated", "frame": "nope"})
     assert st >= 400

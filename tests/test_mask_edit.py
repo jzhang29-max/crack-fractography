@@ -36,11 +36,19 @@ def test_no_research_mask_is_ever_written():
     assert "open(src" not in fn and 'open(src, "w"' not in fn
 
 
-def test_a_marked_research_frame_keeps_its_scale():
-    """A marked copy is the same field at the same magnification. Losing the scale would
-    silently drop every micrometre column from the copy."""
-    fn = _fn("mask_edit", open(os.path.join(REPO, "app", "server.py"), encoding="utf-8").read())
-    assert "set_user_scale(new_frame, src_scale)" in fn
+def test_editing_a_research_frame_keeps_its_identity_and_its_scale():
+    """An edit is the SAME frame, so there is nothing to inherit a scale from -- it never
+    leaves the record that has one. This used to file the result as "<frame>_marked" in
+    uploads and copy the scale across, and losing that copy silently dropped every
+    micrometre column from the corrected version."""
+    src = open(os.path.join(REPO, "app", "server.py"), encoding="utf-8").read()
+    fn = _fn("mask_edit", src)
+    assert "new_frame = frame" in fn, "an edit is filed under a different name again"
+    # THE CODE FORM, NOT THE WORD. A comment above it narrates why the old
+    # "<frame>_marked" copy is gone, which is accurate and worth keeping -- this repo has
+    # already rejected one guard that banned mentioning a removed thing at all.
+    assert 'f"{frame}_marked"' not in fn, "an edit creates a second frame again"
+    assert "_edit_path(arm, frame)" in fn, "the edit is not stored against its own frame"
 
 
 def test_a_half_written_mask_cannot_replace_a_whole_one():
@@ -82,74 +90,15 @@ import sys as _sys, os as _os
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))   # for liveserver
 
 
-def test_the_first_edit_of_a_frame_diffs_against_the_frame_it_copied(tmp_path):
-    """On the copy path, mask_edit called _measure_into_uploads -- which writes the new
-    frame's record FROM THE SAME MASK -- and then remeasure, whose `prior` is that row. The
-    diff was empty by construction, so the first edit of any research frame reported "No
-    measurement changed" however large the correction. Only the first: a second edit of the
-    copy diffed correctly, which is what made it look like a quirk.
-
-    Measured on the real corpus: painting a 40 px band across the full 6144 px width of
-    MAR_H_AS_CBS_0001 moved area_fraction 0.053548 -> 0.062242 and skeleton length
-    111932.5 -> 117208.7 px, and the reply was {"changed": {}}.
-
-    Needs a research arm, because the copy path is what happens for a frame this app does
-    not own -- an uploads frame is edited in place and always diffed correctly. Skipped
-    where there is no reference corpus. Writes only into the server's own uploads dir; the
-    SEM repo is read and never written, which is mask_edit's documented restriction.
-    """
-    import io, json, os, shutil
-    from PIL import Image
-    from liveserver import Server
-
-    # The seed is the repository's own built dataset. This used to be an absolute path
-    # into one session's scratch directory, complete with that session's UUID: it could
-    # never run on another machine, and when the scratch directory was emptied the test
-    # went on reporting success by skipping. analysis/out/ holds exactly the three files
-    # Server(seed=...) copies, and FRACTOGRAPHY_ANALYSIS_OUT overrides it.
-    seed = os.environ.get("FRACTOGRAPHY_ANALYSIS_OUT",
-                          os.path.join(REPO_ROOT, "analysis", "out"))
-    missing = [n for n in ("frames.json", "cracks.json", "specimens.json")
-               if not os.path.exists(os.path.join(seed, n))]
-    if missing:
-        pytest.skip(f"no built dataset at {seed} (missing {', '.join(missing)}); "
-                    f"run the analysis or set FRACTOGRAPHY_ANALYSIS_OUT")
-
-    with Server(tmp_path / "d", seed=seed) as s:
-        st, frames = s.json("/api/frames?arm=sem%2Fgated")
-        if st != 200 or not frames:
-            pytest.skip("no sem/gated frames available")
-        src = frames[0]["frame"]
-        st, raw = s.get(f"/api/mask/sem/gated/{src}")
-        if st != 200:
-            pytest.skip("the source mask is not on disk (no SEM repo configured)")
-
-        before = [f for f in s.dataset("frames")
-                  if f["arm"] == "sem/gated" and f["frame"] == src][0]
-
-        # Paint a band right across the mask: a correction nobody could call no-change.
-        im = Image.open(io.BytesIO(raw)).convert("L")
-        w, h = im.size
-        for y in range(h // 2, min(h, h // 2 + 40)):
-            for x in range(w):
-                im.putpixel((x, y), 0)
-        buf = io.BytesIO(); im.save(buf, "PNG")
-
-        st, body = s.upload(f"{src}.png", buf.getvalue(),
-                            path=f"/api/mask_edit?arm=sem/gated&frame={src}")
-        assert st == 200, body[:400]
-        d = json.loads(body)
-
-        assert d.get("changed"), (
-            f"the first edit of a research frame reported no change. source "
-            f"area_fraction={before.get('area_fraction')}, reply keys="
-            f"{ {k: d[k] for k in ('changed', 'unchanged', 'frame') if k in d} }")
-        assert d["unchanged"] is False
-        assert "area_fraction" in d["changed"], d["changed"]
-        assert d["changed"]["area_fraction"]["before"] == before["area_fraction"]
-        assert d["changed"]["area_fraction"]["after"] != before["area_fraction"]
-        # And it says WHAT the before column is.
-        assert d.get("changed_against") == f"sem/gated/{src}", d.get("changed_against")
+def test_an_edit_diffs_against_what_the_frame_measured_before():
+    """remeasure() keeps the prior record and reports what moved, which for an in-place
+    edit is exactly the right before-and-after: the same frame, before and after the
+    stroke. The copy-based version needed a special case because the row it would have
+    diffed against had just been written from the same mask."""
+    src = open(os.path.join(REPO, "app", "server.py"), encoding="utf-8").read()
+    fn = _fn("remeasure", src)
+    assert "prior = next(" in fn
+    assert "changed" in fn
 
 
 def test_a_marked_copy_keeps_its_parents_micrograph():
@@ -171,44 +120,31 @@ def test_a_marked_copy_keeps_its_parents_micrograph():
     assert 'summ["has_original"] = True' in mi
 
 
-def test_saving_does_not_tear_down_the_editor():
-    """The first save switched the arm to uploads, reloaded the list and reselected, which
-    rebuilt the editor on the copy -- taking the crop view, the place in the list, and the
-    picture with it, and dropping the reader into a tab they had not asked for.
-
-    The selection still follows the copy, so nobody reads the original's numbers beside
-    their own edit. What must not happen is the remount."""
+def test_saving_moves_nothing_and_creates_nothing():
+    """Three earlier versions of this were wrong in the same direction: the first followed
+    a copy into Your images and rebuilt the editor on it; the second kept the canvas but
+    still switched the arm and the selected row; the third stopped moving but still made a
+    second frame. None of them is what "save it on the same image" means."""
     js = open(APPJS, encoding="utf-8").read()
-    # THE WHOLE BRANCH, to its `return`. A window that stopped at the first
-    # `state.frames = await allFrames();` ended before the teardown would sit, so putting
-    # loadArm() back left this test green -- confirmed by doing exactly that.
-    a = js.index("if (d.copied_from) {")
+    a = js.index("if (d.edited_in_place) {")
     blk = js[a:js.index("return;", a)]
-    assert "await loadArm()" not in blk, "the save still reloads the arm and remounts"
-    assert "selectFrame(" not in blk, "the save still reselects and remounts"
-    assert "saveArm" in blk and "saveFrame" in blk, (
-        "the next save must be retargeted at the copy, or it posts the research frame "
-        "name under arm=uploads and 404s")
-    # AND NOTHING ABOUT WHERE THE READER IS MAY CHANGE. The jump is something seen in the
-    # sidebar, not something the DOM does: keeping the canvas mounted while still moving
-    # the arm and the selected row is still a jump, and was still reported as one.
-    for moved in ('state.arm = "uploads"', "state.frame = d.frame",
-                  'state.spec = ""', 'sel.value = "uploads"',
-                  "renderFrames()", "renderSpecimens()"):
+    for moved in ('state.arm =', "state.frame =", 'sel.value', "await loadArm()",
+                  "selectFrame("):
         assert moved not in blk, f"the save still moves the reader: {moved}"
-    assert "SEND.frame = d.frame" in blk, (
-        "the copy must still be reachable by Send strokes to corrections")
+    assert "SEND.frame = saveFrame" in blk, "the edit is not sendable to a correction mask"
 
 
-def test_the_first_save_measures_the_mask_once():
-    """Measuring one of these frames costs 12.8 s. The first save called
-    _measure_into_uploads and then remeasure() on the same 25 megapixels, so it took 27.5 s
-    against 13.9 for every save after it -- with nothing on screen saying why."""
+def test_an_edit_measures_the_mask_once():
+    """Measuring one of these frames costs 12.8 s, and the copy-based save measured the
+    same 25 megapixels twice -- once to create the copy's record and once to report. An
+    in-place edit has one record to update, so there is one measurement."""
     src = open(os.path.join(REPO, "app", "server.py"), encoding="utf-8").read()
-    fn = src[src.index('@app.post("/api/mask_edit")'):src.index("def _measure_into_uploads(")]
-    assert "_measure_into_uploads(dest, new_frame" in fn
-    assert 'remeasure(arm="uploads", frame=new_frame)' not in fn, (
-        "the copy is measured twice again")
+    fn = _fn("mask_edit", src)
+    # One CALL. The word also appears in the comment explaining why there is only one.
+    import re as _re
+    calls = _re.findall(r"=\s*remeasure\(", fn)
+    assert len(calls) == 1, f"the mask is measured {len(calls)} times per save"
+    assert "_measure_into_uploads(dest" not in fn, "a second measuring path is back"
 
 
 def test_a_save_in_progress_says_so_where_it_can_be_seen():
