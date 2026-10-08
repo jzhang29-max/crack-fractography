@@ -332,3 +332,35 @@ def test_a_crop_advertises_its_micrograph_per_frame(tmp_path):
         st, d3 = _crop(s, f, 0, 100, 200, 200)
         rec3 = next(r for r in s.dataset("frames") if r["frame"] == d3["frame"])
         assert rec3.get("has_original") is False, rec3.get("has_original")
+
+
+def test_the_crop_keeps_a_pristine_copy_of_what_it_cut(tmp_path):
+    """Painting overwrites the crop's mask in place. Without a copy of what the detector
+    proposed, "which pixels did the human actually change" has no answer -- and that
+    question is the whole basis of sending strokes back to a parent's correction mask.
+    Without it, confirming a crop asserts a verdict on every pixel in the box."""
+    with Server(tmp_path / "d") as s:
+        up = _seed(s, "ac", 400, 300, [(100, 100, 300, 200)])
+        f = up["frames"][0]["frame"] if "frames" in up else up.get("frame")
+        st, d = _crop(s, f, 50, 50, 200, 200)
+        assert st == 200, d
+        updir = os.path.join(str(tmp_path / "d"), "uploads")
+        gated = os.path.join(updir, f"{d['frame']}_gated.png")
+        ascut = os.path.join(updir, f"{d['frame']}_ascut.png")
+        assert os.path.exists(ascut), "no pristine copy was kept"
+        a, b = Image.open(ascut).convert("L"), Image.open(gated).convert("L")
+        assert a.size == b.size == (200, 200)
+        pristine = a.tobytes()
+        assert pristine == b.tobytes(), "the copy differs from what was cut"
+
+        # now paint the crop, and the pristine copy must NOT follow
+        edited = _mask(200, 200, [(0, 0, 200, 100)])
+        st, raw = s.upload(f"{d['frame']}.png", edited,
+                           path=f"/api/mask_edit?arm=uploads&frame={d['frame']}")
+        assert st == 200, raw[:200]
+        after_gated = Image.open(gated).convert("L").tobytes()
+        after_ascut = Image.open(ascut).convert("L").tobytes()
+        assert after_gated != after_ascut, (
+            "the pristine copy was overwritten by the edit, so the diff is now empty "
+            "and every painted pixel would be invisible")
+        assert after_ascut == pristine, "the pristine copy changed"

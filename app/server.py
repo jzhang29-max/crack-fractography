@@ -900,7 +900,19 @@ def crop(payload: dict = Body(...)):
     # crop all 404 on it. The crop would appear in the sidebar and be impossible to open,
     # which is the one thing a crop exists to let you do: paint on it.
     dst = os.path.join(UPLOAD_DIR, f"{stem}_gated.png")
-    im.crop((x0, y0, x1, y1)).save(dst)
+    cut = im.crop((x0, y0, x1, y1))
+    cut.save(dst)
+
+    # A PRISTINE COPY, BECAUSE A DIFF NEEDS SOMETHING TO DIFF AGAINST. Painting the crop
+    # overwrites <stem>_gated.png in place, so once the user has drawn there is no longer
+    # any record of what the detector proposed -- and "which pixels did the human actually
+    # change" is unanswerable. That question is the whole basis of sending strokes back to
+    # the parent's correction mask: without it, confirming a crop would assert a verdict on
+    # every pixel in the box, including the ones nobody looked at.
+    #
+    # `_ascut` is not in measure.MASK_SUFFIXES and nothing globs this directory (the corpus
+    # batch globs only the SEM and TXM trees), so the file cannot be mistaken for a frame.
+    cut.save(os.path.join(UPLOAD_DIR, f"{stem}_ascut.png"))
 
     # CUT THE MICROGRAPH TO THE SAME BOX. The point of a crop is to paint on it, and you
     # cannot judge a crack boundary against a bare binary mask -- there is nothing
