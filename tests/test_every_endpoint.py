@@ -41,6 +41,7 @@ COVERED = {
     ("get", "/api/original/{arm:path}/{frame}"), ("post", "/api/crop"),
     ("get", "/api/groups"), ("post", "/api/groups"),
     ("post", "/api/group_stats"), ("post", "/api/group_compare"),
+    ("post", "/api/send_to_parent"),
 }
 
 
@@ -373,3 +374,12 @@ def test_a_group_needs_a_name_and_a_frame(srv):
     assert st >= 400, "a nameless group was saved"
     st, _ = _json_post(srv, "/api/groups", {"name": "empty", "frames": []})
     assert st >= 400, "a group with no frames was saved"
+
+
+def test_send_to_parent_refuses_a_frame_that_is_not_a_crop(srv):
+    """Covered in depth by tests/test_send_to_parent.py, which sandboxes the SEM repo's
+    hand labels. Here only so the inventory above is honest about this route."""
+    st, _ = _json_post(srv, "/api/send_to_parent", {"frame": _frame(srv)})
+    assert st >= 400
+    st, _ = _json_post(srv, "/api/send_to_parent", {})
+    assert st >= 400

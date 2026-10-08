@@ -360,7 +360,18 @@ def original(arm: str, frame: str):
     im = Image.open(path)
     ms = _mask_size(arm, frame)
     if ms:
-        im, _ = _match_original_to_mask(im, ms)
+        im, why = _match_original_to_mask(im, ms)
+        # A REFUSAL MUST NOT BE DISCARDED. _match_original_to_mask returns the image
+        # UNCHANGED when it cannot align it, and the second value is how it says so.
+        # Throwing that away served the full micrograph for a mask that covers only part
+        # of it -- five SEM frames here are FOV-cropped rather than databar-trimmed
+        # (MAR_Amb_AS_CBS_0001 is 6144x4376 against a 2952x2952 mask), and the editor
+        # stretches whatever it gets into the mask's own aspect. The crack overlay then
+        # sat hundreds of pixels from the feature it marked, which invites a correction
+        # that is itself wrong. A 409 makes the editor fall back to the bare mask, which
+        # is honest: no picture beats the wrong picture.
+        if why and im.size != ms:
+            raise HTTPException(409, why)
     a = np.asarray(im, dtype=np.float32)
     if a.ndim == 3:
         a = a.mean(axis=2)
@@ -1091,7 +1102,23 @@ def _root_box(arm, frame, by_key, _seen=None):
     _seen.add(key)
     rec = by_key.get(key)
     if rec is None:
-        return None
+        # ONLY AN UPLOADS FRAME CAN BE A CROP, so a missing record for any other arm is a
+        # root whose record simply has not been measured into this dataset -- which is the
+        # normal state of a fresh install that has cropped one SEM frame without running
+        # the corpus measurement. Returning None there made the lineage unresolvable and
+        # the crop unsendable, for a reason that had nothing to do with the crop.
+        if arm == "uploads":
+            return None
+        try:
+            mp = _mask_path(arm, frame)
+        except HTTPException:
+            return None
+        if not mp or not os.path.exists(mp):
+            return None
+        from PIL import Image as _I
+        _I.MAX_IMAGE_PIXELS = None
+        with _I.open(mp) as _m:
+            return (arm, frame, 0, 0, _m.size[0], _m.size[1])
     cf = rec.get("cropped_from") or {}
     box = cf.get("box_px")
     if not (cf.get("frame") and isinstance(box, list) and len(box) == 4):
@@ -1102,8 +1129,18 @@ def _root_box(arm, frame, by_key, _seen=None):
     up = _root_box(cf.get("arm"), cf["frame"], by_key, _seen)
     if up is None:
         return None
-    rarm, rframe, px, py, _pw, _ph = up
+    rarm, rframe, px, py, pw, ph = up
     x, y, w, h = (int(v) for v in box)
+    # THE PARENT'S EXTENT WAS BOUND TO THROWAWAY NAMES AND NEVER USED. cropped_from records
+    # parent_size_px at crop time and nothing read it, so a parent re-rendered at a new
+    # size since the crop was taken would silently relocate the box -- the offset would
+    # still compose, and the write would land on different pixels of a different picture.
+    # Check it at every link, and refuse rather than guess.
+    want = cf.get("parent_size_px")
+    if isinstance(want, list) and len(want) == 2 and (pw, ph) != (int(want[0]), int(want[1])):
+        return None
+    if not (0 <= x and 0 <= y and x + w <= pw and y + h <= ph):
+        return None
     return (rarm, rframe, px + x, py + y, w, h)
 
 
@@ -1140,6 +1177,458 @@ def _pixel_overlaps(members_a, members_b):
                         "root": a[1],
                         "share_of_smaller": round(inter / smaller, 4) if smaller else None})
     return out
+
+
+# ======================================================================== SEND TO PARENT
+#
+# The only route by which painting a crop can improve the detector.
+#
+# A crop holds its parent's pixels, so counting it as a NEW image is a leak and not a
+# gain: splitting each image into four pseudo-crops and letting them count as separate
+# frames moved pooled grouped-CV from 0.8910 to 0.9368 with no label added and no pixel
+# painted. (The mechanism is concrete -- the SEM repo's specimen_key() cannot parse a crop
+# name and returns None, so a crop of the held-out frame stays in training while its
+# parent is held out.) The strokes therefore go into the PARENT's correction mask, at the
+# parent's own coordinates, under the parent's own image identity. Nothing new is created,
+# so there is nothing to leak, and no fold structure changes: nothing in the retrain keys
+# on the NUMBER of labelled images.
+#
+# ONLY THE PIXELS THE HUMAN ACTUALLY CHANGED. The crop is cut from the detector's output,
+# so most of it is the model's opinion. Writing the whole box would manufacture a verdict
+# on every pixel in it -- about a million for a 1000x900 crop -- from a handful of
+# strokes. That is not hypothetical arithmetic: the entire corpus holds 258k not-crack
+# pixels, 92.4% of the negative ROWS come from one frame, and stamping one 500x500 box
+# white would roughly double the corpus's negative evidence from a single gesture.
+
+#: The SEM repo's correction-mask coding. ANY value outside 0..3 silently suppresses the
+#: region it lands in -- build_training_data does np.bincount(...)[1:].argmax()+1, so a
+#: stray 255 is counted as "reviewed" and then yields a verdict that is neither 1 nor 2,
+#: and the region is dropped with no warning. The app's own crop masks are literally
+#: 0/255, which is exactly the byte copy that must never happen.
+PAINT_CRACK, PAINT_NOT_CRACK, PAINT_UNREVIEWED, PAINT_ERASED = 1, 2, 0, 3
+
+#: Same rule as measure.load_mask, so a label agrees with what the app measured.
+CRACK_BELOW = 128
+
+#: build_training_data's floor for a verdict that lands where the segmenter proposed no
+#: candidate at all: connected components smaller than this teach nothing. Cropping in
+#: order to zoom is exactly what encourages strokes this fine, so it is reported.
+FROM_SCRATCH_MIN_PX = 40
+
+#: train_v3_weighted gives each image mass min(1, rows/50). Below the floor, adding rows
+#: multiplies that frame's influence over the whole fit; at or above it, nothing changes.
+WEIGHT_FLOOR_ROWS = 50
+
+
+def _sem_code_on_path():
+    import sys
+    for d in P.sem_code_dirs():
+        if d not in sys.path:
+            sys.path.insert(0, d)
+
+
+def _sem_paint_dir():
+    """The SEM repo's paint directory, ASKED OF THAT REPO rather than reconstructed.
+
+    common.PAINT_DIR honours SEMCRACK_PAINT_DIR, which is how this whole path can be
+    exercised against a throwaway copy of the hand labels. Joining the default location
+    here instead would split the brain: the writer (common.save_correction_mask) would
+    follow the environment while the reader, the undo stack and the "does it already
+    exist" check stayed on the real directory -- so a test believing itself sandboxed
+    would read the real masks, and a merge would snapshot one file and overwrite another.
+    """
+    try:
+        _sem_code_on_path()
+        import common as _c
+        return _c.PAINT_DIR
+    except Exception:                                   # noqa: BLE001
+        sem = P.sem_repo()
+        return os.path.join(sem, "interior_active_learning", "paint") if sem else None
+
+
+def _correction_mask_path(frame):
+    d = _sem_paint_dir()
+    return os.path.join(d, f"{frame}_correction_mask.png") if d else None
+
+
+def _gated_mask_size(frame):
+    """The correction mask's coordinate frame, taken from the gated mask rather than from
+    the original .tif -- the two differ by the databar, and on all 48 currently painted
+    frames the correction mask matches the GATED mask exactly. That identity is what makes
+    a crop box usable as an offset without a transform."""
+    derived = P.sem_derived()
+    if not derived:
+        return None
+    g = os.path.join(derived, "gated_masks", f"{frame}_gated.png")
+    if not os.path.exists(g):
+        return None
+    from PIL import Image as _I
+    _I.MAX_IMAGE_PIXELS = None
+    with _I.open(g) as im:
+        return im.size
+
+
+def _undo_snapshot(frame):
+    """Push the current mask onto the SEM paint tool's own undo stack, so a merge can be
+    taken back from the program the user already knows.
+
+    Replicated rather than imported: app_undo imports flask, which this app does not have.
+    The format is the contract -- paint/.undo/<image>/NNNN.png, depth 10, a `.none` marker
+    when no mask existed, and no entry when the top of the stack is byte-identical.
+    """
+    import shutil
+    try:
+        d = _sem_paint_dir()
+        if not d:
+            return None
+        root = os.path.join(d, ".undo", frame)
+        os.makedirs(root, exist_ok=True)
+        have = sorted(f for f in os.listdir(root) if f.endswith((".png", ".none")))
+        src = _correction_mask_path(frame)
+        if have:
+            top = os.path.join(root, have[-1])
+            if ((not os.path.exists(src) and have[-1].endswith(".none"))
+                    or (os.path.exists(src) and have[-1].endswith(".png")
+                        and os.path.getsize(top) == os.path.getsize(src)
+                        and open(top, "rb").read() == open(src, "rb").read())):
+                return have[-1]
+        n = (max(int(f.split(".")[0]) for f in have) + 1) if have else 0
+        if os.path.exists(src):
+            name = f"{n:04d}.png"
+            shutil.copy2(src, os.path.join(root, name))
+        else:
+            name = f"{n:04d}.none"
+            open(os.path.join(root, name), "w").close()
+        while True:
+            have = sorted(f for f in os.listdir(root) if f.endswith((".png", ".none")))
+            if len(have) <= 10:
+                break
+            os.remove(os.path.join(root, have[0]))
+        return name
+    except Exception:                                   # noqa: BLE001
+        return None
+
+
+def _held_out_frame():
+    """The frame train_v3_weighted holds out, read from its source rather than assumed.
+
+    Regex rather than import: that module pulls in scikit-learn, and the SEM repo's model
+    is pickled against a different version than this app's venv carries.
+    """
+    for d in P.sem_code_dirs():
+        f = os.path.join(d, "train_v3_weighted.py")
+        if not os.path.exists(f):
+            continue
+        try:
+            import re as _re
+            m = _re.search(r'^HELD\s*=\s*["\']([^"\']+)', open(f, encoding="utf-8").read(),
+                           _re.M)
+            if m:
+                return m.group(1)
+        except Exception:                               # noqa: BLE001
+            pass
+    return None
+
+
+def _rows_for_frame(frame):
+    """How many training rows this frame currently contributes, or None if unknown."""
+    sem = P.sem_repo()
+    if not sem:
+        return None
+    csv = os.path.join(sem, "training_data", "labeled_regions.csv")
+    if not os.path.exists(csv):
+        return None
+    try:
+        import csv as _csv
+        with open(csv, newline="", encoding="utf-8") as fh:
+            return sum(1 for r in _csv.DictReader(fh) if r.get("SourceImage") == frame)
+    except Exception:                                   # noqa: BLE001
+        return None
+
+
+@app.post("/api/send_to_parent")
+def send_to_parent(payload: dict = Body(...)):
+    """Write the strokes made on a crop into its PARENT frame's correction mask."""
+    import numpy as np
+    from PIL import Image
+    Image.MAX_IMAGE_PIXELS = None
+
+    frame = (payload.get("frame") or "").strip()
+    dry = bool(payload.get("dry_run"))
+    if not frame:
+        raise HTTPException(400, "which crop?")
+
+    by_key = {(f.get("arm"), f.get("frame")): f for f in (_load_quiet("frames") or [])}
+    rec = by_key.get(("uploads", frame))
+    if rec is None:
+        raise HTTPException(404, f"no uploaded frame called {frame!r}")
+    if not rec.get("cropped_from"):
+        raise HTTPException(400, f"{frame!r} is not a crop, so there is no parent to send "
+                                 f"strokes back to")
+
+    box = _root_box("uploads", frame, by_key)
+    if box is None:
+        raise HTTPException(400, "this crop's lineage could not be resolved to a root "
+                                 "frame, so there is no offset to write at")
+    root_arm, root_frame, ox, oy, bw, bh = box
+    if not root_arm.startswith("sem/"):
+        raise HTTPException(400, f"the root of this crop is {root_arm!r}. Correction masks "
+                                 f"and the retrain exist only for the SEM corpus, so there "
+                                 f"is nowhere for these strokes to go.")
+    if not P.sem_repo():
+        raise HTTPException(503, "no SEM repo is configured, so there is no correction "
+                                 "mask to write into. Set one in Setup.")
+    # The frame name is about to be joined into a path in someone else's repository.
+    import re as _re
+    if not _re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", root_frame):
+        raise HTTPException(400, f"refusing to build a path from the frame name "
+                                 f"{root_frame!r}")
+
+    # TWO PROCESSES, ONE FILE, NO LOCK. The SEM paint tool serialises its own writes with a
+    # threading.Lock, which is per-process and therefore no protection at all against this
+    # one. Both would read-modify-write the whole mask and the last save would silently
+    # discard the other's strokes. There is no file lock anywhere in that repo, so the only
+    # honest answer is to refuse while the other writer is alive.
+    if _paint_alive():
+        raise HTTPException(409, "the SEM marking tool is running, and it writes the same "
+                                 "correction masks with a lock that does not reach across "
+                                 "processes -- whichever saved last would silently discard "
+                                 "the other's strokes. Close it, then send again.")
+
+    # THE RETRAIN PAIRS A MASK WITH AN ORIGINAL AND SKIPS A MASK THAT HAS NONE, keeping any
+    # stale rows it already had. Labels written for a frame with no .tif are effort that
+    # never reaches a model and never says so.
+    tif = os.path.join(P.sem_repo(), "original", f"{root_frame}.tif")
+    if not os.path.exists(tif):
+        raise HTTPException(400, f"{root_frame!r} has no original .tif in the SEM repo. The "
+                                 f"training build pairs every correction mask with one and "
+                                 f"skips the masks that have none, so these strokes would "
+                                 f"never reach the model.")
+
+    gsize = _gated_mask_size(root_frame)
+    if gsize is None:
+        raise HTTPException(400, f"no gated mask on disk for {root_frame!r}, so the shape "
+                                 f"of its correction mask cannot be established")
+    GW, GH = gsize
+    if not (0 <= ox and 0 <= oy and ox + bw <= GW and oy + bh <= GH):
+        raise HTTPException(409, f"the crop maps to [{ox}, {oy}, {bw}, {bh}], which does not "
+                                 f"fit inside {root_frame!r} at {GW}x{GH}. The mask was "
+                                 f"probably regenerated at a different size since this crop "
+                                 f"was taken; re-crop it.")
+
+    cur_p = os.path.join(UPLOAD_DIR, f"{frame}_gated.png")
+    cut_p = os.path.join(UPLOAD_DIR, f"{frame}_ascut.png")
+    if not os.path.exists(cut_p):
+        raise HTTPException(409, "this crop predates the as-cut copy, so there is no record "
+                                 "of what the detector proposed and a stroke cannot be told "
+                                 "apart from the model's own output. Re-crop and paint again.")
+    cur = np.array(Image.open(cur_p).convert("L"))
+    cut = np.array(Image.open(cut_p).convert("L"))
+    if cur.shape != cut.shape:
+        raise HTTPException(409, f"the painted crop is {cur.shape[1]}x{cur.shape[0]} but was "
+                                 f"cut at {cut.shape[1]}x{cut.shape[0]}; it has been "
+                                 f"resampled, so the strokes no longer line up")
+    if (cur.shape[1], cur.shape[0]) != (bw, bh):
+        raise HTTPException(409, f"the crop is {cur.shape[1]}x{cur.shape[0]} but its record "
+                                 f"says {bw}x{bh}; refusing to guess which is right")
+
+    now_crack, was_crack = cur < CRACK_BELOW, cut < CRACK_BELOW
+    changed = now_crack != was_crack
+    n_changed = int(changed.sum())
+    rows_now = _rows_for_frame(root_frame)
+    if n_changed == 0:
+        return {"ok": True, "wrote": 0, "parent": root_frame, "crack_px": 0,
+                "not_crack_px": 0, "rows_before": rows_now,
+                "note": "nothing on this crop differs from what the detector proposed, so "
+                        "there is no human verdict to send. Accepting the model's output "
+                        "is not a label."}
+
+    _sem_code_on_path()
+    try:
+        import common as _sem_common
+    except Exception as exc:                            # noqa: BLE001
+        raise HTTPException(503, f"the SEM repo's correction-mask writer could not be "
+                                 f"imported ({type(exc).__name__}), so nothing was written")
+
+    cm = _sem_common.load_correction_mask(root_frame, (GH, GW))
+    existed = cm is not None
+    if not existed:
+        if os.path.exists(_correction_mask_path(root_frame)):
+            # load_correction_mask returns None for a shape mismatch too, and in that case
+            # writing would rename the human's labels aside as `.stale-HxW.png`. That is
+            # the repo protecting itself; do not provoke it.
+            raise HTTPException(409, f"{root_frame} already has a correction mask that does "
+                                     f"not fit its {GW}x{GH} render. Writing now would move "
+                                     f"those hand labels aside; realign or re-mark that "
+                                     f"frame first.")
+        cm = np.zeros((GH, GW), dtype=np.uint8)
+    cm = np.array(cm, dtype=np.uint8, copy=True)
+    if cm.shape != (GH, GW):
+        raise HTTPException(409, f"internal: mask is {cm.shape} not {(GH, GW)}")
+
+    sub = cm[oy:oy + bh, ox:ox + bw]
+
+    # ERASED (3) IS A HAND VERDICT AND IS NEVER OVERWRITTEN. It says "this should not be a
+    # candidate at all", which is a different statement from "this is / is not a crack",
+    # and a binary crop mask has no way to express it -- so a stroke landing there carries
+    # no information about whether the human still means it. There are 170,922 such pixels
+    # across 16 of the 48 painted frames, comparable to the entire not-crack label set
+    # (258,352), all of it in the directory this app has no business overwriting. Skipped
+    # and counted, not warned about after the fact.
+    protect = sub == PAINT_ERASED
+    writable = changed & ~protect
+    skipped_erased = int((changed & protect).sum())
+    n_changed = int(writable.sum())
+    if n_changed == 0:
+        return {"ok": True, "wrote": 0, "parent": root_frame, "crack_px": 0,
+                "not_crack_px": 0, "skipped_erased_px": skipped_erased,
+                "rows_before": rows_now, "dry_run": dry,
+                "note": f"every one of the {skipped_erased:,} changed pixels lands on the "
+                        f"parent's 'erased from candidacy' verdict, which this will not "
+                        f"overwrite. Nothing was written."}
+
+    contested = int((writable & (sub != PAINT_UNREVIEWED)).sum())
+    now_crack_w = writable & now_crack
+    now_not_w = writable & ~now_crack
+    n_crack = int(now_crack_w.sum())
+    n_not = int(now_not_w.sum())
+
+    # A STROKE IS NOT CONFINED TO THE BOX. build_training_data labels a whole candidate
+    # region by plurality, and a region clipped by the crop edge extends past it, so a
+    # verdict inside the box can decide pixels far outside it. Reported rather than
+    # implied away by a "left_unreviewed" count over the box alone.
+    from scipy import ndimage as _ndi
+    lab, nlab = _ndi.label(writable)
+    sizes = sorted((int(v) for v in (_ndi.sum(writable, lab, range(1, nlab + 1))
+                                     if nlab else [])), reverse=True)
+    too_small = sum(1 for v in sizes if v < FROM_SCRATCH_MIN_PX)
+    edge = set()
+    if nlab:
+        for band in (lab[0, :], lab[-1, :], lab[:, 0], lab[:, -1]):
+            edge.update(int(v) for v in np.unique(band) if v)
+    touching_edge = len(edge)
+
+    held = _held_out_frame()
+    # THE HELD-OUT FRAME IS THE YARDSTICK, NOT TRAINING DATA. Labels added there never
+    # reach the fit, so they cannot improve the model -- but they do change what the
+    # held-out AUC is measuring, and in the direction of agreement with whoever painted
+    # them. Every gate number then improves at once, for no reason connected to the
+    # model. Refused rather than warned, with an explicit override for someone who has
+    # read this and means it.
+    if held and root_frame == held and not payload.get("allow_held_out"):
+        raise HTTPException(409,
+            f"{root_frame} is the frame the retrain HOLDS OUT to measure out-of-sample "
+            f"performance. Labels here never reach training, so they cannot improve the "
+            f"model -- they only move the yardstick toward whoever painted them, and the "
+            f"before/after comparison stops measuring the same thing. Pass "
+            f"allow_held_out if you intend that and will re-establish the baseline.")
+
+    if dry:
+        return {"ok": True, "dry_run": True, "parent": root_frame, "parent_arm": root_arm,
+                "box_px": [ox, oy, bw, bh], "would_write": n_changed,
+                "crack_px": n_crack, "not_crack_px": n_not,
+                "skipped_erased_px": skipped_erased,
+                "contested_existing_verdicts": contested, "marks": nlab,
+                "marks_below_floor": too_small, "marks_touching_box_edge": touching_edge,
+                "rows_before": rows_now, "mask_exists": existed,
+                "is_held_out_frame": bool(held and root_frame == held),
+                "note": "nothing was written. Send again without dry_run to apply."}
+
+    # THE SNAPSHOT IS THE ONLY WAY BACK. If it could not be taken, the write must not
+    # happen: this directory is irreplaceable and the app would be its only mutator with
+    # no recovery path. Swallowing the failure and writing anyway is how the undo stack
+    # becomes decorative.
+    undo = _undo_snapshot(root_frame)
+    if undo is None:
+        raise HTTPException(500, "could not record an undo snapshot of "
+                                 f"{root_frame}'s correction mask, so the write was not "
+                                 f"attempted -- these are hand labels with no other copy.")
+
+    sub[now_crack_w] = PAINT_CRACK
+    sub[now_not_w] = PAINT_NOT_CRACK
+    cm[oy:oy + bh, ox:ox + bw] = sub
+    assert cm.dtype == np.uint8 and set(np.unique(cm).tolist()) <= {0, 1, 2, 3}
+    assert int((np.asarray(cm)[oy:oy + bh, ox:ox + bw] == PAINT_ERASED).sum()) \
+        == int(protect.sum()), "an erased verdict was overwritten"
+
+    # ONE WRITER AT A TIME, AT LEAST WITHIN THIS PROCESS. save_correction_mask writes
+    # through a FIXED `<path>.tmp`, so two merges into the same parent -- two crops of one
+    # frame, or a double-clicked button -- interleave on that one temp file and can leave
+    # the mask truncated or half-written. The SEM repo's own per-frame lock is the right
+    # one to hold because it is the lock its other writers hold. It does not reach across
+    # processes; the running-paint-tool refusal above is what covers that.
+    _lock = getattr(_sem_common, "mask_lock", None)
+    if _lock is not None:
+        with _lock(root_frame):
+            _sem_common.save_correction_mask(root_frame, cm)
+    else:
+        _sem_common.save_correction_mask(root_frame, cm)
+
+    # HOW MUCH OF THIS CAN ACTUALLY BECOME A TRAINING ROW. build_training_data labels a
+    # candidate REGION by plurality over the non-zero values inside it, so a correction
+    # inside a large region already marked the other way is simply outvoted and produces
+    # nothing. Where no candidate exists at all there is a separate path with a hard
+    # 40-pixel floor. Neither is predictable here without running the detector, but the
+    # component sizes are, and a stroke below the floor cannot win either way.
+    warn = []
+    if n_not == 0:
+        warn.append("Every stroke here says CRACK. The corpus already holds 70.0M crack "
+                    "pixels against 258k not-crack, and 35 of its 48 painted frames carry "
+                    "no not-crack label at all -- a correction (erasing something the "
+                    "detector wrongly marked) is worth far more to this model than another "
+                    "confirmation.")
+    if too_small:
+        warn.append(f"{too_small} of {nlab} separate marks are under {FROM_SCRATCH_MIN_PX} "
+                    f"px. Where the detector proposed no candidate, the training build "
+                    f"discards components below that size, so those marks may teach "
+                    f"nothing.")
+    if skipped_erased:
+        warn.append(f"{skipped_erased:,} painted pixels were SKIPPED because the parent "
+                    f"marks them 'erased from candidacy'. That is a hand verdict a binary "
+                    f"crop cannot contradict, so it was left exactly as it was.")
+    if touching_edge:
+        warn.append(f"{touching_edge} of {nlab} marks touch the edge of the crop. The "
+                    f"training build labels a whole candidate region by plurality, and a "
+                    f"region clipped by the crop extends beyond it -- so these verdicts "
+                    f"decide pixels outside the box you could see.")
+    if held and root_frame == held:
+        warn.append(f"{root_frame} is the frame the retrain HOLDS OUT to measure "
+                    f"out-of-sample performance. Labels added here do not leak into "
+                    f"training, but they change the yardstick, so the held-out AUC before "
+                    f"and after will no longer be measuring the same thing.")
+    if rows_now is not None and rows_now < WEIGHT_FLOOR_ROWS:
+        warn.append(f"{root_frame} currently contributes {rows_now} training rows, below "
+                    f"the {WEIGHT_FLOOR_ROWS}-row floor where each image's weight is "
+                    f"min(1, rows/{WEIGHT_FLOOR_ROWS}). Adding rows to it raises its "
+                    f"influence over the whole fit; above the floor it would not.")
+
+    return {
+        "ok": True,
+        "parent": root_frame,
+        "parent_arm": root_arm,
+        "box_px": [ox, oy, bw, bh],
+        "created_mask": not existed,
+        "undo_entry": undo,
+        "wrote": n_changed,
+        "crack_px": n_crack,
+        "not_crack_px": n_not,
+        "marks": nlab,
+        "largest_mark_px": sizes[0] if sizes else 0,
+        "marks_below_floor": too_small,
+        "marks_touching_box_edge": touching_edge,
+        "contested_existing_verdicts": contested,
+        "skipped_erased_px": skipped_erased,
+        "untouched_in_box": int(bw * bh - n_changed - skipped_erased),
+        "rows_before": rows_now,
+        "dry_run": False,
+        "warnings": warn,
+        "note": (f"Written into {root_frame}'s own correction mask, under its own image "
+                 f"identity, so the retrain treats this as more evidence about a frame it "
+                 f"already knows rather than as a new frame. Whether these pixels become "
+                 f"training ROWS is decided by a plurality vote over each candidate region, "
+                 f"which only the training build can answer -- re-run it and compare this "
+                 f"frame's row count against the {rows_now} it has now."),
+    }
 
 
 @app.post("/api/group_compare")
@@ -1298,10 +1787,32 @@ def _measure_into_uploads(mask_path, frame, source=None, specimen=None):
     import sys as _sys
     _sys.path.insert(0, os.path.join(RES, "analysis"))
     from measure import measure_path
-    rows, summ = measure_path(mask_path, "sem", stem=frame)
+
+    # WHAT A RE-MEASURE MUST NOT FORGET. This replaces the frame's whole record with a
+    # freshly measured one, so every field that is a property of the frame's ORIGIN rather
+    # than of its pixels was being dropped the first time anyone painted on it:
+    #
+    #   cropped_from  -- the lineage. Losing it detaches a crop from its parent, which
+    #                    breaks sending strokes back AND silently disables the guard that
+    #                    refuses to compare a crop against the frame it was cut from. The
+    #                    guard would simply stop finding the overlap, with no error.
+    #   has_original  -- whether a micrograph sits behind it, so the editor stops loading
+    #                    the background the moment you paint on the crop.
+    #   modality      -- and it was hardcoded "sem" below, so painting a crop of a TXM
+    #                    frame re-measured it under SEM settings.
+    prior = next((f for f in (_load_quiet("frames") or [])
+                  if f.get("arm") == "uploads" and f.get("frame") == frame), {}) or {}
+    modality = prior.get("modality") or "sem"
+    rows, summ = measure_path(mask_path, modality, stem=frame)
     summ["arm"] = "uploads"
-    summ["specimen"] = specimen or "uploaded"
+    summ["specimen"] = specimen or prior.get("specimen") or "uploaded"
     summ["source_filename"] = f"{frame}_gated.png"
+    for carried in ("cropped_from", "has_original"):
+        if carried in prior:
+            summ[carried] = prior[carried]
+    if prior.get("scale_known") and prior.get("nm_per_px") and not summ.get("nm_per_px"):
+        summ["nm_per_px"] = prior["nm_per_px"]
+        summ["scale_known"] = True
     if source:
         summ["copied_from"] = source
     for r in rows:
@@ -1355,15 +1866,18 @@ def remeasure(arm: str = Query(...), frame: str = Query(...)):
     if not os.path.exists(path):
         raise HTTPException(404, f"no mask on disk at {path}")
 
-    modality = "txm" if arm == "txm" else "sem"
+    prior = next((f for f in (_load_quiet("frames") or [])
+                  if f.get("arm") == arm and f.get("frame") == frame), None)
+    # THE ARM DOES NOT DETERMINE THE MODALITY FOR AN UPLOAD. Every uploads frame was
+    # measured as "sem" by this rule, including a crop of a TXM frame, which carries its
+    # parent's modality on its own record. Ask the record first and fall back to the arm.
+    modality = (prior or {}).get("modality") or ("txm" if arm == "txm" else "sem")
     from measure import measure_path
     try:
         rows, summ = measure_path(path, modality, stem=frame)
     except Exception as e:
         raise HTTPException(500, f"measurement failed: {type(e).__name__}: {e}")
 
-    prior = next((f for f in (_load_quiet("frames") or [])
-                  if f.get("arm") == arm and f.get("frame") == frame), None)
     summ["arm"] = arm
     summ["specimen"] = (prior or {}).get("specimen") or "unparsed"
     # CARRY THE IDENTITY FIELDS THROUGH. measure_path rebuilds the summary from the mask
@@ -1377,7 +1891,16 @@ def remeasure(arm: str = Query(...), frame: str = Query(...)):
     # -> 200, and the frame is replaced (area_fraction 0.117215 -> 0.040319, 185 cracks ->
     # 75, the PNG on disk overwritten). mask_edit and set_scale both call remeasure, so
     # the guard was off after every correction -- the exact moment the mask is worth most.
-    for k in ("source_filename", "was_segmented_here", "copied_from"):
+    #
+    # cropped_from and has_original join that list for the same reason and with a sharper
+    # consequence. A crop's lineage is what lets its strokes be sent back to the parent's
+    # correction mask, and what lets a group comparison REFUSE to put a crop against the
+    # frame it was cut from. Dropping it on re-measure meant the lineage survived exactly
+    # until the moment the user painted on the crop -- so the guard stopped finding the
+    # overlap with no error, and the strokes became unsendable, both silently, at the one
+    # moment the crop was worth anything.
+    for k in ("source_filename", "was_segmented_here", "copied_from",
+              "cropped_from", "has_original"):
         if prior and prior.get(k) is not None and summ.get(k) is None:
             summ[k] = prior[k]
     for r in rows:

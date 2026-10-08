@@ -1376,6 +1376,7 @@ async function renderMark() {
   // the app shows THAT in an iframe and hides the canvas, so there is no #edcanvas to drag
   // on. Offering the button anyway would arm a mode that can never produce a box. It is
   // shown or hidden with the editor, and says which tool is in front when it is hidden.
+  if (typeof sendRowFor === "function") sendRowFor(ED.frame || state.frame);
   const cropRow = $("#croprow");
   if (cropRow) {
     cropRow.hidden = canUseTool;
@@ -2220,6 +2221,7 @@ async function loadArm() {
   await wireSetup();
   wireGroups();
   wireCrop();
+  wireSend();
   try { await health(); } catch (e) { /* the page still works without it */ }
 
   let arms;
@@ -2550,6 +2552,78 @@ function wireCrop() {
       selectFrame(d.frame);
     } catch (err) {
       info.textContent = `crop failed: ${err.message}`;
+    }
+  });
+}
+
+// ============================================================ SEND STROKES TO THE PARENT
+//
+// Visible only on a crop whose root is a SEM frame, because that is the only place the
+// strokes can go: correction masks and the retrain exist for the SEM corpus alone.
+//
+// TWO CLICKS, NOT ONE. The first is a dry run and writes nothing; it reports what WOULD
+// be written, including how many strokes land on verdicts a human already made. The
+// destination is the one directory in this project that holds hand labels with no second
+// copy, so a preview is not politeness -- it is the only chance to notice that a stroke
+// went somewhere unintended while noticing is still free.
+function sendRowFor(frame) {
+  const row = $("#sendrow");
+  if (!row) return;
+  const rec = state.frames.find((x) => x.frame === frame);
+  const cf = rec && rec.cropped_from;
+  const sem = cf && typeof cf.arm === "string" && cf.arm.startsWith("sem/");
+  row.hidden = !(state.arm === "uploads" && sem);
+  SEND.frame = frame;
+  SEND.confirmed = false;
+  const b = $("#sendparent");
+  if (b) { b.textContent = "Send my strokes to the parent frame"; b.className = "btn"; }
+  const i = $("#sendinfo"); if (i) i.textContent = "";
+}
+
+const SEND = { frame: null, confirmed: false };
+
+function wireSend() {
+  const btn = $("#sendparent");
+  if (!btn) return;
+  btn.addEventListener("click", async () => {
+    const info = $("#sendinfo");
+    if (!SEND.frame) { info.textContent = "no crop is open"; return; }
+    info.textContent = SEND.confirmed ? "writing…" : "checking…";
+    try {
+      if (ED.dirty && ED.flushSave) await ED.flushSave();
+      const d = await gPost("/api/send_to_parent",
+                            { frame: SEND.frame, dry_run: !SEND.confirmed });
+      if (!SEND.confirmed) {
+        const n = d.would_write ?? 0;
+        if (!n) {
+          info.textContent = d.note || "nothing to send.";
+          return;
+        }
+        SEND.confirmed = true;
+        btn.textContent = `Write ${n.toLocaleString()} px into ${d.parent}`;
+        btn.className = "btn primary";
+        info.textContent =
+          `${d.crack_px.toLocaleString()} crack, ${d.not_crack_px.toLocaleString()} ` +
+          `not-crack. ${d.contested_existing_verdicts.toLocaleString()} land on a verdict ` +
+          `already there` +
+          (d.skipped_erased_px ? `, ${d.skipped_erased_px.toLocaleString()} on "erased" ` +
+                                 `and will be left alone` : "") +
+          `. Click again to write.`;
+      } else {
+        SEND.confirmed = false;
+        btn.textContent = "Send my strokes to the parent frame";
+        btn.className = "btn";
+        info.innerHTML = esc(
+          `wrote ${d.wrote.toLocaleString()} px into ${d.parent} ` +
+          `(${d.crack_px.toLocaleString()} crack, ${d.not_crack_px.toLocaleString()} ` +
+          `not-crack). Re-run the training build to use them.`) +
+          (d.warnings || []).map((w) => `<br><span class="bad">${esc(w)}</span>`).join("");
+      }
+    } catch (err) {
+      SEND.confirmed = false;
+      btn.textContent = "Send my strokes to the parent frame";
+      btn.className = "btn";
+      info.textContent = err.message;
     }
   });
 }

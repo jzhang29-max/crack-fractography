@@ -267,6 +267,14 @@ tbody tr[aria-selected=true]{background:color-mix(in oklab,var(--s1) 20%,transpa
 .muted{color:var(--text-muted);font-size:var(--t-micro);font-weight:400}
 .flag{color:var(--warn);font-size:var(--t-small)}
 .flag.bad{color:var(--bad)}
+/* A BARE .bad SETS NOTHING ON THIS PAGE. Every rule for it is qualified -- .ra.bad,
+   .banner.bad, .flag.bad, .ro-line.bad -- so a plain <span class="bad"> inherits the
+   muted body colour and a warning reads exactly like the sentence above it. Measured:
+   rgb(146,143,134) against the page's own rgb(232,112,95). The send-to-parent warnings
+   are the ones that say a stroke may teach nothing or was skipped entirely, which is
+   precisely the text that must not look like prose. */
+#sendinfo .bad{color:var(--bad)}
+#sendinfo{display:block;line-height:1.45}
 .u{color:var(--text-muted);font-size:var(--t-small)}
 .croprow{display:flex;gap:8px;align-items:center;margin:0 0 var(--sp3);flex-wrap:wrap}
 .cropbox{position:absolute;border:2px dashed var(--warn);background:rgba(255,190,70,.14);
@@ -411,6 +419,10 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
         <span class="u" id="cropinfo">drag a box on the image, then confirm</span>
         <button id="cropgo" class="btn primary" hidden>Make it a new image</button>
         <button id="cropcancel" class="btn ghost" hidden>Cancel</button>
+      </div>
+      <div class="croprow" id="sendrow" hidden>
+        <button id="sendparent" class="btn">Send my strokes to the parent frame</button>
+        <span class="u" id="sendinfo"></span>
       </div>
       <div id="markbody"></div>
     </div>
