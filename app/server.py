@@ -317,7 +317,7 @@ def _mask_size(arm: str, frame: str):
         return None
 
 
-def _original_path(arm: str, frame: str):
+def _original_path(arm: str, frame: str, _depth: int = 0):
     """Where the micrograph behind `frame` lives, or None. Shared by the viewer and the crop.
 
     Factored out because the crop has to cut the SAME file the viewer draws, and a second
@@ -346,7 +346,23 @@ def _original_path(arm: str, frame: str):
         # uploads arm 404s and the crop is painted on a bare black-and-white mask -- you
         # cannot judge a boundary against the thing whose boundary it is meant to be.
         cand = os.path.join(UPLOAD_DIR, f"{frame}_original.png")
-        return cand if os.path.exists(cand) else None
+        if os.path.exists(cand):
+            return cand
+        # AND SO DOES A MARKED COPY, which is the ordinary case: the first stroke on a
+        # research frame saves a copy here rather than touching the research mask, and
+        # that copy is the same field at the same size. Without this the moment you drew
+        # on a SEM frame the picture underneath vanished and you were left painting on a
+        # bare mask -- which is precisely when you most need to see what is under the
+        # brush. Resolved through the record's own copied_from rather than by taking the
+        # name apart, and depth-limited because a copy of a copy is reachable.
+        rec = next((f for f in (_load_quiet("frames") or [])
+                    if f.get("arm") == "uploads" and f.get("frame") == frame), None)
+        src = (rec or {}).get("copied_from")
+        if isinstance(src, str) and "/" in src and _depth < 4:
+            parm, pframe = src.rsplit("/", 1)
+            if parm != "uploads" or pframe != frame:
+                return _original_path(parm, pframe, _depth + 1)
+        return None
     return None
 
 
@@ -1881,11 +1897,21 @@ async def mask_edit(arm: str = Query(...), frame: str = Query(...),
         # anything, and put it in a bucket with unrelated images.
         src_rec = next((f for f in (_load_quiet("frames") or [])
                         if f.get("arm") == arm and f.get("frame") == frame), None)
+        # MEASURED ONCE, NOT TWICE. _measure_into_uploads has just measured this mask and
+        # written the record; calling remeasure() straight after measured the SAME 25
+        # megapixels again for nothing, and measuring one of these frames costs 12.8 s --
+        # so the first save after a stroke took 27.5 s instead of 13.9, with no visible
+        # sign anything was happening. The response is assembled from the record that call
+        # already stored.
         _measure_into_uploads(dest, new_frame, source=f"{arm}/{frame}",
                               specimen=(src_rec or {}).get("specimen"))
-        out = remeasure(arm="uploads", frame=new_frame)
+        import time as _t
+        out = {"ok": True, "arm": "uploads", "frame": new_frame, "mask_path": dest,
+               "mask_modified": _t.strftime("%Y-%m-%d %H:%M:%S",
+                                            _t.localtime(os.path.getmtime(dest))),
+               "seconds_since_mask_written": round(_t.time() - os.path.getmtime(dest)),
+               "changed": {}, "unchanged": True}
         out["copied_from"] = f"{arm}/{frame}"
-        out["arm"] = "uploads"
         # DIFF AGAINST THE SOURCE, not against the row written one line above.
         #
         # _measure_into_uploads has just written the new frame's record FROM THIS SAME
@@ -1943,6 +1969,14 @@ def _measure_into_uploads(mask_path, frame, source=None, specimen=None):
     for carried in ("cropped_from", "has_original"):
         if carried in prior:
             summ[carried] = prior[carried]
+    # ARM_HAS_ORIGINALS says the uploads arm has none, which is right for an uploaded mask
+    # and wrong for a copy of a research frame. The editor consults the frame's own flag
+    # when the arm's is false, so without this the copy renders black-and-white with its
+    # micrograph sitting fetchable on disk.
+    if source and "/" in source:
+        _parm, _pframe = source.rsplit("/", 1)
+        if _original_path(_parm, _pframe):
+            summ["has_original"] = True
     if prior.get("scale_known") and prior.get("nm_per_px") and not summ.get("nm_per_px"):
         summ["nm_per_px"] = prior["nm_per_px"]
         summ["scale_known"] = True

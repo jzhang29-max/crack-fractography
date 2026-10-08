@@ -8,6 +8,7 @@ import sys
 import pytest
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+APPJS = os.path.join(REPO, "app", "static", "app.js")
 
 
 def _fn(name, src):
@@ -149,3 +150,69 @@ def test_the_first_edit_of_a_frame_diffs_against_the_frame_it_copied(tmp_path):
         assert d["changed"]["area_fraction"]["after"] != before["area_fraction"]
         # And it says WHAT the before column is.
         assert d.get("changed_against") == f"sem/gated/{src}", d.get("changed_against")
+
+
+def test_a_marked_copy_keeps_its_parents_micrograph():
+    """THE FIRST STROKE ON A RESEARCH FRAME USED TO TAKE THE PICTURE AWAY.
+
+    Saving writes a copy into uploads rather than touching the research mask, and the
+    uploads arm reports has_originals false -- correctly, for an uploaded mask. So the
+    copy rendered as a bare black-and-white mask, which is exactly when you most need to
+    see what is under the brush. A copy is the same field at the same size, so it
+    resolves its parent's micrograph through its own copied_from."""
+    src = open(os.path.join(REPO, "app", "server.py"), encoding="utf-8").read()
+    fn = src[src.index("def _original_path("):src.index('@app.get("/api/original/')]
+    assert "copied_from" in fn, (
+        "a marked copy cannot find its parent's micrograph, so painting a research frame "
+        "drops you onto a bare mask")
+    assert "_depth" in fn, "a copy of a copy would recurse without a depth limit"
+    # and the record must ADVERTISE it, or the editor never asks for it
+    mi = src[src.index("def _measure_into_uploads("):src.index("@app.post(\"/api/scale\")")]
+    assert 'summ["has_original"] = True' in mi
+
+
+def test_saving_does_not_tear_down_the_editor():
+    """The first save switched the arm to uploads, reloaded the list and reselected, which
+    rebuilt the editor on the copy -- taking the crop view, the place in the list, and the
+    picture with it, and dropping the reader into a tab they had not asked for.
+
+    The selection still follows the copy, so nobody reads the original's numbers beside
+    their own edit. What must not happen is the remount."""
+    js = open(APPJS, encoding="utf-8").read()
+    # THE WHOLE BRANCH, to its `return`. A window that stopped at the first
+    # `state.frames = await allFrames();` ended before the teardown would sit, so putting
+    # loadArm() back left this test green -- confirmed by doing exactly that.
+    a = js.index("if (d.copied_from) {")
+    blk = js[a:js.index("return;", a)]
+    assert "await loadArm()" not in blk, "the save still reloads the arm and remounts"
+    assert "selectFrame(" not in blk, "the save still reselects and remounts"
+    assert "saveArm" in blk and "saveFrame" in blk, (
+        "the next save must be retargeted at the copy, or it posts the research frame "
+        "name under arm=uploads and 404s")
+    assert 'state.frame = d.frame' in blk, "the selection must still follow the copy"
+
+
+def test_the_first_save_measures_the_mask_once():
+    """Measuring one of these frames costs 12.8 s. The first save called
+    _measure_into_uploads and then remeasure() on the same 25 megapixels, so it took 27.5 s
+    against 13.9 for every save after it -- with nothing on screen saying why."""
+    src = open(os.path.join(REPO, "app", "server.py"), encoding="utf-8").read()
+    fn = src[src.index('@app.post("/api/mask_edit")'):src.index("def _measure_into_uploads(")]
+    assert "_measure_into_uploads(dest, new_frame" in fn
+    assert 'remeasure(arm="uploads", frame=new_frame)' not in fn, (
+        "the copy is measured twice again")
+
+
+def test_a_save_in_progress_says_so_where_it_can_be_seen():
+    """The only sign a save was running was the label on #edsave, which is hidden."""
+    js = open(APPJS, encoding="utf-8").read()
+    # #edsave is built by editorHTML(), and it is hidden there.
+    assert 'id="edsave" hidden' in js, "the save button is no longer hidden; re-read this"
+    fn = js[js.index("const saveNow = async"):js.index("ED.scheduleSave = ")]
+    assert 'out = $("#edout")' in fn, "the readout element is not in scope"
+    i = fn.index('btn.textContent = "Saving')
+    j = fn.index("try {", i)
+    # Between arming the (hidden) button and starting the request, something must be
+    # written to the visible readout.
+    assert "out.innerHTML" in fn[i:j], (
+        "nothing visible changes while a save runs, so a slow one reads as a broken one")

@@ -1886,6 +1886,11 @@ async function openEditor(frame) {
   //: thing it must not do is fire mid-stroke, hence the idle delay.
   const AUTOSAVE_MS = 1800;
   let saving = false, queued = false, timer = null;
+  // WHERE THE NEXT SAVE GOES. The first stroke on a research frame creates a copy in
+  // uploads, and every save after it must target THAT -- the closure's own `frame` is the
+  // research frame, and posting it again under arm=uploads is a 404. This used to be
+  // handled by rebuilding the editor on the copy, which is where the jump came from.
+  let saveArm = state.arm, saveFrame = frame;
 
   const saveNow = async (why) => {
     if (!ED.dirty) return;
@@ -1897,11 +1902,19 @@ async function openEditor(frame) {
     saving = true;
     const btn = $("#edsave"), out = $("#edout");
     if (btn) { btn.disabled = true; btn.textContent = "Saving\u2026"; }
+    // SAY SO WHERE IT CAN BE SEEN. The only sign a save was running was the text of
+    // #edsave, which is hidden -- so a save of a 6144x4096 mask, which has to re-measure
+    // 25 megapixels and three hundred cracks, took a quarter of a minute with nothing on
+    // screen changing at all. It read as "the autosave is broken".
+    if (out) {
+      out.innerHTML = `<span class="u">Saving and re-measuring\u2026 `
+        + `<span class="u">(a full frame takes a few seconds)</span></span>`;
+    }
     try {
       const blob = await new Promise((r) => ED.off.toBlob(r, "image/png"));
       const fd = new FormData();
       fd.append("file", blob, `${frame}_gated.png`);
-      const q = new URLSearchParams({ arm: state.arm, frame });
+      const q = new URLSearchParams({ arm: saveArm, frame: saveFrame });
       const r = await fetch(`/api/mask_edit?${q}`, { method: "POST", body: fd });
       const d = await r.json();
       if (!r.ok) throw new Error(d.detail || r.statusText);
@@ -1914,17 +1927,31 @@ async function openEditor(frame) {
               : `<span class="u">No measurement changed.</span>`);
       }
       if (d.copied_from) {
-        // The edit became a new frame in another arm. Follow it, or the reader is looking
-        // at the original while reading numbers that belong to their copy.
+        // THE EDIT BECAME A COPY IN ANOTHER ARM, AND THE READER STAYS ON THEIR CANVAS.
+        //
+        // This used to switch the arm to uploads, reload the list and reselect, which
+        // tore down the editor and built a new one on the copy. Three things went with
+        // it: the crop view you had set, your place in the frame list, and -- because a
+        // marked copy did not advertise a micrograph -- the picture itself, so the first
+        // stroke on a SEM frame dropped you onto a bare black-and-white mask in a tab you
+        // had not asked for. The concern behind it was real and is still met: the numbers
+        // reported below are the COPY's, and the selection follows the copy, so nobody
+        // reads the original's figures beside their own edit.
+        //
+        // What must change is where the NEXT save goes; what must not is the canvas,
+        // which already holds exactly the pixels the copy was made from.
+        saveArm = "uploads"; saveFrame = d.frame;
+        state.arm = "uploads"; state.spec = ""; state.frame = d.frame;
+        ED.frame = d.frame;                 // so a later remount is a no-op, not a reload
+        const sel = $("#arm"); if (sel) sel.value = "uploads";
+        state.frames = await allFrames();
+        renderFrames(); renderSpecimens(); renderReadout();
         if (out) {
           out.innerHTML = `<span class="u">Saved as <b>${esc(d.frame)}</b> in uploads`
             + ` (${esc(d.copied_from)} unchanged).</span> ` + out.innerHTML;
         }
-        state.arm = "uploads"; state.spec = ""; state.frame = d.frame;
-        $("#arm").value = "uploads";
-        await loadArm();
-        selectFrame(d.frame);
-        return;                       // the editor is being rebuilt for the copy
+        sendRowFor(d.frame);
+        return;
       }
       state.frames = await allFrames();
       renderFrames(); renderSpecimens(); renderReadout();
