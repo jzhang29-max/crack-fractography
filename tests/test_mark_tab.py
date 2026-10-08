@@ -434,8 +434,12 @@ def test_the_frame_list_header_pluralises_too():
     assert "all 1 frames" not in src
     # There are four writes to #listcount; the one that carries the count is the noScale
     # ternary. Taking the first match found `= ""` and reported correct code as wrong.
-    i = src.index("$(\"#listcount\").textContent = noScale")
-    stmt = src[i:src.index(";", i)]
+    # It lives in renderCount() now and writes innerHTML, because the count also carries
+    # the "N hidden / show them" affordance -- a row that vanishes with no trace of where
+    # it went is indistinguishable from one the app lost. Anchored on the function rather
+    # than on one spelling of the assignment, which is what kept breaking.
+    i = src.index("function renderCount()")
+    stmt = src[i:src.index("const uh =", i)]
     assert "plural(" in stmt or '=== 1 ?' in stmt, stmt
     assert "frames scaled`" not in stmt, "the plural is still hardcoded in the scaled branch"
 
@@ -594,3 +598,29 @@ def test_the_image_list_is_not_fetched_when_no_tool_is_running():
         "markImages() is awaited before the running check short-circuits it")
     assert stmt.index("paint.running") < stmt.index("markImages()"), (
         "the running check must come first, or the fetch happens anyway")
+
+
+def test_hiding_a_row_does_not_collapse_the_group_it_was_in():
+    """A specimen group stays open while it holds the SELECTED frame. So hiding the
+    selected row and clearing the selection collapsed the group it was in: five rows on
+    screen became none, which reads as "it deleted everything" rather than "it hid one".
+
+    Measured before the fix: 5 rows -> 0. After: 5 -> 4, and the header reads
+    "61/141 frames ... 1 hidden / show them"."""
+    src = code_only(open(APPJS, encoding="utf-8").read())
+    i = src.index("async function afterHide(")
+    fn = src[i:src.index("\nasync function afterDelete(", i)]
+    assert "sameSpec" in fn, (
+        "hiding the selected row no longer keeps the selection inside its specimen, so "
+        "the group collapses")
+    assert "renderCount()" in fn, "the header still shows the pre-hide total"
+
+
+def test_the_frame_count_is_one_function_not_an_inline_block():
+    """It was computed inline inside loadArm(), so nothing else could refresh it: hiding a
+    row left the header reading the old total and never offered the way back."""
+    src = code_only(open(APPJS, encoding="utf-8").read())
+    assert "function renderCount()" in src
+    # every path that changes which rows are listed must refresh it
+    assert src.count("renderCount()") >= 4, (
+        "a path that changes the list no longer refreshes the count")

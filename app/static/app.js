@@ -139,6 +139,41 @@ function shortFrame(name, prefix) {
     ? name.slice(pre.length) : name;
 }
 
+//: WHAT A ROW'S CROSS DOES. Three different acts, because three different things are
+//: removable: the app's own uploads, a correction the reader drew, and a row in a list.
+const DEL_TITLE = {
+  frame: "Delete this image (moved to the trash folder)",
+  edit: "Discard your correction and go back to the detector's mask",
+  hide: "Hide this row from the list (the image itself is not touched)",
+};
+const delMode = (f) =>
+  state.arm === "uploads" ? "frame" : (f.edited ? "edit" : "hide");
+
+//: THE COUNT IS ITS OWN FUNCTION because more than one thing changes it now. It used to
+//: be computed inline in loadArm(), so hiding a row left the header reading the old
+//: total and never showed the way to bring the row back.
+function renderCount() {
+  const el = $("#listcount");
+  if (!el) return;
+  const nHidden = state.frames.filter((f) => f.hidden).length;
+  const shown = state.frames.filter((f) => !f.hidden);
+  const noScale = shown.filter((f) => !f.scale_known).length;
+  const n = shown.length;
+  // plural(), like every other count. The pluralise pass missed this one because its
+  // guard matched `${...n_frames}` and this site interpolates a length.
+  el.innerHTML = (noScale
+    ? `${noScale}/${n} ${n === 1 ? "frame" : "frames"}: no scale, µm withheld`
+    : `all ${plural(n, "frame")} scaled`)
+    + (nHidden ? ` · <b>${nHidden} hidden</b> <button id="unhide" class="linky">show`
+                 + ` them</button>` : "");
+  const uh = $("#unhide");
+  if (uh) uh.onclick = async () => {
+    await gPost("/api/hide_frame", { arm: state.arm, frame: "*", show: true });
+    state.frames = await allFrames().catch(() => []);
+    renderCount(); renderFrames(); renderSpecimens();
+  };
+}
+
 function renderFrames() {
   const t = $("#frames");
   t.querySelector("thead").innerHTML = "<tr>" + FCOLS.map(([k, l]) =>
@@ -151,8 +186,12 @@ function renderFrames() {
     _cracks: f.n_cracks_measured,
     _p10min: (f.probe && f.probe.p10_min_per_mm) ?? null,
   });
-  FRAME_PREFIX = commonPrefix(state.frames.map((f) => f.frame));
-  const rows = [...state.frames].map(derive).sort((a, b) => {
+  // A HIDDEN ROW IS OUT OF THE LIST, not greyed in it -- "hide" that still takes up a
+  // line is not hiding. It is still in state.frames, so the count above can say how many
+  // and offer them back.
+  const shown = state.frames.filter((f) => !f.hidden);
+  FRAME_PREFIX = commonPrefix(shown.map((f) => f.frame));
+  const rows = shown.map(derive).sort((a, b) => {
     const x = a[state.sortKey], y = b[state.sortKey];
     if (x === y) return 0;
     if (x === null || x === undefined) return 1;
@@ -187,12 +226,18 @@ function renderFrames() {
           // back on the next corpus measurement anyway. An uploads row is the app's own,
           // so there it deletes.
           (f.edited ? ` <span class="flag" title="you have corrected this frame">edited</span>` : "") +
-          (state.arm === "uploads" || f.edited
-            ? ` <button class="rowdel" data-del="${esc(f[k])}" tabindex="-1"` +
-              ` data-mode="${f.edited && state.arm !== "uploads" ? "edit" : "frame"}"` +
-              ` title="${f.edited && state.arm !== "uploads"
-                  ? "Discard your correction on this image"
-                  : "Delete this image"}">\u00d7</button>` : "") +
+          // EVERY ROW HAS ONE, AND IT DOES WHAT THAT ROW ALLOWS. It used to appear only
+          // on uploads rows, so on the SEM arm -- which is where the work happens --
+          // there was no delete control anywhere, and the reader reported twice that
+          // they could not find it. They were right: there was nothing to find.
+          //
+          //   an upload            -> delete it (to the trash)
+          //   a corrected research -> discard the correction, keep the image
+          //   a plain research row -> hide it from the list; the file is the pipeline's
+          //                           and is not the app's to remove
+          ` <button class="rowdel" data-del="${esc(f[k])}" tabindex="-1"` +
+          ` data-mode="${delMode(f)}" title="${esc(DEL_TITLE[delMode(f)])}">` +
+          `${delMode(f) === "hide" ? "\u2013" : "\u00d7"}</button>` +
           `</td>`;
         if (k === "_cracks") {
           const sp = f.speck_count
@@ -277,13 +322,27 @@ function renderFrames() {
       e.stopPropagation();
       e.preventDefault();
       const name = b.dataset.del;
-      const isEdit = b.dataset.mode === "edit";
+      const mode = b.dataset.mode;
+      const isEdit = mode === "edit";
       if (b.dataset.armed !== "1") {
         // TWO CLICKS, NOT confirm(). It matches what Send-to-corrections does, it names
         // the frame, and it cannot be dismissed by a reflex Enter on a native dialog.
         t.querySelectorAll("button.rowdel[data-armed='1']").forEach((o) => {
           o.dataset.armed = ""; o.textContent = "\u00d7"; o.classList.remove("arm");
         });
+        // HIDING NEEDS NO CONFIRMATION. It destroys nothing and the list offers to put
+        // it back; a second click to remove a row from a view is friction for its own
+        // sake. Deleting and discarding both still take two.
+        if (mode === "hide") {
+          try {
+            await gPost("/api/hide_frame", { arm: state.arm, frame: name });
+            await afterHide(name);
+          } catch (err) {
+            const st = $("#listcount");
+            if (st) st.innerHTML = `<span class="bad">${esc(err.message)}</span>`;
+          }
+          return;
+        }
         b.dataset.armed = "1";
         b.textContent = isEdit ? "discard?" : "delete?";
         b.classList.add("arm");
@@ -321,6 +380,25 @@ function renderFrames() {
 //:                   deleted mask stays on the canvas.
 //:   saveFrame    -- the autosave closure would keep posting to it.
 //:   SEND.frame   -- the send button would stay pointing at it.
+//: Hiding is cheap and reversible, so it refreshes the list and says how to undo it
+//: rather than reloading anything.
+async function afterHide(name) {
+  // KEEP THE SELECTION INSIDE THE GROUP YOU WERE IN. A specimen group stays open while
+  // it holds the selected frame, so hiding the selected row and clearing the selection
+  // collapsed the group it was in -- five rows on screen became none, which reads as
+  // "it deleted everything" rather than "it hid one".
+  const gone = state.frames.find((f) => f.frame === name);
+  state.frames = await allFrames().catch(() => []);
+  const visible = state.frames.filter((f) => !f.hidden);
+  if (state.frame === name) {
+    const sameSpec = visible.find((f) => f.specimen === (gone || {}).specimen);
+    state.frame = (sameSpec || visible[0] || {}).frame || null;
+  }
+  renderCount(); renderFrames(); renderSpecimens(); renderReadout();
+  if (TAB === "mark") { ED.frame = null; renderMark(); }
+}
+
+
 async function afterDelete(name, d, wasEdit) {
   if (ED.frame === name) { ED.frame = null; ED.dirty = false; }
   if (typeof SEND !== "undefined" && SEND.frame === name) SEND.frame = null;
@@ -332,7 +410,7 @@ async function afterDelete(name, d, wasEdit) {
   // and loadArm()'s error branch would report the delete as having gone wrong.
   if (!state.frames.length) state.frame = null;
   else if (!state.frame) state.frame = state.frames[0].frame;
-  renderFrames(); renderSpecimens(); renderReadout();
+  renderCount(); renderFrames(); renderSpecimens(); renderReadout();
   if (TAB === "mark") { ED.frame = null; renderMark(); }
   const st = $("#listcount");
   if (st) {
@@ -2220,15 +2298,11 @@ async function loadArm() {
   // was deleted and the two lines that read the result went with it, leaving every arm
   // change blocking on an HTTP round trip that was thrown away -- and duplicating the
   // request renderSpecimens() makes a few lines below.
-  const noScale = state.frames.filter((f) => !f.scale_known).length;
-  const n = state.frames.length;
+  renderCount();
   // plural(), like every other count. The pluralise pass missed this one because its guard
   // matched `${...n_frames}` and this site interpolates state.frames.length -- so on the
   // first-run path the commit cited, the arm dropdown read "uploads · 1 frame" correctly
   // while the header directly under it read "all 1 frames scaled".
-  $("#listcount").textContent = noScale
-    ? `${noScale}/${n} ${n === 1 ? "frame" : "frames"}: no scale, µm withheld`
-    : `all ${plural(n, "frame")} scaled`;
   renderFrames();
   renderSpecimens();
   renderReadout();
@@ -2510,18 +2584,33 @@ function gRender() {
   for (const side of ["a", "b"]) {
     const el = $(`#g${side}-members`);
     if (!el) continue;
+    el.className = `members side-${side}`;
+    // THE NAMES ARE SHORTENED AGAINST WHAT THE GROUP SHARES, not against nothing. Passing
+    // "" printed the whole 34-character frame name in every chip, so each one filled a
+    // line and the "chips" read as a plain list.
+    const pre = commonPrefix(G[side].map((m) => m.frame));
+    const specs = new Set(G[side].map((m) => (state.frames.find(
+      (f) => f.frame === m.frame && f.arm === m.arm) || {}).specimen).filter(Boolean));
     el.innerHTML = G[side].length
       ? G[side].map((m) => `<span class="chip" data-side="${side}" data-k="${esc(gKey(m))}" ` +
-          `role="button" tabindex="0" title="click to remove">` +
-          `<b>${esc(shortFrame(m.frame, ""))}</b> ${esc(m.arm)} ×</span>`).join("")
+          `role="button" tabindex="0" title="${esc(m.frame)} — click to remove">` +
+          `<b>${esc(shortFrame(m.frame, pre) || m.frame)}</b>` +
+          `<span class="u">${esc(m.arm)}</span><span class="x">\u00d7</span></span>`).join("")
       : `<span class="u">nothing yet — arm this group above, then click frames on the left</span>`;
     const n = $(`#g${side}-n`);
-    if (n) n.textContent = G[side].length ? plural(G[side].length, "frame") : "";
+    if (n) {
+      n.innerHTML = G[side].length
+        ? `<span class="gsum">${plural(G[side].length, "frame")}`
+          + (specs.size ? ` · ${plural(specs.size, "specimen")}` : "") + `</span>`
+        : "";
+    }
+    const h = el.closest("section")?.querySelector("h2");
+    if (h) h.classList.add(`side-${side}`);
   }
   const a = $("#arm-a"), b = $("#arm-b");
   if (a && b) {
-    a.className = "btn " + (G.armed === "a" ? "primary" : "ghost");
-    b.className = "btn " + (G.armed === "b" ? "primary" : "ghost");
+    a.className = "armbtn side-a" + (G.armed === "a" ? " on" : "");
+    b.className = "armbtn side-b" + (G.armed === "b" ? " on" : "");
   }
 }
 
@@ -2541,9 +2630,14 @@ async function gPost(path, body) {
   return d;
 }
 
+//: A COUNT IS NOT A DECIMAL. This printed "Crack count 792.00", and two decimal places
+//: on a tally of cracks says the quantity is finer than it is. Whole numbers are shown
+//: whole; everything else keeps its places. Above a thousand it was already rounding and
+//: grouping, which is the same rule.
 const gnum = (v, dp) => v === null || v === undefined ? "—"
   : (Math.abs(v) >= 1000 ? Math.round(v).toLocaleString()
-     : Number(v).toFixed(dp === undefined ? 2 : dp));
+     : (dp === undefined && Number.isInteger(v) ? String(v)
+        : Number(v).toFixed(dp === undefined ? 2 : dp)));
 
 function gStatsTable(s, title) {
   const rows = [];
@@ -2584,11 +2678,16 @@ function gStatsTable(s, title) {
 }
 
 function gCompareTable(d) {
+  // DIRECTION IS SHOWN AS WELL AS SIGNED, because a column of numbers that differ only in
+  // a leading minus is read wrong at a glance. The arrow says which way, the colour
+  // reinforces it, and the sign is still there for anyone who reads the number.
   const rows = d.rows.map((r) => r.a === null || r.b === null
     ? `<tr class="na"><td>${esc(r.label)}</td><td class="num">—</td><td class="num">—</td>` +
       `<td class="num">—</td><td class="u">${esc(r.note || "not available on both sides")}</td></tr>`
-    : `<tr><td>${esc(r.label)}</td><td class="num">${gnum(r.a)}</td>` +
-      `<td class="num">${gnum(r.b)}</td><td class="num">${r.delta > 0 ? "+" : ""}${gnum(r.delta)}</td>` +
+    : `<tr><td class="q">${esc(r.label)}</td><td class="num">${gnum(r.a)}</td>` +
+      `<td class="num">${gnum(r.b)}</td>` +
+      `<td class="num ${r.delta > 0 ? "up" : r.delta < 0 ? "down" : ""}">` +
+      `${r.delta > 0 ? "\u25b2 +" : r.delta < 0 ? "\u25bc " : ""}${gnum(r.delta)}</td>` +
       `<td class="num">${r.ratio === null ? "—" : gnum(r.ratio, 2) + "×"}</td></tr>`).join("");
   const o = d.orientation || {};
   // A CAVEAT THAT INVALIDATES THE COMPARISON DOES NOT BELONG UNDER IT. The rest qualify
@@ -2599,9 +2698,14 @@ function gCompareTable(d) {
   const fatal = (d.pixel_overlaps || []).length ? all.filter((c) => c.includes("SHARE PIXELS")) : [];
   const cav = all.filter((c) => !fatal.includes(c)).map((c) => `<li>${esc(c)}</li>`).join("");
   const top = fatal.map((c) => `<p class="banner bad">${esc(c)}</p>`).join("");
-  return `<section class="card"><h2>${esc(d.label_a)} against ${esc(d.label_b)}</h2>` + top +
+  const na = (d.a && d.a.n_frames) || 0, nb = (d.b && d.b.n_frames) || 0;
+  return `<section class="card"><h2 class="ghead">` +
+    `<span class="side-a"><span class="gdot"></span> ${esc(d.label_a)}</span>` +
+    `<span class="u">against</span>` +
+    `<span class="side-b"><span class="gdot"></span> ${esc(d.label_b)}</span>` +
+    `<span class="gsum">${plural(na, "frame")} vs ${plural(nb, "frame")}</span></h2>` + top +
     `<table class="gtab"><thead><tr><th>quantity</th>` +
-    `<th class="num">${esc(d.label_a)}</th><th class="num">${esc(d.label_b)}</th>` +
+    `<th class="num a">${esc(d.label_a)}</th><th class="num b">${esc(d.label_b)}</th>` +
     `<th class="num">difference</th><th class="num">ratio</th></tr></thead>` +
     `<tbody>${rows}</tbody></table>` +
     `<p class="note">Orientation: ${gnum(o.a_deg, 1)}° (R ${gnum(o.a_R, 3)}) against ` +

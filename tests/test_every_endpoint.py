@@ -42,7 +42,7 @@ COVERED = {
     ("get", "/api/groups"), ("post", "/api/groups"),
     ("post", "/api/group_stats"), ("post", "/api/group_compare"),
     ("post", "/api/send_to_parent"), ("post", "/api/delete_frame"),
-    ("post", "/api/discard_edit"),
+    ("post", "/api/discard_edit"), ("post", "/api/hide_frame"),
 }
 
 
@@ -392,3 +392,21 @@ def test_discard_edit_refuses_an_uploads_frame_and_an_unedited_one(srv):
     assert st >= 400
     st, _ = _json_post(srv, "/api/discard_edit", {"arm": "sem/gated", "frame": "nope"})
     assert st >= 400
+
+
+def test_hide_frame_takes_a_row_out_of_the_list_without_touching_it(srv):
+    """Hiding is the honest verb for a research row: the file is the pipeline's and is not
+    the app's to remove, but a list of 142 frames is a list you want to prune. Nothing is
+    moved and nothing is re-measured -- a flag is set, and it comes back off."""
+    f = _frame(srv)
+    st, d = _json_post(srv, "/api/hide_frame", {"arm": "uploads", "frame": f})
+    assert st == 200, d
+    assert d["hidden_in_arm"] == 1, d
+    rec = next(r for r in srv.dataset("frames") if r["frame"] == f)
+    assert rec.get("hidden") is True
+    # the mask is still there: hiding is not deleting
+    assert srv.get(f"/api/mask/uploads/{f}")[0] == 200
+    st, d = _json_post(srv, "/api/hide_frame", {"arm": "uploads", "frame": "*", "show": True})
+    assert st == 200 and d["hidden_in_arm"] == 0, d
+    rec = next(r for r in srv.dataset("frames") if r["frame"] == f)
+    assert "hidden" not in rec

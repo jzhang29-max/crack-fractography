@@ -1966,6 +1966,49 @@ def _dependents_of(frame):
     return out
 
 
+@app.post("/api/hide_frame")
+def hide_frame(payload: dict = Body(...)):
+    """Take a frame out of the sidebar without destroying anything.
+
+    WHY HIDING IS THE HONEST VERB FOR A RESEARCH FRAME. sem/* and txm* rows are the
+    pipelines' output; the app has never written to them and deleting one would either
+    destroy data it does not own or remove a row the next corpus measurement puts back.
+    But a list of 142 frames is a list you want to prune, and "I cannot do anything about
+    this row" is not an answer. So the row goes away and the file does not.
+
+    Reversible by construction: nothing is moved and nothing is measured again, a flag is
+    set, and the list offers to show them again.
+    """
+    arm = (payload.get("arm") or "").strip()
+    frame = (payload.get("frame") or "").strip()
+    show = bool(payload.get("show"))
+    if not frame:
+        raise HTTPException(400, "which frame?")
+    with _DATASET_LOCK:
+        fp = os.path.join(OUT, "frames.json")
+        if not os.path.exists(fp):
+            raise HTTPException(404, "no dataset yet")
+        with open(fp, encoding="utf-8") as fh:
+            cur = json.load(fh)
+        hit = False
+        for r in cur:
+            if r.get("arm") == arm and (frame == "*" or r.get("frame") == frame):
+                hit = True
+                if show:
+                    r.pop("hidden", None)
+                else:
+                    r["hidden"] = True
+        if not hit:
+            raise HTTPException(404, f"no frame {frame!r} in {arm!r}")
+        _write_json(fp, cur)
+        _CACHE.clear()
+    n_hidden = sum(1 for r in cur if r.get("arm") == arm and r.get("hidden"))
+    return {"ok": True, "arm": arm, "frame": frame, "shown": show,
+            "hidden_in_arm": n_hidden,
+            "note": ("nothing was moved or deleted -- the row is out of the list and the "
+                     "file is exactly where it was.")}
+
+
 @app.post("/api/discard_edit")
 def discard_edit(payload: dict = Body(...)):
     """Throw away the correction on a research frame and go back to the detector's mask.

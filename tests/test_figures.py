@@ -429,3 +429,35 @@ def test_the_map_keeps_a_shared_legend_and_prints_every_value():
     svg = out["svg"]
     assert svg.count('rx="2"') == len(F.RAMP), "the map lost its shared legend"
     assert svg.count("<title>") == out["n"], "not every cell carries its value"
+
+
+def test_group_a_and_b_are_told_apart_by_more_than_colour():
+    """A and B carry one identity each through the armed button, the member chips and the
+    comparison columns. Colour alone would leave the two columns indistinguishable for a
+    reader who cannot separate blue from orange -- and for anyone reading a printout -- so
+    every coloured thing is labelled too.
+
+    Blue and orange are the design system's first two series slots (--s1, --s2) and the
+    canonical colourblind-safe pair; they are not picked here."""
+    css = _src("app/templates/index.html")
+    js = _src("app/static/app.js")
+    assert "--ga:var(--s1)" in css and "--gb:var(--s2)" in css, (
+        "the group colours are no longer the design system's own series slots")
+    # the columns say which group they are, not just what colour
+    assert 'esc(d.label_a)' in js and 'esc(d.label_b)' in js
+    # the armed state is a class, so it survives a reader who cannot see the fill
+    assert "armbtn" in css and ".armbtn.on" in css
+    # and the difference carries a direction glyph, not only a colour
+    assert "\\u25b2" in js and "\\u25bc" in js, (
+        "the difference column signals direction by colour alone")
+
+
+def test_the_caveat_drawer_is_not_the_same_red_as_the_fatal_banner():
+    """The drawer holds things that qualify how to read the numbers; the banner holds the
+    one that invalidates them -- both groups being the same pixels. If everything is red
+    that distinction is gone."""
+    css = _src("app/templates/index.html")
+    i = css.index(".gcav{")
+    assert "var(--warn)" in css[i:i + 200], "the caveat drawer is red again"
+    assert "var(--bad)" not in css[i:css.index("}", i)], (
+        "the drawer uses the same colour as the banner that invalidates a comparison")
