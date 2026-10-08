@@ -307,10 +307,50 @@ changed:
 | crops counted as new frames | 0.9368 | 99.9% |
 | crops bound to their parent | 0.8910 | 0.0% |
 
-+0.0458 AUC with no label added and no pixel painted. The SEM repo's promotion gate exists
-to catch differences of 0.0028 and 0.0063, so the artefact is seven to sixteen times the
-size of the real effects it polices. A crop must inherit its parent's group, never get a
-new one.
++0.0458 AUC with no label added and no pixel painted. A crop must inherit its parent's
+group, never get a new one.
+
+### Sending strokes back: the version that does help
+
+**Send my strokes to the parent frame** writes what you painted on the crop into the SEM
+repo's correction mask for the **parent**, at the parent's own coordinates. The crop is
+then a magnifying glass, not a data point: the labels belong to a frame the model already
+knows, so nothing new is created and nothing can leak. That is the only route by which
+cropping improves the detector, and it works because *you* are faster at labelling when
+zoomed in — not because the crop is information.
+
+Only the pixels you actually changed are written, diffed against a pristine copy of the
+mask as it was cut. Everything you left alone stays `unreviewed`. Writing the whole box
+instead would assert a verdict on about a million pixels from a handful of strokes, in a
+corpus whose entire negative evidence is 258 thousand.
+
+**Erasing is worth more than drawing.** The corpus holds 70.0M crack pixels against 258k
+not-crack — 271 to one — and 35 of its 48 painted frames carry no not-crack label at all.
+Rubbing out something the detector wrongly marked is the scarce, valuable act; confirming
+a crack it already found is the abundant one.
+
+It refuses rather than guesses, in each case because the alternative is a silent wrong
+answer: when the SEM marking tool is running (it writes the same files under a lock that
+does not reach across processes); when the parent is the **held-out** frame (labels there
+never reach training, they only move the yardstick); when a stroke lands on an `erased
+from candidacy` verdict (a hand judgement a binary crop cannot contradict); when the
+parent has been re-rendered at a different size since the crop was taken; and when the
+undo snapshot could not be recorded. The first click is always a dry run.
+
+Whether your pixels become training *rows* is a separate question the training build
+decides, by a plurality vote over each candidate region — so a small correction inside a
+large region already marked the other way can be outvoted and teach nothing. A measured
+example: 3,480 painted pixels took one frame from 44 training rows to 48.
+
+### What the retrain actually says
+
+Running it on the current corpus: held-out AUC 0.8840 → 0.8883, pooled grouped-CV 0.7144 →
+0.6906, and the gate refused to deploy. **Read neither number as a change.** The pooled
+estimator is bimodal across random seeds — 19 of 40 seeds give 0.649, the other 21 give
+0.717, nothing in between — and the 5-seed mean it publishes ranges 0.6628 to 0.7187 on
+*identical data*. Measured at 40 seeds instead of 5, the retrain moved pooled by −0.0021,
+not −0.0238. The gate refuses on differences of 0.0028 and 0.0063, roughly twenty times
+below its own seed spread.
 
 ### Groups: several frames at once, and one set against another
 
