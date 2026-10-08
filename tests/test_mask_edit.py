@@ -189,7 +189,15 @@ def test_saving_does_not_tear_down_the_editor():
     assert "saveArm" in blk and "saveFrame" in blk, (
         "the next save must be retargeted at the copy, or it posts the research frame "
         "name under arm=uploads and 404s")
-    assert 'state.frame = d.frame' in blk, "the selection must still follow the copy"
+    # AND NOTHING ABOUT WHERE THE READER IS MAY CHANGE. The jump is something seen in the
+    # sidebar, not something the DOM does: keeping the canvas mounted while still moving
+    # the arm and the selected row is still a jump, and was still reported as one.
+    for moved in ('state.arm = "uploads"', "state.frame = d.frame",
+                  'state.spec = ""', 'sel.value = "uploads"',
+                  "renderFrames()", "renderSpecimens()"):
+        assert moved not in blk, f"the save still moves the reader: {moved}"
+    assert "SEND.frame = d.frame" in blk, (
+        "the copy must still be reachable by Send strokes to corrections")
 
 
 def test_the_first_save_measures_the_mask_once():

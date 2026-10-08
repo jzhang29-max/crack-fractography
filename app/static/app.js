@@ -611,6 +611,8 @@ async function health() {
     [c.segment_raw_micrograph, "Segment a raw micrograph (.tif)"],
     [c.reference_corpus, "The reference corpus"],
   ].map(([on, t]) => `<li class="${on ? "" : "off"}">${t}</li>`).join("");
+  const ver = $("#appver");
+  if (ver) ver.textContent = HEALTH.version ? `v${HEALTH.version}` : "";
   $("#sempath").value = HEALTH.sem_repo || "";
   $("#corpusrow").hidden = !c.reference_corpus || HEALTH.corpus_measured;
   const impl = HEALTH.measurement_impl || {};
@@ -1946,30 +1948,40 @@ async function openEditor(frame) {
               : `<span class="u">No measurement changed.</span>`);
       }
       if (d.copied_from) {
-        // THE EDIT BECAME A COPY IN ANOTHER ARM, AND THE READER STAYS ON THEIR CANVAS.
+        // THE EDIT BECAME A COPY, AND NOTHING ABOUT WHERE YOU ARE CHANGES.
         //
-        // This used to switch the arm to uploads, reload the list and reselect, which
-        // tore down the editor and built a new one on the copy. Three things went with
-        // it: the crop view you had set, your place in the frame list, and -- because a
-        // marked copy did not advertise a micrograph -- the picture itself, so the first
-        // stroke on a SEM frame dropped you onto a bare black-and-white mask in a tab you
-        // had not asked for. The concern behind it was real and is still met: the numbers
-        // reported below are the COPY's, and the selection follows the copy, so nobody
-        // reads the original's figures beside their own edit.
+        // Drawing on a research frame cannot write to the research mask, so the first
+        // stroke saves a copy into uploads. This used to FOLLOW that copy: switch the arm
+        // to uploads, reload the list, reselect, and rebuild the editor on it. You drew a
+        // line and landed in another tab, on another row, looking at a bare mask.
         //
-        // What must change is where the NEXT save goes; what must not is the canvas,
-        // which already holds exactly the pixels the copy was made from.
+        // Two rounds of this were wrong. The first kept the canvas but still moved the
+        // arm and the selection -- which is the jump, because the jump is something the
+        // reader SEES in the sidebar, not something the DOM does. So: the arm, the
+        // specimen scope, the selected row, the frame list and the canvas are all left
+        // exactly as they were. You are still on the frame you were drawing on.
+        //
+        // The concern this replaced was that a reader would see the original's figures
+        // beside their own edit. They are not: the line under the toolbar reports the
+        // COPY's measurements and names it, and that line is directly above the canvas
+        // the strokes are on. What the sidebar shows for the research frame is that
+        // frame's own numbers, which are still true of it -- nothing was written to it.
         saveArm = "uploads"; saveFrame = d.frame;
-        state.arm = "uploads"; state.spec = ""; state.frame = d.frame;
-        ED.frame = d.frame;                 // so a later remount is a no-op, not a reload
-        const sel = $("#arm"); if (sel) sel.value = "uploads";
-        state.frames = await allFrames();
-        renderFrames(); renderSpecimens(); renderReadout();
+        // The copy is where strokes can be sent back to the correction mask from.
+        SEND.frame = d.frame; SEND.confirmed = false;
+        const sb = $("#sendparent");
+        if (sb) { sb.hidden = false; sb.textContent = "Send strokes to corrections";
+                  sb.className = ""; }
+        const si = $("#sendinfo"); if (si) si.textContent = "";
+        const ch2 = Object.entries(d.changed || {});
         if (out) {
-          out.innerHTML = `<span class="u">Saved as <b>${esc(d.frame)}</b> in uploads`
-            + ` (${esc(d.copied_from)} unchanged).</span> ` + out.innerHTML;
+          out.innerHTML = `<span class="u">Saved to <b>${esc(d.frame)}</b> in Your images`
+            + ` \u2014 ${esc(d.copied_from)} itself is untouched.</span> `
+            + (ch2.length
+                ? ch2.map(([k, v]) => `<b>${k.replace(/_/g, " ")}</b> ${fmt(v.before, 4)} `
+                    + `\u2192 ${fmt(v.after, 4)}`).join("  \u00b7  ")
+                : `<span class="u">No measurement changed.</span>`);
         }
-        sendRowFor(d.frame);
         return;
       }
       state.frames = await allFrames();

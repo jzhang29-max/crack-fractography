@@ -222,6 +222,35 @@ def mask(arm: str, frame: str):
 ORIGINAL_MAX_W = 2400
 
 #: Blur radius subtracted to remove tile-to-tile illumination. See original() below.
+def _app_version():
+    """What build this is, so "which version are you running" is answerable from the UI.
+
+    A round of this project was spent on a screenshot whose toolbar did not match any
+    version in the repository, because there was no way to tell from the window which
+    build it was. The packaged app carries it in Info.plist; a checkout has no plist, so
+    it reads the spec's fallback and says it is a dev run.
+    """
+    import re as _re
+    plist = os.path.join(RES, "..", "Info.plist")
+    try:
+        with open(plist, encoding="utf-8") as fh:
+            m = _re.search(r"<key>CFBundleShortVersionString</key>\s*<string>([^<]+)", fh.read())
+        if m:
+            return m.group(1)
+    except OSError:
+        pass
+    spec = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                        "packaging", "fractography.spec")
+    try:
+        with open(spec, encoding="utf-8") as fh:
+            m = _re.search(r'FALLBACK_VERSION\s*=\s*"([^"]+)"', fh.read())
+        if m:
+            return f"{m.group(1)} (dev)"
+    except OSError:
+        pass
+    return "unknown"
+
+
 HIGHPASS_SIGMA = 60
 
 #: Rendered micrographs, newest last. Small because each entry is a ~2 MB PNG.
@@ -2257,6 +2286,7 @@ def health():
     has_data = bool(arms_measured)
     return {
         "frozen": P.FROZEN,
+        "version": _app_version(),
         "data_dir": P.DATA,
         "dataset_built": has_data,
         "arms_measured": arms_measured,
