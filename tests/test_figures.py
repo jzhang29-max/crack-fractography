@@ -96,7 +96,21 @@ def test_every_control_in_the_markup_is_wired_to_something():
     html, js = _src("app/templates/index.html"), _src("app/static/app.js")
     controls = re.findall(r'<(select|button|input|textarea)\b[^>]*\bid="([^"]+)"', html)
     assert controls, "no id'd controls found -- this guard has stopped measuring anything"
-    dead = sorted(f"<{t} id={i}>" for t, i in controls if i not in js)
+
+    # A CONTROL CAN BE WIRED BY A COMPUTED ID. `$(`#g${side}-clear`)` wires ga-clear and
+    # gb-clear in a loop over ["a","b"], and a plain substring search sees neither, so this
+    # guard reported two live buttons as dead. That is the worse failure direction for a
+    # dead-UI test: the fix it invites is to re-wire a control that already works, or to
+    # delete a working one. Expand each template hole to a wildcard and try again before
+    # calling anything dead.
+    holes = set(re.findall(r'`#([A-Za-z0-9_$\-{}.\[\]]*\$\{[^}]+\}[A-Za-z0-9_\-]*)`', js))
+    patterns = [re.compile("^" + re.sub(r'\\\$\\\{[^}]*\\\}', r'[A-Za-z0-9_-]+',
+                                        re.escape(h)) + "$") for h in holes]
+
+    def wired(i):
+        return i in js or any(p.match(i) for p in patterns)
+
+    dead = sorted(f"<{t} id={i}>" for t, i in controls if not wired(i))
     assert not dead, ("declared in index.html and named by no JavaScript, so it renders "
                       "and does nothing:\n  " + "\n  ".join(dead))
 

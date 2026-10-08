@@ -15,7 +15,7 @@ import os
 import threading
 import time
 
-from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
+from fastapi import Body, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 
@@ -30,6 +30,10 @@ RES = P.RES
 POLARITY_WARN_ABOVE = 0.5
 
 OUT = P.OUT
+
+#: Smallest crop worth measuring. Under this the morphology features are noise:
+#: extract_candidates already drops anything under 40 px of area.
+MIN_CROP_PX = 64
 
 app = FastAPI(title="crack fractography")
 # name -> ((mtime_ns, size), parsed). The stamp is half the entry: see _load.
@@ -178,9 +182,9 @@ def cracks(frame: str = Query(...), arm: str = Query(...),
             "truncated": total > limit, "sorted_by": key, "cracks": cr[:limit]}
 
 
-@app.get("/api/mask/{arm:path}/{frame}")
-def mask(arm: str, frame: str):
-    """The mask PNG itself, so the page can show what a number was measured on."""
+def _mask_path(arm: str, frame: str) -> str:
+    """Where this arm keeps its mask PNGs. Shared by /api/mask and /api/crop so a crop can
+    be taken from any arm the viewer can display, rather than from the SEM arms alone."""
     derived = P.sem_derived()
     src = {"sem/gated": (derived and os.path.join(derived, "gated_masks"), "_gated.png"),
            "sem/machine": (derived and os.path.join(derived, "machine_masks"), "_machine.png"),
@@ -190,8 +194,8 @@ def mask(arm: str, frame: str):
         if not root:
             raise HTTPException(503, "no SEM repo is configured, so its masks cannot be "
                                      "shown. Set one in Setup.")
-        p = os.path.join(root, frame + suf)
-    elif arm.startswith("txm"):
+        return os.path.join(root, frame + suf)
+    if arm.startswith("txm"):
         # Both TXM arms share one layout across two trees: the gated archive and the
         # model-only one. Resolved per arm rather than by a single txm_export() call, which
         # is what made "txm" the only TXM arm whose mask could be fetched.
@@ -199,9 +203,14 @@ def mask(arm: str, frame: str):
         if not tx:
             raise HTTPException(503, f"no mask tree is configured for {arm}, so its masks "
                                      "cannot be shown. Set one in Setup.")
-        p = os.path.join(tx, frame, f"{frame}_crack_mask.png")
-    else:
-        raise HTTPException(400, f"unknown arm {arm!r}")
+        return os.path.join(tx, frame, f"{frame}_crack_mask.png")
+    raise HTTPException(400, f"unknown arm {arm!r}")
+
+
+@app.get("/api/mask/{arm:path}/{frame}")
+def mask(arm: str, frame: str):
+    """The mask PNG itself, so the page can show what a number was measured on."""
+    p = _mask_path(arm, frame)
     if not os.path.exists(p):
         raise HTTPException(404, f"no mask on disk for {frame!r} in {arm!r}")
     return FileResponse(p, media_type="image/png")
@@ -214,6 +223,82 @@ ORIGINAL_MAX_W = 2400
 
 #: Blur radius subtracted to remove tile-to-tile illumination. See original() below.
 HIGHPASS_SIGMA = 60
+
+
+def _match_original_to_mask(oim, mask_wh):
+    """Trim the instrument databar so the micrograph covers the same field as the mask.
+
+    SEM .tif originals here carry the databar as a band BELOW the image -- 6144x4376
+    against a 6144x4096 mask, 280 rows. The mask has it removed; the original does not.
+    Both are then stretched into the same canvas, so the micrograph was squashed by
+    4096/4376 and every mask pixel sat up to 280 source rows away from the feature it was
+    meant to be marking, worst at the bottom of the frame -- where the databar itself was
+    also being painted over. Verified on 260622_316_H_b2_back_CBS_01: the row-mean profile
+    steps hard at row 4095/4096 and the served render's own profile steps at row 1600 of
+    1709, which is 4096 x the serving scale exactly.
+
+    Only ever TRIMS, and only from the bottom, and only when the widths already agree. A
+    mismatch of any other shape is left alone and reported by the caller, because
+    rescaling to fit would put a correct mask over the wrong picture with nothing to say so.
+    """
+    W, H = mask_wh
+    ow, oh = oim.size
+    if (ow, oh) == (W, H):
+        return oim, None
+    if ow == W and oh > H:
+        return oim.crop((0, 0, W, H)), f"trimmed {oh - H} rows of databar"
+    return oim, (f"the micrograph is {ow}x{oh} but the mask is {W}x{H}, so the same box is "
+                 f"not the same region of the specimen")
+
+
+def _mask_size(arm: str, frame: str):
+    """The mask's pixel dimensions, or None. Header-only read; it does not decode."""
+    try:
+        mp = _mask_path(arm, frame)
+    except HTTPException:
+        return None
+    if not mp or not os.path.exists(mp):
+        return None
+    try:
+        from PIL import Image as _I
+        _I.MAX_IMAGE_PIXELS = None
+        with _I.open(mp) as m:
+            return m.size
+    except Exception:                                   # noqa: BLE001
+        return None
+
+
+def _original_path(arm: str, frame: str):
+    """Where the micrograph behind `frame` lives, or None. Shared by the viewer and the crop.
+
+    Factored out because the crop has to cut the SAME file the viewer draws, and a second
+    copy of this lookup is how the two would drift apart.
+    """
+    if arm.startswith("txm"):
+        d = P.txm_images()
+        if not d:
+            return None
+        for ext in (".tif", ".tiff", ".png"):
+            cand = os.path.join(d, frame + ext)
+            if os.path.exists(cand):
+                return cand
+        return None
+    if arm.startswith("sem/"):
+        sem = P.sem_repo()
+        if not sem:
+            return None
+        for ext in (".tif", ".tiff", ".png"):
+            cand = os.path.join(sem, "original", frame + ext)
+            if os.path.exists(cand):
+                return cand
+        return None
+    if arm == "uploads":
+        # A CROP CARRIES ITS PARENT'S MICROGRAPH, CUT TO THE SAME BOX. Without this the
+        # uploads arm 404s and the crop is painted on a bare black-and-white mask -- you
+        # cannot judge a boundary against the thing whose boundary it is meant to be.
+        cand = os.path.join(UPLOAD_DIR, f"{frame}_original.png")
+        return cand if os.path.exists(cand) else None
+    return None
 
 
 @app.get("/api/original/{arm:path}/{frame}")
@@ -259,39 +344,23 @@ def original(arm: str, frame: str):
     from PIL import Image
     Image.MAX_IMAGE_PIXELS = None
 
-    path = None
-    if arm.startswith("txm"):
-        # BOTH TXM arms draw on the same micrographs. The masks differ; the specimen does
-        # not. Keying this on `arm == "txm"` is what would have left the model-only arm
-        # rendering a bare black-and-white mask -- the exact complaint that produced the
-        # originals lookup in the first place.
-        d = P.txm_images()
-        if not d:
-            raise HTTPException(503, "no TXM image directory is configured, so the "
-                                     "original cannot be shown. Set one in Setup.")
-        for ext in (".tif", ".tiff", ".png"):
-            cand = os.path.join(d, frame + ext)
-            if os.path.exists(cand):
-                path = cand
-                break
-    elif arm.startswith("sem/"):
-        sem = P.sem_repo()
-        if not sem:
-            raise HTTPException(503, "no SEM repo is configured.")
-        for ext in (".tif", ".tiff", ".png"):
-            cand = os.path.join(sem, "original", frame + ext)
-            if os.path.exists(cand):
-                path = cand
-                break
-    else:
-        # An uploaded mask has no micrograph behind it -- 404 rather than 400, because the
-        # caller's question ("is there an original for this frame") has a clean answer.
-        raise HTTPException(404, f"the {arm!r} arm has no originals")
+    # BOTH TXM arms draw on the same micrographs. The masks differ; the specimen does not.
+    if arm.startswith("txm") and not P.txm_images():
+        raise HTTPException(503, "no TXM image directory is configured, so the "
+                                 "original cannot be shown. Set one in Setup.")
+    if arm.startswith("sem/") and not P.sem_repo():
+        raise HTTPException(503, "no SEM repo is configured.")
+    path = _original_path(arm, frame)
     if not path:
+        # An uploaded mask that is not a crop has no micrograph behind it -- 404 rather
+        # than 400, because the caller's question has a clean answer.
         raise HTTPException(404, f"no original on disk for {frame!r} in {arm!r}")
 
     from scipy import ndimage as ndi
     im = Image.open(path)
+    ms = _mask_size(arm, frame)
+    if ms:
+        im, _ = _match_original_to_mask(im, ms)
     a = np.asarray(im, dtype=np.float32)
     if a.ndim == 3:
         a = a.mean(axis=2)
@@ -761,6 +830,256 @@ def _mask_path(arm, frame):
         tx = P.txm_export_machine() if arm == "txm/machine" else P.txm_export()
         return os.path.join(tx, frame, f"{frame}_crack_mask.png") if tx else None
     return None
+
+
+# ---------------------------------------------------------------- crop, groups, compare
+
+@app.post("/api/crop")
+def crop(payload: dict = Body(...)):
+    """Cut a rectangle out of one frame and store it as a new frame you can draw on.
+
+    WHY A NEW FRAME RATHER THAN A VIEW. The whole point of cropping here is to then paint
+    on the crop and retrain, and every downstream stage -- the mark tool, the measurement,
+    the retrain -- is keyed on a frame. A crop that were only a viewport would have to be
+    threaded through all of them; a crop that IS a frame needs none of that and inherits
+    the tools unchanged.
+
+    WHAT IS CARRIED, AND WHAT CANNOT BE. The pixel size comes with the crop unchanged: a
+    crop does not magnify, so nm/px is the parent's. The parent frame and the box are
+    recorded on the new frame so the provenance is never guessed. What does NOT survive is
+    censoring status -- a crack that was comfortably inside the parent can touch the edge of
+    the crop, so its length becomes a lower bound that it was not before. The response says
+    how many cracks that happened to, because it is the one number a user will otherwise
+    read straight past.
+    """
+    import sys as _sys
+    _sys.path.insert(0, os.path.join(RES, "analysis"))
+    from measure import canonical_stem, measure_path
+    from PIL import Image
+    Image.MAX_IMAGE_PIXELS = None
+
+    arm = (payload.get("arm") or "").strip()
+    frame = (payload.get("frame") or "").strip()
+    try:
+        x, y = int(payload["x"]), int(payload["y"])
+        w, h = int(payload["w"]), int(payload["h"])
+    except (KeyError, TypeError, ValueError):
+        raise HTTPException(400, "crop needs integer x, y, w, h in PIXELS of the full frame")
+    if w < MIN_CROP_PX or h < MIN_CROP_PX:
+        raise HTTPException(400, f"a {w}x{h} crop is too small to measure; the minimum is "
+                                 f"{MIN_CROP_PX} px on a side")
+
+    src = _mask_path(arm, frame)
+    if not os.path.exists(src):
+        raise HTTPException(404, f"no mask on disk for {frame!r} in {arm!r}")
+    im = Image.open(src)
+    W, H = im.size
+    # Clamp rather than refuse: a drag that ends past the edge is a normal gesture, and the
+    # clamped box is reported back so the caller can see what was actually taken.
+    x0, y0 = max(0, min(x, W - 1)), max(0, min(y, H - 1))
+    x1, y1 = max(x0 + 1, min(x + w, W)), max(y0 + 1, min(y + h, H))
+    if (x1 - x0) < MIN_CROP_PX or (y1 - y0) < MIN_CROP_PX:
+        raise HTTPException(400, f"after clamping to the {W}x{H} frame the crop is "
+                                 f"{x1-x0}x{y1-y0} px, under the {MIN_CROP_PX} px minimum")
+
+    # THE PARENT'S NAME IS ALREADY CANONICAL; APPEND TO IT RATHER THAN RE-DERIVING. A TXM
+    # frame name contains dots (`...img001of005.xrm.bim.bim`), and canonical_stem() used to
+    # run splitext() unconditionally, so `<name>.bim.bim__crop_300_300_700x600` lost
+    # ".bim__crop_300_300_700x600" as if it were a file extension: the crop came back named
+    # after no box at all, and a second crop of the same frame would have overwritten it.
+    # splitext is now limited to image extensions, and the composition order is fixed here
+    # too, so neither change alone is load-bearing.
+    custom = (payload.get("name") or "").strip()
+    stem = canonical_stem(custom) if custom else f"{frame}__crop_{x0}_{y0}_{x1-x0}x{y1-y0}"
+    if not stem:
+        stem = f"{frame}__crop"
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    # `{stem}_gated.png`, NOT `{stem}.png`. The uploads arm resolves every mask through
+    # _mask_path, which appends "_gated.png" -- so a crop saved under its bare stem is
+    # written, measured, and listed as a frame while /api/mask, mask_edit and a second
+    # crop all 404 on it. The crop would appear in the sidebar and be impossible to open,
+    # which is the one thing a crop exists to let you do: paint on it.
+    dst = os.path.join(UPLOAD_DIR, f"{stem}_gated.png")
+    im.crop((x0, y0, x1, y1)).save(dst)
+
+    # CUT THE MICROGRAPH TO THE SAME BOX. The point of a crop is to paint on it, and you
+    # cannot judge a crack boundary against a bare binary mask -- there is nothing
+    # underneath to compare it to. Saved UNTRANSFORMED (the display high-pass is applied
+    # by the viewer, not baked in) and at the mask's own pixel grid, so the box that was
+    # cut from the mask is the same box in the same coordinates.
+    original_cropped, original_note = False, None
+    osrc = _original_path(arm, frame)
+    if not osrc:
+        original_note = ("no micrograph is on file for the parent frame, so this crop is a "
+                         "bare mask -- you can still paint on it, but there is nothing "
+                         "underneath to judge the boundary against")
+    else:
+        try:
+            oim = Image.open(osrc)
+            oim, why = _match_original_to_mask(oim, (W, H))
+            if oim.size == (W, H):
+                cut = oim.crop((x0, y0, x1, y1))
+                # A float TIFF cannot be written as PNG at all ("cannot write mode F"),
+                # which is what every TXM original is. Scale to 16-bit rather than 8:
+                # the viewer high-passes this image, and quantising to 256 levels first
+                # throws away the low-contrast detail that the high-pass exists to find.
+                if cut.mode in ("F", "I", "I;16", "I;16B", "I;16L"):
+                    import numpy as _np
+                    _a = _np.asarray(cut, dtype=_np.float64)
+                    _lo, _hi = float(_a.min()), float(_a.max())
+                    _a = ((_a - _lo) / (_hi - _lo) * 65535.0) if _hi > _lo else _a * 0
+                    cut = Image.fromarray(_a.astype("uint16"), mode="I;16")
+                cut.save(os.path.join(UPLOAD_DIR, f"{stem}_original.png"))
+                original_cropped = True
+            else:
+                # A micrograph of a different size would make the box mean a different
+                # region of the specimen than it means on the mask. Refuse rather than
+                # rescale: a silently resampled original is the wrong picture behind a
+                # correct mask, and nothing downstream would say so.
+                original_note = f"{why}; no original was saved for this crop"
+        except Exception as exc:                        # noqa: BLE001 - never fail the crop
+            original_note = f"could not cut the micrograph: {exc}"
+
+    parent = next((f for f in (_load_quiet("frames") or [])
+                   if f.get("arm") == arm and f.get("frame") == frame), {}) or {}
+    # THE MODALITY IS THE PARENT'S, NOT "sem". This read `measure_path(dst, "sem", ...)`
+    # unconditionally, so every crop of a TXM frame was measured under SEM settings -- a
+    # silent modality swap on exactly half the images the crop feature was asked for.
+    modality = parent.get("modality") or ("txm" if arm.startswith("txm") else "sem")
+    rows, summ = measure_path(dst, modality, stem=stem)
+    summ["arm"] = "uploads"
+    summ["specimen"] = parent.get("specimen") or "uploaded"
+    # a crop does not change the pixel size
+    if parent.get("scale_known") and parent.get("nm_per_px"):
+        summ["nm_per_px"] = parent["nm_per_px"]
+        summ["scale_known"] = True
+    summ["cropped_from"] = {"arm": arm, "frame": frame,
+                            "box_px": [x0, y0, x1 - x0, y1 - y0],
+                            "parent_size_px": [W, H],
+                            "modality": modality,
+                            "original_cropped": original_cropped,
+                            "original_note": original_note}
+    for r in rows:
+        r["arm"] = "uploads"; r["frame"] = stem; r["specimen"] = summ["specimen"]
+
+    with _DATASET_LOCK:
+        for fname, new in (("frames", [summ]), ("cracks", rows)):
+            fp = os.path.join(OUT, f"{fname}.json")
+            cur = json.load(open(fp)) if os.path.exists(fp) else []
+            cur = [q for q in cur
+                   if not (q.get("arm") == "uploads" and q.get("frame") == stem)]
+            cur.extend(new)
+            _write_json(fp, cur)
+    _rebuild_uploads_specimen()
+    _CACHE.clear()
+    n_cen = sum(1 for r in rows if r.get("length_is_censored"))
+    return {"ok": True, "frame": stem, "arm": "uploads",
+            "box_px": [x0, y0, x1 - x0, y1 - y0], "parent_size_px": [W, H],
+            "clamped": [x0, y0, x1 - x0, y1 - y0] != [x, y, w, h],
+            "n_cracks": summ.get("n_cracks_measured"),
+            "area_fraction": summ.get("area_fraction"),
+            "scale_known": bool(summ.get("scale_known")),
+            "n_censored": n_cen,
+            "modality": modality,
+            "original_cropped": original_cropped,
+            "original_note": original_note,
+            "note": (f"{n_cen} of {len(rows)} cracks touch the crop edge, so their lengths "
+                     f"are lower bounds. Cropping creates edges that were not there in the "
+                     f"parent frame.") if n_cen else
+                    "no crack touches the crop edge, so no new censoring was introduced."}
+
+
+def _groups_path():
+    return os.path.join(OUT, "groups.json")
+
+
+def _read_groups():
+    p = _groups_path()
+    if not os.path.exists(p):
+        return {}
+    try:
+        with open(p, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (ValueError, OSError):
+        return {}
+
+
+@app.get("/api/groups")
+def groups_get():
+    return {"groups": _read_groups()}
+
+
+@app.post("/api/groups")
+def groups_set(payload: dict = Body(...)):
+    """Save or delete one named group. A group is a list of {arm, frame}."""
+    name = (payload.get("name") or "").strip()
+    if not name:
+        raise HTTPException(400, "a group needs a name")
+    g = _read_groups()
+    if payload.get("delete"):
+        g.pop(name, None)
+    else:
+        members = payload.get("frames") or []
+        if not isinstance(members, list) or not members:
+            raise HTTPException(400, "a group needs at least one frame")
+        g[name] = [{"arm": m.get("arm"), "frame": m.get("frame")} for m in members
+                   if m.get("arm") and m.get("frame")]
+    _write_json(_groups_path(), g)
+    return {"ok": True, "groups": g}
+
+
+def _collect(members):
+    """Resolve [{arm, frame}] into the frame records and their crack rows."""
+    want = {(m.get("arm"), m.get("frame")) for m in members}
+    frames = [f for f in (_load_quiet("frames") or [])
+              if (f.get("arm"), f.get("frame")) in want]
+    by = {}
+    for c in (_load_quiet("cracks") or []):
+        k = (c.get("arm"), c.get("frame"))
+        if k in want:
+            by.setdefault(k, []).append(c)
+    missing = sorted(f"{a}/{f}" for (a, f) in want
+                     if not any(x.get("arm") == a and x.get("frame") == f for x in frames))
+    return frames, by, missing
+
+
+@app.post("/api/group_stats")
+def group_stats(payload: dict = Body(...)):
+    """Preliminary analysis over a chosen set of frames."""
+    from app import groupstats as GS
+    members = payload.get("frames") or _read_groups().get(payload.get("name") or "", [])
+    if not members:
+        raise HTTPException(400, "give either a list of frames or the name of a saved group")
+    frames, by, missing = _collect(members)
+    if not frames:
+        raise HTTPException(404, f"none of those frames is measured: {', '.join(missing)}")
+    out = GS.group_summary(frames, by)
+    out["requested"] = len(members)
+    out["missing"] = missing
+    return out
+
+
+@app.post("/api/group_compare")
+def group_compare(payload: dict = Body(...)):
+    """Two groups side by side, with what would make the comparison unreadable stated."""
+    from app import groupstats as GS
+    saved = _read_groups()
+    def side(k, default_label):
+        spec = payload.get(k) or {}
+        members = spec.get("frames") or saved.get(spec.get("name") or "", [])
+        if not members:
+            raise HTTPException(400, f"side {k!r} has no frames")
+        fr, by, miss = _collect(members)
+        if not fr:
+            raise HTTPException(404, f"side {k!r}: none of those frames is measured")
+        s = GS.group_summary(fr, by)
+        s["missing"] = miss
+        return s, (spec.get("name") or default_label)
+    a, la = side("a", "A")
+    b, lb = side("b", "B")
+    res = GS.compare(a, b, la, lb)
+    res["a"], res["b"] = a, b
+    return res
 
 
 @app.post("/api/mask_edit")

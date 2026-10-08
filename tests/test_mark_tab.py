@@ -504,11 +504,30 @@ def test_no_comment_claims_a_tab_count_or_a_tab_that_does_not_exist():
     # that tells the reader something is true NOW, or directs behaviour at a tab that is
     # gone: acting on "it earns its place on Mark, Compare and Figure" would have restored
     # a duplicate sentence 200 px from its original.
-    for phrase in ("THREE TABS", "on Mark, Compare and Figure", "NOT ON ANALYSIS"):
+    for phrase in ("on Mark, Compare and Figure", "NOT ON ANALYSIS"):
         assert phrase not in comments, f"a comment still asserts {phrase!r}"
-    # And the tab list itself is the authority on how many there are.
+    # THE TAB LIST IS THE AUTHORITY ON HOW MANY THERE ARE, so this test must ASK it rather
+    # than carry its own copy of the number. The previous version asserted `== 2`, which
+    # made the test itself the stalest claim about the tab count in the repo: adding a
+    # third tab failed here with "the tab list has 3 entries" -- a true statement reported
+    # as an error, while the thing actually worth catching (a COMMENT that contradicts the
+    # list) went unchecked. Derive the count, then hold the prose to it.
+    import re as _re
     tabs = src[src.index("const TABS = ["):src.index("let TAB =")]
-    assert tabs.count('["') == 2, f"the tab list has {tabs.count('[\"')} entries"
+    names = _re.findall(r'\["(\w+)",\s*"([^"]+)"\]', tabs)
+    assert names, "the tab list could not be parsed"
+    n = len(names)
+    words = {1: "ONE", 2: "TWO", 3: "THREE", 4: "FOUR", 5: "FIVE"}
+    for k, w in words.items():
+        if k != n:
+            assert f"{w} TABS" not in comments.upper(), (
+                f"a comment asserts {w} TABS but the list has {n}: "
+                f"{[t[1] for t in names]}")
+    # NO RULE AGAINST NAMING A REMOVED TAB. One was tried here and removed, for the reason
+    # recorded above: comments that narrate, in the past tense, why a tab went away are
+    # accurate and worth keeping, and a blanket ban on "the Compare tab" deletes the only
+    # record of why Compare is not coming back. The prescriptive phrases above are the
+    # line, and the count below is checked against the list rather than against a copy.
 
 
 # --- MODES, NOT STORAGE LAYOUT ---------------------------------------------------------

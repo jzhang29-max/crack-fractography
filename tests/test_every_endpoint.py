@@ -38,7 +38,9 @@ COVERED = {
     ("get", "/api/figure.svg"), ("get", "/api/health"), ("post", "/api/config"),
     ("post", "/api/measure_corpus"), ("get", "/api/measure_corpus"), ("get", "/"),
     ("get", "/mark/{path:path}"), ("post", "/mark/{path:path}"),
-    ("get", "/api/original/{arm:path}/{frame}"),
+    ("get", "/api/original/{arm:path}/{frame}"), ("post", "/api/crop"),
+    ("get", "/api/groups"), ("post", "/api/groups"),
+    ("post", "/api/group_stats"), ("post", "/api/group_compare"),
 }
 
 
@@ -96,8 +98,11 @@ def test_the_index_page_serves_and_carries_the_app(srv):
     body = raw.decode()
     assert st == 200
     assert "<title>" in body and "app.js" in body
-    # The two tabs, not three.
-    assert 'id="pane-results"' in body and 'id="pane-figure"' not in body
+    # Each tab has its pane, and the tabs merged away have none.
+    for pane in ("pane-mark", "pane-results", "pane-groups"):
+        assert f'id="{pane}"' in body, f"{pane} is missing from the page"
+    for gone in ("pane-figure", "pane-compare", "pane-analysis"):
+        assert f'id="{gone}"' not in body, f"{gone} came back"
 
 
 def test_arms_frames_and_specimens_agree(srv):
@@ -284,3 +289,87 @@ def test_an_unknown_arm_is_an_error_not_an_empty_success(srv):
     different and wrong statement."""
     st, _ = srv.get("/api/frames?arm=not-an-arm")
     assert st >= 400, f"unknown arm returned {st}"
+
+
+# --- CROP AND GROUPS -------------------------------------------------------------------
+def _json_post(srv, path, obj):
+    st, raw = srv.post(path, json.dumps(obj).encode(), "application/json")
+    return st, (json.loads(raw) if raw else None)
+
+
+def test_crop_makes_a_measured_frame_and_groups_can_analyse_it(srv):
+    """One pass through the whole new surface: crop a frame, save both as named groups,
+    analyse one, and compare them. Every route is driven over HTTP."""
+    parent = _frame(srv)
+    st, c = _json_post(srv, "/api/crop",
+                       {"arm": "uploads", "frame": parent,
+                        "x": 0, "y": 0, "w": 100, "h": 100})
+    assert st == 200, c
+    child = c["frame"]
+    assert c["n_cracks"] is not None and "note" in c
+
+    # the crop is a frame like any other
+    _, frames = srv.json("/api/frames?arm=uploads")
+    assert child in {f["frame"] for f in frames}
+
+    for name, fr in (("parent", parent), ("crop", child)):
+        st, g = _json_post(srv, "/api/groups",
+                           {"name": name, "frames": [{"arm": "uploads", "frame": fr}]})
+        assert st == 200, g
+    st, back = srv.json("/api/groups")
+    assert st == 200 and {"parent", "crop"} <= set(back["groups"]), back
+
+    st, sa = _json_post(srv, "/api/group_stats",
+                        {"frames": [{"arm": "uploads", "frame": parent}]})
+    assert st == 200, sa
+    assert sa["n_frames"] == 1 and sa["per_frame"]
+    # EVERY QUANTITY THE GROUPS TAB WAS ASKED FOR. Listed explicitly rather than counted,
+    # so dropping one fails here by name instead of changing a total nobody reads.
+    for key in ("n_cracks", "density_per_Mpx", "total_area_px", "mean_area_px",
+                "mean_length_px", "mean_aspect", "orientation", "censoring"):
+        assert key in sa, f"group_stats lost {key}"
+    assert "mean_deg" in sa["orientation"] and "R" in sa["orientation"]
+
+    # a saved group can be analysed by NAME, which is the whole point of saving it
+    st, sb = _json_post(srv, "/api/group_stats", {"name": "crop"})
+    assert st == 200, sb
+    assert sb["n_frames"] == 1
+
+    st, cmp_ = _json_post(srv, "/api/group_compare",
+                          {"a": {"name": "parent"}, "b": {"name": "crop"}})
+    assert st == 200, cmp_
+    assert cmp_["rows"] and {"label", "a", "b"} <= set(cmp_["rows"][0])
+    # n=1 per side is not a comparison anyone should read without being told.
+    assert cmp_.get("caveats"), "a one-frame-per-side comparison carried no caveat"
+
+
+def test_a_group_says_which_of_its_frames_it_could_not_find(srv):
+    """THE DANGEROUS CASE IS PARTIAL, NOT TOTAL. A group of five with one unmeasured frame
+    still produces a summary, and if the shortfall is silent the summary reads as being
+    over five frames while being over four -- a denominator error with no symptom."""
+    parent = _frame(srv)
+    st, d = _json_post(srv, "/api/group_stats",
+                       {"frames": [{"arm": "uploads", "frame": parent},
+                                   {"arm": "uploads", "frame": "no-such-frame"}]})
+    assert st == 200, d
+    assert d["requested"] == 2, d.get("requested")
+    assert d["n_frames"] == 1, d.get("n_frames")
+    assert d["missing"] == ["uploads/no-such-frame"], d.get("missing")
+
+
+def test_group_stats_on_an_unknown_frame_is_an_error(srv):
+    st, _ = _json_post(srv, "/api/group_stats",
+                       {"frames": [{"arm": "uploads", "frame": "no-such-frame"}]})
+    assert st >= 400, f"an unknown frame returned {st}"
+
+
+def test_group_stats_refuses_an_empty_group(srv):
+    st, _ = _json_post(srv, "/api/group_stats", {"frames": []})
+    assert st >= 400, "an empty group produced a summary"
+
+
+def test_a_group_needs_a_name_and_a_frame(srv):
+    st, _ = _json_post(srv, "/api/groups", {"frames": [{"arm": "uploads", "frame": "x"}]})
+    assert st >= 400, "a nameless group was saved"
+    st, _ = _json_post(srv, "/api/groups", {"name": "empty", "frames": []})
+    assert st >= 400, "a group with no frames was saved"

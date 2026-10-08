@@ -1,0 +1,256 @@
+#!/usr/bin/env python3
+"""Cropping a frame: the box, the pixels, the provenance, and the micrograph behind it.
+
+Driven over real HTTP against a live server on a private data directory, not by reading
+the source of the endpoint. This repo already has source-scan tests, and a source scan
+asserts that a function MENTIONS something -- it cannot tell a working crop from one that
+writes the right-shaped file full of the wrong pixels.
+"""
+import io
+import json
+import os
+import sys
+
+import pytest
+from PIL import Image
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from liveserver import Server
+
+
+def _mask(w, h, boxes):
+    """A white mask with black rectangles at `boxes` = [(x0,y0,x1,y1), ...]."""
+    im = Image.new("L", (w, h), 255)
+    for (x0, y0, x1, y1) in boxes:
+        for y in range(y0, y1):
+            for x in range(x0, x1):
+                im.putpixel((x, y), 0)
+    out = io.BytesIO(); im.save(out, "PNG"); return out.getvalue()
+
+
+def _seed(s, name="parent", w=400, h=300, boxes=((20, 20, 180, 40),)):
+    st, raw = s.upload(f"{name}.png", _mask(w, h, list(boxes)))
+    assert st == 200, raw[:300]
+    return json.loads(raw)
+
+
+def _crop(s, frame, x, y, w, h, arm="uploads"):
+    st, raw = s.post("/api/crop", json.dumps(
+        {"arm": arm, "frame": frame, "x": x, "y": y, "w": w, "h": h}).encode(),
+        "application/json")
+    return st, json.loads(raw) if raw else None
+
+
+def test_the_crop_holds_the_pixels_that_were_in_the_box(tmp_path):
+    """The one thing a crop must get right. A crop of the right SHAPE containing the wrong
+    REGION is the failure that no shape assertion can see, so this puts a mark in a known
+    place and checks the crop contains it and the region beside it does not."""
+    with Server(tmp_path / "d") as s:
+        up = _seed(s, "p1", 400, 300, [(200, 100, 260, 160)])   # one black square, right half
+        f = up["frames"][0]["frame"] if "frames" in up else up.get("frame")
+        st, left = _crop(s, f, 0, 0, 150, 300)
+        assert st == 200, left
+        st, right = _crop(s, f, 180, 80, 160, 140)
+        assert st == 200, right
+        # The square is entirely inside the right box and entirely outside the left one.
+        assert left["n_cracks"] == 0, f"the left crop should be blank, got {left}"
+        assert right["n_cracks"] == 1, f"the right crop should hold the square, got {right}"
+        assert right["area_fraction"] > 0.1, right["area_fraction"]
+
+
+def test_a_crop_records_the_box_it_was_cut_from(tmp_path):
+    """Provenance is the whole defence against a measurement drifting loose from the region
+    it describes. The parent, the box and the parent's size must all be on the frame."""
+    with Server(tmp_path / "d") as s:
+        up = _seed(s, "p2", 400, 300)
+        f = up["frames"][0]["frame"] if "frames" in up else up.get("frame")
+        st, d = _crop(s, f, 10, 20, 200, 150)
+        assert st == 200, d
+        rec = next(r for r in s.dataset("frames") if r["frame"] == d["frame"])
+        cf = rec["cropped_from"]
+        assert cf["frame"] == f
+        assert cf["box_px"] == [10, 20, 200, 150]
+        assert cf["parent_size_px"] == [400, 300]
+
+
+def test_a_box_running_off_the_edge_is_clamped_and_says_so(tmp_path):
+    with Server(tmp_path / "d") as s:
+        up = _seed(s, "p3", 400, 300)
+        f = up["frames"][0]["frame"] if "frames" in up else up.get("frame")
+        st, d = _crop(s, f, 300, 200, 400, 400)
+        assert st == 200, d
+        assert d["clamped"] is True
+        assert d["box_px"] == [300, 200, 100, 100], d["box_px"]
+
+
+def test_a_crop_too_small_to_measure_is_refused(tmp_path):
+    with Server(tmp_path / "d") as s:
+        up = _seed(s, "p4", 400, 300)
+        f = up["frames"][0]["frame"] if "frames" in up else up.get("frame")
+        st, d = _crop(s, f, 0, 0, 10, 10)
+        assert st == 400
+        assert "too small" in json.dumps(d).lower()
+
+
+def test_the_crop_reports_the_censoring_it_created(tmp_path):
+    """A crack comfortably inside the parent can touch the edge of the crop, which turns its
+    length into a lower bound. That change is invisible in the numbers unless it is said."""
+    with Server(tmp_path / "d") as s:
+        # a long bar well inside the parent; the crop cuts through it
+        up = _seed(s, "p5", 400, 300, [(50, 140, 350, 160)])
+        f = up["frames"][0]["frame"] if "frames" in up else up.get("frame")
+        st, whole = _crop(s, f, 20, 100, 360, 120)     # bar fully inside -> no new censoring
+        assert st == 200, whole
+        st, cut = _crop(s, f, 100, 100, 150, 120)      # crop slices the bar -> censored
+        assert st == 200, cut
+        assert whole["n_censored"] == 0, whole
+        assert cut["n_censored"] >= 1, cut
+        assert "lower bound" in cut["note"]
+
+
+def test_a_crop_of_a_frame_with_no_micrograph_says_so(tmp_path):
+    """An uploaded mask has no original behind it. The crop still works, but painting on a
+    bare binary mask has nothing underneath to judge a boundary against, so it is stated
+    rather than left for the user to discover at the brush."""
+    with Server(tmp_path / "d") as s:
+        up = _seed(s, "p6", 400, 300)
+        f = up["frames"][0]["frame"] if "frames" in up else up.get("frame")
+        st, d = _crop(s, f, 0, 0, 200, 200)
+        assert st == 200, d
+        assert d["original_cropped"] is False
+        assert d["original_note"] and "micrograph" in d["original_note"]
+        # and the viewer agrees there is nothing to show
+        st2, _ = s.get(f"/api/original/uploads/{d['frame']}")
+        assert st2 == 404
+
+
+def test_a_crop_can_itself_be_cropped(tmp_path):
+    """A crop is a frame, which is the whole design. If a crop could not be cropped, it
+    would be a viewport wearing a frame's name."""
+    with Server(tmp_path / "d") as s:
+        up = _seed(s, "p7", 400, 300, [(100, 100, 300, 200)])
+        f = up["frames"][0]["frame"] if "frames" in up else up.get("frame")
+        st, a = _crop(s, f, 50, 50, 300, 220)
+        assert st == 200, a
+        st, b = _crop(s, a["frame"], 10, 10, 200, 150)
+        assert st == 200, b
+        rec = next(r for r in s.dataset("frames") if r["frame"] == b["frame"])
+        assert rec["cropped_from"]["frame"] == a["frame"]
+
+
+def test_the_crop_does_not_invent_a_scale(tmp_path):
+    """A crop does not magnify, so it inherits the parent's nm/px -- and when the parent has
+    none, the crop must not acquire one."""
+    with Server(tmp_path / "d") as s:
+        up = _seed(s, "p8", 400, 300)
+        f = up["frames"][0]["frame"] if "frames" in up else up.get("frame")
+        st, d = _crop(s, f, 0, 0, 200, 200)
+        assert st == 200, d
+        assert d["scale_known"] is False
+        rec = next(r for r in s.dataset("frames") if r["frame"] == d["frame"])
+        assert rec.get("nm_per_px") in (None, 0), rec.get("nm_per_px")
+
+
+def test_the_crop_can_be_opened_and_painted(tmp_path):
+    """THE WHOLE POINT OF A CROP IS TO DRAW ON IT. The crop was first written under its bare
+    stem while the uploads arm resolves masks as `<frame>_gated.png`, so the crop was
+    measured and listed as a frame while /api/mask and mask_edit both 404'd on it -- it
+    appeared in the sidebar and could not be opened. Nothing in the crop's own response
+    said so: it reported a frame, a crack count and an area fraction, all correct.
+    """
+    with Server(tmp_path / "d") as s:
+        up = _seed(s, "p9", 400, 300, [(100, 100, 300, 200)])
+        f = up["frames"][0]["frame"] if "frames" in up else up.get("frame")
+        st, d = _crop(s, f, 50, 50, 300, 220)
+        assert st == 200, d
+        child = d["frame"]
+
+        # 1. the mask is fetchable, and it is the size of the box
+        st, raw = s.get(f"/api/mask/uploads/{child}")
+        assert st == 200, f"the crop's mask could not be fetched: {st}"
+        im = Image.open(io.BytesIO(raw))
+        assert im.size == (300, 220), im.size
+
+        # 2. an edit to it is accepted and re-measured
+        edited = _mask(300, 220, [(0, 0, 300, 110)])     # half the crop painted black
+        st, raw = s.upload(f"{child}.png", edited,
+                           path=f"/api/mask_edit?arm=uploads&frame={child}")
+        assert st == 200, raw[:300]
+        rec = next(r for r in s.dataset("frames") if r["frame"] == child)
+        assert rec["area_fraction"] > 0.4, (
+            f"the painted mask was not re-measured: area {rec['area_fraction']}")
+
+
+# --- THE DATABAR ------------------------------------------------------------------------
+def _match(ow, oh, mw, mh):
+    from app.server import _match_original_to_mask
+    return _match_original_to_mask(Image.new("L", (ow, oh)), (mw, mh))
+
+
+def test_a_databar_band_is_trimmed_so_the_overlay_lines_up():
+    """SEM originals carry the databar below the image: 6144x4376 against a 6144x4096 mask.
+    Both were stretched into the same canvas, so the micrograph was squashed by 4096/4376
+    and a mask pixel sat up to 280 source rows from the feature it marked -- worst at the
+    bottom, where the databar was itself being painted over."""
+    im, why = _match(6144, 4376, 6144, 4096)
+    assert im.size == (6144, 4096), im.size
+    assert why and "280" in why
+
+
+def test_an_original_that_already_matches_is_untouched():
+    im, why = _match(3914, 3899, 3914, 3899)
+    assert im.size == (3914, 3899)
+    assert why is None
+
+
+def test_a_mismatch_of_any_other_shape_is_refused_not_rescaled():
+    """Trimming is only ever from the bottom and only when the widths already agree. A
+    rescale would put a correct mask over the wrong picture with nothing to say so."""
+    for ow, oh in ((3000, 4376), (6144, 3000), (6000, 4376)):
+        im, why = _match(ow, oh, 6144, 4096)
+        assert im.size == (ow, oh), f"{ow}x{oh} was altered"
+        assert why and "not the same region" in why
+
+
+def test_a_databar_is_trimmed_end_to_end_and_the_crop_takes_the_right_region(tmp_path):
+    """The trim, driven through the real server rather than called directly.
+
+    A 400x340 micrograph behind a 400x300 mask is the SEM shape in miniature: 40 rows of
+    databar. The crop must come from the IMAGE area, so a box at y=100 is row 100 of the
+    specimen -- not row 100 of a picture that has been squashed to fit.
+    """
+    with Server(tmp_path / "d") as s:
+        up = _seed(s, "pd", 400, 300, [(40, 40, 360, 80)])
+        f = up["frames"][0]["frame"] if "frames" in up else up.get("frame")
+
+        # a micrograph 40 rows taller than the mask, with a known bright stripe at y=120
+        # and a black "databar" band below the image area
+        im = Image.new("L", (400, 340), 30)
+        for y in range(120, 140):
+            for x in range(400):
+                im.putpixel((x, y), 240)
+        for y in range(300, 340):
+            for x in range(400):
+                im.putpixel((x, y), 0)
+        updir = os.path.join(str(tmp_path / "d"), "uploads")
+        assert os.path.isdir(updir), sorted(os.listdir(str(tmp_path / "d")))
+        im.save(os.path.join(updir, f"{f}_original.png"))
+
+        # the viewer now serves it at the MASK's aspect ratio, databar removed
+        st, raw = s.get(f"/api/original/uploads/{f}")
+        assert st == 200, st
+        served = Image.open(io.BytesIO(raw))
+        assert abs(served.width / served.height - 400 / 300) < 0.01, (
+            f"served {served.size}; the databar was not trimmed")
+
+        # and a crop takes the box from the image area
+        st, d = _crop(s, f, 0, 90, 400, 100)
+        assert st == 200, d
+        assert d["original_cropped"] is True, d.get("original_note")
+        cut = Image.open(os.path.join(updir, f"{d['frame']}_original.png"))
+        assert cut.size == (400, 100), cut.size
+        a = cut.convert("L")
+        # the stripe at image rows 120..140 lands at crop rows 30..50, and nowhere else
+        assert a.getpixel((200, 40)) > 200, "the crop did not take the stripe"
+        assert a.getpixel((200, 5)) < 60, "the crop is offset from the image area"
+        assert a.getpixel((200, 90)) < 60, "the crop is offset from the image area"

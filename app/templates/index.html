@@ -268,6 +268,25 @@ tbody tr[aria-selected=true]{background:color-mix(in oklab,var(--s1) 20%,transpa
 .flag{color:var(--warn);font-size:var(--t-small)}
 .flag.bad{color:var(--bad)}
 .u{color:var(--text-muted);font-size:var(--t-small)}
+.croprow{display:flex;gap:8px;align-items:center;margin:0 0 var(--sp3);flex-wrap:wrap}
+.cropbox{position:absolute;border:2px dashed var(--warn);background:rgba(255,190,70,.14);
+  pointer-events:none;z-index:40}
+.grprow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:var(--sp2)}
+.grpname{background:var(--bg2);color:var(--text);border:1px solid var(--line);
+  border-radius:5px;padding:5px 9px;font-size:var(--t-small);min-width:12rem}
+.members{display:flex;gap:6px;flex-wrap:wrap}
+.chip{background:var(--bg2);border:1px solid var(--line);border-radius:999px;
+  padding:3px 10px;font-size:var(--t-micro);color:var(--text-muted)}
+.chip b{color:var(--text);font-weight:600}
+.gtab{width:100%;border-collapse:collapse;font-size:var(--t-small);margin-top:var(--sp2)}
+.gtab th{text-align:left;color:var(--text-muted);font-weight:600;padding:5px 8px;
+  border-bottom:1px solid var(--line)}
+.gtab td{padding:5px 8px;border-bottom:1px solid var(--line)}
+.gtab td.num{text-align:right;font-variant-numeric:tabular-nums}
+.gtab tr.na td{color:var(--text-muted)}
+.gcav{border:1px solid var(--bad);border-radius:6px;padding:9px 12px;margin-top:var(--sp3)}
+.gcav b{color:var(--bad)}
+.gcav li{margin:4px 0;font-size:var(--t-small)}
 .note{color:var(--text-muted);font-size:var(--t-small);margin:0 0 var(--sp3)}
 img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
   background:#fff;display:block}
@@ -374,6 +393,15 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
     <!-- MARK IS FIRST because that is the order the work happens in: you draw or correct
          a mask, then you ask what it measures. -->
     <div class="pane" id="pane-mark" role="tabpanel">
+      <!-- CROP. Drag a box on the image, then make it a new frame you can draw on and
+           retrain from. It lives here, next to the brush, because cropping is part of
+           preparing something to mark -- not an analysis step. -->
+      <div class="croprow" id="croprow">
+        <button id="cropmode" class="btn">Crop a region</button>
+        <span class="u" id="cropinfo">drag a box on the image, then confirm</span>
+        <button id="cropgo" class="btn primary" hidden>Make it a new image</button>
+        <button id="cropcancel" class="btn ghost" hidden>Cancel</button>
+      </div>
       <div id="markbody"></div>
     </div>
 
@@ -382,6 +410,45 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
          places to see one thing. They are one scroll now, most-answering first: the
          sentences, then the picture they are about, then the numbers behind them, then
          the raw rows behind a disclosure. -->
+    <!-- GROUPS. Aggregate statistics over a set of frames you pick, and a comparison of
+         one set against another. It is its own pane rather than a mode of Results
+         because Results answers "what is in THIS frame" and everything on it is keyed to
+         the single selected frame; this answers "what is in these frames TOGETHER",
+         which is a different selection model and would have fought the frame picker. -->
+    <div class="pane" id="pane-groups" role="tabpanel" hidden>
+      <section class="card">
+        <h2>Pick the images</h2>
+        <p class="note">While this tab is open, clicking a frame in the list on the left adds
+          it to whichever group is armed below. Click a chip to take it out again.</p>
+        <div class="grprow">
+          <span class="u">Clicking a frame adds it to:</span>
+          <button id="arm-a" class="btn primary" data-g="a">Group A</button>
+          <button id="arm-b" class="btn ghost" data-g="b">Group B</button>
+        </div>
+      </section>
+      <section class="card">
+        <h2><input id="ga-name" class="grpname" value="Group A" aria-label="name of group A">
+          <span class="u" id="ga-n"></span>
+          <button id="ga-clear" class="btn ghost">Clear</button></h2>
+        <div id="ga-members" class="members"></div>
+      </section>
+      <section class="card">
+        <h2><input id="gb-name" class="grpname" value="Group B" aria-label="name of group B">
+          <span class="u" id="gb-n"></span>
+          <button id="gb-clear" class="btn ghost">Clear</button></h2>
+        <div id="gb-members" class="members"></div>
+      </section>
+      <section class="card">
+        <div class="grprow">
+          <button id="g-run" class="btn primary">Analyse group A</button>
+          <button id="g-runb" class="btn">Analyse group B</button>
+          <button id="g-compare" class="btn">Compare A against B</button>
+          <span class="u" id="g-status"></span>
+        </div>
+      </section>
+      <div id="g-out"></div>
+    </div>
+
     <div class="pane" id="pane-results" role="tabpanel" hidden>
       <!-- ORDER IS THE NAVIGATION. This pane had grown to six stacked sections with the
            IMAGE third, so reaching the thing a researcher looks at most meant scrolling

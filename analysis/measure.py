@@ -456,6 +456,15 @@ def _rose(oris, areas, rows):
 #: <frame>_gated.png, so the suffix is packaging, not identity.
 MASK_SUFFIXES = ("_crack_mask", "_gated", "_machine", "_mask")
 
+#: Only these are treated as a file extension to be removed. os.path.splitext() calls
+#: everything after the LAST dot an extension, and frame names in this project contain
+#: dots: a TXM frame is `...img001of005.xrm.bim.bim`. Splitting that blindly turned
+#: `...xrm.bim.bim__crop_300_300_700x600` into `...xrm.bim` -- the crop suffix was read as
+#: an extension and deleted, so the crop came back named after no box at all and a second
+#: crop of the same frame would have overwritten the first. It also quietly truncated any
+#: uploaded `sample.v2.png` to `sample`.
+IMAGE_EXTS = (".png", ".tif", ".tiff", ".jpg", ".jpeg", ".bmp", ".gif", ".webp")
+
 
 def canonical_stem(name):
     """The frame name for a mask file. ONE definition, exported, because there were two.
@@ -478,7 +487,10 @@ def canonical_stem(name):
     record, so the crack rows and the mask file were unreachable exactly as before. Caught
     by the release smoke check on its first run after it was taught to measure.
     """
-    stem = os.path.splitext(os.path.basename(name))[0]
+    stem = os.path.basename(name)
+    root, ext = os.path.splitext(stem)
+    if ext.lower() in IMAGE_EXTS:
+        stem = root
     while True:
         for suf in MASK_SUFFIXES:
             if stem.endswith(suf) and len(stem) > len(suf):

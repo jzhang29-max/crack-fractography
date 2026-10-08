@@ -234,7 +234,20 @@ function renderFrames() {
     renderFrames();
   });
   t.querySelectorAll("tbody tr:not(.grp)").forEach((tr) =>
-    tr.onclick = () => selectFrame(tr.dataset.f));
+    tr.onclick = () => {
+      // ON THE GROUPS TAB THE LIST IS THE GROUP PICKER. Selecting a frame to VIEW is
+      // meaningless there -- that pane shows a set, not a frame -- so the same click
+      // does the thing the pane is for. Everywhere else it still selects.
+      if (TAB === "groups" && typeof gAdd === "function") {
+        const added = gAdd(state.arm, tr.dataset.f);
+        const st = $("#g-status");
+        if (st) st.textContent = added
+          ? `added ${shortFrame(tr.dataset.f, "")} to ${G.armed.toUpperCase()}`
+          : `${shortFrame(tr.dataset.f, "")} is already in ${G.armed.toUpperCase()}`;
+        return;
+      }
+      selectFrame(tr.dataset.f);
+    });
 }
 
 /* ---------------------------------------------------------------- rose */
@@ -844,22 +857,25 @@ async function renderSpecimens() {
 // SIX, NOT EIGHT. "Frame detail", "Orientation" and "Cracks" were three destinations for
 // one question -- everything else about the frame you have selected -- so they are one
 // scrolling pane. A tab strip is navigation only while a reader can hold it in their head.
-// FOUR TABS, MARK FIRST. Read-out, Mask and Details were three destinations all
-// answering "what about this frame?", so seeing one frame meant visiting three places.
-// They are one Analysis page now. And the order follows the work: mark a mask, then ask
-// what it measures, then compare, then export.
-// Two tabs now, and both of the two removed since were removed for the same reason: a tab
-// whose content is the same numbers in another arrangement is navigation cost with no
-// answer at the end of it. Compare's table ranked nothing -- it could not, one imaged site
-// per specimen -- and its rows were each already on their own specimen's card.
-//: TWO TABS. Analysis and Figure both answered "what do these images show?", so a reader
-//: had to already know that the conclusions were on one and the chart supporting them on
-//: the other -- and the figure, which is the thing most worth looking at, was the one
-//: behind the extra click. They are one page now, findings first and the figure directly
-//: under them.
+// THREE TABS, MARK FIRST, AND THE ORDER FOLLOWS THE WORK: mark a mask, read what it
+// measures, then put frames side by side.
+//
+// Tabs have only ever been REMOVED here for one reason -- a tab whose content is the same
+// numbers in another arrangement is navigation cost with no answer at the end of it.
+// Read-out, Mask and Details were three destinations all answering "what about this
+// frame?"; they are one Results page. Analysis and Figure both answered "what do these
+// images show?", and the figure -- the thing most worth looking at -- was the one behind
+// the extra click; they are one page, findings first. The old Compare tab ranked nothing,
+// because it could not: one imaged site per specimen, and every row was already on its
+// own specimen's card.
+//
+// Groups is not a fourth arrangement of those numbers, which is why it earns a tab. It
+// answers a question none of the others can be asked: not "what about this frame?" but
+// "what about THESE frames, against THOSE?" -- a unit of analysis the app did not have.
 const TABS = [
   ["mark", "Mark"],
   ["results", "Results"],
+  ["groups", "Groups"],
 ];
 let TAB = "mark";
 
@@ -1355,6 +1371,16 @@ async function renderMark() {
   // check counting page errors, which is the reason it counts them.
   const canUseTool = paint.running
     && toolCanOpen(true, state.frame, await markImages(), state.arm);
+
+  // CROP BELONGS TO THE BUILT-IN EDITOR. When the SEM repo's own marking tool is running
+  // the app shows THAT in an iframe and hides the canvas, so there is no #edcanvas to drag
+  // on. Offering the button anyway would arm a mode that can never produce a box. It is
+  // shown or hidden with the editor, and says which tool is in front when it is hidden.
+  const cropRow = $("#croprow");
+  if (cropRow) {
+    cropRow.hidden = canUseTool;
+    if (canUseTool && typeof cropReset === "function") cropReset();
+  }
 
   if (canUseTool) {
     const fr = $("#markframe");
@@ -2186,6 +2212,8 @@ async function loadArm() {
   };
 
   await wireSetup();
+  wireGroups();
+  wireCrop();
   try { await health(); } catch (e) { /* the page still works without it */ }
 
   let arms;
@@ -2228,3 +2256,287 @@ async function loadArm() {
   };
   loadArm();
 })();
+
+// ============================================================ GROUPS AND COMPARE
+//
+// Results answers "what is in THIS frame". This answers "what is in these frames
+// together, and how does that set differ from another set". It is a different selection
+// model -- many frames at once, in two named piles -- so it is its own pane rather than a
+// mode of Results, where it would have fought the single-frame picker.
+//
+// SELECTION REUSES THE FRAME LIST rather than adding a column of checkboxes to it. The
+// list is already grouped by specimen and already sorts; duplicating it here, or widening
+// it with a column that is meaningless on every other tab, were both worse than arming a
+// group and clicking.
+const G = { a: [], b: [], armed: "a" };
+const gKey = (m) => `${m.arm}/${m.frame}`;
+
+function gRender() {
+  for (const side of ["a", "b"]) {
+    const el = $(`#g${side}-members`);
+    if (!el) continue;
+    el.innerHTML = G[side].length
+      ? G[side].map((m) => `<span class="chip" data-side="${side}" data-k="${esc(gKey(m))}" ` +
+          `role="button" tabindex="0" title="click to remove">` +
+          `<b>${esc(shortFrame(m.frame, ""))}</b> ${esc(m.arm)} ×</span>`).join("")
+      : `<span class="u">nothing yet — arm this group above, then click frames on the left</span>`;
+    const n = $(`#g${side}-n`);
+    if (n) n.textContent = G[side].length ? plural(G[side].length, "frame") : "";
+  }
+  const a = $("#arm-a"), b = $("#arm-b");
+  if (a && b) {
+    a.className = "btn " + (G.armed === "a" ? "primary" : "ghost");
+    b.className = "btn " + (G.armed === "b" ? "primary" : "ghost");
+  }
+}
+
+function gAdd(arm, frame) {
+  const side = G.armed, k = gKey({ arm, frame });
+  if (G[side].some((m) => gKey(m) === k)) return false;   // already there; not an error
+  G[side].push({ arm, frame });
+  gRender();
+  return true;
+}
+
+async function gPost(path, body) {
+  const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify(body) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.detail || `server error ${r.status}`);
+  return d;
+}
+
+const gnum = (v, dp) => v === null || v === undefined ? "—"
+  : (Math.abs(v) >= 1000 ? Math.round(v).toLocaleString()
+     : Number(v).toFixed(dp === undefined ? 2 : dp));
+
+function gStatsTable(s, title) {
+  const rows = [];
+  for (const k of ["n_cracks", "density_per_Mpx", "density_per_mm2", "total_area_px",
+                   "total_area_um2", "area_fraction_pct", "mean_area_px", "median_area_px",
+                   "mean_length_px", "mean_length_uncensored_px", "mean_aspect"]) {
+    const v = s[k]; if (!v) continue;
+    rows.push(v.value === null
+      ? `<tr class="na"><td>${esc(v.label)}</td><td class="num">—</td><td colspan="2">` +
+        `${esc(v.why_none || "not available")}</td></tr>`
+      : `<tr><td>${esc(v.label)}</td><td class="num">${gnum(v.value)}</td>` +
+        `<td class="u">${esc(v.unit)}</td>` +
+        `<td class="u">${gnum(v.spread_min)} – ${gnum(v.spread_max)} across ${v.n} frames</td></tr>`);
+  }
+  const o = s.orientation || {};
+  rows.push(`<tr><td>Mean orientation</td><td class="num">` +
+    `${o.mean_deg === null || o.mean_deg === undefined ? "—" : gnum(o.mean_deg, 1) + "°"}</td>` +
+    `<td class="u">axial</td><td class="u">R = ${gnum(o.R, 3)}${o.meaningful === false
+      ? ` — <b>below ${0.15}, so there is no preferred direction and this angle should not be quoted</b>` : ""}</td></tr>`);
+  const c = s.censoring || {};
+  const bracket = (s.mean_length_px && s.mean_length_uncensored_px
+                   && s.mean_length_px.value && s.mean_length_uncensored_px.value)
+    ? (s.mean_length_px.value / s.mean_length_uncensored_px.value) : null;
+  return `<section class="card"><h2>${esc(title)} <span class="u">` +
+    `${plural(s.n_frames, "frame")}, ${plural((s.specimens || []).length, "specimen")}</span></h2>` +
+    `<table class="gtab"><thead><tr><th>quantity</th><th class="num">value</th>` +
+    `<th>unit</th><th>spread across frames</th></tr></thead><tbody>${rows.join("")}</tbody></table>` +
+    `<p class="note">${c.n_censored || 0} of ${plural(c.n_cracks || 0, "crack")} ` +
+    `(${gnum(c.pct_censored, 1)}%) ` +
+    `run out of their frame, so every length above is a lower bound.` +
+    (bracket && bracket > 1.25
+      ? ` <b>Here the two length rows differ by ${bracket.toFixed(1)}×, so no single average ` +
+        `length is defensible for this group — quote the bracket.</b>` : "") + `</p>` +
+    (s.scale_known_frames === s.n_frames ? ""
+      : `<p class="note">${s.scale_known_frames} of ${plural(s.n_frames, "frame")} have a ` +
+        `recovered pixel size, so the micrometre and per-mm² rows use only those.</p>`) +
+    `</section>`;
+}
+
+function gCompareTable(d) {
+  const rows = d.rows.map((r) => r.a === null || r.b === null
+    ? `<tr class="na"><td>${esc(r.label)}</td><td class="num">—</td><td class="num">—</td>` +
+      `<td class="num">—</td><td class="u">${esc(r.note || "not available on both sides")}</td></tr>`
+    : `<tr><td>${esc(r.label)}</td><td class="num">${gnum(r.a)}</td>` +
+      `<td class="num">${gnum(r.b)}</td><td class="num">${r.delta > 0 ? "+" : ""}${gnum(r.delta)}</td>` +
+      `<td class="num">${r.ratio === null ? "—" : gnum(r.ratio, 2) + "×"}</td></tr>`).join("");
+  const o = d.orientation || {};
+  const cav = (d.caveats || []).map((c) => `<li>${esc(c)}</li>`).join("");
+  return `<section class="card"><h2>${esc(d.label_a)} against ${esc(d.label_b)}</h2>` +
+    `<table class="gtab"><thead><tr><th>quantity</th>` +
+    `<th class="num">${esc(d.label_a)}</th><th class="num">${esc(d.label_b)}</th>` +
+    `<th class="num">difference</th><th class="num">ratio</th></tr></thead>` +
+    `<tbody>${rows}</tbody></table>` +
+    `<p class="note">Orientation: ${gnum(o.a_deg, 1)}° (R ${gnum(o.a_R, 3)}) against ` +
+    `${gnum(o.b_deg, 1)}° (R ${gnum(o.b_R, 3)}) — ${gnum(o.axial_separation_deg, 1)}° apart. ` +
+    `${o.meaningful ? "" : "<b>At least one group has no preferred direction, so these two angles are not comparable.</b>"}</p>` +
+    (cav ? `<div class="gcav"><b>Before reading the numbers above</b><ul>${cav}</ul></div>` : "") +
+    `</section>`;
+}
+
+function wireGroups() {
+  const out = $("#g-out"), st = $("#g-status");
+  const busy = (m) => { if (st) st.textContent = m || ""; };
+  $("#arm-a")?.addEventListener("click", () => { G.armed = "a"; gRender(); });
+  $("#arm-b")?.addEventListener("click", () => { G.armed = "b"; gRender(); });
+  for (const side of ["a", "b"]) {
+    $(`#g${side}-clear`)?.addEventListener("click", () => { G[side] = []; gRender(); });
+    $(`#g${side}-members`)?.addEventListener("click", (e) => {
+      const chip = e.target.closest(".chip"); if (!chip) return;
+      G[side] = G[side].filter((m) => gKey(m) !== chip.dataset.k);
+      gRender();
+    });
+  }
+  const run = async (side) => {
+    if (!G[side].length) { busy(`group ${side.toUpperCase()} is empty`); return; }
+    busy("measuring…");
+    try {
+      const name = $(`#g${side}-name`)?.value || `Group ${side.toUpperCase()}`;
+      const d = await gPost("/api/group_stats", { frames: G[side] });
+      out.innerHTML = gStatsTable(d, name);
+      busy(d.missing && d.missing.length
+        ? `${plural(d.missing.length, "frame")} not measured and skipped` : "");
+    } catch (err) { busy(""); out.innerHTML = `<section class="card"><p class="note bad">${esc(err.message)}</p></section>`; }
+  };
+  $("#g-run")?.addEventListener("click", () => run("a"));
+  $("#g-runb")?.addEventListener("click", () => run("b"));
+  $("#g-compare")?.addEventListener("click", async () => {
+    if (!G.a.length || !G.b.length) { busy("both groups need at least one frame"); return; }
+    busy("comparing…");
+    try {
+      const d = await gPost("/api/group_compare", {
+        a: { frames: G.a, name: $("#ga-name")?.value || "A" },
+        b: { frames: G.b, name: $("#gb-name")?.value || "B" } });
+      out.innerHTML = gCompareTable(d) + gStatsTable(d.a, d.label_a) + gStatsTable(d.b, d.label_b);
+      busy("");
+    } catch (err) { busy(""); out.innerHTML = `<section class="card"><p class="note bad">${esc(err.message)}</p></section>`; }
+  });
+  gRender();
+}
+
+// ============================================================ CROP
+//
+// Drag a box on the mask you are editing, and make that box a NEW frame. A crop is a
+// frame, not a viewport, so every tool downstream -- the brush, the measurement, the
+// retrain -- works on it unchanged and none of them had to learn about cropping.
+//
+// The box is drawn in SCREEN pixels over the canvas and converted to IMAGE pixels on
+// submit, using the same transform the brush uses, so a crop is the same region of the
+// saved mask whatever the zoom or the window size.
+const CROP = { on: false, box: null, el: null };
+
+function cropReset() {
+  CROP.on = false; CROP.box = null; CROP.frame = null; CROP.drag = false;
+  CROP.el?.remove(); CROP.el = null;
+  const b = $("#cropmode"); if (b) { b.textContent = "Crop a region"; b.className = "btn"; }
+  $("#cropgo")?.setAttribute("hidden", "");
+  $("#cropcancel")?.setAttribute("hidden", "");
+  const i = $("#cropinfo"); if (i) i.textContent = "drag a box on the image, then confirm";
+}
+
+function wireCrop() {
+  const btn = $("#cropmode");
+  if (!btn) return;
+  btn.onclick = () => {
+    if (CROP.on) { cropReset(); return; }
+    const cv0 = $("#edcanvas");
+    // ED.frame IS THE ONLY PROOF THE CANVAS SHOWS WHAT WE THINK IT DOES. Four code paths
+    // set ED.frame = null to force a re-mount and none of them clear ED.off, so the
+    // offscreen canvas outlives the frame it was built from. Arming on ED.off alone lets
+    // a drag be measured against the PREVIOUS image's width and height and then posted
+    // against state.frame -- a box of the right shape cut out of the wrong picture.
+    if (!ED.frame || !ED.off || !cv0 || !(cv0.getBoundingClientRect().width > 0)) {
+      $("#cropinfo").textContent = "open an image in Mark first"; return;
+    }
+    CROP.on = true;
+    btn.textContent = "Cropping — click to cancel"; btn.className = "btn primary";
+    $("#cropcancel")?.removeAttribute("hidden");
+    $("#cropinfo").textContent = "drag a box on the image";
+  };
+  $("#cropcancel")?.addEventListener("click", cropReset);
+
+  // Captured on the wrapper, not the canvas, so the drag survives the pointer leaving the
+  // canvas mid-gesture -- which is the common case when cropping right up to an edge.
+  const host = () => $("#edcanvas")?.parentElement;
+  document.addEventListener("pointerdown", (e) => {
+    if (!CROP.on) return;
+    const cv = $("#edcanvas"); if (!cv || !cv.contains(e.target)) return;
+    e.preventDefault(); e.stopPropagation();
+    const r = cv.getBoundingClientRect();
+    CROP.start = [e.clientX, e.clientY];
+    CROP.el?.remove();
+    CROP.el = document.createElement("div");
+    CROP.el.className = "cropbox";
+    host().style.position = host().style.position || "relative";
+    host().appendChild(CROP.el);
+    CROP.rect = r;
+    CROP.frame = ED.frame;   // pinned: the box belongs to THIS frame, not to whatever is open at submit
+    CROP.drag = true;
+  }, true);
+  document.addEventListener("pointermove", (e) => {
+    if (!CROP.on || !CROP.drag || !CROP.el) return;
+    const [sx, sy] = CROP.start;
+    const hr = host().getBoundingClientRect();
+    const x = Math.min(sx, e.clientX), y = Math.min(sy, e.clientY);
+    const w = Math.abs(e.clientX - sx), h = Math.abs(e.clientY - sy);
+    Object.assign(CROP.el.style, { left: (x - hr.left) + "px", top: (y - hr.top) + "px",
+                                   width: w + "px", height: h + "px" });
+    const cv = $("#edcanvas"), r = cv.getBoundingClientRect();
+    // A CANVAS WITH NO LAYOUT DIVIDES BY ZERO. If the pane is hidden, or the editor has
+    // not finished sizing, getBoundingClientRect is 0x0 and every coordinate below comes
+    // out NaN -- which serialises to null, posts a box of nulls, and fails server-side
+    // with a message about integers that says nothing about the real cause. Refuse here,
+    // where the cause is known.
+    if (!(r.width > 0 && r.height > 0) || !ED.off) {
+      CROP.box = null;
+      $("#cropinfo").textContent = "the image is not on screen yet — open it in Mark first";
+      return;
+    }
+    if (ED.frame !== CROP.frame) {
+      CROP.box = null;
+      $("#cropinfo").textContent = "the image changed while you were dragging — start the crop again";
+      return;
+    }
+    const toNat = (cx, cy) => [Math.round((cx - r.left) / r.width * ED.off.width),
+                               Math.round((cy - r.top) / r.height * ED.off.height)];
+    const [ix0, iy0] = toNat(x, y), [ix1, iy1] = toNat(x + w, y + h);
+    CROP.box = { x: ix0, y: iy0, w: ix1 - ix0, h: iy1 - iy0 };
+    $("#cropinfo").textContent =
+      `${CROP.box.w} × ${CROP.box.h} px of ${ED.off.width} × ${ED.off.height}`;
+  }, true);
+  document.addEventListener("pointerup", () => {
+    if (!CROP.on || !CROP.drag) return;
+    CROP.drag = false;
+    if (CROP.box && CROP.box.w >= 64 && CROP.box.h >= 64) {
+      $("#cropgo")?.removeAttribute("hidden");
+    } else {
+      $("#cropinfo").textContent = "too small — a crop must be at least 64 px on a side";
+      $("#cropgo")?.setAttribute("hidden", "");
+    }
+  }, true);
+
+  $("#cropgo")?.addEventListener("click", async () => {
+    // Not `ED.frame || state.frame`: the fallback is what would silently send the box to
+    // a frame the canvas was not showing. If the editor re-mounted mid-gesture, refuse.
+    const frame = CROP.frame;
+    if (!CROP.box || !frame) { $("#cropinfo").textContent = "no image open"; return; }
+    if (frame !== ED.frame) {
+      $("#cropinfo").textContent = "the image changed since you drew the box — start the crop again";
+      return;
+    }
+    const info = $("#cropinfo");
+    info.textContent = "cropping and measuring…";
+    try {
+      // Strokes still inside the autosave delay would otherwise not be in the file the
+      // crop is cut from, so the crop would come from the pre-edit mask.
+      if (ED.dirty && ED.flushSave) await ED.flushSave();
+      const d = await gPost("/api/crop", { arm: state.arm, frame, ...CROP.box });
+      cropReset();
+      info.textContent = `made ${d.frame} — ${plural(d.n_cracks, "crack")}, ` +
+        `${(d.area_fraction * 100).toFixed(2)}% area. ${d.note}` +
+        (d.original_note ? ` ${d.original_note}.` : "");
+      // Show it: the point of cropping is to draw on the crop next.
+      state.arm = "uploads";
+      const sel = $("#arm"); if (sel) sel.value = "uploads";
+      await loadArm();
+      selectFrame(d.frame);
+    } catch (err) {
+      info.textContent = `crop failed: ${err.message}`;
+    }
+  });
+}
