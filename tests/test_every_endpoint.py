@@ -47,7 +47,7 @@ COVERED = {
     ("get", "/api/collections"), ("post", "/api/collections"),
     ("post", "/api/set_collection"),
     ("get", "/api/reviewed"), ("post", "/api/review_region"),
-    ("get", "/api/review_scores"),
+    ("get", "/api/review_scores"), ("post", "/api/sample_tiles"),
 }
 
 
@@ -401,6 +401,20 @@ def test_discard_edit_refuses_an_uploads_frame_and_an_unedited_one(srv):
     assert st >= 400
     st, _ = _json_post(srv, "/api/discard_edit", {"arm": "sem/gated", "frame": "nope"})
     assert st >= 400
+
+
+def test_sample_tiles_refuses_what_it_cannot_sample(srv):
+    """Covered in depth by tests/test_sample_tiles.py; here so the inventory is honest.
+    Only the refusals run: a successful call would cut tiles into the shared module
+    server's dataset and every later test would see them."""
+    before = len(srv.dataset("frames"))
+    for bad in ({"arm": "sem/machine", "n": 0}, {"arm": "sem/machine", "n": 201},
+                {"arm": "sem/machine", "size": 16}, {"arm": "sem/machine", "n": "x"},
+                {"arm": "sem/machine", "collection": "a/b"},
+                {"arm": "nonsense"}, {"arm": "uploads", "size": 2048}):
+        st, d = _json_post(srv, "/api/sample_tiles", bad)
+        assert st >= 400, (bad, d)
+    assert len(srv.dataset("frames")) == before, "a refused sample still cut tiles"
 
 
 def test_the_review_endpoints_answer_and_refuse(srv):

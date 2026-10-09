@@ -1822,6 +1822,11 @@ let applyZoomRef = null;
 //: Shown in the Save button's tooltip, so the automatic behaviour is discoverable from
 //: the one control that used to be mandatory.
 const AUTOSAVE_HINT = "a moment after you stop drawing";
+//: THE BIGGEST FRAME SOMEONE CAN HONESTLY CALL FULLY REVIEWED IN ONE GO. A 1024 x 1024
+//: tile is 1.05 Mpx; the SEM frames are 25 Mpx, and a button that lets you assert a
+//: verdict on all 25 million from one click is how a corpus ends up with labels nobody
+//: looked at. Above this you crop first, and the claim is about the box you cropped.
+const REVIEWABLE_WHOLE_PX = 1024 * 1024;
 
 function editorHTML(frame) {
   return `
@@ -2089,16 +2094,32 @@ async function openEditor(frame) {
     } catch { return null; }
   };
 
+  // WHERE THE CLAIM IS CREDIBLE, which is a crop OR a frame small enough to be one.
+  //
+  // Its own function, called from setView AND once on mount. As a line inside setView it
+  // never ran for a freshly opened tile: ED.view is assigned directly at mount and
+  // setView is only reached afterwards if there is a remembered crop to restore -- so
+  // the button kept the `hidden` it has in the markup, and on a 512 x 512 ground-truth
+  // tile, which is the entire point of the control, you had to crop the tile before you
+  // could say you had reviewed it. Found by opening one in the running app; the unit
+  // tests all passed, because they read the rule rather than running the mount.
+  const syncReviewButton = () => {
+    const rv = $("#reviewed");
+    if (!rv || !ED.off) return;
+    const v = ED.view || { w: ED.off.width, h: ED.off.height };
+    const whole = v.w >= ED.off.width && v.h >= ED.off.height;
+    const small = ED.off.width * ED.off.height <= REVIEWABLE_WHOLE_PX;
+    rv.hidden = whole && !small;
+    rv.textContent = whole ? "Mark this tile reviewed" : "Mark region reviewed";
+  };
+
   ED.view = { x: 0, y: 0, w: ED.off.width, h: ED.off.height };
   ED.setView = (v) => {
     ED.view = v || { x: 0, y: 0, w: ED.off.width, h: ED.off.height };
     rememberView(v);
     const whole = ED.view.w === ED.off.width && ED.view.h === ED.off.height;
     const rb = $("#cropreset"); if (rb) rb.hidden = whole;
-    // ONLY ON A CROP. "I have checked every pixel in this region" is a claim you can
-    // make about a box you are looking at and cannot honestly make about a 25-megapixel
-    // frame, so the control exists only where the claim is credible.
-    const rv = $("#reviewed"); if (rv) rv.hidden = whole;
+    syncReviewButton();
     const ci = $("#cropinfo");
     if (ci) ci.textContent = whole ? "" :
       `showing ${ED.view.w} × ${ED.view.h} of ${ED.off.width} × ${ED.off.height} px`;
@@ -2263,6 +2284,7 @@ async function openEditor(frame) {
     const ci = $("#cropinfo");
     if (ci) ci.textContent += " \u00b7 where you left it";
   }
+  syncReviewButton();
   const curZoom = () => ED.zoom != null ? ED.zoom : fitWidth() / (ED.view || ED.off).w;
   $("#edzoomin").onclick = () => { ED.zoom = Math.min(4, curZoom() * 1.5); applyZoom(); };
   $("#edzoomout").onclick = () => { ED.zoom = Math.max(0.02, curZoom() / 1.5); applyZoom(); };
@@ -2494,7 +2516,9 @@ async function openEditor(frame) {
   const rvb = $("#reviewed");
   if (rvb) rvb.onclick = async () => {
     const v = ED.view;
-    if (!v || (v.w >= ED.off.width && v.h >= ED.off.height)) return;
+    if (!v) return;
+    const whole = v.w >= ED.off.width && v.h >= ED.off.height;
+    if (whole && ED.off.width * ED.off.height > REVIEWABLE_WHOLE_PX) return;
     const out = $("#edout");
     // FLUSH FIRST. The stored verdict is read from the mask ON DISK, so recording it
     // with strokes still in the browser would file a region that is missing exactly the

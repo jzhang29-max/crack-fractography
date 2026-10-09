@@ -252,3 +252,47 @@ def test_a_region_can_be_removed(tmp_path):
             os.path.join(str(tmp_path / "d"), "reviewed", rid + ".png"))
         # and the image itself is untouched
         assert any(r["frame"] == f for r in s.dataset("frames"))
+
+
+# --- WHERE THE CONTROL IS OFFERED -------------------------------------------------------
+def test_a_small_tile_can_be_marked_reviewed_without_cropping_it_first():
+    """THE CONTROL HAS TO BE REACHABLE ON THE THING IT WAS BUILT FOR.
+
+    It was shown only while a crop was active, which is right on a 6144x4096 frame -- "I
+    have checked every pixel here" is not a claim anyone can make about 25 megapixels
+    from one click, and a button that allows it is how a corpus ends up with labels
+    nobody looked at. But the sampled ground-truth tiles are 512x512, the whole tile IS
+    the region, and the user had to crop a tile before they could say they had reviewed
+    it. Found by opening one in the running app.
+
+    The threshold is asserted both ways: a tile is offered it, a full frame is not."""
+    js = open(os.path.join(REPO, "app", "static", "app.js"), encoding="utf-8").read()
+    import re
+    m = re.search(r"const REVIEWABLE_WHOLE_PX = (\d+) \* (\d+);", js)
+    assert m, "the whole-frame review threshold is gone"
+    limit = int(m.group(1)) * int(m.group(2))
+    assert 512 * 512 <= limit, f"a 512 px tile ({512*512:,} px) is above the {limit:,} limit"
+    assert limit < 6144 * 4096, (
+        f"the limit is {limit:,} px, which lets a whole 25 Mpx SEM frame be called "
+        f"reviewed from one click")
+
+    # the visibility rule reads the limit, and the handler refuses above it
+    sync = js[js.index("const syncReviewButton = () =>"):]
+    sync = sync[:sync.index("\n  };") + 5]
+    assert "REVIEWABLE_WHOLE_PX" in sync, "the button's visibility ignores the threshold"
+    assert "rv.hidden = whole && !small" in sync, sync[-400:]
+    # AND IT MUST RUN ON MOUNT, not only when a crop changes. As a line inside setView it
+    # never ran for a freshly opened tile -- ED.view is assigned directly at mount and
+    # setView is only reached afterwards if there is a remembered crop -- so the button
+    # kept the `hidden` from the markup on exactly the frames it exists for.
+    sv = js[js.index("ED.setView = (v) =>"):js.index("ED.restoreView = ()")]
+    assert "syncReviewButton()" in sv, "changing the crop does not update the button"
+    mount = js[js.index("applyZoomRef = applyZoom;"):js.index("const curZoom = ()")]
+    assert "syncReviewButton()" in mount, (
+        "the button's visibility is never set when a frame is opened, so a tile with no "
+        "remembered crop shows no way to mark it reviewed")
+    h = js[js.index('const rvb = $("#reviewed");'):]
+    h = h[:h.index("\n  };") + 5]
+    assert "REVIEWABLE_WHOLE_PX" in h, (
+        "the handler does not enforce the threshold, so a hidden button that is clicked "
+        "another way would still assert a verdict on a whole frame")

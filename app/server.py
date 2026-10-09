@@ -1226,6 +1226,174 @@ def _read_groups():
         return {}
 
 
+@app.post("/api/sample_tiles")
+def sample_tiles(payload: dict = Body(...)):
+    """Cut n tiles at UNIFORMLY RANDOM positions, for hand labelling as ground truth.
+
+    THE SAMPLING RULE IS THE EXPERIMENT. Positions are drawn uniformly over the total
+    area of the arm's frames -- a frame twice the size gets twice the expected tiles --
+    and NOTHING about the detector's output or any existing label is consulted when
+    choosing them. That is the whole point, and it is not the obvious choice: this
+    project's own published benchmark cut its 15 tiles centred on the densest painted
+    region, and those tiles came out 97.31% unreviewed, WORSE than the whole frames
+    (91.25%), because centring on a crack raises crack density without adding a single
+    not-crack verdict. A crack-seeded sample measures the detector where it was always
+    going to look good.
+
+    MOST TILES WILL CONTAIN NO PREDICTED CRACK, and that is not waste. Measured on this
+    corpus at 256 px: 40% of uniform tiles contain any predicted crack, 60% none. A tile
+    the detector called empty is the only place a MISSED crack can be found, and this
+    detector's documented failure here is blindness -- 54 of 54 sampled AM negatives were
+    real cracks. Those tiles are the ones that can show it, and they are quick to label
+    because there is usually nothing to paint.
+
+    CUT FROM THE MACHINE ARM, not the gated one. /api/crop keeps a pristine `_ascut.png`
+    of what it cut, and that copy is what the tile is later scored against; cut from
+    sem/gated it would already contain the human strokes gated_masks.py unions in.
+    """
+    import numpy as np
+    from PIL import Image
+    Image.MAX_IMAGE_PIXELS = None
+
+    arm = (payload.get("arm") or "sem/machine").strip()
+    # `payload.get("n") or 40` SILENTLY ACCEPTS ZERO, because 0 is falsy -- so a request
+    # for no tiles returned forty of them. Explicit None checks, for all three.
+    def _int(key, default):
+        v = payload.get(key)
+        return default if v is None else int(v)
+    try:
+        n, size, seed = _int("n", 40), _int("size", 512), _int("seed", 0)
+    except (TypeError, ValueError):
+        raise HTTPException(400, "n, size and seed must be integers")
+    collection = (payload.get("collection") or "").strip()
+    if not 1 <= n <= 200:
+        raise HTTPException(400, f"n must be between 1 and 200, not {n}")
+    if not 32 <= size <= 2048:
+        raise HTTPException(400, f"size must be between 32 and 2048 px, not {size}")
+    if collection and not SAFE_COLLECTION.match(collection):
+        raise HTTPException(400, f"{collection!r} is not a usable collection name")
+
+    frames = [f for f in (_load_quiet("frames") or []) if f.get("arm") == arm]
+    if not frames:
+        raise HTTPException(404, f"no measured frames in {arm!r} to sample from")
+
+    # ONLY FRAMES A TILE COULD ACTUALLY BE LABELLED ON.
+    #
+    # A tile with no micrograph behind it is not a sample unit -- you cannot judge a
+    # crack boundary against the binary mask whose boundary it is meant to be -- so
+    # admitting one would mean handing over a tile that has to be skipped, and a sample
+    # with a hole in it that nobody recorded.
+    #
+    # Measured on this corpus: 121 of 142 sem frames differ from their micrograph only by
+    # the databar, which is trimmed; 16 match exactly; and FIVE have masks of a different
+    # SHAPE entirely -- 2952x2952, 3036x3037, 2970x2971, 3041x3042 and 1490x1490 against
+    # 6144x4376 or 3072x2188 originals. Those are not databar cases and the crop rightly
+    # refuses them: the same box is a different region of the specimen in each file. They
+    # are 1.3% of the corpus by mask area and they are excluded here, by NAME, in the
+    # response -- restricting the population is defensible, doing it silently is not.
+    pool, skipped = [], []
+    for f in frames:
+        mp = _mask_path(arm, f["frame"])
+        if not mp or not os.path.exists(mp):
+            skipped.append((f["frame"], "no mask on disk")); continue
+        w, h = f.get("width_px"), f.get("height_px")
+        if not w or not h or w < size or h < size:
+            skipped.append((f["frame"], f"{w}x{h} is smaller than the tile")); continue
+        osrc = _original_path(arm, f["frame"])
+        if not osrc:
+            skipped.append((f["frame"], "no micrograph on file, so a tile could not be "
+                                        "labelled")); continue
+        try:
+            with Image.open(osrc) as _oi:
+                _m, why = _match_original_to_mask(_oi, (int(w), int(h)))
+                fits = _m.size == (int(w), int(h))
+        except Exception as exc:                        # noqa: BLE001
+            skipped.append((f["frame"], f"could not read the micrograph: {exc}")); continue
+        if not fits:
+            skipped.append((f["frame"], why or "the micrograph does not cover the mask"))
+            continue
+        pool.append((f["frame"], int(w), int(h)))
+    if not pool:
+        raise HTTPException(404, f"no frame in {arm!r} is at least {size}x{size} px")
+
+    areas = np.array([(w - size + 1) * (h - size + 1) for _, w, h in pool], dtype=np.float64)
+    probs = areas / areas.sum()
+    rng = np.random.default_rng(seed)
+
+    made, failed, seen = [], [], set()
+    for i in range(n):
+        for _attempt in range(25):        # resample a position that repeats exactly
+            k = int(rng.choice(len(pool), p=probs))
+            name, w, h = pool[k]
+            x = int(rng.integers(0, w - size + 1))
+            y = int(rng.integers(0, h - size + 1))
+            if (name, x, y) not in seen:
+                break
+        seen.add((name, x, y))
+        try:
+            c = crop({"arm": arm, "frame": name, "x": x, "y": y, "w": size, "h": size})
+        except HTTPException as e:
+            failed.append({"parent": name, "box": [x, y, size, size],
+                           "error": getattr(e, "detail", str(e))})
+            continue
+        stem = c["frame"]
+        # WHAT THE DETECTOR SAID HERE, recorded now from the pristine copy. It is not used
+        # to choose the tile -- it is read after the position is fixed -- and having it on
+        # the record is what lets the finished set be analysed by stratum later without
+        # re-deriving anything.
+        pred_frac = None
+        cut = os.path.join(UPLOAD_DIR, f"{stem}_ascut.png")
+        if os.path.exists(cut):
+            with Image.open(cut) as im:
+                pred_frac = round(float((np.array(im.convert("L")) < CRACK_BELOW).mean()), 6)
+        # `original_cropped`, which is the key /api/crop actually returns -- reading a
+        # `has_original` that the response never carries reported every tile as having no
+        # micrograph while all of them had one on disk. A tile with no micrograph cannot
+        # be hand-labelled at all, so this is exactly the field a typo must not silence:
+        # the note saying WHY is carried through with it.
+        made.append({"frame": stem, "parent": name, "box": [x, y, size, size],
+                     "predicted_fraction": pred_frac,
+                     "has_micrograph": bool(c.get("original_cropped")),
+                     "micrograph_note": c.get("original_note")})
+
+    if collection and made:
+        with _DATASET_LOCK:
+            fp = os.path.join(OUT, "frames.json")
+            cur = json.load(open(fp, encoding="utf-8")) if os.path.exists(fp) else []
+            names = {m["frame"] for m in made}
+            for r in cur:
+                if r.get("arm") == "uploads" and r.get("frame") in names:
+                    r["collection"] = collection
+            _write_json(fp, cur)
+            if collection not in _read_collections():
+                _write_json(_collections_path(), _read_collections() + [collection])
+            _CACHE.clear()
+        _rebuild_uploads_specimen()
+
+    with_pred = [m for m in made if (m["predicted_fraction"] or 0) > 0]
+    blind = [m for m in made if not m["has_micrograph"]]
+    return {"ok": True, "n_requested": n, "n_made": len(made), "collection": collection or None,
+            "arm_sampled": arm, "tile_px": size, "seed": seed,
+            "frames_in_pool": len(pool),
+            "frames_excluded": len(skipped),
+            "excluded": [{"frame": n, "why": w} for n, w in skipped],
+            "tiles": made, "failed": failed,
+            "n_with_any_predicted_crack": len(with_pred),
+            # A TILE WITH NO MICROGRAPH CANNOT BE LABELLED. You cannot judge a crack
+            # boundary against the binary mask whose boundary it is meant to be, so this
+            # is reported at the top rather than left to be noticed per tile.
+            "n_without_micrograph": len(blind),
+            "without_micrograph": [{"frame": m["frame"], "why": m["micrograph_note"]}
+                                   for m in blind][:10],
+            "sampling_rule": (f"positions drawn uniformly over the {int(areas.sum()):,} "
+                              f"valid top-left corners across {len(pool)} frames of "
+                              f"{arm}, seed {seed}. Neither the detector's output nor any "
+                              f"existing label was consulted in choosing them."),
+            "note": ("hand-label each tile, then press Mark region reviewed on it. Tiles "
+                     "with no predicted crack are not waste -- they are the only place a "
+                     "MISSED crack can be found.")}
+
+
 #: A REVIEWED REGION IS THE ONLY THING THAT MAKES PRECISION MEASURABLE HERE.
 #:
 #: Measured over the 48 hand-labelled SEM frames: of the 41,265,259 pixels currently
@@ -1248,6 +1416,31 @@ def _read_groups():
 #: archived repo stays byte-identical. Merging it into the corpus later is a separate and
 #: deliberate act.
 REVIEW_CRACK, REVIEW_NOT = 1, 2
+
+
+def _prediction_for(arm, frame):
+    """What this frame's DETECTOR said, as a file independent of anything a human did.
+
+    Three cases, and the middle one is what makes a cropped tile scorable at all:
+
+      sem/*     -> machine_masks. Never gated: gated_masks.py:122 is
+                   `(machine | (painted & darker)) & ~notc`, which unions the human's own
+                   strokes into the prediction and subtracts not-crack, so it can never
+                   fire where a human said not-crack.
+      uploads   -> `<frame>_ascut.png` when it exists. /api/crop writes that pristine copy
+                   at cut time precisely because painting overwrites `_gated.png` in
+                   place; without it a tile cut from the detector's output and then
+                   corrected has no record of what was proposed, and the only file left
+                   to compare against is the one the human just edited.
+      otherwise -> the arm's own mask.
+    """
+    if str(arm).startswith("sem/"):
+        return _mask_path("sem/machine", frame), "sem/machine"
+    if arm == "uploads":
+        cut = os.path.join(UPLOAD_DIR, f"{frame}_ascut.png")
+        if os.path.exists(cut):
+            return cut, "uploads/as-cut"
+    return _mask_path(arm, frame), arm
 
 
 def _review_dir():
@@ -1349,8 +1542,7 @@ def review_region(payload: dict = Body(...)):
     changed_px = None
     scorable, why = True, None
     try:
-        pred_arm = "sem/machine" if arm.startswith("sem/") else arm
-        pp = _mask_path(pred_arm, frame)
+        pp, pred_arm = _prediction_for(arm, frame)
         # SAY IT NOW, NOT AT SCORING TIME. The scorer refuses a verdict copied from the
         # file it would be scored against; discovering that only when you ask for the
         # number means a session's worth of regions recorded and none of them usable.
@@ -1358,8 +1550,9 @@ def review_region(payload: dict = Body(...)):
             scorable = False
             why = ("this region is recorded, but it cannot be scored: the mask it was "
                    "read from IS the one it would be compared against, so it could only "
-                   "come out perfect. Correct the frame first, or review a sem/* frame, "
-                   "whose detector output is a separate file.")
+                   "come out perfect. Review a tile made with Crop (which keeps a "
+                   "pristine copy of what the detector proposed) or a sem/* frame, whose "
+                   "detector output is a separate file.")
         elif os.path.exists(pp):
             with Image.open(pp) as pim:
                 pm = np.array(pim.convert("L"))
@@ -1418,11 +1611,10 @@ def review_scores(arm: str | None = None):
     uTP = uFP = uFN = uTN = 0          # the same, over regions the human changed
     n_unchanged = n_circular = 0
     for r in rows:
-        pred_arm = "sem/machine" if str(r["arm"]).startswith("sem/") else r["arm"]
         try:
-            pp = _mask_path(pred_arm, r["frame"])
+            pp, pred_arm = _prediction_for(r["arm"], r["frame"])
         except HTTPException:
-            out.append({**r, "error": f"no prediction available for {pred_arm}"}); continue
+            out.append({**r, "error": f"no prediction available for {r['arm']}"}); continue
         # THE PREDICTION MUST NOT BE THE FILE THE VERDICT WAS COPIED FROM. On an uploads
         # frame with no edit it is literally the same PNG, so every pixel agrees and the
         # region returns precision 1.0 having measured nothing. That is the shape of
@@ -1433,9 +1625,9 @@ def review_scores(arm: str | None = None):
             n_circular += 1
             out.append({**r, "circular": True, "scored_against": pred_arm,
                         "error": "the verdict was read from the same file this would be "
-                                 "scored against, so it can only come out perfect. Review "
-                                 "a frame whose detector output is a separate artifact "
-                                 "(any sem/* frame), or edit this one first."})
+                                 "scored against, so it can only come out perfect. Use a "
+                                 "tile made with Crop, which keeps a pristine copy of "
+                                 "what the detector proposed, or any sem/* frame."})
             continue
         gp = os.path.join(_review_dir(), r["id"] + ".png")
         if not os.path.exists(pp) or not os.path.exists(gp):
