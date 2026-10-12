@@ -235,7 +235,14 @@ def test_the_autosave_waits_long_enough_to_think():
     # the four things that must still flush
     assert js.count("ED.flushSave") >= 5, "a flush site has gone missing"
     assert 'if (id !== "mark" && ED.dirty && ED.flushSave)' in js, "leaving the tab"
-    assert 'window.addEventListener("beforeunload"' in js, "closing the window"
+    # CLOSING THE WINDOW. This asserted the literal
+    # `window.addEventListener("beforeunload"`, which stopped matching when the three
+    # exits were handled in a loop -- and the mechanism changed as well as the spelling:
+    # beforeunload now sends a beacon, because an async fetch started there is cancelled
+    # before it reaches the server. See
+    # test_closing_the_window_mid_stroke_does_not_lose_the_stroke.
+    assert '"beforeunload"' in js and '"pagehide"' in js, "closing the window"
+    assert '"visibilitychange"' in js, "hiding the window"
 
 
 def test_every_path_that_dirties_the_mask_also_schedules_the_save():
@@ -255,3 +262,52 @@ def test_every_path_that_dirties_the_mask_also_schedules_the_save():
         "a path sets ED.dirty without going through markDirty, so it will not reveal the "
         "manual save")
     assert fn.count("ED.markDirty()") >= 2, "the fill path no longer marks dirty"
+
+
+def test_closing_the_window_mid_stroke_does_not_lose_the_stroke():
+    """MEASURED LOSING WORK, THEN MEASURED KEEPING IT.
+
+    `beforeunload -> flushSave()` does not work, and the test that proved it was run in
+    the app, not reasoned about: paint a tile, reload immediately, and the frame's area
+    fraction came back at exactly its old value. flushSave starts an async fetch, the
+    page unloads, the request is cancelled. This app runs in WKWebView, where
+    `beforeunload` is less reliable still.
+
+    Three exits, two mechanisms:
+      visibilitychange  fires while the page is ALIVE (switching away, minimising, on the
+                        way to quitting), so the ordinary flush works and has no size
+                        limit. This is what protects a 25-megapixel frame.
+      pagehide          as the page is destroyed. Only sendBeacon is finished by the
+      beforeunload      browser afterwards, and it is capped at about 64 KB.
+
+    Measured payloads: a 256 px ground-truth tile is 8,007 bytes, so every tile is
+    covered on every exit; a 6144x4096 frame would be ~3 MB and is not, which is why the
+    visibility flush matters and why the cap is checked rather than assumed. After the
+    fix the same reload test went 0.404205 -> 0.423508, and the visibility path went
+    0.423508 -> 0.438385.
+    """
+    js = open(APPJS, encoding="utf-8").read()
+
+    assert 'document.addEventListener("visibilitychange"' in js, (
+        "nothing saves when the window is hidden, which is the only protection a frame "
+        "too big to beacon has")
+    vis = js[js.index('document.addEventListener("visibilitychange"'):]
+    vis = vis[:vis.index("});") + 3]
+    assert "document.hidden" in vis and "flushSave" in vis, vis
+
+    for ev in ("pagehide", "beforeunload"):
+        assert f'"{ev}"' in js, f"{ev} is not handled, so that exit loses unsaved strokes"
+
+    fn = js[js.index("ED.beaconSave = () =>"):]
+    fn = fn[:fn.index("\n  };") + 5]
+    assert "navigator.sendBeacon" in fn, (
+        "the unload path still uses a normal request, which the browser cancels")
+    assert "60000" in fn, "there is no size cap, so an oversized beacon fails silently"
+    assert "cropKey()" in fn and 'q.set("box"' in fn, (
+        "the beacon ignores the crop box, so a cropped save would land on the whole frame")
+
+    # and the beacon must be TRIED FIRST on unload -- a flushSave that runs first would
+    # set `saving`, and the beacon would then be skipped by the in-flight guard
+    unload = js[js.index('for (const ev of ["pagehide", "beforeunload"])'):]
+    unload = unload[:unload.index("\n}") + 2]
+    assert unload.index("beaconSave") < unload.index("flushSave"), unload

@@ -2509,6 +2509,47 @@ async function openEditor(frame) {
   //: Leaving the frame, the tab or the window must not strand unsaved strokes.
   ED.flushSave = () => { clearTimeout(timer); return saveNow("flush"); };
 
+  //: THE SAVE THAT SURVIVES THE PAGE BEING TORN DOWN.
+  //:
+  //: flushSave() on `beforeunload` does not work and was measured not working: it starts
+  //: an async fetch, the page unloads, and the request is cancelled before it reaches the
+  //: server. Painted a tile, reloaded immediately, and the frame's area fraction came
+  //: back at exactly its old value -- the strokes were gone. This app runs in WKWebView,
+  //: where `beforeunload` is less reliable still.
+  //:
+  //: sendBeacon is the one send a browser promises to finish after the page is gone. It
+  //: cannot set headers, so the body is FormData, which carries its own multipart
+  //: boundary and is what /api/mask_edit already parses. It is also capped (about 64 KB
+  //: in practice), so it is used only when the payload fits -- which a 256 x 256 tile
+  //: mask always does at a few KB, and a 25 Mpx frame never will. For the big ones the
+  //: visibilitychange flush below is the real protection, because it runs while the page
+  //: is still alive.
+  ED.beaconSave = () => {
+    if (!ED.dirty || !navigator.sendBeacon || !ED.off) return false;
+    try {
+      const v = ED.view;
+      const key = cropKey();
+      let src = ED.off;
+      if (key !== null) {
+        const sub = document.createElement("canvas");
+        sub.width = v.w; sub.height = v.h;
+        sub.getContext("2d").drawImage(ED.off, v.x, v.y, v.w, v.h, 0, 0, v.w, v.h);
+        src = sub;
+      }
+      // toBlob is async and there is no time left, so the data URL is converted here.
+      const url = src.toDataURL("image/png");
+      const bin = atob(url.slice(url.indexOf(",") + 1));
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      if (bytes.length > 60000) return false;          // over the beacon cap
+      const q = new URLSearchParams({ arm: saveArm, frame: saveFrame });
+      if (key !== null) q.set("box", `${v.x},${v.y},${v.w},${v.h}`);
+      const fd = new FormData();
+      fd.append("file", new Blob([bytes], { type: "image/png" }), `${saveFrame}_gated.png`);
+      return navigator.sendBeacon(`/api/mask_edit?${q}`, fd);
+    } catch { return false; }
+  };
+
   //: MARKING A REGION REVIEWED. This is the control that makes precision measurable:
   //: without a region where BOTH classes are known, a detector pixel outside the user's
   //: crack strokes is unjudgeable, and precision is bounded by how much was painted
@@ -2805,7 +2846,27 @@ async function loadArm() {
   // Closing the window or reloading. Best effort only -- a browser will not wait for an
   // async request here -- but it converts "silently lost" into "usually saved", and the
   // 1.8s delay means the window where anything is at risk is small.
-  window.addEventListener("beforeunload", () => { if (ED.dirty && ED.flushSave) ED.flushSave(); });
+//: THREE WAYS THE PAGE CAN GO, and only one of them leaves time for a normal save.
+//:
+//: visibilitychange fires while the page is STILL ALIVE -- switching away from the
+//: window, minimising it, and on the way to quitting -- so the ordinary flush works and
+//: there is no size limit. It is the one that protects a 25-megapixel frame.
+//:
+//: pagehide and beforeunload fire as the page is being destroyed. An async fetch started
+//: there is cancelled; only sendBeacon is finished by the browser afterwards. pagehide is
+//: listed first because WKWebView, which is what this app runs in, fires it more reliably
+//: than beforeunload.
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden && ED.dirty && ED.flushSave) ED.flushSave();
+});
+for (const ev of ["pagehide", "beforeunload"]) {
+  window.addEventListener(ev, () => {
+    if (!ED.dirty) return;
+    // The beacon first: if it is accepted the bytes are already queued with the browser.
+    if (ED.beaconSave && ED.beaconSave()) return;
+    if (ED.flushSave) ED.flushSave();
+  });
+}
 
   $("#limitsbtn").onclick = () => {
     const d = $("#defs");
