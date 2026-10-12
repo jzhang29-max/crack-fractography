@@ -29,6 +29,9 @@ def main():
     sys.path.insert(0, os.path.join(sem_repo, "interior_active_learning", "code"))
     sys.path.insert(0, os.path.join(sem_repo, "code"))
 
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import detector_overrides as DO
+
     import unified_pipeline as up
     import common
     up.load_correction_mask = lambda *a, **k: None
@@ -38,9 +41,15 @@ def main():
     # run_unified_pipeline resolves its input from ORIGINAL_DIR by name, so the caller stages
     # the upload there under a temporary name and passes the stem.
     stem = os.path.splitext(os.path.basename(src))[0]
+    DO.install(up)
     st = up.run_unified_pipeline(stem)
     labeled, df = st["labeled"], st["df"]
-    keep = set(df.loc[df["IsCrack"] == True, "Label"].tolist())      # noqa: E712
+    if DO.USE_REGION_CLASSIFIER:
+        keep = set(df.loc[df["IsCrack"] == True, "Label"].tolist())  # noqa: E712
+    else:
+        # Measured worse than keeping everything: see detector_overrides.py. Dropping the
+        # classifier only ADDS regions, so it can never delete a pixel a human marked.
+        keep = set(df["Label"].tolist())
     m = np.isin(labeled, list(keep)) if keep else np.zeros(labeled.shape, bool)
     Image.fromarray(np.where(m, 0, 255).astype(np.uint8), "L").save(dst, optimize=True)
     print(f"{m.shape[1]}x{m.shape[0]} {100 * float(m.mean()):.4f}")
