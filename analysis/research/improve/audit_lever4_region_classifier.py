@@ -1,11 +1,11 @@
-"""ADVERSARIAL AUDIT of improve/lever4_region_classifier.py.
+"""ADVERSARIAL AUDIT of lever4_region_classifier.py.
 
 Run:
     cd <scratchpad>/audit_lever4
     /Users/jiamingzhang/Desktop/APP/sem-crack-detector/.venv/bin/python -B \
-        /Users/jiamingzhang/Desktop/APP/crack-fractography/analysis/improve/audit_lever4_region_classifier.py
+        /Users/jiamingzhang/Desktop/APP/crack-fractography/analysis/research/improve/audit_lever4_region_classifier.py
 
-Everything scores through analysis/tilebench.py. Nothing writes outside the scratchpad.
+Everything scores through analysis/research/tilebench.py. Nothing writes outside the scratchpad.
 """
 import os, sys, warnings
 warnings.filterwarnings("ignore")
@@ -13,7 +13,7 @@ SC = ("/private/tmp/claude-501/-Users-jiamingzhang-Desktop-APP/"
       "48e14b5c-6bee-4570-a55e-3f87da7069da/scratchpad")
 os.environ.setdefault("MPLCONFIGDIR", SC + "/mpl")
 sys.path.insert(0, "/Users/jiamingzhang/Desktop/APP/crack-fractography/analysis/research")
-sys.path.insert(0, "/Users/jiamingzhang/Desktop/APP/crack-fractography/analysis/improve")
+sys.path.insert(0, "/Users/jiamingzhang/Desktop/APP/crack-fractography/analysis/research/improve")
 sys.dont_write_bytecode = True
 import numpy as np
 import tilebench as TB

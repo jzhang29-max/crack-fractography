@@ -1,6 +1,18 @@
 """LEVER 4 -- retrain the region classifier on the precise tile labels, with new features.
 
-RESULT (held-out, leave-one-SPECIMEN-out, scored by analysis/tilebench.py):
+STATUS: REJECTED, 2026-10-12. Do not ship this, and do not read the tile scores below as
+support for shipping it. Tested against the hand-painted correction masks on 48 full
+frames, it deletes 72.67% of the hand-marked crack the shipped classifier-off path
+delivers -- worse than the texture veto (67.54%) and the thickness excision (62.43%) that
+were already rejected on the same evidence, and worse than the shipped classifier it was
+meant to replace. Its top feature, MeanWidth, spans 2.61-29.34 px over the training
+positives here and 18-236 px over the regions that hold painted crack on a full frame, so
+its verdict on a main crack is extrapolation, not learning. The headline below is also
+weaker than it looks at the shipped setting: at MATCHED mad_k=5.0 with the one
+off-specimen void tile removed its gain over keeping every candidate is -0.0063.
+Full record: fullframe_lever4_safety.py. Guard: tests/test_region_rules_rejected.py.
+
+RESULT (held-out, leave-one-SPECIMEN-out, scored by analysis/research/tilebench.py):
 
     shipped baseline          P 0.3378  R 0.3696  IoU 0.2143  F1 0.3530
     this, mad_k fixed at 5.0  P 0.8655  R 0.5122  IoU 0.4745  F1 0.6436   <- pure lever 4
@@ -43,7 +55,7 @@ mad_k=5.0 the retrained classifier's entire advantage IS that region (IoU25 0.47
 
 Usage:
     /Users/jiamingzhang/Desktop/APP/sem-crack-detector/.venv/bin/python -B \
-        analysis/improve/lever4_region_classifier.py
+        analysis/research/improve/lever4_region_classifier.py
 (builds an 82 MB region cache in the scratchpad on first run, ~25 s, then reports)
 """
 import os, sys, time, pickle, warnings

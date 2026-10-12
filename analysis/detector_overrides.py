@@ -81,7 +81,45 @@ fitted on itself. See analysis/tilebench.py for the instrument that enforces the
 # are 512 px crops and a wide-open main crack does not fit in one; the repo's comment says
 # it plainly ("the main crack is DARKER and SMOOTHER than the off-specimen background").
 # Do not reintroduce a region-level rule here without re-running
-# analysis/improve/voidkiller_safety.py against the paint.
+# analysis/research/improve/voidkiller_safety.py against the paint.
+#
+# A THIRD rule has now died the same way, and it is the most important of the three
+# because it did not look like a precision rule at all. The region classifier was
+# RETRAINED on the 26 tiles with 24 extra geometry/context/raw-uint16 features and scores
+# nested held-out tile IoU 0.5318 -- nearly double the 0.2979 that ships here. On the 48
+# full frames that carry a hand-painted correction mask (70,041,625 marked crack px, vs
+# the 10-12 frames and 6.3M px earlier runs used) it deletes, of the hand-marked crack
+# this classifier-off path delivers:
+#     retrained region classifier    deletes 72.67% of kept hand-marked crack
+#     texture veto floor=1.0         deletes 67.54%   <- re-measured on the SAME 48 frames
+#     thickness excision r_big=50    deletes 62.43%      through the SAME denominator, so
+#     thickness excision r_big=100   deletes 54.62%      the four are comparable
+# It is the worst of the four, and it is worse than the shipped classifier it was meant to
+# replace: it removes 143,252 hand-marked NOT-crack px while deleting 12,518,382
+# hand-marked crack px -- 87 px of real crack per px of false positive -- where the
+# shipped classifier removes MORE not-crack (150,293 px) for 14x less crack damage.
+# (The 43.46%/41.00%/40.28% figures above are four frames against "% of all painted" and
+# are NOT comparable to these; one unit set and one denominator at a time.)
+#
+# The cause is structural, so no retraining fixes it. MeanWidth is the retrained model's
+# top feature by permutation importance; over the tile training POSITIVES it spans
+# 2.61-29.34 px, because a crack wider than that does not fit in a 512 px labelling crop.
+# The regions holding painted crack on a full frame span MeanWidth 18-236 px and MaxWidth
+# 42-654 px: disjoint support. 88.0% of every deleted crack pixel lies in a region wider
+# than ANY training positive, and only 8 of 31 such regions are rejected -- so this is not
+# even a learned width rule, it is unconstrained extrapolation into a corner of feature
+# space the training set never visited, where the stakes are the whole main crack.
+# Read at MATCHED mad_k with the one off-specimen void tile removed, its tile advantage at
+# the shipped mad_k=5.0 is -0.0063 -- a REGRESSION -- and it loses 3.8% of tile true
+# positives too. The pooled tile IoU reported that as a win because the precision it
+# bought on one void region outweighed it.
+# Bolting on production's force_keep_area=50000 cuts the deletion to 8.74%, still 28 of 48
+# frames losing >1% of their kept crack, and the tiles cannot even evaluate it: 1 of 228
+# tile regions reaches 50,000 px and it is the void, so on tiles a force-keep scores
+# IoU 0.5318 -> 0.3324. The tile and full-frame rankings of one rule point opposite ways.
+# Full record and the gate to re-run:
+# analysis/research/improve/fullframe_lever4_safety.py, guarded by
+# tests/test_region_rules_rejected.py.
 USE_REGION_CLASSIFIER = False
 
 # SECOND CHANGE: union the darkness cut across a ladder of flattening radii.
