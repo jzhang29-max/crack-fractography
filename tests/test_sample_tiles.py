@@ -253,3 +253,40 @@ def test_a_sampled_tile_is_scorable_end_to_end(seeded):
         assert reg["scored_against"] == "uploads/as-cut", reg
         assert reg["tp"] + reg["fp"] + reg["fn"] + reg["tn"] == 512 * 512
         assert reg["fn"] >= 4000, reg      # the block I painted, less any already marked
+
+
+@needs_sem
+def test_restricting_to_specimens_says_so_and_sticks_to_them(seeded):
+    """A sample over named specimens estimates THOSE SPECIMENS, not the corpus, and the
+    two must not be pooled without area weights. Used to top up what a uniform draw
+    missed: at n=24 over 14 specimens, five got nothing and 10.1% of the corpus area was
+    unrepresented. The restriction is echoed back in the response for the same reason the
+    seed is -- a sample whose population nobody recorded cannot be interpreted later."""
+    with Server(seeded) as s:
+        st, all_r = _post(s, "/api/sample_tiles",
+                          {"arm": "sem/machine", "n": 3, "size": 256, "seed": 31})
+        assert st == 200, all_r
+        pool_spec = sorted({f["specimen"] for f in json.load(
+            open(os.path.join(str(seeded), "frames.json"), encoding="utf-8"))})
+        pick = pool_spec[:2]
+        st, r = _post(s, "/api/sample_tiles",
+                      {"arm": "sem/machine", "n": 6, "size": 256, "seed": 31,
+                       "specimens": pick})
+        assert st == 200, r
+        assert r["specimens_restricted_to"] == sorted(pick), r["specimens_restricted_to"]
+        assert "RESTRICTED" in r["sampling_rule"], r["sampling_rule"]
+        assert "must not be pooled" in r["sampling_rule"]
+        # every tile's parent really is in one of the named specimens
+        by_frame = {f["frame"]: f["specimen"] for f in json.load(
+            open(os.path.join(str(seeded), "frames.json"), encoding="utf-8"))}
+        got = {by_frame[t["parent"]] for t in r["tiles"]}
+        assert got <= set(pick), f"sampled outside the restriction: {got - set(pick)}"
+
+
+@needs_sem
+@pytest.mark.parametrize("bad", [[], "MAR_H_AS", ["no such specimen"]])
+def test_an_unusable_specimen_restriction_is_refused(seeded, bad):
+    with Server(seeded) as s:
+        st, _ = _post(s, "/api/sample_tiles",
+                      {"arm": "sem/machine", "n": 2, "size": 256, "specimens": bad})
+        assert st in (400, 404), f"{bad!r} was accepted"

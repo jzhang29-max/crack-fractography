@@ -661,3 +661,33 @@ def test_a_remembered_crop_is_validated_against_the_mask_it_is_restored_onto():
     rm = js[js.index("const rememberView = (v) =>"):]
     rm = rm[:rm.index("\n  };") + 5]
     assert "removeItem" in rm, "clearing the crop does not clear the stored one"
+
+
+def test_a_flat_bright_region_is_not_saved_as_black(tmp_path):
+    """`_a * 0` wrote black for ANY constant region, whatever its brightness.
+
+    These micrographs are clipped at acquisition -- one frame holds 69% of its pixels at
+    exactly 65535 -- so a crop landing on a saturated-white patch was saved as a black
+    square, and the person labelling it would have been shown the opposite of what is
+    there with nothing on screen to say so. Found while checking a sampled ground-truth
+    tile whose source region turned out to be 65,536 pixels of a single value; that one
+    was black, so it was faithful by luck.
+    """
+    import numpy as np
+    d = tmp_path / "d"
+    with Server(d) as s:
+        # _seed here returns the whole upload response, not the frame name
+        f = _seed(s, "flat")["frame"]
+        up = os.path.join(str(d), "uploads")
+        # a 16-bit micrograph: left half saturated white, right half mid-grey
+        # the same size as the mask _seed makes (400x300), or the crop refuses to cut it
+        a = np.full((300, 400), 30000, np.uint16)
+        a[:, :100] = 65535
+        Image.fromarray(a, mode="I;16").save(os.path.join(up, f"{f}_original.png"))
+        st, c = _crop(s, f, 0, 0, 64, 64)
+        assert st == 200, c
+        assert c["original_cropped"] is True, c.get("original_note")
+        got = np.array(Image.open(os.path.join(up, f"{c['frame']}_original.png")))
+        assert got.min() == got.max(), "the test region was not constant after all"
+        assert got.max() > 1000, (
+            f"a saturated-white region was saved at level {got.max()}, i.e. as black")

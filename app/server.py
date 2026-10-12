@@ -1143,7 +1143,15 @@ def crop(payload: dict = Body(...)):
                     import numpy as _np
                     _a = _np.asarray(cut, dtype=_np.float64)
                     _lo, _hi = float(_a.min()), float(_a.max())
-                    _a = ((_a - _lo) / (_hi - _lo) * 65535.0) if _hi > _lo else _a * 0
+                    # A CONSTANT REGION KEEPS ITS LEVEL. `_a * 0` wrote black for any
+                    # flat region whatever its brightness, so a saturated-WHITE patch --
+                    # and these micrographs are clipped at acquisition, one frame holding
+                    # 69% of its pixels at exactly 65535 -- was saved as a black square.
+                    # The labeller would have been shown the opposite of what is there,
+                    # with nothing on screen to say so. Clipped rather than stretched,
+                    # because a single value has no range to stretch against.
+                    _a = (((_a - _lo) / (_hi - _lo) * 65535.0) if _hi > _lo
+                          else _np.clip(_a, 0.0, 65535.0))
                     cut = Image.fromarray(_a.astype("uint16"), mode="I;16")
                 cut.save(os.path.join(UPLOAD_DIR, f"{stem}_original.png"))
                 original_cropped = True
@@ -1274,6 +1282,22 @@ def sample_tiles(payload: dict = Body(...)):
         raise HTTPException(400, f"{collection!r} is not a usable collection name")
 
     frames = [f for f in (_load_quiet("frames") or []) if f.get("arm") == arm]
+    # NARROWING THE POPULATION IS A DIFFERENT EXPERIMENT, so it is explicit and it is
+    # echoed back. A uniform sample over the whole arm estimates the corpus; a sample
+    # restricted to named specimens estimates those specimens, and the two must not be
+    # pooled without weights. Used here to top up the specimens a uniform draw missed --
+    # at n=24 over 14 specimens, five got nothing.
+    want_spec = payload.get("specimens")
+    if want_spec is not None:
+        if not isinstance(want_spec, list) or not want_spec:
+            raise HTTPException(400, "specimens must be a non-empty list of names")
+        want = {str(x) for x in want_spec}
+        have = {f.get("specimen") for f in frames}
+        unknown = sorted(want - have)
+        if unknown:
+            raise HTTPException(404, f"no frames in {arm!r} for specimen(s): "
+                                     f"{', '.join(unknown)}")
+        frames = [f for f in frames if f.get("specimen") in want]
     if not frames:
         raise HTTPException(404, f"no measured frames in {arm!r} to sample from")
 
@@ -1385,9 +1409,16 @@ def sample_tiles(payload: dict = Body(...)):
             "n_without_micrograph": len(blind),
             "without_micrograph": [{"frame": m["frame"], "why": m["micrograph_note"]}
                                    for m in blind][:10],
+            "specimens_restricted_to": sorted(want_spec) if want_spec else None,
             "sampling_rule": (f"positions drawn uniformly over the {int(areas.sum()):,} "
                               f"valid top-left corners across {len(pool)} frames of "
-                              f"{arm}, seed {seed}. Neither the detector's output nor any "
+                              f"{arm}"
+                              + (f", RESTRICTED to specimens "
+                                 f"{', '.join(sorted(want_spec))} -- this estimates those "
+                                 f"specimens, not the corpus, and must not be pooled with "
+                                 f"an unrestricted sample without area weights"
+                                 if want_spec else "")
+                              + f", seed {seed}. Neither the detector's output nor any "
                               f"existing label was consulted in choosing them."),
             "note": ("hand-label each tile, then press Mark region reviewed on it. Tiles "
                      "with no predicted crack are not waste -- they are the only place a "
