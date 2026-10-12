@@ -1274,6 +1274,20 @@ def sample_tiles(payload: dict = Body(...)):
     except (TypeError, ValueError):
         raise HTTPException(400, "n, size and seed must be integers")
     collection = (payload.get("collection") or "").strip()
+    # BLANK, SO THE GROUND TRUTH IS INDEPENDENT OF THE DETECTOR.
+    #
+    # A tile cut from sem/machine arrives with the detector's output already drawn on it,
+    # and "labelling" then means editing that. What comes back is not an independent
+    # ground truth, it is the prediction plus whatever the labeller felt moved to change
+    # -- anchored to it, and biased toward agreeing with it. The whole point of the
+    # exercise is a verdict the detector had no hand in.
+    #
+    # So the editable mask starts empty and the person draws the cracks themselves. The
+    # detector's output is NOT discarded: `_ascut.png` still holds exactly what it said
+    # at that box, and that is what /api/review_scores compares the finished label
+    # against. The two files are what make the comparison honest.
+    blank = bool(payload.get("blank_mask"))
+    tag = (payload.get("tag") or "").strip() or None
     if not 1 <= n <= 200:
         raise HTTPException(400, f"n must be between 1 and 200, not {n}")
     if not 32 <= size <= 2048:
@@ -1361,6 +1375,16 @@ def sample_tiles(payload: dict = Body(...)):
                            "error": getattr(e, "detail", str(e))})
             continue
         stem = c["frame"]
+        if blank:
+            # White is not-crack. `_ascut.png` was written before this and is untouched.
+            gated = os.path.join(UPLOAD_DIR, f"{stem}_gated.png")
+            with Image.open(gated) as _g:
+                _blank = Image.new("L", _g.size, 255)
+            _blank.save(gated)
+            try:
+                remeasure(arm="uploads", frame=stem)
+            except HTTPException:
+                pass
         # WHAT THE DETECTOR SAID HERE, recorded now from the pristine copy. It is not used
         # to choose the tile -- it is read after the position is fixed -- and having it on
         # the record is what lets the finished set be analysed by stratum later without
@@ -1380,14 +1404,22 @@ def sample_tiles(payload: dict = Body(...)):
                      "has_micrograph": bool(c.get("original_cropped")),
                      "micrograph_note": c.get("original_note")})
 
-    if collection and made:
+    if (collection or tag) and made:
         with _DATASET_LOCK:
             fp = os.path.join(OUT, "frames.json")
             cur = json.load(open(fp, encoding="utf-8")) if os.path.exists(fp) else []
             names = {m["frame"] for m in made}
             for r in cur:
                 if r.get("arm") == "uploads" and r.get("frame") in names:
-                    r["collection"] = collection
+                    if collection:
+                        r["collection"] = collection
+                    # WHICH SAMPLE THIS TILE CAME FROM, on the record rather than in a
+                    # second collection. A uniform draw and a top-up over named specimens
+                    # estimate different things and must stay separable -- but splitting
+                    # them across two dropdown entries makes the person navigate between
+                    # two lists to do one job. One collection, a field that says which.
+                    if tag:
+                        r["sample"] = tag
             _write_json(fp, cur)
             if collection not in _read_collections():
                 _write_json(_collections_path(), _read_collections() + [collection])
@@ -1410,6 +1442,7 @@ def sample_tiles(payload: dict = Body(...)):
             "without_micrograph": [{"frame": m["frame"], "why": m["micrograph_note"]}
                                    for m in blind][:10],
             "specimens_restricted_to": sorted(want_spec) if want_spec else None,
+            "tag": tag, "blank_mask": blank,
             "sampling_rule": (f"positions drawn uniformly over the {int(areas.sum()):,} "
                               f"valid top-left corners across {len(pool)} frames of "
                               f"{arm}"
@@ -1420,9 +1453,13 @@ def sample_tiles(payload: dict = Body(...)):
                                  if want_spec else "")
                               + f", seed {seed}. Neither the detector's output nor any "
                               f"existing label was consulted in choosing them."),
-            "note": ("hand-label each tile, then press Mark region reviewed on it. Tiles "
-                     "with no predicted crack are not waste -- they are the only place a "
-                     "MISSED crack can be found.")}
+            "note": (("each tile opens BLANK over its micrograph: draw the cracks you "
+                      "see, then press Mark this tile reviewed. What the detector said "
+                      "is kept separately and is what your label is scored against."
+                      if blank else
+                      "hand-label each tile, then press Mark region reviewed on it.")
+                     + " Tiles with no crack in them are not waste -- they are the only "
+                       "place a MISSED crack can be found.")}
 
 
 #: A REVIEWED REGION IS THE ONLY THING THAT MAKES PRECISION MEASURABLE HERE.
@@ -3294,7 +3331,7 @@ def remeasure(arm: str = Query(...), frame: str = Query(...)):
     # the row as corrected at all. discard_edit pops the key before it re-measures rather
     # than setting it False, so a genuine discard is still not carried back.
     for k in ("source_filename", "was_segmented_here", "copied_from",
-              "cropped_from", "has_original", "edited", "collection"):
+              "cropped_from", "has_original", "edited", "collection", "sample"):
         if prior and prior.get(k) is not None and summ.get(k) is None:
             summ[k] = prior[k]
     for r in rows:

@@ -290,3 +290,99 @@ def test_an_unusable_specimen_restriction_is_refused(seeded, bad):
         st, _ = _post(s, "/api/sample_tiles",
                       {"arm": "sem/machine", "n": 2, "size": 256, "specimens": bad})
         assert st in (400, 404), f"{bad!r} was accepted"
+
+
+@needs_sem
+def test_a_blank_tile_keeps_the_detector_output_somewhere_else(seeded):
+    """GROUND TRUTH THE DETECTOR HAD NO HAND IN.
+
+    A tile cut from sem/machine arrives with the detector's output already drawn on it,
+    and "labelling" then means editing that -- so what comes back is the prediction plus
+    whatever the labeller felt moved to change, anchored to it and biased toward agreeing
+    with it. The user asked for the samples "without any markings", which is also the
+    better experiment.
+
+    The two things that must both hold: the editable mask is empty, AND the detector's
+    output survives in `_ascut.png`, because that is what the finished label is scored
+    against. Blanking both would leave nothing to compare to.
+    """
+    with Server(seeded) as s:
+        st, r = _post(s, "/api/sample_tiles",
+                      {"arm": "sem/machine", "n": 4, "size": 512, "seed": 41,
+                       "collection": "GT", "tag": "uniform", "blank_mask": True})
+        assert st == 200, r
+        assert r["blank_mask"] is True and r["tag"] == "uniform"
+        up = os.path.join(str(seeded), "uploads")
+        marked = 0
+        for t in r["tiles"]:
+            g = np.array(Image.open(os.path.join(up, f"{t['frame']}_gated.png")).convert("L"))
+            assert (g == 255).all(), f"{t['frame']} opens with {int((g<128).sum())} marked px"
+            a = np.array(Image.open(os.path.join(up, f"{t['frame']}_ascut.png")).convert("L"))
+            x, y, w, h = t["box"]
+            par = np.array(Image.open(
+                os.path.join(_MACHINE, f"{t['parent']}_machine.png")).convert("L"))
+            assert np.array_equal(a, par[y:y + h, x:x + w]), (
+                f"{t['frame']}: blanking the mask also destroyed the detector's copy")
+            marked += int((a < 128).sum())
+        assert marked > 0, (
+            "no sampled tile had any detector output at all; this test would pass "
+            "trivially on a corpus where the detector predicts nothing")
+        rows = [f for f in s.dataset("frames") if f.get("arm") == "uploads"]
+        assert all(f.get("collection") == "GT" for f in rows), rows[0]
+        assert all(f.get("sample") == "uniform" for f in rows)
+        assert all(f.get("area_fraction") == 0 for f in rows), (
+            "a blanked tile still measures crack in it")
+
+        # AND THEY SURVIVE A LATER RE-MEASURE, which is the case that actually bites.
+        # The stamp above is applied after the tiles are cut, so it passes whether or not
+        # the fields are on remeasure's carry-through list -- I checked, by removing them
+        # and watching this test stay green. The moment that matters is the FIRST TIME
+        # THE LABELLER PAINTS: that re-measures the frame, and a field not carried across
+        # is silently dropped, so the tile falls out of its own collection as soon as
+        # someone starts work on it.
+        t = r["tiles"][0]["frame"]
+        m = np.array(Image.open(os.path.join(up, f"{t}_gated.png")).convert("L"))
+        m[20:60, 20:120] = 0
+        import io as _io
+        b = _io.BytesIO(); Image.fromarray(m, mode="L").save(b, "PNG")
+        st, raw = s.upload("x.png", b.getvalue(),
+                           path=f"/api/mask_edit?arm=uploads&frame={t}")
+        assert st == 200, raw[:300]
+        rec = next(f for f in s.dataset("frames") if f.get("frame") == t)
+        assert rec.get("collection") == "GT", (
+            "painting a tile dropped it out of its collection")
+        assert rec.get("sample") == "uniform", (
+            "painting a tile lost which sample it belongs to, so the uniform draw and "
+            "the top-up can no longer be told apart")
+
+
+@needs_sem
+def test_a_blank_tile_is_still_scorable_against_what_the_detector_said(seeded):
+    """The point of keeping the as-cut copy. Draw a crack on an empty tile, mark it
+    reviewed, and the comparison is against the detector -- not against the drawing."""
+    with Server(seeded) as s:
+        st, r = _post(s, "/api/sample_tiles",
+                      {"arm": "sem/machine", "n": 3, "size": 512, "seed": 43,
+                       "blank_mask": True})
+        assert st == 200, r
+        t = max(r["tiles"], key=lambda z: z["predicted_fraction"] or 0)
+        if not (t["predicted_fraction"] or 0) > 0:
+            pytest.skip("no sampled tile had a prediction to score against")
+        up = os.path.join(str(seeded), "uploads")
+        m = np.array(Image.open(os.path.join(up, f"{t['frame']}_gated.png")).convert("L"))
+        m[100:150, 100:300] = 0                      # the labeller draws one crack
+        import io as _io
+        b = _io.BytesIO(); Image.fromarray(m, mode="L").save(b, "PNG")
+        st, raw = s.upload("x.png", b.getvalue(),
+                           path=f"/api/mask_edit?arm=uploads&frame={t['frame']}")
+        assert st == 200, raw[:300]
+        st, d = _post(s, "/api/review_region",
+                      {"arm": "uploads", "frame": t["frame"], "box": [0, 0, 512, 512]})
+        assert st == 200 and d["scorable"] is True, d.get("why_not")
+        st, sc = s.json("/api/review_scores")
+        reg = next(x for x in sc["regions"] if x.get("frame") == t["frame"])
+        assert reg["scored_against"] == "uploads/as-cut"
+        assert reg["tp"] + reg["fp"] + reg["fn"] + reg["tn"] == 512 * 512
+        assert reg["fp"] > 0, (
+            "the detector marked pixels the labeller did not, and none were counted as "
+            "false positives -- the comparison is not reaching the as-cut copy")
