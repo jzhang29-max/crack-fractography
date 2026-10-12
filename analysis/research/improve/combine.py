@@ -17,7 +17,7 @@ import numpy as np
 from scipy import ndimage as ndi
 from skimage import filters
 
-sys.path.insert(0, "/Users/jiamingzhang/Desktop/APP/crack-fractography/analysis")
+sys.path.insert(0, "/Users/jiamingzhang/Desktop/APP/crack-fractography/analysis/research")
 sys.dont_write_bytecode = True
 import tilebench as TB, crackpipe as CP
 import detect_cracks as D

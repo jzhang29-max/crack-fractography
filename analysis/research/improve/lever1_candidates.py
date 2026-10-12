@@ -31,7 +31,7 @@ warnings.filterwarnings("ignore")
 SC = ("/private/tmp/claude-501/-Users-jiamingzhang-Desktop-APP/"
       "48e14b5c-6bee-4570-a55e-3f87da7069da/scratchpad")
 os.environ.setdefault("MPLCONFIGDIR", SC + "/mpl")
-AN = "/Users/jiamingzhang/Desktop/APP/crack-fractography/analysis"
+AN = "/Users/jiamingzhang/Desktop/APP/crack-fractography/analysis/research"
 if AN not in sys.path:
     sys.path.insert(0, AN)
 sys.dont_write_bytecode = True

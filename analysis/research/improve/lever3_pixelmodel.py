@@ -113,7 +113,7 @@ import os, sys, time
 import numpy as np
 from scipy import ndimage as ndi
 
-ANALYSIS = "/Users/jiamingzhang/Desktop/APP/crack-fractography/analysis"
+ANALYSIS = "/Users/jiamingzhang/Desktop/APP/crack-fractography/analysis/research"
 sys.path.insert(0, ANALYSIS)
 import tilebench as TB
 import crackpipe as CP

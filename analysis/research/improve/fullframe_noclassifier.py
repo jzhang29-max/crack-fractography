@@ -19,7 +19,7 @@ import numpy as np
 from scipy import ndimage as ndi
 from PIL import Image
 
-sys.path.insert(0, "/Users/jiamingzhang/Desktop/APP/crack-fractography/analysis")
+sys.path.insert(0, "/Users/jiamingzhang/Desktop/APP/crack-fractography/analysis/research")
 sys.path.insert(0, "/Users/jiamingzhang/Desktop/APP/sem-crack-detector/code")
 sys.dont_write_bytecode = True
 import joblib

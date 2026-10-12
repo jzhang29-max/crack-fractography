@@ -84,7 +84,7 @@ Run: <sem-crack-detector venv>/bin/python -B audit_lever3_pixelmodel.py [--all]
 """
 import os, sys, numpy as np
 
-ANALYSIS = "/Users/jiamingzhang/Desktop/APP/crack-fractography/analysis"
+ANALYSIS = "/Users/jiamingzhang/Desktop/APP/crack-fractography/analysis/research"
 sys.path.insert(0, ANALYSIS)
 import tilebench as TB
 import crackpipe as CP

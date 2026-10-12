@@ -64,7 +64,7 @@ import numpy as np
 from scipy import ndimage as ndi
 from skimage import exposure, morphology, filters
 
-ANALYSIS = "/Users/jiamingzhang/Desktop/APP/crack-fractography/analysis"
+ANALYSIS = "/Users/jiamingzhang/Desktop/APP/crack-fractography/analysis/research"
 if ANALYSIS not in sys.path:
     sys.path.insert(0, ANALYSIS)
 import tilebench as TB            # noqa: E402  THE scorer

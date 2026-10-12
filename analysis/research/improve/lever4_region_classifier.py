@@ -51,7 +51,7 @@ warnings.filterwarnings("ignore")
 SC = ("/private/tmp/claude-501/-Users-jiamingzhang-Desktop-APP/"
       "48e14b5c-6bee-4570-a55e-3f87da7069da/scratchpad")
 os.environ.setdefault("MPLCONFIGDIR", SC + "/mpl")
-sys.path.insert(0, "/Users/jiamingzhang/Desktop/APP/crack-fractography/analysis")
+sys.path.insert(0, "/Users/jiamingzhang/Desktop/APP/crack-fractography/analysis/research")
 sys.dont_write_bytecode = True
 import numpy as np
 from scipy import ndimage as ndi

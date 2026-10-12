@@ -4,7 +4,7 @@ If it does not, every comparison built on it is between two different instrument
 differences mean nothing. This runs before any improvement is believed.
 """
 import sys, numpy as np
-sys.path.insert(0, "/Users/jiamingzhang/Desktop/APP/crack-fractography/analysis")
+sys.path.insert(0, "/Users/jiamingzhang/Desktop/APP/crack-fractography/analysis/research")
 sys.dont_write_bytecode = True
 import tilebench as TB, crackpipe as CP
 

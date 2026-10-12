@@ -21,7 +21,7 @@ import numpy as np
 from scipy import ndimage as ndi
 from PIL import Image
 
-sys.path.insert(0, "/Users/jiamingzhang/Desktop/APP/crack-fractography/analysis")
+sys.path.insert(0, "/Users/jiamingzhang/Desktop/APP/crack-fractography/analysis/research")
 sys.dont_write_bytecode = True
 import crackpipe as CP
 import detect_cracks as D
