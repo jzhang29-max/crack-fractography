@@ -1356,7 +1356,23 @@ def sample_tiles(payload: dict = Body(...)):
 
     areas = np.array([(w - size + 1) * (h - size + 1) for _, w, h in pool], dtype=np.float64)
     probs = areas / areas.sum()
-    rng = np.random.default_rng(seed)
+    # THE SEED IS MIXED WITH WHAT IS BEING SAMPLED, or two calls that differ only in
+    # their restriction draw the SAME positions.
+    #
+    # Measured: topping up four missing specimens with four calls, all seed 7, put all
+    # eight tiles on just TWO box coordinates -- (3853,3216) and (4695,807), each used
+    # four times across four different specimens. Each call builds its own
+    # default_rng(7), so each replays one sequence, and with pools of similar dimensions
+    # it lands in the same places. The tiles were not independent draws; they were two
+    # positions repeated.
+    #
+    # Mixing keeps reproducibility -- the same request with the same seed still gives
+    # the same sample -- while making a different request with the same seed a different
+    # sample, which is what a seed is supposed to mean.
+    import hashlib as _hl
+    _key = f"{seed}|{arm}|{size}|{','.join(sorted(want_spec)) if want_spec else '*'}"
+    _mixed = int.from_bytes(_hl.blake2b(_key.encode(), digest_size=8).digest(), "big")
+    rng = np.random.default_rng(_mixed)
 
     made, failed, seen = [], [], set()
     for i in range(n):

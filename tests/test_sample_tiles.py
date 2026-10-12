@@ -386,3 +386,43 @@ def test_a_blank_tile_is_still_scorable_against_what_the_detector_said(seeded):
         assert reg["fp"] > 0, (
             "the detector marked pixels the labeller did not, and none were counted as "
             "false positives -- the comparison is not reaching the as-cut copy")
+
+
+@needs_sem
+def test_two_restrictions_with_the_same_seed_do_not_draw_the_same_positions(seeded):
+    """MEASURED FAILING. Topping up four missing specimens with four calls, all seed 7,
+    put all eight tiles on just TWO box coordinates -- (3853,3216,512,512) and
+    (4695,807,512,512), each used four times across four different specimens. Each call
+    builds its own default_rng(7) and replays one sequence, and with pools of similar
+    dimensions it lands in the same places. Those tiles were not independent draws.
+
+    Reproducibility is the other half: the SAME request with the same seed must still
+    give the same sample, or no result can be checked later."""
+    specs = sorted({f["specimen"] for f in json.load(
+        open(os.path.join(str(seeded), "frames.json"), encoding="utf-8"))})
+    if len(specs) < 3:
+        pytest.skip("need at least three specimens")
+    boxes = {}
+    with Server(seeded) as s:
+        for sp in specs[:3]:
+            st, r = _post(s, "/api/sample_tiles",
+                          {"arm": "sem/machine", "n": 2, "size": 512, "seed": 7,
+                           "specimens": [sp]})
+            assert st == 200, r
+            boxes[sp] = [tuple(t["box"]) for t in r["tiles"]]
+        flat = [b for v in boxes.values() for b in v]
+        assert len(set(flat)) > len(flat) // 2, (
+            f"three restrictions with one seed produced {len(set(flat))} distinct boxes "
+            f"out of {len(flat)}: {boxes}")
+
+        # and the same request twice is still identical
+        again = {}
+        for sp in specs[:2]:
+            st, r = _post(s, "/api/sample_tiles",
+                          {"arm": "sem/machine", "n": 2, "size": 512, "seed": 7,
+                           "specimens": [sp]})
+            assert st == 200, r
+            again[sp] = [tuple(t["box"]) for t in r["tiles"]]
+        for sp in again:
+            assert again[sp] == boxes[sp], (
+                f"the same request with the same seed changed: {sp}")
