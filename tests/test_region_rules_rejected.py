@@ -46,6 +46,7 @@ def test_the_rejection_is_recorded_with_the_numbers_that_decided_it():
         "88.0%",           # share of deleted crack in regions wider than any of them
         "-0.0063",         # its tile gain at the SHIPPED mad_k, void tile removed
         "8.74%",           # the force-keep remedy, which also fails
+        "76.72%",          # the same verdict against the v1.49 candidate stage that ships
     ):
         assert ev in doc, f"the rejection is recorded but {ev!r} (its evidence) is not"
 

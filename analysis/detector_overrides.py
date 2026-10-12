@@ -101,6 +101,11 @@ fitted on itself. See analysis/tilebench.py for the instrument that enforces the
 # (The 43.46%/41.00%/40.28% figures above are four frames against "% of all painted" and
 # are NOT comparable to these; one unit set and one denominator at a time.)
 #
+# Re-measured against the v1.49 multi-scale candidate stage that ships now, rather than
+# the v1.48 single-scale cut those figures used: 76.72% of kept, and the force-keep remedy
+# degrades from 28 to 33 of 48 frames losing >1%. The union is a strict superset, so it
+# hands the classifier more crack to reject and the verdict gets WORSE, not better.
+#
 # The cause is structural, so no retraining fixes it. MeanWidth is the retrained model's
 # top feature by permutation importance; over the tile training POSITIVES it spans
 # 2.61-29.34 px, because a crack wider than that does not fit in a 512 px labelling crop.

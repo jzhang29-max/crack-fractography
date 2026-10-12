@@ -47,6 +47,23 @@ rules read 16.61% / 15.35% / 13.43% over 48 frames, against 43.46% / 41.00% / 40
 the four frames voidkiller_safety.py used -- which is why only one unit set and one
 denominator may be quoted at a time.
 
+RE-MEASURED against the candidate stage that ships TODAY. v1.49 (commit b5de5a5) landed
+the multi-scale union while this was in flight, so the numbers above are against v1.48's
+single-scale sigma=40 cut. Re-run with CANDIDATES=v149, which takes the override function
+from detector_overrides.install() itself rather than reimplementing it (and is checked by
+collapsing its ladder to (40,), which must reproduce v1.48 exactly):
+
+    arm                     crack px kept   deleted vs no-classifier   % of what it kept
+    no classifier (v1.49)      20,903,694                          0               0.00%
+    lever 4                     4,865,430                 16,038,264              76.72%
+    lever 4 + force-keep       18,645,814                  2,257,880              10.80%
+    shipped classifier         19,770,671                  1,133,023               5.42%
+
+The union is a strict superset, so it hands the classifier MORE crack to reject and the
+verdict gets worse, not better: 76.72% against 72.67%, and the force-keep remedy degrades
+from 28 to 33 of 48 frames losing more than 1% of their kept crack. Every conclusion below
+holds on both candidate stages.
+
 Not a single-frame artefact: 38 of the 48 frames lose more than 1% of their kept crack,
 7 of the 10 specimens lose more than 60%, and the figure is 77.49% at mad_k=3.0 and
 77.64% at mad_k=2.5. The one number that settles it -- lever 4 removes 143,252
