@@ -32,6 +32,7 @@ branched network would invent one.
 """
 import json
 import os
+import re
 import sys
 
 import numpy as np
@@ -491,6 +492,20 @@ def canonical_stem(name):
     root, ext = os.path.splitext(stem)
     if ext.lower() in IMAGE_EXTS:
         stem = root
+    # The stem has to be a name the rest of the app will accept back. server.py's
+    # SAFE_FRAME requires an alphanumeric first character and [A-Za-z0-9._-] after it, and
+    # it guards delete, rename, review and mask-edit -- but NOT upload. So a file called
+    # "_scan01.tif", "my scan.tif" or a macOS "._foo" produced a frame that could be
+    # created and measured and then never deleted or edited, with the 400 arriving from a
+    # different endpoint than the one that made it. Measured on a real upload named
+    # "__cf_e2e_test": it segmented, wrote 42 crack rows, and delete answered
+    # "'__cf_e2e_test' is not a frame name this will build a path from".
+    #
+    # Sanitising happens BEFORE the suffix loop, not after, and that order is load-bearing:
+    # "foo mask.png" sanitised afterwards becomes "foo_mask", which a SECOND call would
+    # then strip to "foo" -- breaking the idempotency this function's docstring is mostly
+    # about. Sanitised first it is "foo_mask" -> "foo" on both calls.
+    stem = re.sub(r"[^A-Za-z0-9._\-]", "_", stem).lstrip("._-") or "image"
     while True:
         for suf in MASK_SUFFIXES:
             if stem.endswith(suf) and len(stem) > len(suf):

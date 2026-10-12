@@ -15,6 +15,10 @@ import pytest
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO, "analysis"))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # for liveserver
+import re as _re
+
+SAFE_FRAME_RE = _re.compile(r"[A-Za-z0-9][A-Za-z0-9._\-]*\Z")
+
 from measure import MASK_SUFFIXES, canonical_stem   # noqa: E402
 
 
@@ -34,11 +38,19 @@ def test_a_name_made_only_of_suffixes_never_canonicalises_to_nothing():
 
     The guarantee is non-emptiness, not that the name is untouched: "_crack_mask" losing
     its "_mask" to become "_crack" is odd but harmless, whereas an empty frame name breaks
-    every lookup keyed on it."""
+    every lookup keyed on it.
+
+    This used to assert canonical_stem("_gated.png") == "_gated". That expectation was
+    itself the bug now covered by test_frame_name_round_trip.py: SAFE_FRAME requires an
+    alphanumeric first character and guards delete, rename, review and mask_edit, so a
+    frame named "_gated" could be created and measured and then never removed. The leading
+    separator is now stripped. The guarantee this test exists for -- a non-empty name -- is
+    unchanged, and is still checked over every suffix below."""
     for n in list(MASK_SUFFIXES) + ["_gated.png", "_mask_gated", "_gated_gated"]:
         got = canonical_stem(n)
         assert got, f"{n!r} canonicalised away to an empty name"
-    assert canonical_stem("_gated.png") == "_gated"
+        assert SAFE_FRAME_RE.match(got), f"{n!r} canonicalised to {got!r}, which cannot be deleted"
+    assert canonical_stem("_gated.png") == "gated"
 
 
 def test_the_longest_suffix_wins():
