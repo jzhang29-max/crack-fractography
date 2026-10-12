@@ -84,6 +84,50 @@ fitted on itself. See analysis/tilebench.py for the instrument that enforces the
 # analysis/improve/voidkiller_safety.py against the paint.
 USE_REGION_CLASSIFIER = False
 
+# SECOND CHANGE: union the darkness cut across a ladder of flattening radii.
+#
+# flatten_background is a high-pass filter, so sigma=40 erases any feature wider than its
+# own blur radius -- segment_dark_regions' docstring already says this about voids. The
+# consequence is broader than voids: a crack is only reliably dark at the scales near its
+# own width, and one radius sees one band. Taking the SAME cut at seven radii and unioning
+# them costs nothing in parameters and recovers the bands sigma=40 cannot see.
+#
+# mad_k stays at the shipped 5.0 and the ladder is every scale, not a chosen subset, so
+# this introduces NO new tuned constant. On the 26 tiles (held-out == fitted, 0 params):
+#
+#                            precision  recall     IoU      F1
+#     v1.48 (single scale)      0.4033  0.5326  0.2979  0.4590
+#     multi-scale union         0.4182  0.6252  0.3344  0.5012
+#
+# All four rise again. Excluding the one off-specimen void tile: IoU 0.4812 -> 0.5314,
+# F1 0.6498 -> 0.6940. Driving THIS code (not a reference copy) over 12 full frames
+# against the paint: recall on hand-marked crack 0.6697 -> 0.7911, +809,540 px, with the
+# hand-marked not-crack rate 0.5987 -> 0.6077 and 0 hand-marked pixels deleted. Mean cost
+# 7.1 s per full frame.
+#
+# It is a STRICT SUPERSET of the shipped mask, not merely "safe in testing": the union
+# contains the sigma=40 term unchanged, so it cannot drop a pixel the old build kept. That
+# is proved by construction and checked anyway -- 0 pixels lost across the 26 tiles and
+# across 6,669,145 hand-painted pixels on 12 full frames.
+#
+# Rejected alternative, and the reason this is a union and not a vote: requiring a pixel to
+# be dark at >= 3 of the 7 radii scores slightly better on the tiles (IoU 0.3394 vs 0.3334)
+# but it is subtractive, and on full frames it deletes 0.65% of hand-marked crack -- up to
+# 2.00% on a single frame -- while reaching LOWER full-frame recall (0.7114 vs 0.7962). The
+# tile ranking and the full-frame ranking disagree, and the full frame is where this runs.
+#
+# Cost: seven flattening passes per image instead of one. The two largest radii dominate,
+# because scipy truncates a gaussian at 4 sigma and so convolves with a ~2561 px kernel for
+# sigma=320 -- that one scale was 36 s of a 64 s union on a 25 Mpx frame. But a background
+# estimate has no detail finer than its own sigma by construction, so for sigma > 64 it is
+# computed on a decimated copy and resampled back: 67.2 s -> 14.5 s per full frame. Checked
+# rather than assumed -- across the 26 tiles the two masks differ by 347 px out of 6.8 M
+# (0.005%), the fast path is still a strict superset of the stock mask, and the numbers
+# quoted above are the FAST path's, which is what actually runs.
+SCALE_LADDER = (5, 10, 20, 40, 80, 160, 320)
+DECIMATE_ABOVE_SIGMA = 64
+USE_MULTISCALE_UNION = True
+
 OVERRIDES = {}      # stage-function constants; empty -- mad_k is NOT changed, see below.
 # mad_k was measured to be badly set (relaxing 5.0 -> 2.5 lifts held-out recall 0.3696 ->
 # 0.4460 with the classifier in place) but it is NOT shipped, because with the classifier
@@ -99,13 +143,63 @@ def install(up, **extra):
     `up.run_unified_pipeline(...)`. Returns the names actually overridden, so a caller can
     log what it changed rather than assuming.
     """
+    import numpy as np
+    from scipy import ndimage as _ndi
+    from skimage import exposure as _exp, filters
     import detect_cracks as dc
+
+    def _flatten(img8, sigma):
+        """flatten_background, with the background estimated on a decimated copy for the
+        large radii where full resolution buys nothing but time."""
+        if sigma <= DECIMATE_ABOVE_SIGMA:
+            return dc.flatten_background(img8, sigma=sigma)
+        f = max(1, int(round(sigma / 32.0)))
+        small = _ndi.uniform_filter(img8.astype(np.float32), f)[::f, ::f]
+        bg_s = _ndi.gaussian_filter(small, sigma / f, mode="nearest")
+        bg = _ndi.zoom(bg_s, (img8.shape[0] / bg_s.shape[0], img8.shape[1] / bg_s.shape[1]),
+                       order=1, mode="nearest")[:img8.shape[0], :img8.shape[1]]
+        if bg.shape != img8.shape:                 # zoom can land a pixel short
+            bg = np.pad(bg, ((0, img8.shape[0] - bg.shape[0]),
+                             (0, img8.shape[1] - bg.shape[1])), mode="edge")
+        flat = img8.astype(np.float32) - bg
+        lo, hi = np.percentile(flat, [0.5, 99.5])
+        if hi <= lo:
+            lo, hi = flat.min(), flat.max()
+        return _exp.rescale_intensity(flat, in_range=(lo, hi),
+                                      out_range=(0, 255)).astype(np.uint8)
+
     applied = []
     params = {**OVERRIDES, **extra}
-    if "mad_k" in params or "absolute_dark_thresh" in params:
-        base = dc.segment_dark_regions
-        kw = {k: params[k] for k in ("mad_k", "absolute_dark_thresh") if k in params}
+    base = dc.segment_dark_regions
+    kw = {k: params[k] for k in ("mad_k", "absolute_dark_thresh") if k in params}
+    mad_k = params.get("mad_k", 5.0)
+    absolute = params.get("absolute_dark_thresh", 10)
+    ladder = params.get("scale_ladder", SCALE_LADDER)
+    multiscale = params.get("use_multiscale_union", USE_MULTISCALE_UNION)
 
+    if multiscale:
+        def segment_dark_regions(flat, img8=None, **call_kw):
+            # img8 is required to re-flatten at other radii. unified_pipeline always passes
+            # it; if some other caller does not, fall back to the stock single-scale cut
+            # rather than silently returning something different from what was measured.
+            if img8 is None:
+                return base(flat, **{**call_kw, **kw})
+            k = call_kw.get("mad_k", mad_k)
+            absd = call_kw.get("absolute_dark_thresh", absolute)
+            out = None
+            for sigma in ladder:
+                f = flat if sigma == 40 else _flatten(img8, sigma)
+                sm = filters.gaussian(f, sigma=call_kw.get("denoise_sigma", 1.0),
+                                      preserve_range=True)
+                med = np.median(sm)
+                mad = np.median(np.abs(sm - med)) * 1.4826
+                cut = sm < min(filters.threshold_otsu(sm), med - k * mad)
+                out = cut if out is None else (out | cut)
+            return out | (img8 < absd)
+
+        up.segment_dark_regions = segment_dark_regions
+        applied.append(f"segment_dark_regions(multiscale union over {ladder}, mad_k={mad_k})")
+    elif kw:
         def segment_dark_regions(flat, **call_kw):
             return base(flat, **{**call_kw, **kw})
 

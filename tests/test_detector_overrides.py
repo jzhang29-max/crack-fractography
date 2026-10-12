@@ -128,3 +128,83 @@ def test_switch_changes_which_regions_survive():
     assert m_off.sum() > m_on.sum(), "classifier-off must only ever ADD regions"
     assert not (m_on & ~m_off).any(), "classifier-off dropped a region the classifier kept"
     assert DO.USE_REGION_CLASSIFIER is False      # the branch this build takes
+
+
+# ------------------------------------------------------- the multi-scale union override
+# detect_cracks imports pandas, which lives in the DETECTOR's venv, not this app's -- that
+# separation is the reason detect_one.py runs as a subprocess at all. So these two run only
+# where both are present. The binding check that does not need the detector is below, and
+# analysis/research/verify_override.py is the full check under the detector's interpreter:
+# it confirms the shipped override is pixel-identical to the measured reference on all 26
+# tiles, a strict superset everywhere, and scores exactly what the provenance block claims.
+SEM_CODE = "/Users/jiamingzhang/Desktop/APP/sem-crack-detector/code"
+
+
+def _detector_importable():
+    if not os.path.isdir(SEM_CODE):
+        return False
+    import importlib.util
+    return importlib.util.find_spec("pandas") is not None
+
+
+@pytest.mark.skipif(not _detector_importable(), reason="the detector and its venv are not both available here")
+def test_union_is_a_strict_superset_of_the_stock_mask():
+    """The safety property the whole change rests on. The union contains the sigma=40 term
+    unchanged, so it CANNOT drop a pixel the old build kept -- which is why a tile score is
+    sufficient evidence for it, where two subtractive rules measured far better on tiles and
+    then deleted 40%+ of hand-marked crack on full frames."""
+    import numpy as np
+    sys.path.insert(0, SEM_CODE)
+    import detect_cracks as dc
+    import detector_overrides as DO
+
+    rng = np.random.default_rng(0)
+    img8 = (rng.normal(140, 18, (192, 192))).clip(0, 255).astype(np.uint8)
+    img8[40:140, 92:98] = 12                 # a dark crack-like streak
+    img8[150:180, 20:60] = 3                 # a dark blob at another scale
+
+    class FakeUP:
+        pass
+
+    up = FakeUP()
+    assert DO.install(up), "install() overrode nothing"
+    flat = dc.flatten_background(img8)
+    stock = dc.segment_dark_regions(flat, img8=img8)
+    union = up.segment_dark_regions(flat, img8=img8)
+    lost = int((stock & ~union).sum())
+    assert lost == 0, f"the union dropped {lost} px the stock mask kept -- not a superset"
+    assert int(union.sum()) >= int(stock.sum())
+
+
+@pytest.mark.skipif(not _detector_importable(), reason="the detector and its venv are not both available here")
+def test_union_falls_back_rather_than_silently_differing_without_img8():
+    """Re-flattening at other radii needs img8. unified_pipeline always passes it, but a
+    caller that does not must get the stock cut, not a quietly different mask."""
+    import numpy as np
+    sys.path.insert(0, SEM_CODE)
+    import detect_cracks as dc
+    import detector_overrides as DO
+
+    rng = np.random.default_rng(1)
+    img8 = (rng.normal(140, 18, (96, 96))).clip(0, 255).astype(np.uint8)
+    img8[30:70, 40:46] = 10
+    flat = dc.flatten_background(img8)
+
+    class FakeUP:
+        pass
+
+    up = FakeUP()
+    DO.install(up)
+    assert np.array_equal(up.segment_dark_regions(flat, img8=None),
+                          dc.segment_dark_regions(flat))
+
+
+def test_the_union_default_is_on_and_carries_its_evidence():
+    import detector_overrides as DO
+
+    assert DO.USE_MULTISCALE_UNION is True
+    assert 40 in DO.SCALE_LADDER, "the ladder must contain the shipped radius or it is not a superset"
+    src = open(os.path.join(HERE, "analysis", "detector_overrides.py"),
+               encoding="utf-8").read()
+    for ev in ("0.3344", "STRICT SUPERSET", "0.65%", "0.005%"):
+        assert ev in src, f"the union is on but {ev!r} (its evidence) is not recorded"
