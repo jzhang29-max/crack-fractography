@@ -21,7 +21,15 @@ fitted on itself. See analysis/tilebench.py for the instrument that enforces the
 # Measured 2026-10-11 on the 26 hand-labelled tiles (MAR_AmbB_AS excluded: 87% of its paint
 # is round, i.e. porosity). Selection is leave-one-SPECIMEN-out over 13 specimens.
 #
-#   shipped (mad_k=5.0)        precision 0.3378  recall 0.3696  IoU 0.2143
+# READ EVERY TILE NUMBER IN THIS FILE AS: POOLED OVER ALL PIXELS, ZERO TOLERANCE. That is
+# the most pessimistic of five legitimate aggregations and none of the rows below said so.
+# The arms are compared within that one aggregation, which is what makes the comparisons
+# valid; what is NOT valid is lifting a single cell out as "the detector's precision". The
+# shipped path's own figures in every aggregation are tilebench.SHIPPED_V1491 and
+# docs/REPORTING_GUIDE.md §1.
+#
+#   v1.47 baseline (mad_k=5.0, classifier ON)
+#                              precision 0.3378  recall 0.3696  IoU 0.2143
 #
 # Decomposing every missed pixel by the stage that dropped it showed the loss is not the
 # classifier: 45.7% of marked crack is never proposed as a candidate, against 16.3% lost at
@@ -35,7 +43,7 @@ fitted on itself. See analysis/tilebench.py for the instrument that enforces the
 # keeping every candidate region the classifier would have rejected:
 #
 #                            precision  recall     IoU      F1
-#     shipped                   0.3378  0.3696  0.2143  0.3530
+#     v1.47, classifier ON      0.3378  0.3696  0.2143  0.3530
 #     classifier deleted        0.4033  0.5326  0.2979  0.4590
 #
 # All four metrics rise, with ZERO free parameters, so there is nothing here to overfit:
@@ -60,6 +68,9 @@ fitted on itself. See analysis/tilebench.py for the instrument that enforces the
 # Caveat on that second line: those 12 frames carry only 32,351 hand-verified not-crack
 # pixels against 6,326,983 crack pixels, so it is weak evidence of no precision cost, not
 # strong evidence of none. The tiles are the better precision evidence.
+# Second caveat, on BOTH lines: the 12 are the ALPHABETICALLY FIRST painted frames and come
+# from two specimens. They are a paired before/after and nothing else -- the corpus
+# full-frame recall over all 41 painted frames is 0.2983 pooled / 0.6464 per-frame median.
 #
 # Safe by construction, and checked rather than assumed: across the 26 tiles the number of
 # pixels the shipped detector marks that this does NOT mark is exactly 0. It only ever
@@ -94,10 +105,10 @@ fitted on itself. See analysis/tilebench.py for the instrument that enforces the
 #     texture veto floor=1.0         deletes 67.54%   <- re-measured on the SAME 48 frames
 #     thickness excision r_big=50    deletes 62.43%      through the SAME denominator, so
 #     thickness excision r_big=100   deletes 54.62%      the four are comparable
-# It is the worst of the four, and it is worse than the shipped classifier it was meant to
+# It is the worst of the four, and it is worse than the v1.47 classifier it was meant to
 # replace: it removes 143,252 hand-marked NOT-crack px while deleting 12,518,382
 # hand-marked crack px -- 87 px of real crack per px of false positive -- where the
-# shipped classifier removes MORE not-crack (150,293 px) for 14x less crack damage.
+# v1.47 classifier removes MORE not-crack (150,293 px) for 14x less crack damage.
 # (The 43.46%/41.00%/40.28% figures above are four frames against "% of all painted" and
 # are NOT comparable to these; one unit set and one denominator at a time.)
 #
@@ -148,6 +159,23 @@ USE_REGION_CLASSIFIER = False
 # hand-marked not-crack rate 0.5987 -> 0.6077 and 0 hand-marked pixels deleted. Mean cost
 # 7.1 s per full frame.
 #
+# THE 0.7911 IS NOT THIS DETECTOR'S FULL-FRAME RECALL, and it was quoted as if it were.
+# Those 12 frames are the ALPHABETICALLY FIRST 12 and come from two specimens. Over all 41
+# painted frames the same quantity is 0.2983 pooled and 0.6464 per-frame median (p25 0.358,
+# p75 0.808) -- five frames hold 57.9% of all painted crack and every one of them sits at
+# 0.10-0.36, so the pooled figure is essentially those five. docs/REPORTING_GUIDE.md §2.
+# The 0.6697 -> 0.7911 pair is a before/after on one subset through one instrument, which
+# is the only thing it may be used for; neither end of it is a corpus figure.
+#
+# The four tile numbers above are POOLED OVER EVERY PIXEL at zero tolerance, which is the
+# most pessimistic of five legitimate aggregations and was never stated. Same masks, same
+# labels: median over the 26 tiles reads P 0.8056 R 0.7623 F1 0.5922 IoU 0.4208, and median
+# over the 13 specimens at 2 px tolerance reads 0.8988 / 0.8025 / 0.6633 / 0.4962. A
+# perfectly placed trace caps at IoU 0.4993 on these tiles, so 0.4208 is 84% of what these
+# labels permit. The before/after above is read within one aggregation and is unaffected,
+# but no single row of it may be lifted out as "the detector's precision" or "its recall".
+# Reproduce: analysis/research/improve/aggregation.py.
+#
 # It is a STRICT SUPERSET of the shipped mask, not merely "safe in testing": the union
 # contains the sigma=40 term unchanged, so it cannot drop a pixel the old build kept. That
 # is proved by construction and checked anyway -- 0 pixels lost across the 26 tiles and
@@ -156,8 +184,10 @@ USE_REGION_CLASSIFIER = False
 # Rejected alternative, and the reason this is a union and not a vote: requiring a pixel to
 # be dark at >= 3 of the 7 radii scores slightly better on the tiles (IoU 0.3394 vs 0.3334)
 # but it is subtractive, and on full frames it deletes 0.65% of hand-marked crack -- up to
-# 2.00% on a single frame -- while reaching LOWER full-frame recall (0.7114 vs 0.7962). The
-# tile ranking and the full-frame ranking disagree, and the full frame is where this runs.
+# 2.00% on a single frame -- while reaching LOWER full-frame recall (0.7114 vs 0.7962, both
+# on the same alphabetically-first 12 frames as above, so comparable to each other and to
+# nothing else). The tile ranking and the full-frame ranking disagree, and the full frame
+# is where this runs.
 #
 # Cost: seven flattening passes per image instead of one. The two largest radii dominate,
 # because scipy truncates a gaussian at 4 sigma and so convolves with a ~2561 px kernel for
