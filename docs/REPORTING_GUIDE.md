@@ -1,0 +1,122 @@
+# What to put in the paper, and how to read each number
+
+Written 2026-10-12 from measurements in this repository. Every figure here was produced by
+a script under `analysis/research/`; none is quoted from memory or from a summary.
+
+---
+
+## 1. The headline table
+
+The detector, scored against 26 tiles the labeller painted **from a blank mask**, so it had
+no hand in them. Selection is leave-one-**specimen**-out over 13 specimens, so no parameter
+saw the specimen it is scored on.
+
+| | precision | recall | IoU | F1 |
+|---|---|---|---|---|
+| previous version | 0.3378 | 0.3696 | 0.2143 | 0.3530 |
+| **current** | **0.4182** | **0.6252** | **0.3344** | **0.5012** |
+| current, at 2 px tolerance | 0.4528 | 0.7389 | 0.3903 | 0.5615 |
+
+**This table must not appear without the next sentence.** One tile of the 26 contains an
+off-specimen void — vacuum, not material — which the detector marks because it is dark.
+That single tile holds **141,480 of the 176,225 false positives (80.3%)** against 554 true
+positives. Excluding it:
+
+| | precision | recall | IoU | F1 |
+|---|---|---|---|---|
+| previous version, 25 tiles | 0.8925 | 0.3709 | 0.3550 | 0.5240 |
+| **current, 25 tiles** | **0.7840** | 0.6247 | **0.5330** | **0.6953** |
+
+Both are honest. Quoting only the first understates the detector on ordinary fields;
+quoting only the second hides a real and reproducible failure mode. Give both.
+
+## 2. Full frames: pooled and per-frame disagree, and both belong
+
+Scored against the hand-painted correction masks on 41 frames (70,041,625 painted px),
+counting only refereed pixels — crack and not-crack — and excluding the 91% of the corpus
+nobody has reviewed.
+
+| | recall on hand-painted crack |
+|---|---|
+| pooled, area-weighted | 0.2983 |
+| per-frame median | 0.6464 (p25 0.358, p75 0.808) |
+
+Five frames hold **57.9%** of all painted crack and every one sits at recall 0.10-0.36, so
+the pooled figure is essentially those five frames. A subset of 12 frames from two
+specimens pools to 0.7911 — if a number like that appears anywhere, check which frames
+produced it.
+
+## 3. The measurements, which matter more than IoU
+
+Per-tile ratio of the detector's measurement to the same measurement on the hand labels.
+1.000 is perfect.
+
+| | previous | current |
+|---|---|---|
+| area fraction | 0.419 | **0.951** |
+| crack length | 0.469 | 1.095 |
+| crack width | 0.928 | 0.925 |
+| crack count (components >= 250 px) | 0.211 | 0.95 |
+
+Pooled and area-weighted over the 25 non-void tiles the area fraction is 0.42x -> 0.80x, so
+corpus totals still under-report by about a fifth. Raw crack counts read 1.5x because they
+include sub-100 px specks; **always report counts with a minimum component size.**
+
+## 4. What is defensible, and what is not
+
+**Defensible, and measured here:**
+
+- An independent ground truth: tiles sampled uniformly and painted from blank, against a
+  corpus whose own labels are broad-brush (median stroke 59 px; full-frame paint has a
+  median width of 192 px).
+- Held-out numbers with their brackets, and the pooled/per-frame split stated.
+- The negative results, which are the most transferable part: six region-level rules that
+  score well on 512 px crops and then delete 54-75% of hand-painted crack on full frames.
+  The structural cause is that **a 512 px crop cannot contain a wide crack** — tile ground
+  truth tops out at 43.7 px mean width while real painted cracks reach 178 px, and 19.6% of
+  real crack regions are wider than anything in the tiles.
+- The metric critique: on this SEM corpus a physically correct 3 px trace scores IoU 0.1662;
+  on TXM it scores 0.0498. Any IoU above that is bought by being thicker than a crack.
+- Model size: 4 KB, against 293 MB - 3.2 GB for the deep baselines.
+
+**Not defensible — do not write these:**
+
+- Any claim of beating published methods. Frozen at its settings this detector scores
+  **F1 0.0000** on CrackForest; given the one parameter every published arm is allowed to
+  fit, 0.4886 against a published ~0.7177. On ceramic cracks, 0.0630.
+- Any speed claim. It loses to a plain single-pass UNet by 1.6x at p=0.0001.
+- Any novelty framing. 55 of 55 tested framings were found to be prior art. The magnitudes
+  measured on this material are what is unowned, not the ideas.
+- Pooled numbers without the void caveat, or IoU on TXM as a ranking.
+
+---
+
+## 5. What each metric means, and how to read it
+
+| metric | in one sentence | no-information floor | ceiling on this data | read it as |
+|---|---|---|---|---|
+| **recall** | of the crack that is really there, the fraction you found | **1.000** — marking every pixel scores a perfect recall | 1.0 | never alone; only at a stated precision |
+| **precision** | of what you marked, the fraction that is really crack | the prevalence of crack: **0.0297** on SEM tiles, **0.0810** on TXM refereed px | 1.0 | as a multiple of the floor ("lift"); below ~2x it is close to noise |
+| **lift** | precision divided by the floor | 1.00 | — | >3 is a real signal; 1.09 is what Otsu scores, i.e. nothing |
+| **F1** | the balance of precision and recall, so it cannot be gamed by marking everything | 0.0577 SEM tiles / 0.1499 TXM | 1.0 | the single best summary number here |
+| **IoU** | overlap divided by union — the strictest pixel measure | 0.0297 / 0.0810 | **0.1662** (SEM) and **0.0498** (TXM) for a *correct* 3 px crack | comparable only at a stated tolerance; never rank TXM on it |
+| **clDice** | overlap of the centre-lines, so it scores where the crack *runs*, not how fat it is drawn | ~0 | ~1.0 | the right metric for thin structures; use it alongside IoU |
+| **tolerance** | how many px of slack is allowed before a pixel counts as wrong | — | — | worth ~22 F1 points at 2 px in the literature; state it or the number is unreadable |
+
+## 6. What each parameter does, and its sensible range
+
+| parameter | in one sentence | shipped | sensible range | outside that range |
+|---|---|---|---|---|
+| **mad_k** | how many robust standard deviations below the frame's median a pixel must sit to be called dark | **5.0** | **4 - 6** | F1 on TXM peaks at 5.0 (0.3750) and falls away either side; by 1.0 lift is 1.69 and by **0.5 it is 1.09 — identical to marking everything** |
+| **absolute_dark_thresh** | the grey level below which a pixel counts as crack whatever its surroundings | **10** | 10 - 20 | supplies half of all recall; 20 gains frame recall but costs tile precision and TXM F1, so it is exposed and left at 10 |
+| **SCALE_LADDER** | the background-blur radii the darkness cut is taken at, unioned — a feature wider than the radius is erased by its own flattening | 5,10,20,40,80,160,320 | use all of them | a single radius sees only one band of crack widths |
+| **min_area_px** (clean_mask) | the smallest blob that survives cleaning | 13 | 10 - 20 | accounts for only 1.6% of missed crack, so not worth tuning |
+| **feature filter** | the smallest region passed on for measurement | 40 | 40 - 100 | raising it to 100 deletes 1.31% of real crack for no measurable gain |
+| **region classifier** | a model that accepted or rejected each candidate region | **off** | off | switching it on costs recall on every specimen tested and zeroes three of them |
+
+### The one trap worth repeating
+
+A higher recall is not a better detector. On TXM the loosest setting reaches recall 0.9819
+and scores F1 0.1620; the shipped setting reaches recall 0.6707 and scores F1 0.3750. The
+loose arm's precision, 0.0883, is the same number a plain Otsu threshold gets and is 1.09x
+a coin flip. **Read recall and precision together, and read precision against its floor.**
