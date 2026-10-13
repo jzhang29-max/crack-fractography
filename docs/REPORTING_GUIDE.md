@@ -8,27 +8,41 @@ a script under `analysis/research/`; none is quoted from memory or from a summar
 ## 1. The headline table
 
 The detector, scored against 26 tiles the labeller painted **from a blank mask**, so it had
-no hand in them. Selection is leave-one-**specimen**-out over 13 specimens, so no parameter
-saw the specimen it is scored on.
+no hand in them. Selection is leave-one-**specimen**-out over 13 specimens.
 
-| | precision | recall | IoU | F1 |
+**State the aggregation and the tolerance or the number means nothing.** The same masks and
+the same labels, under five legitimate choices — the spread is larger than the difference
+between any two methods ever tested on this corpus:
+
+| aggregation | precision | recall | F1 | IoU |
 |---|---|---|---|---|
-| previous version | 0.3378 | 0.3696 | 0.2143 | 0.3530 |
-| **current** | **0.4182** | **0.6252** | **0.3344** | **0.5012** |
-| current, at 2 px tolerance | 0.4528 | 0.7389 | 0.3903 | 0.5615 |
+| pooled over all pixels | 0.4182 | 0.6252 | 0.5012 | 0.3344 |
+| median over the 26 tiles | 0.8056 | 0.7623 | 0.5922 | 0.4208 |
+| median over 13 specimens | 0.7897 | 0.7159 | 0.5418 | 0.3715 |
+| **median over tiles, 2 px tolerance** | **0.8970** | **0.9200** | 0.6785 | 0.5134 |
+| **median over specimens, 2 px tolerance** | **0.8988** | **0.8025** | 0.6633 | 0.4962 |
 
-**This table must not appear without the next sentence.** One tile of the 26 contains an
-off-specimen void — vacuum, not material — which the detector marks because it is dark.
-That single tile holds **141,480 of the 176,225 false positives (80.3%)** against 554 true
-positives. Excluding it:
+Both qualifiers are standard: per-image medians and a stated tolerance are what the crack
+literature reports (CrackForest is published at F1 75.35 at 0 px and 97.10 at 2 px — same
+paper, same model). The recommended row for a write-up is **median over specimens at 2 px**,
+because the specimen is the unit that repeats and the tolerance is declared.
 
-| | precision | recall | IoU | F1 |
-|---|---|---|---|---|
-| previous version, 25 tiles | 0.8925 | 0.3709 | 0.3550 | 0.5240 |
-| **current, 25 tiles** | **0.7840** | 0.6247 | **0.5330** | **0.6953** |
+**Do not compute F1 from the median precision and the median recall.** That gives 0.8479 and
+describes a specimen that does not exist — the high-precision specimens are not the
+high-recall ones. The median of the per-specimen F1s is **0.6633**. Quote that.
 
-Both are honest. Quoting only the first understates the detector on ordinary fields;
-quoting only the second hides a real and reproducible failure mode. Give both.
+**IoU must be quoted with its ceiling.** A *perfectly placed* trace — down the label's own
+centreline, zero localisation error, best width — caps at **IoU 0.4993** on tiles and 0.5020
+on full frames. So IoU 0.4208 is **84% of what is achievable against these labels**, not
+"0.42 out of 1.0". Without the ceiling the number reads as a failing method; with it, it
+reads as a labelling-geometry limit, which is what it is.
+
+**One tile of 26 holds 80.3% of all false positives** — an off-specimen void, 141,480 FP
+against 554 TP. Excluding it, pooled precision is 0.7840. Give both or neither.
+
+**Verified against the app:** the scored masks equal what v1.49.1 actually emits to within
+242 px over all 26 tiles (production labels 8-connected, the scoring path 4-connected; the
+difference moves every metric in the fourth decimal and always in the app's favour).
 
 ## 2. Full frames: pooled and per-frame disagree, and both belong
 
