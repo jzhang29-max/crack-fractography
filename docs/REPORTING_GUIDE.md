@@ -31,18 +31,48 @@ because the specimen is the unit that repeats and the tolerance is declared.
 describes a specimen that does not exist — the high-precision specimens are not the
 high-recall ones. The median of the per-specimen F1s is **0.6633**. Quote that.
 
-**IoU must be quoted with its ceiling.** A *perfectly placed* trace — down the label's own
-centreline, zero localisation error, best width — caps at **IoU 0.4993** on tiles and 0.5020
-on full frames. So IoU 0.4208 is **84% of what is achievable against these labels**, not
-"0.42 out of 1.0". Without the ceiling the number reads as a failing method; with it, it
-reads as a labelling-geometry limit, which is what it is.
+**IoU must be quoted with its ceiling — like for like.** A *perfectly placed* trace, down the
+label's own centreline with zero localisation error at its best width, caps at **IoU 0.4993**
+pooled (an 11 px trace) and **0.5498** as a median over tiles (a 7 px trace). The ceiling is
+aggregation-dependent too, so it must be read in the same units as the score:
+
+| | achieved | ceiling | fraction |
+|---|---|---|---|
+| pooled | 0.3344 | 0.4993 | **67.0%** |
+| median over tiles | 0.4208 | 0.5498 | **76.5%** |
+
+An earlier draft of this file said "84%". That divided a per-tile MEDIAN by a POOLED ceiling
+and is withdrawn. Either row above is defensible; mixing them is not.
 
 **One tile of 26 holds 80.3% of all false positives** — an off-specimen void, 141,480 FP
 against 554 TP. Excluding it, pooled precision is 0.7840. Give both or neither.
 
-**Verified against the app:** the scored masks equal what v1.49.1 actually emits to within
-242 px over all 26 tiles (production labels 8-connected, the scoring path 4-connected; the
-difference moves every metric in the fourth decimal and always in the app's favour).
+**The scored masks are NOT what the app emits, and an earlier draft of this file said they
+were.** That claim compared two reimplementations of the CANDIDATE STAGE, which differ only
+by the 4- vs 8-connected spelling of the 40 px filter (242 px over 26 tiles). The app calls
+`unified_pipeline.run_unified_pipeline`, which also runs a **Pass 2** — concavity,
+bridge-corridor and interior-fill proposals — and with the region classifier switched OFF
+`detect_one.py` keeps every row of `df`, Pass-2 rows included, which the model itself scored
+not-crack. Driving the real function:
+
+    the app keeps 17,972 px MORE than was scored, over the 20 of 26 tiles whose raster
+    survives the pipeline's own find_field_of_view crop, and loses none.
+    pooled      precision 0.4181 -> 0.4094   recall 0.6255 -> 0.6487   IoU 0.3344 -> 0.3351
+    per specimen                              recall 0.7159 -> 0.7858
+
+So "the classifier is off" is a broader change than the tile experiment tested. The direction
+is favourable — more recall, slightly less precision, IoU essentially unmoved — but the
+scored numbers describe the candidate stage, not the shipped output, and should be labelled
+that way until the app's own masks are scored directly.
+
+**"Median over specimens" is ambiguous and the two readings differ by 0.15.** Median of the
+per-tile medians gives recall 0.7159; pooling each specimen's pixels first gives 0.5624. This
+file means the former. Say which you mean.
+
+**The 26-tile median row has the F1 defect too.** Median precision 0.8056 and median recall
+0.7623 would imply F1 0.7833; the quoted 0.5922 is the median per-tile F1. Only 5 of 26 tiles
+reach both medians, and per-tile precision and recall rank-correlate **-0.227**. The triple
+describes no tile that exists — quote the median F1, never the F1 of the medians.
 
 ## 2. Full frames: pooled and per-frame disagree, and both belong
 
