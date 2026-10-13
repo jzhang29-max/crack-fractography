@@ -160,7 +160,44 @@ def report(r):
                                                Counter(r["picks"].values()).most_common()))
 
 
-SHIPPED = dict(precision=0.3378, recall=0.3696, iou=0.2143)   # measured, mad_k=5.0, thr 0.5538
+#: THIS IS NOT WHAT SHIPS, and it used to be called SHIPPED, which made the one gate that
+#: certifies this harness certify a pipeline retired two versions ago. It is the v1.47
+#: reference point -- region classifier ON, single flattening radius sigma=40, mad_k=5.0,
+#: classifier threshold 0.5538 -- and it is kept only because `crackpipe.predict` still
+#: reproduces exactly that, which is what tilebench_verify.py checks.
+V147_CLASSIFIER_ON = dict(precision=0.3378, recall=0.3696, iou=0.2143)
+
+#: WHAT ACTUALLY SHIPS (v1.49.1: classifier OFF, 7-scale darkness union, mad_k 5.0,
+#: absolute_dark 10), measured through this harness over the same 26 tiles.
+#:
+#: EVERY ROW IS THE SAME MASKS AND THE SAME LABELS. The aggregation moves the number more
+#: than any model change tested in this project ever has, so a figure from here is
+#: unreadable without naming its row. Reproduce with
+#: analysis/research/improve/aggregation.py; the recommended row for a write-up is
+#: median over specimens at 2 px tolerance, and the pooled row must never appear alone.
+#:
+#:   aggregation                          prec  recall      F1     IoU
+#:   pooled over all pixels             0.4182  0.6252  0.5012  0.3344
+#:   median over the 26 TILES           0.8056  0.7623  0.5922  0.4208
+#:   median over 13 SPECIMENS           0.7897  0.7159  0.5418  0.3715
+#:   median over TILES, 2 px tol        0.8970  0.9200  0.6785  0.5134
+#:   median over SPECIMENS, 2 px tol    0.8988  0.8025  0.6633  0.4962
+#:
+#: F1 in those rows is the MEDIAN OF THE PER-UNIT F1s, not 2PR/(P+R) of the two medians --
+#: that would read 0.8479 and describe a specimen that does not exist, because the
+#: high-precision specimens are not the high-recall ones.
+#:
+#: IoU CARRIES ITS CEILING OR IT IS MISREAD. A perfectly placed trace -- down the label's
+#: own centreline, zero localisation error, best width -- caps at IoU 0.4993 on these
+#: tiles, so 0.4208 is 84% of what these labels permit, not 42% of perfect.
+SHIPPED_V1491 = dict(
+    pooled=dict(precision=0.4182, recall=0.6252, f1=0.5012, iou=0.3344),
+    median_tiles=dict(precision=0.8056, recall=0.7623, f1=0.5922, iou=0.4208),
+    median_specimens=dict(precision=0.7897, recall=0.7159, f1=0.5418, iou=0.3715),
+    median_tiles_tol2=dict(precision=0.8970, recall=0.9200, f1=0.6785, iou=0.5134),
+    median_specimens_tol2=dict(precision=0.8988, recall=0.8025, f1=0.6633, iou=0.4962),
+    iou_ceiling_perfect_trace=0.4993,
+)
 
 
 def controls():

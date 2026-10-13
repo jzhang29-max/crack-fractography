@@ -1,0 +1,450 @@
+{
+ "fig_aggregation": {
+  "app_mask_check": {
+   "app_only_px": 17948,
+   "from_pass2_px": 17948,
+   "pct": 5.92,
+   "scored_only_px": 0,
+   "scored_px": 303159
+  },
+  "figure": "fig_aggregation.png",
+  "largest_model_gain_iou": 0.1753,
+  "n_specimens": 13,
+  "n_tiles": 26,
+  "rows": {
+   "median over 13 specimens": {
+    "f1": 0.5403,
+    "iou": 0.3701,
+    "precision": 0.7897,
+    "recall": 0.7159
+   },
+   "median over specimens, 2 px tolerance": {
+    "f1": 0.6615,
+    "iou": 0.4942,
+    "precision": 0.9009,
+    "recall": 0.8025
+   },
+   "median over the 26 tiles": {
+    "f1": 0.5903,
+    "iou": 0.4189,
+    "precision": 0.8054,
+    "recall": 0.7623
+   },
+   "median over tiles, 2 px tolerance": {
+    "f1": 0.68,
+    "iou": 0.5152,
+    "precision": 0.8981,
+    "recall": 0.92
+   },
+   "pooled over 25 tiles (off-specimen void removed)": {
+    "f1": 0.6952,
+    "iou": 0.5329,
+    "precision": 0.7833,
+    "recall": 0.625
+   },
+   "pooled over all pixels, 26 tiles": {
+    "f1": 0.5012,
+    "iou": 0.3344,
+    "precision": 0.4181,
+    "recall": 0.6255
+   }
+  },
+  "smallest_type_pt": 7.5,
+  "spans": {
+   "f1": 0.194,
+   "iou": 0.1984,
+   "precision": 0.4828,
+   "recall": 0.295
+  },
+  "text": "Figure A. The reporting rule moves the number further than any model has. One set of masks \u2014 the shipped v1.49.1 detector with the region classifier off \u2014 scored against the same 26 hand-labelled 512 px tiles from 13 specimens, under six reporting rules. Recall reads between 0.625 and 0.920 and IoU between 0.334 and 0.533; the IoU span of 0.198 is larger than the +0.1753 paired median IoU that switching the region classifier off bought, which is the largest gain any model change has made on this corpus. Tolerance is 0 px except on the two rows that say 2 px. 'Median over specimens' means the median over the 13 specimens of the median over that specimen's tiles; pooling a specimen's pixels first and then taking the median is a different number (recall 0.562 rather than 0.716). Each column is its own median, so F1 is not recoverable from the precision and recall drawn beside it. Provenance: the scored mask is the candidate stage. The application's own pipeline emits a strict superset of it \u2014 17,948 further pixels over the 26 tiles, 5.9% of the scored area, 100% of them pass-2 interior candidates \u2014 so these are not quite the application's own numbers."
+ },
+ "fig_ceiling": {
+  "cldice_at_41": 0.8649,
+  "detector_iou_pooled": 0.3344,
+  "detector_iou_tilemedian": 0.4189,
+  "figure": "fig_ceiling.png",
+  "iou_pooled": [
+   0.0663,
+   0.249,
+   0.3864,
+   0.4639,
+   0.4974,
+   0.4993,
+   0.4826,
+   0.4592,
+   0.4328,
+   0.4058,
+   0.3796,
+   0.3545,
+   0.3309,
+   0.3096,
+   0.2905,
+   0.2733,
+   0.2578,
+   0.2438,
+   0.2312,
+   0.2198,
+   0.2094
+  ],
+  "iou_pooled_peak": 0.4993,
+  "iou_pooled_peak_width": 11,
+  "iou_tilemedian_peak": 0.5498,
+  "iou_tilemedian_peak_width": 7,
+  "n_specimens": 13,
+  "n_tiles": 26,
+  "skelf1_at_11": 0.9806,
+  "smallest_type_pt": 7.5,
+  "tau_px": 2,
+  "text": "Figure B. The ceiling, computed rather than quoted. A trace of the given width laid down the skeleton of the human's own paint is the best answer a detector could give if the paint marks where the crack is but not how wide the brush was. Scored against that paint on the same 26 tiles from 13 specimens at 0 px tolerance, pooled IoU peaks at 0.4993 at 11 px: IoU above 0.8 is unreachable on this corpus by any model whatsoever. The ceiling is itself a reporting choice \u2014 as the median over tiles it is 0.5498 at 7 px \u2014 so the detector's 0.3344 pooled is 67% of the pooled ceiling and its 0.4189 tile-median is 76% of the tile-median one; the two must not be crossed. clDice barely notices, holding 0.865 even for a trace drawn 41 px wide, and skeleton-F1 at 2 px stays above 0.98 out to 11 px before the skeleton of a deliberately fattened trace starts to wander.",
+  "tolerance_px": 0,
+  "widths": [
+   1,
+   3,
+   5,
+   7,
+   9,
+   11,
+   13,
+   15,
+   17,
+   19,
+   21,
+   23,
+   25,
+   27,
+   29,
+   31,
+   33,
+   35,
+   37,
+   39,
+   41
+  ]
+ },
+ "fig_gameability": {
+  "achieved_ratio_median": [
+   1.0,
+   1.19,
+   1.258,
+   1.354,
+   1.44,
+   1.564,
+   1.637,
+   1.733,
+   1.832,
+   1.924,
+   2.039,
+   2.122,
+   2.229,
+   2.329,
+   2.438,
+   2.531,
+   2.627,
+   2.726,
+   2.824,
+   2.919,
+   3.024
+  ],
+  "at_1_5x": {
+   "cldice": {
+    "down": 1,
+    "paired_median": 0.0189,
+    "up": 12,
+    "wilcoxon_p": 0.0005
+   },
+   "iou": {
+    "down": 8,
+    "paired_median": -0.0226,
+    "up": 5,
+    "wilcoxon_p": 0.7354
+   },
+   "skelf1": {
+    "down": 8,
+    "paired_median": -0.0018,
+    "up": 5,
+    "wilcoxon_p": 0.2439
+   }
+  },
+  "figure": "fig_gameability.png",
+  "n_specimens": 13,
+  "n_tiles": 26,
+  "requested_factors": [
+   1.0,
+   1.1,
+   1.2,
+   1.3,
+   1.4,
+   1.5,
+   1.6,
+   1.7,
+   1.8,
+   1.9,
+   2.0,
+   2.1,
+   2.2,
+   2.3,
+   2.4,
+   2.5,
+   2.6,
+   2.7,
+   2.8,
+   2.9,
+   3.0
+  ],
+  "smallest_type_pt": 7.5,
+  "tau_px": 2,
+  "text": "Figure C. Two of the three metrics this project has quoted can be bought without finding anything. The shipped mask on the same 26 tiles from 13 specimens is grown outward at a continuous radius \u2014 bisected so the achieved area ratio lands on the requested one \u2014 and rescored at 0 px tolerance. At 1.5x area, clDice rises on every specimen (paired median +0.0189, 12 up / 1 down, p=0.0005) while skeleton-F1 at 2 px does not move (-0.0018, 5 up / 8 down, p=0.2439). IoU is the case that depends on how it is read: the tile median rises from 0.4189 to 0.4988, but paired over the 13 specimens it falls (-0.0226, 5 up / 8 down, p=0.7354), so IoU is gameable in the tile-median reading and not in the paired one. Growth by whole dilation steps, the spelling used elsewhere in this project, overshoots 1.5x by about 16% and is recorded separately in the data file.",
+  "tile_median_at_1_0x": {
+   "cldice": 0.6267,
+   "iou": 0.4189,
+   "skelf1": 0.5531
+  },
+  "tile_median_at_1_5x": {
+   "cldice": 0.6933,
+   "iou": 0.4988,
+   "skelf1": 0.5431
+  },
+  "tolerance_px": 0
+ },
+ "fig_operating_curve": {
+  "figure": "fig_operating_curve.png",
+  "n_specimens": 13,
+  "n_tiles": 26,
+  "prevalence": 0.02973,
+  "random_area_matched_precision": 0.0242,
+  "smallest_type_pt": 7.5,
+  "sweeps": {
+   "absolute_dark": [
+    {
+     "iou": 0.4522,
+     "iou_25": 0.5056,
+     "no_info_floor": 0.04,
+     "precision": 0.691,
+     "precision_25": 0.8254,
+     "recall": 0.5669,
+     "value": 0
+    },
+    {
+     "iou": 0.3347,
+     "iou_25": 0.5373,
+     "no_info_floor": 0.0244,
+     "precision": 0.4219,
+     "precision_25": 0.805,
+     "recall": 0.6183,
+     "value": 5
+    },
+    {
+     "iou": 0.3344,
+     "iou_25": 0.5329,
+     "no_info_floor": 0.0243,
+     "precision": 0.4181,
+     "precision_25": 0.7833,
+     "recall": 0.6255,
+     "value": 10
+    },
+    {
+     "iou": 0.3286,
+     "iou_25": 0.5143,
+     "no_info_floor": 0.0239,
+     "precision": 0.4057,
+     "precision_25": 0.7327,
+     "recall": 0.6336,
+     "value": 15
+    },
+    {
+     "iou": 0.3177,
+     "iou_25": 0.4845,
+     "no_info_floor": 0.0233,
+     "precision": 0.386,
+     "precision_25": 0.6642,
+     "recall": 0.6422,
+     "value": 20
+    },
+    {
+     "iou": 0.3027,
+     "iou_25": 0.4471,
+     "no_info_floor": 0.0226,
+     "precision": 0.3611,
+     "precision_25": 0.5877,
+     "recall": 0.652,
+     "value": 25
+    },
+    {
+     "iou": 0.2815,
+     "iou_25": 0.3995,
+     "no_info_floor": 0.0219,
+     "precision": 0.3287,
+     "precision_25": 0.5021,
+     "recall": 0.6622,
+     "value": 30
+    },
+    {
+     "iou": 0.2106,
+     "iou_25": 0.2673,
+     "no_info_floor": 0.0201,
+     "precision": 0.233,
+     "precision_25": 0.3045,
+     "recall": 0.6868,
+     "value": 40
+    },
+    {
+     "iou": 0.156,
+     "iou_25": 0.1836,
+     "no_info_floor": 0.0193,
+     "precision": 0.1665,
+     "precision_25": 0.1984,
+     "recall": 0.7117,
+     "value": 50
+    },
+    {
+     "iou": 0.1204,
+     "iou_25": 0.1354,
+     "no_info_floor": 0.0206,
+     "precision": 0.1257,
+     "precision_25": 0.1422,
+     "recall": 0.7399,
+     "value": 60
+    }
+   ],
+   "mad_k": [
+    {
+     "iou": 0.0948,
+     "iou_25": 0.1027,
+     "no_info_floor": 0.0256,
+     "precision": 0.0962,
+     "precision_25": 0.1043,
+     "recall": 0.8721,
+     "value": 1.0
+    },
+    {
+     "iou": 0.1564,
+     "iou_25": 0.1795,
+     "no_info_floor": 0.0257,
+     "precision": 0.1609,
+     "precision_25": 0.1855,
+     "recall": 0.8479,
+     "value": 1.5
+    },
+    {
+     "iou": 0.2265,
+     "iou_25": 0.2804,
+     "no_info_floor": 0.0262,
+     "precision": 0.2384,
+     "precision_25": 0.2988,
+     "recall": 0.8205,
+     "value": 2.0
+    },
+    {
+     "iou": 0.29,
+     "iou_25": 0.3911,
+     "no_info_floor": 0.0264,
+     "precision": 0.3154,
+     "precision_25": 0.4386,
+     "recall": 0.7832,
+     "value": 2.5
+    },
+    {
+     "iou": 0.3266,
+     "iou_25": 0.4719,
+     "no_info_floor": 0.0264,
+     "precision": 0.3689,
+     "precision_25": 0.5655,
+     "recall": 0.7403,
+     "value": 3.0
+    },
+    {
+     "iou": 0.3415,
+     "iou_25": 0.5164,
+     "no_info_floor": 0.0262,
+     "precision": 0.3991,
+     "precision_25": 0.6608,
+     "recall": 0.7029,
+     "value": 3.5
+    },
+    {
+     "iou": 0.3453,
+     "iou_25": 0.5368,
+     "no_info_floor": 0.0257,
+     "precision": 0.4142,
+     "precision_25": 0.7246,
+     "recall": 0.6748,
+     "value": 4.0
+    },
+    {
+     "iou": 0.3417,
+     "iou_25": 0.5396,
+     "no_info_floor": 0.0249,
+     "precision": 0.4191,
+     "precision_25": 0.7627,
+     "recall": 0.649,
+     "value": 4.5
+    },
+    {
+     "iou": 0.3344,
+     "iou_25": 0.5329,
+     "no_info_floor": 0.0243,
+     "precision": 0.4181,
+     "precision_25": 0.7833,
+     "recall": 0.6255,
+     "value": 5.0
+    },
+    {
+     "iou": 0.3245,
+     "iou_25": 0.52,
+     "no_info_floor": 0.0235,
+     "precision": 0.4136,
+     "precision_25": 0.7954,
+     "recall": 0.601,
+     "value": 5.5
+    },
+    {
+     "iou": 0.3155,
+     "iou_25": 0.5081,
+     "no_info_floor": 0.0228,
+     "precision": 0.4092,
+     "precision_25": 0.8068,
+     "recall": 0.5793,
+     "value": 6.0
+    },
+    {
+     "iou": 0.3044,
+     "iou_25": 0.4931,
+     "no_info_floor": 0.022,
+     "precision": 0.4034,
+     "precision_25": 0.8202,
+     "recall": 0.5537,
+     "value": 7.0
+    },
+    {
+     "iou": 0.2911,
+     "iou_25": 0.4729,
+     "no_info_floor": 0.0209,
+     "precision": 0.3942,
+     "precision_25": 0.8243,
+     "recall": 0.5268,
+     "value": 8.0
+    },
+    {
+     "iou": 0.2721,
+     "iou_25": 0.4435,
+     "no_info_floor": 0.0194,
+     "precision": 0.3802,
+     "precision_25": 0.8294,
+     "recall": 0.489,
+     "value": 10.0
+    },
+    {
+     "iou": 0.2538,
+     "iou_25": 0.4143,
+     "no_info_floor": 0.018,
+     "precision": 0.3652,
+     "precision_25": 0.8285,
+     "recall": 0.4543,
+     "value": 12.0
+    }
+   ]
+  },
+  "text": "Figure D. The shipped operating point, on the detector's own two knobs. Each marker is the full v1.49.1 chain re-run at one setting over the same 26 hand-labelled tiles from 13 specimens, scored at 0 px tolerance and pooled over pixels. The dotted line is the no-information floor: the precision a mask of the same per-tile area would score with its pixels scattered at random, which is 0.0242 at the shipped area and 0.0297 for a mask that covers everything. The grey curve drops one tile, an off-specimen void that owns most of the corpus's false positives, and it moves precision by about 0.37 \u2014 further than either knob does. That single tile is also why absolute_dark_thresh=0 appears to win on the pooled curve (IoU 0.4522 against 0.3344 at the shipped 10) and loses on the other 25 (0.5056 against 0.5329); the shipped setting of 10 is unchanged.",
+  "tolerance_px": 0
+ }
+}

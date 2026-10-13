@@ -1,10 +1,23 @@
-"""The shipped detector, with its hard-coded constants turned into arguments.
+"""The v1.47 detector, with its hard-coded constants turned into arguments.
+
+NOT THE SHIPPED PATH, and this docstring used to claim it was. `predict()` here runs the
+region classifier at its bundled threshold over a single flattening radius (sigma=40).
+v1.49.1 ships NEITHER of those: the classifier is off and the darkness cut is unioned over
+seven radii. For the mask the app actually emits use
+`analysis/research/improve/angle4_shipped.py`, which binds the real function out of
+`detector_overrides.install()` so it cannot drift from production.
+
+What this module is still for: the v1.47 reference arm in a before/after, and the sys.path
+side effect that puts the archived detector on the path.
 
 sem-crack-detector is archived and read-only, so nothing here edits it. Every stage calls
 the real `detect_cracks` functions where the parameter is already exposed, and
 re-implements only `segment_dark_regions`, whose mad_k and absolute_dark_thresh are
-baked in. The defaults reproduce the shipped behaviour exactly -- verified against the
-independently measured P 0.3378 / R 0.3696 / IoU 0.2143 by tilebench_verify.py.
+baked in. The defaults reproduce the v1.47 behaviour exactly -- verified against the
+independently measured P 0.3378 / R 0.3696 / IoU 0.2143 by tilebench_verify.py. The
+corresponding v1.49.1 figures are tilebench.SHIPPED_V1491, and they must be quoted with
+their aggregation: pooled 0.4182 / 0.6252 / IoU 0.3344, median over specimens at 2 px
+0.8988 / 0.8025 / IoU 0.4962, against an IoU ceiling of 0.4993 for a perfect trace.
 """
 import os, sys
 import numpy as np

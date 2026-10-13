@@ -1,0 +1,59 @@
+{
+ "app_mask_check": {
+  "app_only_px": 17948,
+  "from_pass2_px": 17948,
+  "pct": 5.92,
+  "scored_only_px": 0,
+  "scored_px": 303159
+ },
+ "figure": "fig_aggregation.png",
+ "largest_model_gain_iou": 0.1753,
+ "n_specimens": 13,
+ "n_tiles": 26,
+ "rows": {
+  "median over 13 specimens": {
+   "f1": 0.5403,
+   "iou": 0.3701,
+   "precision": 0.7897,
+   "recall": 0.7159
+  },
+  "median over specimens, 2 px tolerance": {
+   "f1": 0.6615,
+   "iou": 0.4942,
+   "precision": 0.9009,
+   "recall": 0.8025
+  },
+  "median over the 26 tiles": {
+   "f1": 0.5903,
+   "iou": 0.4189,
+   "precision": 0.8054,
+   "recall": 0.7623
+  },
+  "median over tiles, 2 px tolerance": {
+   "f1": 0.68,
+   "iou": 0.5152,
+   "precision": 0.8981,
+   "recall": 0.92
+  },
+  "pooled over 25 tiles (off-specimen void removed)": {
+   "f1": 0.6952,
+   "iou": 0.5329,
+   "precision": 0.7833,
+   "recall": 0.625
+  },
+  "pooled over all pixels, 26 tiles": {
+   "f1": 0.5012,
+   "iou": 0.3344,
+   "precision": 0.4181,
+   "recall": 0.6255
+  }
+ },
+ "smallest_type_pt": 7.5,
+ "spans": {
+  "f1": 0.194,
+  "iou": 0.1984,
+  "precision": 0.4828,
+  "recall": 0.295
+ },
+ "text": "Figure A. The reporting rule moves the number further than any model has. One set of masks \u2014 the shipped v1.49.1 detector with the region classifier off \u2014 scored against the same 26 hand-labelled 512 px tiles from 13 specimens, under six reporting rules. Recall reads between 0.625 and 0.920 and IoU between 0.334 and 0.533; the IoU span of 0.198 is larger than the +0.1753 paired median IoU that switching the region classifier off bought, which is the largest gain any model change has made on this corpus. Tolerance is 0 px except on the two rows that say 2 px. 'Median over specimens' means the median over the 13 specimens of the median over that specimen's tiles; pooling a specimen's pixels first and then taking the median is a different number (recall 0.562 rather than 0.716). Each column is its own median, so F1 is not recoverable from the precision and recall drawn beside it. Provenance: the scored mask is the candidate stage. The application's own pipeline emits a strict superset of it \u2014 17,948 further pixels over the 26 tiles, 5.9% of the scored area, 100% of them pass-2 interior candidates \u2014 so these are not quite the application's own numbers."
+}

@@ -214,7 +214,12 @@ and this code, state the sharpest claim each could support, and try to kill *tha
 assets, one proposer each, then two independent attackers per claim — one searching for prior
 art, one attacking the method and the numbers.
 
-**5 of 5 died. Running tally: 48 of 48 novelty framings refuted.**
+**5 of 5 died. Running tally after this round: 48 of 48 novelty framings refuted.**
+
+> **This file stops at round 8, and the tally does not.** Later rounds took it to **55 of
+> 55**, every one prior art; see `docs/REPORTING_GUIDE.md` §4. Do not quote 43 or 48 as the
+> current count — those are the figures as of rounds 6 and 7 and both are numbers attached
+> to a point in time, not to the project.
 
 What makes this round different from the six before it: three of the five were killed by
 **measurements taken on this project's own files**, not by a citation. Those are defects, and

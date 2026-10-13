@@ -1,0 +1,241 @@
+{
+ "figure": "fig_operating_curve.png",
+ "n_specimens": 13,
+ "n_tiles": 26,
+ "prevalence": 0.02973,
+ "random_area_matched_precision": 0.0242,
+ "smallest_type_pt": 7.5,
+ "sweeps": {
+  "absolute_dark": [
+   {
+    "iou": 0.4522,
+    "iou_25": 0.5056,
+    "no_info_floor": 0.04,
+    "precision": 0.691,
+    "precision_25": 0.8254,
+    "recall": 0.5669,
+    "value": 0
+   },
+   {
+    "iou": 0.3347,
+    "iou_25": 0.5373,
+    "no_info_floor": 0.0244,
+    "precision": 0.4219,
+    "precision_25": 0.805,
+    "recall": 0.6183,
+    "value": 5
+   },
+   {
+    "iou": 0.3344,
+    "iou_25": 0.5329,
+    "no_info_floor": 0.0243,
+    "precision": 0.4181,
+    "precision_25": 0.7833,
+    "recall": 0.6255,
+    "value": 10
+   },
+   {
+    "iou": 0.3286,
+    "iou_25": 0.5143,
+    "no_info_floor": 0.0239,
+    "precision": 0.4057,
+    "precision_25": 0.7327,
+    "recall": 0.6336,
+    "value": 15
+   },
+   {
+    "iou": 0.3177,
+    "iou_25": 0.4845,
+    "no_info_floor": 0.0233,
+    "precision": 0.386,
+    "precision_25": 0.6642,
+    "recall": 0.6422,
+    "value": 20
+   },
+   {
+    "iou": 0.3027,
+    "iou_25": 0.4471,
+    "no_info_floor": 0.0226,
+    "precision": 0.3611,
+    "precision_25": 0.5877,
+    "recall": 0.652,
+    "value": 25
+   },
+   {
+    "iou": 0.2815,
+    "iou_25": 0.3995,
+    "no_info_floor": 0.0219,
+    "precision": 0.3287,
+    "precision_25": 0.5021,
+    "recall": 0.6622,
+    "value": 30
+   },
+   {
+    "iou": 0.2106,
+    "iou_25": 0.2673,
+    "no_info_floor": 0.0201,
+    "precision": 0.233,
+    "precision_25": 0.3045,
+    "recall": 0.6868,
+    "value": 40
+   },
+   {
+    "iou": 0.156,
+    "iou_25": 0.1836,
+    "no_info_floor": 0.0193,
+    "precision": 0.1665,
+    "precision_25": 0.1984,
+    "recall": 0.7117,
+    "value": 50
+   },
+   {
+    "iou": 0.1204,
+    "iou_25": 0.1354,
+    "no_info_floor": 0.0206,
+    "precision": 0.1257,
+    "precision_25": 0.1422,
+    "recall": 0.7399,
+    "value": 60
+   }
+  ],
+  "mad_k": [
+   {
+    "iou": 0.0948,
+    "iou_25": 0.1027,
+    "no_info_floor": 0.0256,
+    "precision": 0.0962,
+    "precision_25": 0.1043,
+    "recall": 0.8721,
+    "value": 1.0
+   },
+   {
+    "iou": 0.1564,
+    "iou_25": 0.1795,
+    "no_info_floor": 0.0257,
+    "precision": 0.1609,
+    "precision_25": 0.1855,
+    "recall": 0.8479,
+    "value": 1.5
+   },
+   {
+    "iou": 0.2265,
+    "iou_25": 0.2804,
+    "no_info_floor": 0.0262,
+    "precision": 0.2384,
+    "precision_25": 0.2988,
+    "recall": 0.8205,
+    "value": 2.0
+   },
+   {
+    "iou": 0.29,
+    "iou_25": 0.3911,
+    "no_info_floor": 0.0264,
+    "precision": 0.3154,
+    "precision_25": 0.4386,
+    "recall": 0.7832,
+    "value": 2.5
+   },
+   {
+    "iou": 0.3266,
+    "iou_25": 0.4719,
+    "no_info_floor": 0.0264,
+    "precision": 0.3689,
+    "precision_25": 0.5655,
+    "recall": 0.7403,
+    "value": 3.0
+   },
+   {
+    "iou": 0.3415,
+    "iou_25": 0.5164,
+    "no_info_floor": 0.0262,
+    "precision": 0.3991,
+    "precision_25": 0.6608,
+    "recall": 0.7029,
+    "value": 3.5
+   },
+   {
+    "iou": 0.3453,
+    "iou_25": 0.5368,
+    "no_info_floor": 0.0257,
+    "precision": 0.4142,
+    "precision_25": 0.7246,
+    "recall": 0.6748,
+    "value": 4.0
+   },
+   {
+    "iou": 0.3417,
+    "iou_25": 0.5396,
+    "no_info_floor": 0.0249,
+    "precision": 0.4191,
+    "precision_25": 0.7627,
+    "recall": 0.649,
+    "value": 4.5
+   },
+   {
+    "iou": 0.3344,
+    "iou_25": 0.5329,
+    "no_info_floor": 0.0243,
+    "precision": 0.4181,
+    "precision_25": 0.7833,
+    "recall": 0.6255,
+    "value": 5.0
+   },
+   {
+    "iou": 0.3245,
+    "iou_25": 0.52,
+    "no_info_floor": 0.0235,
+    "precision": 0.4136,
+    "precision_25": 0.7954,
+    "recall": 0.601,
+    "value": 5.5
+   },
+   {
+    "iou": 0.3155,
+    "iou_25": 0.5081,
+    "no_info_floor": 0.0228,
+    "precision": 0.4092,
+    "precision_25": 0.8068,
+    "recall": 0.5793,
+    "value": 6.0
+   },
+   {
+    "iou": 0.3044,
+    "iou_25": 0.4931,
+    "no_info_floor": 0.022,
+    "precision": 0.4034,
+    "precision_25": 0.8202,
+    "recall": 0.5537,
+    "value": 7.0
+   },
+   {
+    "iou": 0.2911,
+    "iou_25": 0.4729,
+    "no_info_floor": 0.0209,
+    "precision": 0.3942,
+    "precision_25": 0.8243,
+    "recall": 0.5268,
+    "value": 8.0
+   },
+   {
+    "iou": 0.2721,
+    "iou_25": 0.4435,
+    "no_info_floor": 0.0194,
+    "precision": 0.3802,
+    "precision_25": 0.8294,
+    "recall": 0.489,
+    "value": 10.0
+   },
+   {
+    "iou": 0.2538,
+    "iou_25": 0.4143,
+    "no_info_floor": 0.018,
+    "precision": 0.3652,
+    "precision_25": 0.8285,
+    "recall": 0.4543,
+    "value": 12.0
+   }
+  ]
+ },
+ "text": "Figure D. The shipped operating point, on the detector's own two knobs. Each marker is the full v1.49.1 chain re-run at one setting over the same 26 hand-labelled tiles from 13 specimens, scored at 0 px tolerance and pooled over pixels. The dotted line is the no-information floor: the precision a mask of the same per-tile area would score with its pixels scattered at random, which is 0.0242 at the shipped area and 0.0297 for a mask that covers everything. The grey curve drops one tile, an off-specimen void that owns most of the corpus's false positives, and it moves precision by about 0.37 \u2014 further than either knob does. That single tile is also why absolute_dark_thresh=0 appears to win on the pooled curve (IoU 0.4522 against 0.3344 at the shipped 10) and loses on the other 25 (0.5056 against 0.5329); the shipped setting of 10 is unchanged.",
+ "tolerance_px": 0
+}
