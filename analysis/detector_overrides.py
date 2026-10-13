@@ -171,6 +171,106 @@ SCALE_LADDER = (5, 10, 20, 40, 80, 160, 320)
 DECIMATE_ABOVE_SIGMA = 64
 USE_MULTISCALE_UNION = True
 
+# WHERE THE REMAINING RECALL GOES, and why no third change ships.
+#
+# After the union above, the candidate stage still never proposes 70.13% of the hand-painted
+# crack on the 48 frames that carry a correction mask. Every argument above is about the
+# other 29.87%. Decomposed at FRAME scale for the first time -- the same quantity reads
+# 45.7% on the 512 px tiles, so the tiles understate it by 24 points -- each missed pixel
+# attributed to the FIRST step that dropped it and did not give it back (closing and
+# fill_holes are extensive and can only add):
+#
+#     stage                                               px   % of painted  % of the loss
+#     reaches a candidate                         20,923,398         29.87%              -
+#     not dark at ANY ladder radius               47,165,748         67.34%         96.02%
+#     dark, but component <= 13 px (clean_mask)    1,130,323          1.61%          2.30%
+#     erased by clean_mask's opening, disk(1)        583,347          0.83%          1.19%
+#     in the clean mask, component < 40 px           238,809          0.34%          0.49%
+#
+# The buckets are disjoint, exhaustive and asserted to sum to the painted crack on every
+# frame. 29.87% reproduces the 29.84% measured by a separate instrument above; the residual
+# is connectivity -- production labels candidates with measure.label(connectivity=2) while
+# crackpipe.stages and fullframe_lever4_safety.py use ndi.label (4-conn), which fragments
+# more and so drops more at min_area_px=40 (2,711,438 px vs 2,710,974 on one frame).
+# So MORPHOLOGY AND THE AREA FILTERS ARE 4% OF THE PROBLEM; the darkness cut is all of it.
+# Per specimen the coverage runs 14.15% (MAR_Amb_AS) to 100% (260622_316_H_b4, n=1), per
+# frame 6.1% to 100%, and two frames hold 45.97% of the loss, so nothing here may be quoted
+# pooled alone. The one place morphology does matter is Cast_24hr_SE_Side_006: 17.09% of its
+# paint to the small-object filter plus 8.80% to the opening. The pooled 2.30%/1.19% is that
+# frame and MAR_Amb_HIP_ETD_0003, not a property of the corpus.
+#
+# HALF OF ALL RECALL IS absolute_dark_thresh=10, an integer with no provenance here. It
+# proposes 13,907,547 of the 20,923,398 painted crack px, 10,516,306 of them reached by no
+# ladder rung at all; dropping the term deletes 47.50% of kept hand-marked crack. Raising it
+# is additive by construction (the whole chain after the darkness cut preserves inclusion)
+# and recovers a lot: img8<20 lifts painted-crack coverage 29.87% -> 40.51%, img8<30 ->
+# 43.41%, and with mad_k 3.0 as well -> 53.31%, for 12.64% of the frame marked against
+# 8.43%. It also behaves unlike relaxing mad_k: img8<20 adds 8.3 Mpx for only +196 regions
+# (42,476 px each -- it WIDENS cracks already found, and 89.5% of what it adds is inside
+# hand-painted crack), where mad_k 3.0 adds +53,223 regions at 445 px each with 34.3% of its
+# area painted, which is the pore/speck signature this stage's docstring names.
+#
+# IT STILL DOES NOT SHIP, because nothing here can price it and two instruments disagree.
+#   * The paint cannot: 258,352 px of hand-marked NOT-crack and 170,922 of ERASE against
+#     70,041,625 of crack, and they are ALREADY 85.5%/96.7% proposed at the shipped setting.
+#     There is no headroom in which a precision cost could appear.
+#   * The 26 tiles can, and they say no. Through analysis/research/tilebench.py with the
+#     classifier off, leave-one-specimen-out over the grid picks t=10 in 13 of 13 folds:
+#     IoU 0.3246 at t=10, 0.3056 at 20, 0.2622 at 30, 0.1603 at 50. Going to 20 buys +1,227
+#     true px and costs +27,473 false px -- 22.4 px of false positive per px of real crack,
+#     the mirror of the 87-to-1 that killed the retrained classifier. Identical without the
+#     off-specimen void tile, so it is not that tile.
+#   * But a BUDGET-MATCHED RANDOM CONTROL says the tile verdict is not "it is noise": at the
+#     2.97% tile prevalence the null fp/tp is 81.6, so the measured 22.4 is a 3.53x
+#     enrichment over chance. The added area is real signal whose MARGINAL precision (4.3%)
+#     sits far below the stage's running 41%, which is why every IoU-like metric falls.
+#   * And the two instruments are blind in opposite directions. img8<20 raises the tile
+#     region count 14.6% at 700 px per new region and the frame count 0.4% at 42,476 px per
+#     new region -- 60x. The tiles are 6.8 Mpx of 811 Mpx, actively selected, and 3x less
+#     painted than the corpus (2.97% vs 8.6%): they hold the pores the threshold also
+#     catches and not the wide-open cracks it widens. The frames hold the cracks but score
+#     them against paint 192 px wide at the median. Neither can say whether the added dark
+#     pixels are crack. What would settle it is certified NOT-crack at frame scale on
+#     MAR_Amb_AS_CBS_0003, MAR_Amb_AS_ETD_0003 and Cast_24hr_SE_Side_006, which hold 29% of
+#     the loss and are exactly where the two instruments disagree -- the same labelling gap
+#     the region-classifier rejection above reached from the other side.
+#
+# A THIRD CORPSE, and it was the most promising-looking of the three. flatten_background
+# rescales the residual onto 0-255 by its 0.5/99.5 percentiles, which pins the flattened
+# image's MAD at 24-43 grey levels with a median near 130 -- so `med - 5*mad` lands NEGATIVE
+# and the rung proposes nothing at all. That is not a rounding curiosity: 56 of 336
+# frame-rungs (16.7%) are dead this way, 17 of 48 frames have at least one and they hold
+# 45.49% of the entire loss, MAR_Amb_Cast_ETD_0004 has all seven dead and reaches 6.1% of
+# its paint. The cut is affine-invariant in exact arithmetic, so the remedy looked free:
+# same cut, same mad_k, same ladder, on the UNCLIPPED float residual, from a background
+# asserted bit-identical to _flatten's. It is worth +0.14 points (29.87% -> 30.01% as a
+# union) and in raw form it is not even a superset -- it deletes 444,839 px of hand-painted
+# crack, caught by the instrument's own additivity guard. On k_max the two representations
+# agree to within 0.4 points at every threshold. THE NEGATIVE BAR IS A SYMPTOM, NOT A CAUSE:
+# at those radii the residual genuinely has no 5-MAD outliers, because flattening at a
+# radius larger than the feature removes the feature -- exactly what segment_dark_regions'
+# docstring already says about voids. Do not re-propose it.
+#
+# AND THE BOUND THE 70.13% CANNOT BE READ WITHOUT. The paint asserts "there is crack in this
+# region", not "this pixel is crack": from its own distance transform, 2*EDT inside the
+# paint is p50 = 192 px over all 70M painted crack px (467.6 px on MAR_Amb_AS_CBS_0003,
+# where the paint covers 50.8% of the frame), so half of all painted crack pixels are more
+# than 96 px from the nearest unpainted pixel. Measured on img8 -- the only quantity that is
+# not blinded here, because the flattened robust z puts the never-proposed paint
+# indistinguishable from matrix (p25/p50 -0.75/+0.00 vs -0.75/+0.00) for the structural
+# reason that a crack wider than the blur radius lands near neutral, "~122 out of 255" by
+# the docstring's own measurement -- a one-sided mixture bound needing no crack-like
+# reference puts AT LEAST 19.72% of the never-proposed paint darker than matrix can account
+# for, so AT MOST about 80% of the 70.13% is paint lying over genuine matrix. That bound
+# first read 88.16% because it was maximised over the threshold, where the denominator goes
+# to zero; its own control (distant matrix measured against near matrix, which must read ~0)
+# read 96.22% and caught it. At fixed, decision-relevant thresholds both matrix controls
+# read exactly 0.00%.
+#
+# Full record: analysis/research/improve/fullframe_recall_decomposition.py,
+# fullframe_recall_recovery.py and absdark_tiles.py, with their report_*.py.
+# Guard: tests/test_candidate_recall_decomposition.py.
+
 OVERRIDES = {}      # stage-function constants; empty -- mad_k is NOT changed, see below.
 # mad_k was measured to be badly set (relaxing 5.0 -> 2.5 lifts held-out recall 0.3696 ->
 # 0.4460 with the classifier in place) but it is NOT shipped, because with the classifier

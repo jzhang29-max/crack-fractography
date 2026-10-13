@@ -8,6 +8,20 @@ delete anything. But the paint cannot price it: the corpus holds 258,352 hand-ma
 NOT-crack pixels against 70,041,625 crack, and 85.5% of them are ALREADY proposed at the
 shipped setting, so there is no headroom in which a precision cost could show up.
 
+MEASURED, and it does NOT ship. Leave-one-specimen-out over the grid picks t=10 in 13 of
+13 folds; IoU falls 0.3246 -> 0.3056 (t=20) -> 0.2622 (t=30) -> 0.1603 (t=50). Going to 20
+buys +1,227 true px and costs +27,473 false px: 22.4 px of false positive per px of real
+crack, identical without the known off-specimen void tile. But the budget-matched random
+control below says that is not "it is noise" -- at the 2.97% tile prevalence the null is
+81.6, so 22.4 is a 3.53x enrichment over chance. The added area is real signal whose
+MARGINAL precision (4.3%) sits far below the stage's running 41%, which is why every
+IoU-like metric falls. And the tiles are blind to what the change is FOR: t=10->20 raises
+the tile region count 14.6% at 700 px per new region and the FRAME region count 0.4% at
+42,476 px per new region, because these 26 crops are 6.8 Mpx of 811 Mpx, actively selected
+and 3x less painted than the corpus -- they hold the pores the threshold also catches and
+not the wide-open cracks it widens. Neither instrument can say whether the added dark
+pixels are crack. Full record in analysis/detector_overrides.py.
+
 The 26 hand-labelled tiles can, and for an ADDITIVE rule a tile score is admissible --
 that is v1.49's own argument for shipping on tile evidence ("a STRICT SUPERSET ... which
 is why a tile score is sufficient evidence for it"), and it is the opposite of the three
@@ -21,7 +35,9 @@ the same thing in the two places, so a threshold tuned on crop-stretched tiles w
 transfer to a frame. Both are run:
 
     crop   tilebench's own cached img8. Comparable to every tile number on record, and the
-           t=10 arm must reproduce the 0.2979 that ships -- asserted, not hoped.
+           t=10 arm must reproduce the 0.3344 that ships -- asserted, not hoped. (NOT
+           0.2979, which is v1.48's single-scale figure; this control was written against
+           that stale number first and correctly failed.)
     parent the same crop re-stretched by its PARENT micrograph's percentiles, which is what
            the pipeline actually feeds the absolute test. This is the arm whose threshold
            transfers to a full frame.
@@ -153,6 +169,34 @@ def main():
             m = TB._agg([per[(mode, t)][j] for j in keep])
             print(f"  {t:>21} {m['precision']:10.4f} {m['recall']:8.4f} {m['iou']:8.4f} "
                   f"{m['f1']:8.4f}")
+
+    # ---------------------------------------------------------- budget-matched random null
+    # A sibling session established that on these tiles almost all apparent precision GAIN
+    # from a deleting rule is the SIZE of the deletion rather than where it lands, because
+    # one tile owns ~80% of all false positives, and that any precision claim here needs a
+    # budget-matched random control. The same applies in reverse to an ADDING rule: at a
+    # 2.97% crack prevalence, area added at random lands on crack 2.97% of the time, so the
+    # null fp/tp is about 66 and a measured 22 is a GAIN over chance, not a failure. The
+    # per-tile prevalence is used, not the pooled one, because the tiles differ 100-fold in
+    # how much of them is painted.
+    print("\nBUDGET-MATCHED RANDOM CONTROL on the ADDITION. `enrichment` is the measured "
+          "new true\npositives over what the same number of pixels added at random inside "
+          "each tile would hit.")
+    for mode in ("crop", "parent"):
+        print(f"\n  {mode}:")
+        print(f"    {'t':>5} {'added px':>12} {'new tp':>9} {'new fp':>10} "
+              f"{'fp per tp':>10} {'random null':>12} {'exp. tp':>9} {'enrichment':>11}")
+        b = per[(mode, 10)]
+        for t in TS[1:]:
+            a = per[(mode, t)]
+            dtp = sum(y["tp"] - x["tp"] for x, y in zip(b, a))
+            dfp = sum(y["fp"] - x["fp"] for x, y in zip(b, a))
+            add = sum(y["area"] - x["area"] for x, y in zip(b, a))
+            etp = sum((y["area"] - x["area"]) * (x["tp"] + x["fn"]) / float(tl["gt"].size)
+                      for x, y, tl in zip(b, a, tiles))
+            print(f"    {t:>5} {add:>12,} {dtp:>+9,} {dfp:>+10,} "
+                  f"{dfp / max(dtp, 1):>10.2f} {(add - etp) / max(etp, 1e-9):>12.2f} "
+                  f"{etp:>9.0f} {dtp / max(etp, 1e-9):>10.2f}x")
 
     base = TB._agg(per[("crop", 10)])
     # 0.3344 is the v1.49 multi-scale-union, classifier-off score recorded in
