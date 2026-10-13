@@ -208,3 +208,15 @@ def test_the_union_default_is_on_and_carries_its_evidence():
                encoding="utf-8").read()
     for ev in ("0.3344", "STRICT SUPERSET", "0.65%", "0.005%"):
         assert ev in src, f"the union is on but {ev!r} (its evidence) is not recorded"
+
+
+def test_absolute_dark_thresh_is_exposed_at_its_measured_default():
+    """It supplies half of all recall and three instruments disagree about raising it, so
+    it is a named constant carrying its evidence rather than a literal buried in a closure."""
+    import detector_overrides as DO
+
+    assert DO.ABSOLUTE_DARK_THRESH == 10
+    src = open(os.path.join(HERE, "analysis", "detector_overrides.py"),
+               encoding="utf-8").read()
+    for ev in ("0.4049", "0.3863", "0.3635", "91.6%", "0.41%", "2.57 against 2.69"):
+        assert ev in src, f"the default is set but {ev!r} (its evidence) is not recorded"

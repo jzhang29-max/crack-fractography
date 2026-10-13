@@ -167,6 +167,47 @@ USE_REGION_CLASSIFIER = False
 # rather than assumed -- across the 26 tiles the two masks differ by 347 px out of 6.8 M
 # (0.005%), the fast path is still a strict superset of the stock mask, and the numbers
 # quoted above are the FAST path's, which is what actually runs.
+# A THIRD KNOB, MEASURED AND DELIBERATELY LEFT AT ITS SHIPPED VALUE.
+#
+# `absolute_dark_thresh` supplies HALF of all recall the detector has -- it proposes
+# 13,907,547 of the 20,923,398 painted px that reach a candidate at frame scale, 10.5M of
+# them reached by no ladder rung at all -- and it is an integer with no provenance here.
+# Raising it is additive by construction (img8 < 20 contains img8 < 10), verified: 0 px
+# lost at every threshold on every tile. So it cannot delete a human label, which is why
+# it is exposed rather than buried.
+#
+# It is left at 10 because THREE instruments disagree and the two with real negative
+# evidence both say no.
+#
+#   SEM FULL FRAMES, 41 frames / 70M painted px -- says YES, strongly.
+#     recall on painted crack   0.2983 -> 0.4049 at t=20, 0.4338 at t=30
+#     the 10->20 step adds 8,149,543 px of which 7,461,863 (91.6%) is inside paint,
+#     for +1,916 px of painted not-crack.
+#   TILES, 26 precise labels -- says NO.
+#     P 0.4182 -> 0.3863, IoU 0.3344 -> 0.3177, F1 0.5012 -> 0.4823; area fraction
+#     against the hand labels overshoots 0.951 -> 1.083 and length 1.095 -> 1.170.
+#     Leave-one-specimen-out picks t=10 in 12 of 13 folds.
+#   TXM, 31 frames, 11.3:1 refereed not-crack -- says NO, mildly.
+#     recall 0.6707 -> 0.6929 but precision 0.2602 -> 0.2464, so F1 0.3750 -> 0.3635.
+#
+# The SEM frame "yes" is the weakest evidence despite being the largest: that paint has a
+# median width of 192 px, so "inside painted crack" sweeps up whatever sits beside a crack.
+# The tile "no" is also compromised -- the 26 crops contain only 33,673 of the 8,149,543
+# pixels this moves (0.41%), and 56% of those sit in one porosity-heavy tile reading 0.5%
+# purity. The TXM "no" rests on the only large body of certified not-crack in the project.
+#
+# What the shape test says, which is the part that is NOT about anybody's labels: the
+# regions t=20 adds are indistinguishable from the ones already kept -- median elongation
+# 2.57 against 2.69, 30.6% below elongation 2.0 against 29.4%, median area 78 against 89
+# (painted crack elsewhere is 3.27, porosity 1.51). So the added material is NOT
+# disproportionately pores; it is the same population the detector already accepts. That
+# refutes the obvious objection and is why this is a judgement call rather than a closed
+# one.
+#
+# To try it: install(up, absolute_dark_thresh=20). Expect area fraction to rise by roughly
+# a seventh and crack counts with it; re-measure anything already reported.
+ABSOLUTE_DARK_THRESH = 10
+
 SCALE_LADDER = (5, 10, 20, 40, 80, 160, 320)
 DECIMATE_ABOVE_SIGMA = 64
 USE_MULTISCALE_UNION = True
@@ -316,7 +357,7 @@ def install(up, **extra):
     base = dc.segment_dark_regions
     kw = {k: params[k] for k in ("mad_k", "absolute_dark_thresh") if k in params}
     mad_k = params.get("mad_k", 5.0)
-    absolute = params.get("absolute_dark_thresh", 10)
+    absolute = params.get("absolute_dark_thresh", ABSOLUTE_DARK_THRESH)
     ladder = params.get("scale_ladder", SCALE_LADDER)
     multiscale = params.get("use_multiscale_union", USE_MULTISCALE_UNION)
 
