@@ -209,31 +209,6 @@ def cracks(frame: str = Query(...), arm: str = Query(...),
             "truncated": total > limit, "sorted_by": key, "cracks": cr[:limit]}
 
 
-def _mask_path(arm: str, frame: str) -> str:
-    """Where this arm keeps its mask PNGs. Shared by /api/mask and /api/crop so a crop can
-    be taken from any arm the viewer can display, rather than from the SEM arms alone."""
-    derived = P.sem_derived()
-    src = {"sem/gated": (derived and os.path.join(derived, "gated_masks"), "_gated.png"),
-           "sem/machine": (derived and os.path.join(derived, "machine_masks"), "_machine.png"),
-           "uploads": (P.UPLOADS, "_gated.png")}
-    if arm in src:
-        root, suf = src[arm]
-        if not root:
-            raise HTTPException(503, "no SEM repo is configured, so its masks cannot be "
-                                     "shown. Set one in Setup.")
-        return os.path.join(root, frame + suf)
-    if arm.startswith("txm"):
-        # Both TXM arms share one layout across two trees: the gated archive and the
-        # model-only one. Resolved per arm rather than by a single txm_export() call, which
-        # is what made "txm" the only TXM arm whose mask could be fetched.
-        tx = P.txm_export_machine() if arm == "txm/machine" else P.txm_export()
-        if not tx:
-            raise HTTPException(503, f"no mask tree is configured for {arm}, so its masks "
-                                     "cannot be shown. Set one in Setup.")
-        return os.path.join(tx, frame, f"{frame}_crack_mask.png")
-    raise HTTPException(400, f"unknown arm {arm!r}")
-
-
 @app.get("/api/mask/{arm:path}/{frame}")
 def mask(arm: str, frame: str):
     """The mask PNG itself, so the page can show what a number was measured on.
@@ -247,6 +222,9 @@ def mask(arm: str, frame: str):
     if e:
         return FileResponse(e, media_type="image/png")
     p = _mask_path(arm, frame)
+    if p is None:
+        raise HTTPException(503, f"no mask tree is configured for {arm!r}, so its masks "
+                                 "cannot be shown. Set one in Setup.")
     if not os.path.exists(p):
         raise HTTPException(404, f"no mask on disk for {frame!r} in {arm!r}")
     return FileResponse(p, media_type="image/png")
@@ -1023,6 +1001,18 @@ async def mark(path: str, request: Request):
 # after that tool re-applies and exports. The timestamp is how a user tells "my corrections
 # are in this number" from "I am re-measuring the same bytes as last time".
 def _mask_path(arm, frame):
+    """Where this arm keeps its mask PNGs. Shared by /api/mask and /api/crop, so a crop can
+    be taken from any arm the viewer can display rather than from the SEM arms alone.
+
+    Returns None when the arm is known but its tree is not configured. There used to be a
+    SECOND definition of this function earlier in the file which raised
+    HTTPException(503, "no SEM repo is configured...") in that case; this one shadowed it,
+    so the message was dead code and callers got whatever None did to them -- on /api/mask,
+    os.path.exists(None) raises TypeError and the user sees a 500 on the first run of a
+    downloaded app with nothing set in Setup. The None contract is kept because several
+    callers (e.g. the scale probe) deliberately fall through on it, and the endpoints that
+    cannot continue without a path now raise the 503 themselves.
+    """
     derived = P.sem_derived()
     src = {"sem/gated": (derived and os.path.join(derived, "gated_masks"), "_gated.png"),
            "sem/machine": (derived and os.path.join(derived, "machine_masks"), "_machine.png"),

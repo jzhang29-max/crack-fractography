@@ -196,6 +196,15 @@ def build(frames, arm, kind, x=None, y=None, min_frames=3, include_thin=False):
         d["rows"] = d.pop("_drawn_rows", rows)
         return d
 
+    # Every kind except "scatter" reads ONE field, `y or x`. With both omitted that is
+    # None and FIELDS[None] raises KeyError, which surfaces as a 500 -- while an unknown
+    # field name is a clean 400. Same user error, two different answers, and the 500 says
+    # nothing about what to fix. server.py already anticipated the case for the download
+    # filename ("y or x or 'figure'") but never for the lookup.
+    if kind != "scatter" and not (y or x):
+        raise ValueError("a figure needs a field: pass y (or x). "
+                         f"Known fields: {', '.join(sorted(FIELDS))}")
+
     if kind == "histogram":
         return _with_rows(_hist(rows, arm, y or x, dropped))
     if kind == "scatter":
