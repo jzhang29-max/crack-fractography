@@ -1,0 +1,18 @@
+{
+ "claim": "On the 15-tile benchmark the published models were scored on, the shipped detector leads both metrics. The lead survives dropping the frames whose tiles informed its configuration, and does not survive dropping the specimens - n=2 there, which settles nothing either way.",
+ "caveat": "Every competing arm is scored leave-one-FRAME-out, which penalises it for having a tunable parameter. v1.49.2 has no parameter fitted on these tiles, but 3 of the 9 frames and 5 of 7 specimens also appear in the 26-tile set used to choose its configuration, so the all-15 row is the favourable reading. And at n=15 nothing on this benchmark separated statistically in the first place.",
+ "rows": [
+  {"arm": ">>> shipped v1.49.2, all 15 tiles", "iou": 0.3628, "cldice": 0.4246, "note": "no parameter fitted here; config informed by 3 shared frames"},
+  {"arm": ">>> shipped v1.49.2, frame-disjoint", "iou": 0.3530, "cldice": 0.3658, "note": "n=9; frames never used to choose the config"},
+  {"arm": ">>> shipped v1.49.2, specimen-disjoint", "iou": 0.1596, "cldice": 0.2883, "note": "n=2; too small to conclude, trends against"},
+  {"arm": "global threshold", "iou": 0.2579, "cldice": 0.1827, "note": "one line of code, LOFO"},
+  {"arm": "NESTED LOFO ensemble", "iou": 0.2526, "cldice": 0.1739, "note": "honest nested selection"},
+  {"arm": "Sato ridge", "iou": 0.1972, "cldice": 0.2981, "note": "classical filter, LOFO"},
+  {"arm": "SAM 3 (zero-shot union)", "iou": 0.1914, "cldice": 0.3030, "note": "foundation model, no fitting"},
+  {"arm": "OmniCrack30k nnU-Net", "iou": 0.2069, "cldice": 0.3304, "note": "trained on 30,017 images incl. steel"},
+  {"arm": "Meijering ridge", "iou": 0.1802, "cldice": 0.3382, "note": "classical filter, LOFO; best clDice of the competitors"},
+  {"arm": "Sauvola local", "iou": 0.1117, "cldice": 0.2421, "note": "classical filter, LOFO"},
+  {"arm": "Frangi ridge", "iou": 0.0843, "cldice": 0.0849, "note": "classical filter, LOFO"},
+  {"arm": "a correct 3 px trace", "iou": 0.1662, "cldice": 0.9997, "note": "the physically correct answer; IoU ceiling reference"}
+ ]
+}
