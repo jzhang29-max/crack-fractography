@@ -11,8 +11,15 @@ import os, sys
 import numpy as np
 from scipy import ndimage as ndi
 
-SEM = "/Users/jiamingzhang/Desktop/APP/sem-crack-detector"
-APP = "/Users/jiamingzhang/Desktop/APP/crack-fractography"
+# Located by env var with a sibling-repo default, not by an absolute path: the paper's
+# figure chain imports this module and forbids absolute paths, and a hardcoded home
+# directory made this file unrunnable anywhere else. Defaults are the layout this project
+# is developed in, so nothing changes for an existing caller.
+APP = os.path.abspath(os.environ.get(
+    "APP_REPO", os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.dirname(os.path.abspath(__file__)))))))
+SEM = os.path.abspath(os.environ.get(
+    "SEM_REPO", os.path.join(os.path.dirname(APP), "sem-crack-detector")))
 for p in (APP + "/analysis/research", APP + "/analysis", SEM + "/code",
           SEM + "/interior_active_learning/code"):
     if p not in sys.path:

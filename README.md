@@ -53,11 +53,12 @@ AnalyzeSkeleton**, shipped since about 2008. The density taxonomy (P10/P20/P21) 
 **Dershowitz & Herda (1992)**. The projected-length roughness parameter is **Underwood &
 Banerji**. The sampling, counting and confidence-interval layer is **ASTM E562, E1382,
 E1245, E2283** and **ISO 643**. The censoring machinery is rock-mechanics window sampling.
-Forty-eight separate novelty framings were tested against the literature over this
-project's life and all forty-eight were already owned. `docs/PRACTICE_AND_PRIOR_ART.md`
-carries the running tally, the named owner for each framing recorded there, and the full
-detail for the last two rounds; it is NOT a per-framing ledger of all forty-eight, and this
-sentence used to say it was. The
+Fifty-five separate novelty framings were tested against the literature over this
+project's life and all fifty-five were already owned. `docs/PRACTICE_AND_PRIOR_ART.md`
+carries the detail for rounds 6 to 8, which is where the tally stood at 48; the later
+rounds that took it to 55 are recorded in `docs/REPORTING_GUIDE.md` §4 and not broken out
+per framing there either. Neither file is a per-framing ledger of all fifty-five, and this
+sentence used to claim one existed. The
 closest prior art is **MIPAR** (Sosa et al. 2014), a commercial desktop application whose
 own product page advertises quantifying additive-manufacturing crack density, size
 distribution and localized density — this app's pitch, in this app's material system. Free

@@ -118,11 +118,37 @@ def _write_json(path, obj):
     inf put 12 Infinity literals into frames.json and left three endpoints returning 500
     across restarts with no route back through the UI. Refusing at the write keeps a
     non-finite value out of the product rather than persisting it.
+
+    THE TEMP NAME IS UNIQUE PER WRITER, and that is the half this got wrong. A FIXED
+    `<path>.tmp` is not a private scratch file: two writers of the same dataset open the
+    same name, each truncating what the other is streaming into it, and then both call
+    os.replace on it. Measured on /api/groups with six concurrent saves of six different
+    collections: three answered HTTP 500 (`FileNotFoundError: groups.json.tmp` -- the first
+    replace had already consumed the shared temp out from under the others), and on one
+    round in six the file that did land was a splice of two writers' bytes and no longer
+    parsed as JSON. _read_groups() catches that ValueError and returns {}, so the Groups
+    pane went back to "no saved collections yet" with no error anywhere, and the next save
+    wrote a one-entry file over the wreckage. The hazard is the same one the correction
+    mask hit (see save_correction_mask's per-frame lock further down), but a lock cannot
+    be the whole answer here: _DATASET_LOCK is in-process, and nothing stops a second
+    server on the same data directory. A per-writer temp name makes the race impossible
+    rather than unlikely, so os.replace is the only step the writers share -- and that one
+    is atomic.
     """
-    tmp = f"{path}.tmp"
-    with open(tmp, "w") as fh:
-        json.dump(obj, fh, allow_nan=False)
-    os.replace(tmp, path)
+    tmp = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
+    try:
+        with open(tmp, "w") as fh:
+            json.dump(obj, fh, allow_nan=False)
+        os.replace(tmp, path)
+    except BaseException:
+        # A unique name means a failed write leaves debris only this writer can own, so it
+        # is this writer's to clear. Nothing globs the data directory, so a leftover would
+        # not be read as a dataset -- but it would still sit beside the user's files.
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 @app.get("/api/arms")
@@ -1214,14 +1240,32 @@ def _groups_path():
 
 
 def _read_groups():
+    """The saved collections, or {} when there are none.
+
+    THE SHAPE IS CHECKED, NOT ASSUMED. Every caller does `g.pop(name)` or
+    `g.get(name, [])` on what comes back, so a groups.json holding anything other than an
+    object of lists -- a hand edit, a file written by something else, a splice that
+    happens to still parse -- turned all four group endpoints into HTTP 500 with no route
+    back through the UI: the pane could not save over the bad file, and nothing offered to
+    replace it. A wrong shape is treated exactly like an unreadable one, which is the
+    state the pane already knows how to recover from (save again).
+
+    The `except ValueError` is also the reason a corrupt file is SILENT. That is now a
+    narrower risk than it was -- _write_json no longer shares one temp file between
+    writers -- but the swallow is still why the symptom to look for is "no saved
+    collections yet" rather than an error.
+    """
     p = _groups_path()
     if not os.path.exists(p):
         return {}
     try:
         with open(p, encoding="utf-8") as fh:
-            return json.load(fh)
+            data = json.load(fh)
     except (ValueError, OSError):
         return {}
+    if not isinstance(data, dict):
+        return {}
+    return {k: v for k, v in data.items() if isinstance(k, str) and isinstance(v, list)}
 
 
 @app.post("/api/sample_tiles")
@@ -1879,21 +1923,74 @@ def groups_get():
 
 @app.post("/api/groups")
 def groups_set(payload: dict = Body(...)):
-    """Save or delete one named group. A group is a list of {arm, frame}."""
-    name = (payload.get("name") or "").strip()
+    """Save or delete one named group. A group is a list of {arm, frame}.
+
+    UNDER THE DATASET LOCK, because this is a read-modify-write of a shared file and it
+    was the only one of the four writers of groups.json that did not hold it. Six
+    concurrent saves of six different collections persisted four: two answered "Saved" to
+    the client and were overwritten by a save that had read the file before them. The
+    pane's Save button does not disable itself while the request is in flight, so a
+    double-click is two concurrent posts, and the app's own comment on _DATASET_LOCK lists
+    two windows on one data directory as a case it already had to cover.
+
+    THE STORED LIST IS WHAT THE STATISTICS WILL SEE. The membership filter used to run
+    after the "needs at least one frame" check, so a list of members that all failed it
+    stored `{"<name>": []}` -- a collection the pane offers as "0 frames", that
+    /api/group_stats then rejects with "give either a list of frames or the name of a
+    saved group" as though it did not exist, and that delete_frame's pruner goes out of
+    its way never to leave behind. A member that is not an object at all (a bare frame
+    name, the obvious thing for a script to send) raised AttributeError and a 500.
+    """
+    raw_name = payload.get("name")
+    # A NAME THAT IS NOT A STRING is a 400, not a 500: `(7 or "").strip()` raises
+    # AttributeError, and `{"name": 7}` is the shape a script writes by accident.
+    name = raw_name.strip() if isinstance(raw_name, str) else ""
     if not name:
         raise HTTPException(400, "a group needs a name")
-    g = _read_groups()
-    if payload.get("delete"):
-        g.pop(name, None)
-    else:
-        members = payload.get("frames") or []
-        if not isinstance(members, list) or not members:
-            raise HTTPException(400, "a group needs at least one frame")
-        g[name] = [{"arm": m.get("arm"), "frame": m.get("frame")} for m in members
-                   if m.get("arm") and m.get("frame")]
-    _write_json(_groups_path(), g)
+    with _DATASET_LOCK:
+        g = _read_groups()
+        if payload.get("delete"):
+            g.pop(name, None)
+        else:
+            members = payload.get("frames") or []
+            if not isinstance(members, list) or not members:
+                raise HTTPException(400, "a group needs at least one frame")
+            keep, seen = [], set()
+            for m in members:
+                if not isinstance(m, dict) or not m.get("arm") or not m.get("frame"):
+                    continue
+                k = (m["arm"], m["frame"])
+                # A GROUP IS A SET OF FRAMES. _collect() resolves members through a set, so
+                # a frame listed twice is measured once however it is stored -- storing it
+                # twice only makes the saved list disagree with every number taken from it.
+                if k in seen:
+                    continue
+                seen.add(k)
+                keep.append({"arm": m["arm"], "frame": m["frame"]})
+            if not keep:
+                raise HTTPException(400, "a group needs at least one frame with both an "
+                                         "arm and a frame name")
+            g[name] = keep
+        _write_json(_groups_path(), g)
     return {"ok": True, "groups": g}
+
+
+def _members(value, where="frames"):
+    """Check a member list's SHAPE before anything reads fields off it.
+
+    `_collect` and `_pixel_overlaps` both call `m.get("arm")` on every element, so a list
+    of bare frame names -- the obvious thing to send by hand -- and a `frames` that is an
+    object rather than a list both arrived as AttributeError and HTTP 500. An endpoint
+    that cannot read its own request should say which part it could not read.
+    """
+    if not isinstance(value, list):
+        raise HTTPException(400, f"{where} must be a list of {{arm, frame}} objects, not "
+                                 f"{type(value).__name__}")
+    bad = [m for m in value if not isinstance(m, dict)]
+    if bad:
+        raise HTTPException(400, f"{where} must hold {{arm, frame}} objects; got "
+                                 f"{type(bad[0]).__name__} (e.g. {bad[0]!r:.40})")
+    return value
 
 
 def _collect(members):
@@ -1915,7 +2012,11 @@ def _collect(members):
 def group_stats(payload: dict = Body(...)):
     """Preliminary analysis over a chosen set of frames."""
     from app import groupstats as GS
-    members = payload.get("frames") or _read_groups().get(payload.get("name") or "", [])
+    name = payload.get("name") if isinstance(payload.get("name"), str) else ""
+    # `or`, not `is not None`, so an empty list still falls through to the saved name --
+    # the behaviour the pane has always had.
+    given = payload.get("frames")
+    members = _members(given) if given else _read_groups().get(name or "", [])
     if not members:
         raise HTTPException(400, "give either a list of frames or the name of a saved group")
     frames, by, missing = _collect(members)
@@ -1924,6 +2025,13 @@ def group_stats(payload: dict = Body(...)):
     out = GS.group_summary(frames, by)
     out["requested"] = len(members)
     out["missing"] = missing
+    # WHAT HAPPENED TO THE OTHER MEMBERS. `requested` minus `n_frames` had two causes and
+    # only one of them was reported: _collect() resolves members through a set, so a frame
+    # listed twice is measured once -- correctly, since pooling it twice would double-count
+    # it -- but nothing said so, and "3 requested, 2 frames, 0 missing" read as a frame
+    # lost somewhere. The three numbers now add up.
+    out["duplicates_ignored"] = len(members) - len({
+        (m.get("arm"), m.get("frame")) for m in members if isinstance(m, dict)})
     return out
 
 
@@ -2532,9 +2640,25 @@ def group_compare(payload: dict = Body(...)):
     """Two groups side by side, with what would make the comparison unreadable stated."""
     from app import groupstats as GS
     saved = _read_groups()
+
     def side(k, default_label):
-        spec = payload.get(k) or {}
-        members = spec.get("frames") or saved.get(spec.get("name") or "", [])
+        """Resolve one side ONCE and hand the member list back with it.
+
+        The overlap check used to re-resolve both sides from the payload itself, which
+        meant the fatal "these two groups are the same pixels" caveat was computed from a
+        second, independent reading of the request. Two readings of one thing is a
+        divergence waiting to happen -- and the second one repeated
+        `payload.get("a", {}).get("frames")`, which is an AttributeError rather than a
+        default when the request carries `"a": null`.
+        """
+        spec = payload.get(k)
+        if spec is None:
+            spec = {}
+        if not isinstance(spec, dict):
+            raise HTTPException(400, f"side {k!r} must be an object with frames or a name")
+        nm = spec.get("name") if isinstance(spec.get("name"), str) else ""
+        members = _members(spec["frames"], f"side {k!r} frames") if spec.get("frames") \
+            else saved.get(nm or "", [])
         if not members:
             raise HTTPException(400, f"side {k!r} has no frames")
         fr, by, miss = _collect(members)
@@ -2542,14 +2666,11 @@ def group_compare(payload: dict = Body(...)):
             raise HTTPException(404, f"side {k!r}: none of those frames is measured")
         s = GS.group_summary(fr, by)
         s["missing"] = miss
-        return s, (spec.get("name") or default_label)
-    a, la = side("a", "A")
-    b, lb = side("b", "B")
+        return s, (nm or default_label), members
+    a, la, mem_a = side("a", "A")
+    b, lb, mem_b = side("b", "B")
     res = GS.compare(a, b, la, lb)
-    ov = _pixel_overlaps(payload.get("a", {}).get("frames")
-                         or saved.get((payload.get("a") or {}).get("name") or "", []),
-                         payload.get("b", {}).get("frames")
-                         or saved.get((payload.get("b") or {}).get("name") or "", []))
+    ov = _pixel_overlaps(mem_a, mem_b)
     if ov:
         worst = max(ov, key=lambda o: o["share_of_smaller"] or 0)
         res.setdefault("caveats", [])
@@ -3404,6 +3525,30 @@ def _rebuild_specimen(arm, specimen):
                       if not (r.get("arm") == arm and r.get("specimen") == specimen)]
         except Exception:
             others = []
+    # ARM SENSITIVITY IS A PROPERTY OF THE PAIR, AND IT IS STORED IN BOTH RECORDS.
+    #
+    # paired_arm_ratio compares gated against machine on identical frames, so its answer is
+    # symmetric and the two copies MUST agree. Only the edited arm's record was rewritten,
+    # so correcting a gated frame left the machine record's copy describing the pre-edit
+    # masks -- a field with a writer that nothing re-ran.
+    #
+    # Measured on the shipped corpus: of 28 paired records exactly one disagreed with the
+    # live computation -- MAR_H_AS sem/machine stored n_frames_corrected = 0 where both a
+    # frame-by-frame recount and specimen_stats itself say 1. On screen that specimen's
+    # machine card read "Unreviewed: detector output, no operator corrections -- the gated
+    # and machine arms are identical on all 20 frames" while its gated card read
+    # "Corrections change area 1.003x on 1 frames", and the two arm read-outs disagreed
+    # about the same comparison: "10 of 14 specimens" against "9 of 14".
+    #
+    # Only this one field is refreshed on the counterpart. Every other number in that
+    # record is computed from the counterpart arm's OWN frames, which this edit did not
+    # touch, so re-summarising it would be work that can only introduce difference.
+    if pair:
+        other_arm = next((a for a in pair if a != arm), None)
+        for r in others:
+            if r.get("arm") == other_arm and r.get("specimen") == specimen:
+                r["arm_sensitivity"] = specimen_stats.paired_arm_ratio(
+                    by_arm, specimen, *pair)
     _write_json(sp, others + [rec])
 
 

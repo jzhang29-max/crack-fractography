@@ -294,6 +294,29 @@ def _mag_clause(ci):
 
 # ---------------------------------------------------------------------------------------
 # Specimen-level read-out.
+def _gradient_note(grad):
+    """The gradient caveat from the LIVE module, not the copy frozen into the record.
+
+    The note carries no per-specimen content, so a copy in every record is duplication of
+    a constant -- and the duplication is what went stale. `analysis/stage.py` replaced the
+    sentence's ending ("-- more patches would") with a statement that the remedy is
+    untested, because n_patches is 1 on every positioned arm in this corpus. Records
+    written before that change kept the old ending: measured on the shipped corpus, 6 of
+    the 8 stage_gradient records still assert the retracted remedy, while the ±% badge
+    tooltip in app.js on the same screen says it is untested.
+
+    Printing the record's copy meant a withdrawn claim shipped as a current statement, and
+    nothing on screen distinguished the six stale records from the two fresh ones. The
+    stored copy is kept as a fallback only -- it is what that measurement was written with,
+    and an app whose stage module will not import should still say something here.
+    """
+    try:
+        import stage                                   # local, as everywhere in this file
+        return stage.GRADIENT_NOTE
+    except Exception:                                                      # noqa: BLE001
+        return grad.get("note") or ""
+
+
 def for_specimen(r, frames=None):
     """Read-out for one specimen-arm record, optionally with its frames for field tallies."""
     out = []
@@ -391,7 +414,7 @@ def for_specimen(r, frames=None):
             # decimal, so each was its own row. The headline is unaffected -- max field
             # over min field IS a spread across the patch, and it never claimed rows.
             f"{grad['axis'].replace('_', ' ')} over {grad['n_frames_with_position']} "
-            f"fields. {grad['note']}",
+            f"fields. {_gradient_note(grad)}",
             hedge="The interval above is then describing a spatial trend rather than "
                   "sampling error, so more tiles in the SAME patch will not narrow it. "
                   "Stage units are the instrument's and are not asserted to be "
@@ -623,7 +646,16 @@ def for_arm(records, frames=None):
             "each was imaged at a single site, so the scatter between its fields and the "
             "difference between specimens are the same variance component, and no test on "
             "these data separates them -- spatial pseudoreplication in Hurlbert's sense. "
-            "The table below is in name order for that reason.",
+            # NOT "The table below is in name order for that reason." That table was
+            # REMOVED -- app.js says so where it used to be built ("NO TABLE OF ALL
+            # SPECIMENS. It listed fourteen rows by seven columns and ranked nothing"),
+            # and index.html keeps only an orphan `#spectable tbody tr` CSS rule. So the
+            # basis for the app's central refusal pointed at a UI element that no longer
+            # exists, and /api/specimens does not even return name order on sem/gated or
+            # sem/machine: it returns the order specimens.json happens to hold. The
+            # refusal itself is unchanged and correct; only the sentence about the screen
+            # was stale.
+            "No ordering of them is offered anywhere in this app for that reason.",
             hedge="A second imaged site on a specimen would make the question answerable. "
                   "Until then a narrower interval buys precision on the one site.",
             level="warn"))
@@ -916,10 +948,20 @@ def for_arm(records, frames=None):
         med = _st.median(ratios)
         out.append(_s(
             f"Operator corrections change {len(touched)} of {len(sens)} specimens.",
+            # "PER-SPECIMEN MEDIANS", SAID OUT LOUD. `ratios` holds ONE number per
+            # specimen -- each already a median over that specimen's corrected frames --
+            # and the range was printed with no unit of analysis on it. Read as frames,
+            # "running 1.00x to 2.45x" says no correction ever removed crack; per FRAME
+            # the real range on this corpus is 0.59x to 5.78x and FOUR frames fall below
+            # 1.0, three of them on 260708_316_H_b2 where a stroke cut area by up to 41%.
+            # The detector statement two blocks up already names its unit ("Per-specimen
+            # medians run ..."); this one did not, so the same engine labelled one range
+            # and left the other to be read as whatever the reader assumed.
             f"the gated and machine arms are the same frames with and without the "
             f"operator's strokes. Where a correction exists the gated area fraction is "
-            f"{med:.2f}× the machine's at the median, running {min(ratios):.2f}× to "
-            f"{max(ratios):.2f}×.",
+            f"{med:.2f}× the machine's at the median of the per-specimen medians, which "
+            f"run {min(ratios):.2f}× to {max(ratios):.2f}×. A single frame's correction "
+            f"can fall outside that range in either direction.",
             hedge="A specimen with no correction is not a specimen the detector got "
                   "right; it is one nobody reviewed.",
             level="info", value=round(med, 3)))
@@ -980,7 +1022,17 @@ def for_figure(kind, x, y, rows, label_of=None):
 
     # --- SCATTER: a rank correlation, on fields, with its null ------------------------
     if kind == "scatter" and x and y:
-        warn = ALGEBRAIC_PAIRS.get(frozenset((x, y)))
+        # THE IDENTITY IS THE STRONGEST ALGEBRAIC PAIR AND IT WAS THE ONE THAT FELL
+        # THROUGH. frozenset(("area_fraction", "area_fraction")) has ONE element, so it
+        # matches no key in ALGEBRAIC_PAIRS and the lookup returned None. Driving
+        # /api/figure/says?kind=scatter&x=area_fraction&y=area_fraction on the real corpus
+        # returned a single statement -- "Crack area fraction rises with Crack area
+        # fraction", Spearman rho = +1.000, p = 0.0000 over 86 fields, at level "warn" --
+        # on a figure whose caption carries it out of the app. Listing the identity in
+        # ALGEBRAIC_PAIRS cannot fix it: no two-element key can ever hold it.
+        warn = (f"{lab(x)} is plotted against itself, so every point lies on the line "
+                f"y = x by construction and the rank correlation is exactly +1 whatever "
+                f"the material did" if x == y else ALGEBRAIC_PAIRS.get(frozenset((x, y))))
         if warn:
             out.append(_s(
                 "These two axes are related by definition, not by the material.",

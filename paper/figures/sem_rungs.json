@@ -1,0 +1,101 @@
+{
+ "version": "v1.49.2",
+ "frame": "MAR_H_AS_CBS_0004",
+ "crop": [
+  400,
+  1600,
+  1200
+ ],
+ "full": [
+  6144,
+  4096
+ ],
+ "ladder": [
+  5,
+  10,
+  20,
+  40,
+  80,
+  160,
+  320
+ ],
+ "mad_k": 5.0,
+ "absolute_dark_thresh": 10,
+ "decimate_above_sigma": 64,
+ "class_names": [
+  "sigma 5",
+  "sigma 10",
+  "sigma 20",
+  "sigma 40",
+  "sigma 80",
+  "sigma 160",
+  "sigma 320",
+  "absolute DN < 10"
+ ],
+ "controls": {
+  "ladder_collapse": "PASS: seg_fn(ladder=(40,)) == detect_cracks.segment_dark_regions",
+  "partition": "PASS: OR over the seven one-rung ladders == the seven-rung union"
+ },
+ "frame_px": 25165824,
+ "crop_px": 1440000,
+ "crop_frac_pct": 5.7220458984375,
+ "frame_single_pct": 2.443373203277588,
+ "frame_union_pct": 3.5433053970336914,
+ "crop_single_pct": 3.3980555555555556,
+ "crop_union_pct": 4.709097222222222,
+ "frame_first_seen_px": {
+  "sigma 5": 347763,
+  "sigma 10": 117699,
+  "sigma 20": 99423,
+  "sigma 40": 14129,
+  "sigma 80": 20319,
+  "sigma 160": 13804,
+  "sigma 320": 6250,
+  "absolute DN < 10": 272315
+ },
+ "crop_first_seen_px": {
+  "sigma 5": 25020,
+  "sigma 10": 8865,
+  "sigma 20": 7347,
+  "sigma 40": 779,
+  "sigma 80": 1246,
+  "sigma 160": 1146,
+  "sigma 320": 462,
+  "absolute DN < 10": 22946
+ },
+ "frame_rung_total_px": {
+  "sigma 5": 620078,
+  "sigma 10": 649451,
+  "sigma 20": 697637,
+  "sigma 40": 614895,
+  "sigma 80": 612997,
+  "sigma 160": 615630,
+  "sigma 320": 616256
+ },
+ "frame_absolute_px": 272315,
+ "frame_added_by_radius_px": {
+  "sigma 5": 163604,
+  "sigma 10": 39508,
+  "sigma 20": 33322,
+  "sigma 40": 0,
+  "sigma 80": 20319,
+  "sigma 160": 13804,
+  "sigma 320": 6250,
+  "absolute DN < 10": 0
+ },
+ "crop_added_by_radius_px": {
+  "sigma 5": 10255,
+  "sigma 10": 3076,
+  "sigma 20": 2694,
+  "sigma 40": 0,
+  "sigma 80": 1246,
+  "sigma 160": 1146,
+  "sigma 320": 462,
+  "absolute DN < 10": 0
+ },
+ "frame_added_over_single_px": 276807,
+ "frame_added_over_single_pp": 1.0999321937561035,
+ "crop_added_over_single_px": 18879,
+ "crop_added_over_single_pp": 1.3110416666666667,
+ "seconds": 35.2
+}

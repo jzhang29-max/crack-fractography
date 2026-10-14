@@ -125,7 +125,7 @@ FIGFILE = {
  3: "3 - method comparison, identical data.png",
  4: "4 - transfer, the class list does not say.png",
  5: "5 - TXM, what each stage adds.png",
- 6: "6 - SEM, where the model differs.png",
+ 6: "6 - SEM, what deleting the region classifier recovers.png",
 }
 
 # Each figure is placed inline, immediately after the paragraph that first cites it.

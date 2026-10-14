@@ -1,10 +1,44 @@
-"""Figure 2 -- what the two models are MADE of.
+"""Figure 2 -- what the two models are MADE of, as the application runs them (v1.49.2).
 
-Every dimension, layer shape, parameter count, coefficient and threshold here was read
-out of the shipped artefacts (models/crack_classifier.joblib,
-interior_active_learning/models/unified_model.joblib, models/f17_v5_20260824.joblib,
-models/hybrid_v5_20260824.joblib and facebook/sam-vit-huge's own config), not copied
-from documentation.
+Every dimension, layer shape, parameter count, coefficient and threshold here is READ OUT
+of the shipped artefacts and of a production run, through two committed JSON records:
+`sem_models.json` (sem_models.py, the two SEM bundles) and `sem_production.json`
+(sem_production.py, the pipeline driven exactly as analysis/detect_one.py drives it). The
+TXM side reads `txm_stats.json` and models/f17_v5_20260824.joblib,
+models/hybrid_v5_20260824.joblib and facebook/sam-vit-huge's own config.
+
+THE SEM COLUMN USED TO DRAW THE ARCHIVED v1.47 CLASSIFIER AS IF IT DECIDED SOMETHING.
+It is disabled: v1.49.2 sets USE_REGION_CLASSIFIER = False and detect_one.py keeps every
+row of df. Two treatments were considered and BOTH were wrong as stated:
+
+  (a) keep the panel, labelled "the archived, now-disabled model". True but incomplete --
+      it implies the model has no effect, and it has one.
+  (b) replace it with "production contains no learned model at all on the SEM side".
+      Striking, and FALSE. The check is in sem_production.json: a joblib.load trace over a
+      real production run returns BOTH `models/crack_classifier.joblib` and
+      `interior_active_learning/models/unified_model.joblib`. Reading
+      USE_REGION_CLASSIFIER and inferring (b) is exactly the assumption the task warned
+      against, and the code says otherwise in two places:
+        * score_pass1_candidates loads the 8-feature bundle on every run and writes
+          IsCrack; run_unified_pipeline then builds Pass 2's seed crack_mask from THAT
+          column. The switched-off model still chooses which Pass-2 candidates exist and
+          what MeanDistToCrack and FracBoundaryTouchingCrack are measured against.
+        * Pass 2 scores every candidate with the 11-feature unified model and drops the
+          ones it rejects -- 544 generated, 431 accepted on the example frame. That model
+          gates every pixel Pass 2 contributes, and Pass 2 is in what the app emits.
+
+So this column draws the THIRD, true thing: the candidate stage has zero fitted parameters
+(the honest part of (b), correctly scoped), pass 1's nine coefficients are computed and
+discarded at emission while still steering pass 2 (the part (a) missed), and pass 2's
+twelve are the only learned weights in the SEM arm that change a pixel of the output. The
+three boxes are three different colours for that reason.
+
+The eight pass-1 coefficients were EIGHT LITERALS in this file, under a docstring saying
+they had been read out of the artefact. They had been, once, by hand. A refit would have
+left the figure drawing last year's weights with nothing able to notice. They come from
+sem_models.json now, in the order the bar chart draws them.
+
+The TXM arm is unchanged.
 """
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -14,8 +48,21 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 HERE = _paths.FIG_CACHE
-SEM = json.load(open(f"{HERE}/sem_stats.json"))
 TXM = json.load(open(f"{HERE}/txm_stats.json"))
+# The SEM column's two sources, and NOTHING is computed from them here. sem_models.json is
+# the readout of the two bundles (sem_models.py); sem_production.json is what the pipeline
+# did when it was driven exactly as analysis/detect_one.py drives it (sem_production.py).
+# sem_stats.json, the archived single-radius record, is deliberately NOT read: this column
+# no longer draws that pipeline.
+MOD = json.load(open(f"{HERE}/sem_models.json"))
+M1, M2, SG = MOD["pass1"], MOD["pass2"], MOD["stages"]
+PR = json.load(open(f"{HERE}/sem_production.json"))
+assert PR["use_region_classifier"] is False, "this figure draws the classifier-off path"
+# The claim "no learned model on the SEM side" is checkable and it is FALSE; the trace in
+# sem_production.json is the check. Both bundles load on every production run, so if this
+# ever stops being true the figure must change, loudly.
+assert set(PR["learned_artefacts_loaded"]) == {M1["path"], M2["path"]}, \
+    f"the SEM path's learned artefacts moved: {PR['learned_artefacts_loaded']}"
 
 INK, MUT, RULE = (24, 24, 26), (98, 98, 104), (210, 210, 206)
 RED, BLU, AMB, GRN, VIO, SLT = (196, 42, 42), (38, 102, 190), (186, 120, 10), (28, 118, 74), (112, 62, 172), (96, 104, 118)
@@ -25,6 +72,12 @@ K = {"in":   ((242, 242, 238), SLT,  "input"),
      "fit":  ((252, 238, 238), RED,  "fitted to this lab's labels"),
      "froz": ((244, 238, 252), VIO,  "frozen, pre-trained, 637 M params"),
      "hum":  ((252, 246, 232), AMB,  "operator"),
+     # Deliberately the DARKEST fill of the seven. Its first value was (240,240,236),
+     # one grey step from "input" at (242,242,238) -- indistinguishable on a greyscale
+     # print, which is where a figure about what is and is not switched on must still
+     # work. Its left spine is drawn broken as well, so the state survives even a
+     # black-and-white photocopy.
+     "off":  ((214, 214, 210), (108, 108, 114), "fitted, loaded, verdict discarded"),
      "meas": ((236, 248, 240), GRN,  "measurement")}
 
 def font(sz, bold=False):
@@ -58,7 +111,10 @@ def wrap(t, f, w):
     if line: out.append(line)
     return out
 
-img = Image.new("RGB", (W, 2200), "white")
+# 2200 was not enough once the SEM column grew a box: the crop is min(height, last+30),
+# so an overflow is SILENT -- the plate just ends mid-diagram. Assert instead.
+CANVAS = 3200
+img = Image.new("RGB", (W, CANVAS), "white")
 d = ImageDraw.Draw(img)
 
 def box(x, y, w, kind, head, lines, rhs=None):
@@ -74,11 +130,22 @@ def box(x, y, w, kind, head, lines, rhs=None):
         BOXPROSE.append((head, [l for l in lines if l.strip()]))
     hw = d.textlength(head, font=F_BH)
     rw = d.textlength(rhs, font=F_SM) if rhs else 0
+    # THE HEAD ITSELF WAS NEVER MEASURED. Only head-plus-rhs was, so a long head alone ran
+    # straight out of the box and over the column beside it, and the script still exited 0:
+    # five heads in the rewritten SEM column did exactly that, printing on top of the
+    # coefficient panel. PIL clips nothing and reports nothing, so this has to be an assert.
+    assert hw <= w - 32, (f"box head is {hw:.0f} px wide in a {w - 32:.0f} px box "
+                          f"and will overprint the next column: {head!r}")
     # at MIN_PX a long head and a long rhs no longer share a line; measure rather than hope
     stacked = bool(rhs) and (hw + 24 + rw > w - 32)
     h = 14 + 36 + (30 if stacked else 0) + 10
     d.rounded_rectangle([x, y, x+w, y+h], radius=7, fill=fill, outline=edge, width=2)
-    d.rectangle([x, y+2, x+6, y+h-2], fill=edge)
+    if kind == "off":
+        seg = 9
+        for yy0 in range(y+2, y+h-2, seg*2):
+            d.rectangle([x, yy0, x+6, min(yy0+seg, y+h-2)], fill=edge)
+    else:
+        d.rectangle([x, y+2, x+6, y+h-2], fill=edge)
     d.text((x+16, y+12), head, font=F_BH, fill=INK)
     if rhs:
         if stacked:
@@ -129,69 +196,115 @@ def barchart(x, y, w, h, labels, vals, title, sub, pos_col=RED, neg_col=BLU, fmt
 # Six swatches no longer fit one row at this width: at 2,782 px they did, and after the
 # columns were stacked "operator" and "measurement" ran off the right edge and were cropped.
 kx, ky = M, 24
-for kind in ("in", "det", "fit", "froz", "hum", "meas"):
+for kind in ("in", "det", "fit", "off", "froz", "hum", "meas"):
     fill, edge, lab = K[kind]
     need = 46 + d.textlength(lab, font=F_SM) + 34
     if kx > M and kx + need > W - M:
         kx, ky = M, ky + 38
     d.rounded_rectangle([kx, ky, kx+30, ky+28], radius=4, fill=fill, outline=edge, width=2)
+    if kind == "off":
+        for yy0 in range(ky+2, ky+28, 18):
+            d.rectangle([kx, yy0, kx+6, min(yy0+9, ky+26)], fill=edge)
     d.text((kx+40, ky+2), lab, font=F_SM, fill=MUT)
     kx += need
 KEYBOT = ky + 48
 d.line([M, KEYBOT, W-M, KEYBOT], fill=INK, width=2)
 
 # ------------------------------------------------------------------ SEM column
+# THIS COLUMN DRAWS PRODUCTION (v1.49.2), and the two learned boxes are drawn differently
+# from each other because they are in different states. See the module docstring: one is
+# loaded, scored and then ignored at emission; the other gates every pixel pass 2 adds.
 X0 = M
+LAD = " · ".join(str(s) for s in PR["scale_ladder"])
 d.rectangle([X0, KEYBOT+20, X0+6, KEYBOT+52], fill=RED)
-d.text((X0+18, KEYBOT+18), "SEM arm — region classifier, two passes", font=F_H, fill=INK)
-d.text((X0+18, KEYBOT+56), "Candidate REGIONS are scored, not pixels. 9 fitted coefficients in pass 1, 12 in pass 2.", font=F_HN, fill=MUT)
+d.text((X0+18, KEYBOT+18), "SEM arm — v1.49.2, as the application runs it", font=F_H, fill=INK)
+# Wrapped and measured. The unwrapped single draw this replaced ran off the right edge of
+# the plate and was cropped away, silently.
+_sf = ("Candidate REGIONS are scored, not pixels. Nothing is fitted up to the candidate "
+       f"stage; pass 1's {M1['n_params']} coefficients are computed and then discarded at "
+       f"emission; pass 2's {M2['n_params']} decide.")
+_sfy = KEYBOT + 56
+for _ln in wrap(_sf, F_HN, CW - 18):
+    d.text((X0+18, _sfy), _ln, font=F_HN, fill=MUT); _sfy += 32
+SEMTOP = _sfy + 12
 
 bx, bw = X0, 700
 cx = bx + bw//2
-y = KEYBOT + 98
+y = SEMTOP
 y = box(bx, y, bw, "in", "Back-scattered SEM frame",
-        [f"16-bit TIFF, {SEM['full'][0]}×{SEM['full'][1]} px, {SEM['nm_per_px']:.1f} nm/px. 142 frames = 86 physical fields, many imaged through two detectors, over 14 specimens."],
+        [f"16-bit TIFF, {PR['raw_full'][0]}×{PR['raw_full'][1]} px, {PR['nm_per_px']:.1f} nm/px. 142 frames are 86 physical",
+         "fields, many imaged through two detectors — the invariant tests/test_specimen_stats.py exists to hold."],
         rhs="25 MP")
 arrow(cx, y, y+26); y += 26
-y = box(bx, y, bw, "det", "load_as_uint8",
-        ["Rescale on the frame's own 1–99.5 percentile. A databar, if present, is detected",
-         "by two independent signals (row mean+sd collapse, and a full-width step) and cropped."], rhs="no parameters fitted")
+y = box(bx, y, bw, "det", "load_as_uint8  →  find_field_of_view",
+        ["Rescale on the frame's own 1–99.5 percentile, then crop to the usable sample area:",
+         f"on this frame {PR['raw_full'][1]} rows become {PR['full'][1]}, and every count below is on that extent.",
+         "A databar, if present, is detected by two independent signals (row mean+sd collapse,",
+         "and a full-width step) and cropped."], rhs="no parameters fitted")
 arrow(cx, y, y+26); y += 26
-y = box(bx, y, bw, "det", "flatten_background  ·  σ = 40 px",
-        ["Subtract a Gaussian copy, stretch on 0.5–99.5. Makes one global threshold viable;",
-         "costs contrast and removes voids wider than the blur radius."], rhs="σ chosen, not learned")
+y = box(bx, y, bw, "det", "flatten_background  ·  SEVEN radii",
+        [f"σ = {LAD} px. Subtract a Gaussian copy, stretch on 0.5–99.5.",
+         "The archived pipeline ran this at",
+         "σ = 40 alone; flattening is a high-pass filter, so ONE radius erases every feature",
+         "wider than itself and a crack is only reliably dark at the scales near its own width.",
+         f"Above σ = {PR['decimate_above_sigma']} the background is estimated on a decimated copy, which changes",
+         "cost and not the result."], rhs="radii enumerated, not learned")
 arrow(cx, y, y+26); y += 26
-y = box(bx, y, bw, "det", "compute_vesselness  ·  Frangi, σ = 1–6",
-        ["Hessian eigenvalue ratio, black_ridges=True. Separates thin curves from round blobs,",
-         f"which darkness alone cannot: {SEM['ves_ratio']:.1f}:1 crack-to-matrix on the window in figure 1."], rhs="becomes feature 8")
+y = box(bx, y, bw, "det", f"compute_vesselness  ·  Frangi, σ = {SG['frangi_label']}",
+        [f"sigmas=range({SG['frangi_sigmas'][0]}, {SG['frangi_sigmas'][-1]+1}) — FIVE scales, not six; the figure said σ = 1–6 for three",
+         "revisions because the range's exclusive stop was read as inclusive.",
+         "Hessian eigenvalue ratio, black_ridges=True. Separates thin curves from round blobs,",
+         f"which darkness alone cannot: {PR['ves_ratio']:.1f}:1 crack-to-matrix on the window in figure 1.",
+         "It is still computed, and it is still a feature of both models below."],
+        rhs="a feature of both models")
 arrow(cx, y, y+26); y += 26
-y = box(bx, y, bw, "det", "segment_dark_regions  +  clean_mask",
-        ["min(Otsu, median − 5·MAD·1.4826)  OR  absolute DN < 10 for wide voids.",
-         "Then open r=1, close r=3, drop < 13 px — max(5, 40 // 3), the production value, not",
-         "clean_mask's own default of 15. Fill holes.",
-         f"On the example frame, over the {SEM['full'][1]}×{SEM['full'][0]} extent it shares with its masks: "
-         f"{SEM['frame_dark_pct']:.2f}% dark → {SEM['frame_components']} components → {SEM['frame_candidates']} candidates ≥ 40 px.",
-         "The threshold is global, so the extent chosen changes these counts."],
-        rhs="candidate proposal")
+y = box(bx, y, bw, "det", "segment_dark_regions  ·  UNIONED",
+        [f"At every rung: min(Otsu, median − {PR['mad_k']:.0f}·MAD·1.4826). OR-ed across the seven, then OR-ed",
+         f"with an absolute DN < {PR['absolute_dark_thresh']} test for voids wider than any blur radius.",
+         "The union contains the σ = 40 term unchanged, so it cannot drop a pixel one radius kept;",
+         "collapsing the ladder to (40,) reproduces the archived cut bit for bit, and that control",
+         "runs before any number here is written.",
+         f"On the example frame: {PR['frame_dark_single_pct']:.2f}% dark at one radius → {PR['frame_dark_union_pct']:.2f}% at seven."],
+        rhs="NO parameter is fitted")
 arrow(cx, y, y+26); y += 26
-y = box(bx, y, bw, "fit", "PASS 1  ·  StandardScaler → LogisticRegression",
-        ["8 region features → 8 weights + 1 intercept. class_weight='balanced', max_iter=2000.",
-         f"Fitted on {SEM['n_train']:,} adjudicated regions from {SEM['n_images']} images ({SEM['n_train']:,} = 6,408 crack / 1,097 not).",
-         f"Operating point {SEM['threshold']:.4f}, read from the bundle — transferred by quantile from a",
-         f"held-out image, NOT the 0.5 library default. Pooled grouped-CV AUC {SEM['pooled_auc']:.3f} ± {SEM['pooled_auc_sd']:.3f}."],
-        rhs="9 fitted parameters")
+y = box(bx, y, bw, "det",
+        f"clean_mask  →  candidates  ·  all {PR['frame_candidates']:,} kept",
+        [f"Open r={SG['clean_open_radius']}, close r={SG['clean_close_radius']}, drop < {SG['clean_min_area_px_production']} px — run_unified_pipeline's own literal, not clean_mask's",
+         f"default of {SG['clean_min_area_px_default']} — fill holes, then a {PR['min_area_candidate']} px floor on the component.",
+         f"{PR['frame_candidates_single']:,} candidates at one radius → {PR['frame_candidates']:,} at seven, {PR['frame_cand_pct']:.2f}% of the frame.",
+         "EVERY one of them survives to the output. Up to this line the SEM detector contains",
+         "no learned parameter at all: a darkness cut, morphology, and an area floor."],
+        rhs="zero fitted parameters to here")
 arrow(cx, y, y+26); y += 26
-y = box(bx, y, bw, "fit", "PASS 2  ·  interior fill, 11 features",
-        ["Adds MeanRawBrightness, MeanFlatBrightness, FracBoundaryTouchingCrack, MeanDistToCrack",
-         "— context rather than shape — and a geometric rule calibrated on known positives:",
-         "accept within 12.9 px of accepted crack and below 135.8 flat brightness, floor 0.65.",
-         "Recall 0.82 on known positives at a 0.54 accept rate over the full pool. Fill only:",
-         "pass 1's output is a strict subset of the result."],
-        rhs="12 fitted parameters")
+y = box(bx, y, bw, "off", "PASS 1  ·  SCORED, THEN DISCARDED",
+        [f"{M1['path']} is still read on every run and still writes an IsCrack column;",
+         "detect_one.py then ignores it, because USE_REGION_CLASSIFIER is False.",
+         f"On the example frame it would keep {PR['frame_archived_kept']:,} of {PR['frame_candidates']:,} regions and remove "
+         f"{PR['frame_archived_would_drop_px']:,} px,",
+         f"{100*PR['frame_archived_would_drop_frac']:.1f}% of what the app emits, {PR['frame_archived_drops_painted_px']:,} px of it hand-painted crack.",
+         "IT IS NOT INERT. Pass 2's candidates are generated relative to the crack mask built",
+         "from exactly this column, so the switched-off model still chooses what pass 2 may",
+         "propose and what its two context features are measured against."],
+        rhs=f"{M1['n_params']} coefficients, none of them consulted")
+arrow(cx, y, y+26); y += 26
+y = box(bx, y, bw, "fit", "PASS 2  ·  interior fill — THIS ONE DECIDES",
+        [f"{M2['path']}. Adds MeanRawBrightness, MeanFlatBrightness, FracBoundaryTouchingCrack",
+         "and MeanDistToCrack — context rather than shape — beside a geometric rule calibrated",
+         f"on known positives: accept within {M2['interior_fill_rule']['dist_thr']:.1f} px of accepted crack and below "
+         f"{M2['interior_fill_rule']['bri_thr']:.1f} flat",
+         f"brightness, floor {M2['interior_fill_rule']['floor']:.2f}. Recall {M2['interior_fill_rule']['recall_on_known_positives']:.2f} on known positives at a "
+         f"{M2['interior_fill_rule']['full_pool_accept_rate']:.2f} accept rate over the full pool.",
+         f"On the example frame it generated {PR['pass2_candidates_generated']} candidates and accepted {PR['pass2_candidates_accepted']}, adding "
+         f"{PR['frame_pass2_added_px']:,} px",
+         f"({PR['frame_pass2_added_pct']:.2f} pp) that the candidate stage does not contain. Fill only: the candidates are",
+         "a strict subset of the result."],
+        rhs=f"{M2['n_params']} fitted parameters")
 arrow(cx, y, y+26); y += 26
 y = box(bx, y, bw, "hum", "Operator reviews whole regions",
-        ["Add or remove a region before anything is measured; every change is written to a ledger",
-         "(44 of the 142 SEM frame-records carry one). Not a brush — the unit of correction is the unit of decision."],
+        ["Add or remove a region before anything is measured; every change is written to a ledger:",
+         f"{SG['ledger_path']} holds {SG['ledger_rows']} rows over {SG['ledger_frames']} frames. The old caption said 44 of 142 frames",
+         "carried one; no record in these repositories produces that number, so it is not quoted.",
+         "Not a brush — the unit of correction is the unit of decision."],
         rhs="auditable")
 arrow(cx, y, y+26); y += 26
 y_sem_end = box(bx, y, bw, "meas", "Measurement",
@@ -200,34 +313,64 @@ y_sem_end = box(bx, y, bw, "meas", "Measurement",
          "histogram. Per specimen: ASTM E562 interval from BETWEEN-FIELD variance only."],
         rhs="what is reported")
 
-# the coefficients, read off the fitted model
-CO = [("MeanVesselness", -0.574), ("Elongation", +0.324), ("Extent", -0.316),
-      ("Eccentricity", +0.195), ("LogArea", +0.131), ("Solidity", +0.090),
-      ("Circularity", +0.048), ("MeanDarkness", -0.037)]
+# The coefficients, read out of the bundle by sem_models.py and NOT retyped here. They used
+# to be eight literals in this file under a docstring claiming they had come from the
+# artefact; a refit would have left the figure drawing last year's weights with no check
+# able to see it.
+CO = [(n, v) for n, v in M1["coefficients"]]
 rx = X0 + bw + 40
 rw = CW - bw - 40
-by = barchart(rx, KEYBOT + 98, rw, 300, [c[0] for c in CO], [c[1] for c in CO],
-         "Pass 1: the 8 weights, as fitted",
-         "Standardised coefficients from the deployed bundle. Sign is toward 'crack'. "
+by = barchart(rx, SEMTOP, rw, 300, [c[0] for c in CO], [c[1] for c in CO],
+         f"Pass 1: the {M1['n_features']} weights, and what they now decide",
+         "Standardised coefficients read out of the bundle the application still loads. Sign is "
+         "toward 'crack'. Nothing downstream reads the verdict they produce, so this panel is "
+         "the archived model's anatomy, not a description of a decision in the running system. "
          "Vesselness is the largest single term and it is NEGATIVE: given a region's shape, more "
          "ridge-like texture inside it argues AGAINST crack on this training set. Darkness is the "
          "smallest term of the eight — the thing a human looks at first.")
 by += 10
-by = box(rx, by, rw, "det", "Why linear, measured not assumed",
-    ["On the same grouped split, trees score HIGHER raw accuracy — RandomForest 0.834,",
-     "GradientBoosting 0.849, SVC 0.837 against LogisticRegression's 0.655 — by calling almost",
-     "everything crack. Their specificity is 0.008, 0.009 and 0.005 on a set that is 85% positive.",
-     "Ranked by pooled AUC instead, the order reverses: 0.714 against 0.508, 0.533 and 0.276.",
-     "Accuracy on an 85%-positive set is not a model comparison; that is why the linear one ships."],
-    rhs="AUC 0.714 vs 0.51, 0.53, 0.28")
+FAM = M1["families"]
+_famline = " · ".join(f"{k.split()[0]} {v['accuracy']:.3f}" for k, v in FAM.items()
+                      if k != "LogisticRegression")
+by = box(rx, by, rw, "det", "Why linear, while it was consulted",
+    [f"On the same grouped split, trees score HIGHER raw accuracy — {_famline} against",
+     f"LogisticRegression's {FAM['LogisticRegression']['accuracy']:.3f} — by calling almost everything crack. Their specificity is "
+     + ", ".join(f"{v['specificity']:.3f}" for k, v in FAM.items() if k != "LogisticRegression"),
+     f"against {FAM['LogisticRegression']['specificity']:.3f}, on a set that is "
+     f"{100*M1['n_pos']/M1['n_train']:.0f}% positive. Ranked by pooled AUC the order reverses:",
+     " · ".join(f"{k.split()[0]} {v['pooled_auc']:.3f}" for k, v in FAM.items()) + ".",
+     "Accuracy on an 85%-positive set is not a model comparison. That argument chose this family;",
+     "it is reproduced because the bundle is still on disk and still loaded, not because the",
+     "choice still has consequences."],
+    rhs=f"AUC {FAM['LogisticRegression']['pooled_auc']:.3f} vs "
+        + ", ".join(f"{v['pooled_auc']:.2f}" for k, v in FAM.items() if k != "LogisticRegression"))
+by += 10
+by = box(rx, by, rw, "det", "What switching the verdict off is worth",
+    ["Measured, not argued, and with ZERO free parameters — fitted and held-out are the same",
+     "number by construction. On the 26 hand-labelled tiles, keeping every region the",
+     "classifier would have rejected: precision 0.3378 → 0.4033, recall 0.3696 → 0.5326,",
+     "IoU 0.2143 → 0.2979, F1 0.3530 → 0.4590. Paired across the 13 specimens the median IoU",
+     "gain is +0.1753, 11 of 13 better, Wilcoxon p = 0.0061.",
+     "It also ended a dead zone. Three ETD specimens scored recall 0.0000 at EVERY candidate",
+     "setting ever tried, which read as the cracks being invisible to intensity. They were not:",
+     "the candidate stage proposed them and the classifier rejected all of them —",
+     "MAR_Amb_AS 0.0000 → 0.3792, MAR_Amb_Cast 0.0000 → 0.3537, MAR_Amb_HIP 0.0000 → 0.6827.",
+     f"On the example frame, recall on the operator's own mask: {PR['frame_recall_single']:.3f} at one radius, "
+     f"{PR['frame_recall_cand']:.3f} at",
+     f"seven, {PR['frame_recall_archived']:.3f} if the classifier's verdict were honoured, {PR['frame_recall_emitted']:.3f} as the app emits it.",
+     "A retrained 32-feature version of the same model deletes 72.67% of hand-painted crack on",
+     "the 48 full frames; of six region-level precision rules tried, four are deleters and two",
+     "change no score. Record: analysis/detector_overrides.py."],
+    rhs="+0.1753 median IoU, 0 parameters")
 by += 10
 by = box(rx, by, rw, "fit", "Pass 2's weights put CONTEXT first",
-    ["MeanDistToCrack −1.956 · MeanFlatBrightness +1.890 · MeanVesselness +1.364",
-     "LogArea −1.125 · MeanRawBrightness −0.852 · Extent −0.532 · Solidity −0.439",
-     "Circularity −0.283 · FracBoundaryTouchingCrack −0.185 · Eccentricity −0.080 · Elongation +0.062",
+    [" · ".join(f"{n} {v:+.3f}" for n, v in M2["coefficients"][:3]),
+     " · ".join(f"{n} {v:+.3f}" for n, v in M2["coefficients"][3:7]),
+     " · ".join(f"{n} {v:+.3f}" for n, v in M2["coefficients"][7:]),
      "The two strongest terms are both relational: how far this region sits from crack already",
-     "accepted, and how bright it is after flattening. Vesselness flips sign between passes."],
-    rhs="11 features, intercept −0.225")
+     "accepted, and how bright it is after flattening. Vesselness flips sign between passes.",
+     "These are the only learned weights in the SEM arm that change a pixel of the output."],
+    rhs=f"{M2['n_features']} features, intercept {M2['intercept']:+.3f}")
 
 # ------------------------------------------------------------------ TXM arm, below the SEM arm
 X1 = M
@@ -326,7 +469,8 @@ y_txm_end = box(X1, y, tw_, "meas", "Measurement — the same code as the SEM ar
 
 # ------------------------------------------------------------------ bottom strip
 last = max(y_sem_end, y_txm_end, by)
-img = img.crop((0, 0, W, min(img.height, last + 30)))
+assert last + 30 <= CANVAS, f"the plate overflowed the canvas: {last+30} > {CANVAS}"
+img = img.crop((0, 0, W, last + 30))
 out = os.path.join(_paths.FIG_DIR, "2 - what the models are made of.png")
 os.makedirs(os.path.dirname(out), exist_ok=True)
 img.save(out)
@@ -338,17 +482,26 @@ print("wrote", out, img.size, "min_px", MIN_PX)
 # only other place it appears. The per-box prose is taken from BOXPROSE, which box() filled
 # as it drew, so the caption cannot drift from the diagram: every box that carries prose
 # appears here under its own drawn heading, in drawing order.
-CO_TEXT = ("**Pass 1: the 8 weights, as fitted** \u2014 standardised coefficients from the deployed "
-           "bundle, drawn as the bar panel beside the SEM column; sign is toward crack. "
+# "the deployed bundle" was the phrase this caption used, and it is the one thing the
+# figure may not say: the bundle is loaded, but its verdict is discarded.
+CO_TEXT = (f"**Pass 1: the {M1['n_features']} weights, and what they now decide** \u2014 standardised "
+           f"coefficients read out of `{M1['path']}`, the bundle the application still loads on "
+           "every run; drawn as the bar panel beside the SEM column, sign toward crack. "
            + " \u00b7 ".join(f"{n} {v:+.3f}" for n, v in CO) +
-           ". Vesselness is the largest single term and it is negative: given a region's shape, "
-           "more ridge-like texture inside it argues against crack on this training set. "
-           "Darkness is the smallest of the eight \u2014 the thing a human looks at first.")
+           f", intercept {M1['intercept']:+.3f}. Vesselness is the largest single term and it is "
+           "negative: given a region's shape, more ridge-like texture inside it argues against "
+           "crack on this training set. Darkness is the smallest of the eight \u2014 the thing a "
+           "human looks at first. **No stage reads the verdict these weights produce.** They are "
+           "the archived model's anatomy, reproduced because the artefact is still on the SEM "
+           "path, not because the decision still has consequences.")
 _key = ("Colour says what kind of stage it is, keyed along the top: input; deterministic image "
-        "processing; fitted to this laboratory's labels; frozen and pre-trained; operator; "
-        "measurement. The left column is the SEM arm, scoring candidate **regions** with 9 "
-        "fitted coefficients in pass 1 and 12 in pass 2; the right column is the TXM arm, "
-        "scoring every **pixel**, with 46,658 fitted parameters on top of 637 M frozen ones. "
+        "processing; fitted to this laboratory's labels; **fitted, loaded, verdict discarded**; "
+        "frozen and pre-trained; operator; measurement. The upper column is the SEM arm as "
+        f"v{PR['version'].lstrip('v')} runs it, scoring candidate **regions**: nothing is fitted up to and "
+        f"including the candidate stage, pass 1's {M1['n_params']} coefficients are computed and then "
+        f"discarded at emission, and pass 2's {M2['n_params']} are the only learned weights in the arm "
+        "that change a pixel of the output. The lower column is the TXM arm, scoring every "
+        "**pixel**, with 46,658 fitted parameters on top of 637 M frozen ones. "
         "Stage by stage: ")
 def _join(ls):
     """Join a box's drawn lines back into prose.
@@ -377,10 +530,25 @@ _key += " " + CO_TEXT
 CAPTION = dict(
   min_px=MIN_PX,
   lead=("What the two models are made of: every layer shape, parameter count, coefficient and "
-        "threshold was read out of the shipped model files and SAM's own configuration rather "
-        "than from documentation, because in this project the documentation went stale twice "
-        "while the files did not."),
+        "threshold was read out of the model files themselves and SAM's own configuration "
+        "rather than from documentation, because in this project the documentation went stale "
+        "twice while the files did not. The SEM column draws the pipeline the application "
+        f"runs (v{PR['version'].lstrip('v')}), in which the candidate stage contains no fitted parameter "
+        "at all and the eight-feature region classifier, though still loaded and still scored "
+        "on every run, has its verdict discarded."),
   panel_key=_key,
+  # The one number in the caption that is not drawn anywhere on the plate, and the one the
+  # whole treatment turns on. Asserted against the record rather than written by hand.
+  classifier_off_evidence=dict(
+      artefacts_loaded=PR["learned_artefacts_loaded"],
+      frame=PR["frame"],
+      candidates=PR["frame_candidates"],
+      classifier_would_keep=PR["frame_archived_kept"],
+      classifier_would_remove_px=PR["frame_archived_would_drop_px"],
+      of_emitted=round(PR["frame_archived_would_drop_frac"], 4),
+      hand_painted_px_removed=PR["frame_archived_drops_painted_px"],
+      pass2_generated=PR["pass2_candidates_generated"],
+      pass2_accepted=PR["pass2_candidates_accepted"]),
   extended=[
    ("Does a newer SAM help? Asked by measurement, on paired pixels, and the answer was no.",
     "SAM is used here as a frozen **dense feature** source, so the only question that matters "

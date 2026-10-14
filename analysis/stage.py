@@ -172,12 +172,32 @@ def gradient(frames, field="area_fraction"):
     # untested hypothesis is the same discipline the rest of the app applies to a claim it
     # cannot measure -- and the alternative, asserting the fix, is exactly the kind of
     # sentence the refusal engine exists to block.
-    out["note"] = ("ASTM E562 presumes fields placed over a surface. A gradient means the "
-                   "between-field variance is partly a trend across one patch, so more "
-                   "tiles in the same patch will not narrow the interval. Whether separated "
-                   "patches would is UNTESTED here: every specimen in this corpus has one "
-                   "imaged patch, so no between-patch variance has been measured.")
+    out["note"] = GRADIENT_NOTE
     return out
+
+
+#: THE NOTE, AS A NAMED CONSTANT, because it is the same sentence for every specimen and
+#: the copy stored in each record is what went stale.
+#
+# This text carries NO per-specimen content -- no rho, no ratio, no field count -- yet a
+# copy of it is written into every specimen record, and `conclusions.for_specimen` printed
+# that copy verbatim. When the retracted "-- more patches would" ending was replaced above,
+# the records already on disk kept the old sentence: measured on the shipped corpus,
+# 6 of 8 stage_gradient records still end "more tiles in the same patch will not narrow the
+# interval -- more patches would", a remedy this corpus cannot support (n_patches is 1 on
+# every positioned arm). The app's own ±% badge tooltip in app.js already says "untested",
+# so two places on the SAME screen disagreed, and the six stale records were
+# indistinguishable from the two fresh ones.
+#
+# conclusions.py now prefers this constant over the stored copy, so correcting the sentence
+# corrects every card without a re-measurement. The stored copy stays in the record as the
+# provenance of what that measurement was written with.
+GRADIENT_NOTE = (
+    "ASTM E562 presumes fields placed over a surface. A gradient means the "
+    "between-field variance is partly a trend across one patch, so more "
+    "tiles in the same patch will not narrow the interval. Whether separated "
+    "patches would is UNTESTED here: every specimen in this corpus has one "
+    "imaged patch, so no between-patch variance has been measured.")
 
 
 #: How far apart two field centres may sit and still count as one imaged site, in units of

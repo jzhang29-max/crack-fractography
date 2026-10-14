@@ -5,6 +5,23 @@ Why bother: segment_dark_regions picks its threshold from the frame's own histog
 1200 px window is NOT the deployed computation, so a Pass-1-vs-deployed-mask
 difference measured that way confounds "what Pass 2 adds" with "what a different
 threshold does". Computing on the full frame removes the confound.
+
+WHAT "DEPLOYED" MEANS HERE, AND IT IS NO LONGER THE APPLICATION. This script runs the
+sem-crack-detector pipeline AS PUBLISHED AND ARCHIVED -- single flattening radius
+sigma=40, then the logistic region classifier at its bundled threshold, which is where
+`published_candidates` and `published_kept` in sem_stats.json come from (they were called
+`frame_candidates` 453 and `frame_kept` 245, names that read as facts about the frame
+rather than about one retired pipeline, and were quoted that way). The application
+has since stopped doing both. v1.49.1 switches the region classifier OFF (paired median
+IoU +0.1753 over 13 specimens, 11 of 13 better, Wilcoxon p = 0.0061, with zero free
+parameters) and unions the darkness cut over seven flattening radii, so it keeps every
+candidate -- there is no kept/dropped split to draw. See
+`crack-fractography/analysis/detector_overrides.py`.
+
+So the SEM figures built on this file depict the ARCHIVED PUBLISHED PIPELINE, which is a
+defensible thing for the paper to depict, but a caption that calls it "deployed" or "what
+the app runs" is now false. Fix the caption or regenerate against
+`analysis/research/improve/angle4_shipped.py`; do not leave it ambiguous.
 """
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -58,6 +75,12 @@ Image.fromarray(img8).resize((w//8, h//8), Image.LANCZOS).save(f"{OUT}/sem_frame
 gs, ms, p1 = g[sl], m[sl], pass1[sl]
 bundle = joblib.load(MODEL)
 st = dict(frame=FRAME, crop=[X0,Y0,SIDE], full=[int(w),int(h)], nm_per_px=51.883,
+  pipeline="ARCHIVED sem-crack-detector as published: ONE flattening radius (sigma=40) "
+           "and the logistic region classifier at its bundled threshold",
+  not_what_the_app_runs="v1.49.2 unions the darkness cut over seven flattening radii and "
+           "sets USE_REGION_CLASSIFIER = False, so no candidate region is rejected. The "
+           "production record is sem_production.json, written by sem_production.py; the "
+           "per-radius decomposition is sem_rungs.json, written by sem_rungs.py.",
   min_area_clean=MIN_AREA_CLEAN, min_area_candidate=40,
   extent_note=f"stages computed on the {h}x{w} extent common to the frame and its masks; "
               f"the TIFF is 4376 rows and the masks 4096, and the global Otsu/MAD threshold "
@@ -65,13 +88,26 @@ st = dict(frame=FRAME, crop=[X0,Y0,SIDE], full=[int(w),int(h)], nm_per_px=51.883
   threshold=float(bundle["threshold"]), n_train=int(bundle["n_train"]), n_images=len(bundle["images"]),
   pooled_auc=bundle["cv_results"]["LogisticRegression"]["pooled_auc"],
   pooled_auc_sd=bundle["cv_results"]["LogisticRegression"]["pooled_auc_std"],
-  frame_dark_pct=100*float(dark.mean()), frame_clean_pct=100*float(clean.mean()),
-  frame_components=int(n_raw), frame_candidates=int(len(df)), frame_kept=int(scored["IsCrack"].sum()),
-  frame_pass1_pct=100*float(pass1.mean()), frame_mach_pct=100*float(m.mean()), frame_gated_pct=100*float(g.mean()),
-  prob_median_kept=float(np.median(scored.loc[scored["IsCrack"],"CrackProbability"])),
-  prob_median_dropped=float(np.median(scored.loc[~scored["IsCrack"],"CrackProbability"])),
-  crop_gated_pct=100*float(gs.mean()), crop_mach_pct=100*float(ms.mean()), crop_pass1_pct=100*float(p1.mean()),
-  crop_pass2_added_pp=100*float((ms & ~p1).mean()), crop_pass1_not_mach_pp=100*float((p1 & ~ms).mean()),
+  # EVERY KEY BELOW THAT NAMES A STAGE IS PREFIXED `published_`, and that is not cosmetic.
+  # These used to be called frame_dark_pct / frame_components / frame_candidates /
+  # frame_kept, which read as properties of the frame and were quoted as if they were
+  # properties of the detector. They are properties of the ARCHIVED pipeline on this
+  # frame, and under what the app runs they are all different -- 3.5433% dark against
+  # 2.4434% here, 1,347 candidates against 451, and nothing rejected at all: the three
+  # figures are sem_production.json's own. Renaming
+  # rather than re-pointing is deliberate: a generator that still asks for the old name
+  # now fails with a KeyError instead of silently drawing the wrong pipeline's number.
+  published_dark_pct=100*float(dark.mean()), published_clean_pct=100*float(clean.mean()),
+  published_components=int(n_raw), published_candidates=int(len(df)),
+  published_kept=int(scored["IsCrack"].sum()),
+  published_pass1_pct=100*float(pass1.mean()),
+  published_prob_median_kept=float(np.median(scored.loc[scored["IsCrack"],"CrackProbability"])),
+  published_prob_median_dropped=float(np.median(scored.loc[~scored["IsCrack"],"CrackProbability"])),
+  published_crop_pass1_pct=100*float(p1.mean()),
+  published_crop_pass2_added_pp=100*float((ms & ~p1).mean()),
+  published_crop_pass1_not_mach_pp=100*float((p1 & ~ms).mean()),
+  frame_mach_pct=100*float(m.mean()), frame_gated_pct=100*float(g.mean()),
+  crop_gated_pct=100*float(gs.mean()), crop_mach_pct=100*float(ms.mean()),
   crack_dn=float(np.median(img8[sl][gs])), matrix_dn=float(np.median(img8[sl][~gs])),
   matrix_sd=float(img8[sl][~gs].std()),
   ves_crack=float(ves[sl][gs].mean()), ves_matrix=float(ves[sl][~gs].mean()),

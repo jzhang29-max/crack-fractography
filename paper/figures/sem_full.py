@@ -1,9 +1,15 @@
-"""Every SEM panel, produced by calling the shipped detector's own functions.
+"""Every SEM panel, produced by calling the published detector's own functions.
 
 Nothing here is a reimplementation: load_as_uint8, flatten_background,
 segment_dark_regions, clean_mask, compute_vesselness, region_features_from_labeled
 and classify_with_model are imported from code/detect_cracks.py, and the classifier
-is the deployed bundle models/crack_classifier.joblib at its own threshold.
+is the published bundle models/crack_classifier.joblib at its own threshold.
+
+SCOPE: this is the ARCHIVED v1.47 SEM pipeline -- one flattening radius (sigma=40) and
+the logistic region classifier. The application runs neither: v1.49.1 unions the
+darkness cut over seven radii and sets USE_REGION_CLASSIFIER = False (deleting the
+classifier won on every metric with zero free parameters, paired median IoU +0.1753
+over 13 specimens, Wilcoxon p = 0.0061). See analysis/detector_overrides.py.
 """
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -80,4 +86,7 @@ st["sep_raw_sd"] = float((np.median(sub[~gs]) - np.median(sub[gs])) / sub[~gs].s
 st["sep_flat_sd"] = float((np.median(flat[~gs]) - np.median(flat[gs])) / flat[~gs].std())
 st["sep_ves_sd"] = float((ves[gs].mean() - ves[~gs].mean()) / ves[~gs].std())
 print(json.dumps(st, indent=1))
-json.dump(st, open(f"{OUT}/sem_stats.json","w"), indent=1)
+# NOT sem_stats.json. That file is the record mk_fig2.py quotes its numbers from, and
+# this script is an earlier preview no current figure draws -- running it used to
+# overwrite the record with a different schema, silently. Writes its own file instead.
+json.dump(st, open(f"{OUT}/sem_stats_preview_full.json", "w"), indent=1)

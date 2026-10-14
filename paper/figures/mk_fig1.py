@@ -1,8 +1,34 @@
 """Figure 1 -- what each filter and model stage does, panel by panel.
 
-Every image panel is a real array written by sem_fullframe.py / txm_full.py, which import
-and call the shipped pipelines' own functions. The TXM ensemble panel was verified
-bit-identical to the app's cached probability map (mean |diff| = 0.0).
+Every image panel is a real array written by a stage runner that imports and calls the
+pipelines' own functions. The TXM ensemble panel was verified bit-identical to the app's
+cached probability map (mean |diff| = 0.0).
+
+THE SEM ROW NOW DRAWS v1.49.2 -- WHAT THE APPLICATION RUNS. It used to draw the archived
+published pipeline, and two of its eight panels had no counterpart in production at all:
+the darkness cut at ONE flattening radius, and the logistic region classifier keeping
+"245 of 453 regions". Production unions the cut over seven radii (5,10,20,40,80,160,320),
+because a feature wider than the blur radius is erased by its own flattening, and it sets
+USE_REGION_CLASSIFIER = False, so there is no kept/dropped split to draw -- deleting the
+classifier beat keeping it on every metric with zero free parameters (paired median IoU
++0.1753 over 13 specimens, 11 of 13, Wilcoxon p = 0.0061).
+
+The single-radius cut SURVIVES as panel 4, as the honest "before" that panel 5 is measured
+against. The row's arrays come from sem_production.py (`semp_*`, driven through
+`detector_overrides.install()` and `run_unified_pipeline` exactly as analysis/detect_one.py
+drives them) and sem_rungs.py (`semr_*`, the union decomposed by rung). Its numbers come
+from sem_production.json and sem_rungs.json and from nowhere else. sem_stats.json is the
+ARCHIVED record and is now read by NOTHING: figure 2's SEM column was rebuilt against
+production too, and its model numbers come from sem_models.json. The file is kept as the
+committed record of the published pipeline, not because a plate depends on it.
+
+PANEL 8 IS THE FULL PIPELINE, Pass 2 included -- `np.isin(labeled, df["Label"])` over the
+whole of run_unified_pipeline's output, which is what detect_one.py writes to disk. It is
+not the candidate stage; panel 6 is, and the two differ by 0.67 pp on this window. A panel
+that claimed to show what the app emits while drawing only the candidates would be short
+by every Pass-2 pixel.
+
+TXM arm unchanged: the SEM arm still has eight panels, so the layout did not move.
 
 Layout rule learned the hard way: caption height is MEASURED from the wrapped text, never
 assumed, or the first row overwrites the second.
@@ -16,8 +42,18 @@ from PIL import Image, ImageDraw, ImageFont
 from scipy import ndimage as ndi
 
 HERE = _paths.FIG_CACHE
-SEM = json.load(open(f"{HERE}/sem_stats.json"))
+# The SEM arm reads the PRODUCTION record and the rung decomposition. It deliberately does
+# NOT read sem_stats.json: that file is the archived published pipeline's record, and a
+# single number lifted from it into this plate would attach the retired classifier's
+# arithmetic to a panel drawn from v1.49.2.
+PROD = json.load(open(f"{HERE}/sem_production.json"))
+RUNG = json.load(open(f"{HERE}/sem_rungs.json"))
 TXM = json.load(open(f"{HERE}/txm_stats.json"))
+assert PROD["frame"] == RUNG["frame"] and PROD["crop"] == RUNG["crop"], \
+    "the production record and the rung decomposition are not the same window"
+assert PROD["use_region_classifier"] is False, "this plate draws the classifier-off path"
+for _c, _v in RUNG["controls"].items():
+    assert _v.startswith("PASS"), f"sem_rungs control {_c} did not pass: {_v}"
 L = lambda n: np.load(f"{HERE}/{n}.npy")
 
 INK, MUT = (24, 24, 26), (98, 98, 104)
@@ -144,103 +180,102 @@ def locator(im, thumb_path, crop, full):
     return im
 
 # ---------------------------------------------------------------- SEM panels
-_SKEL = (0, 0)
+# Colours for the union panel, ordered DARK -> LIGHT down the ladder, so a reader who
+# cannot see hue still reads "smaller flattening radius = darker swatch". Checked by
+# converting the finished plate to greyscale and confirming the six stay ordered.
+RUNG_COL = [("sigma 5",   (118,  16,  62)),
+            ("sigma 10",  (178,  38,  36)),
+            ("sigma 20",  (212, 104,  22)),
+            ("sigma 80",  (226, 158,  28)),
+            ("sigma 160", (238, 202,  70)),
+            ("sigma 320", (250, 238, 158))]
+RUNG_IDX = {f"sigma {s}": i for i, s in enumerate(RUNG["ladder"], start=1)}
 
 
-def measured_panel(g8, gated):
-    """Mask, plus the geometry the measurements are actually taken from."""
-    global _SKEL
-    from skimage import morphology
-    sk = morphology.skeletonize(np.asarray(gated, bool))
-    nb = ndi.convolve(sk.astype(np.uint8), np.ones((3, 3), np.uint8), mode="constant") - sk
-    junc = sk & (nb >= 3)
-    lab, nj = ndi.label(junc, structure=np.ones((3, 3)))
-    _SKEL = (int(sk.sum()), int(nj))
-    jd = ndi.binary_dilation(junc, iterations=3)
-    skd = ndi.binary_dilation(sk, iterations=1)
-    return over(g8, [(np.asarray(gated, bool), (242, 170, 170), 0.80),
-                     (skd, (150, 16, 16), 1.0),
-                     (jd, (20, 70, 180), 1.0)])
+def union_chip(im, lines, swatches, lo, hi):
+    """Panel 5's legend: two measured lines, then a swatch bar reading smallest radius to
+    largest, which is also smallest-to-largest in LIGHTNESS so the order survives a
+    greyscale print.
+
+    Same geometry discipline as tag(): the chip is drawn at the panel's NATIVE crop size,
+    which fit() then divides by k, so every size is multiplied by k and MIN_PX is what
+    lands on the page. The width is asserted -- at MIN_PX a chip that used to fit does not.
+    """
+    im = im.copy(); d = ImageDraw.Draw(im)
+    k = im.width / P
+    f = font(max(8, round(MIN_PX * k)))
+    lh, pad, gap = round(TINY_LH * k), round(6 * k), round(7 * k)
+    cw = round(26 * k)                      # one swatch cell
+    bar = len(swatches) * cw
+    wlo, whi = d.textlength(lo, font=f), d.textlength(hi, font=f)
+    wmax = max([d.textlength(t, font=f) for t in lines] + [wlo + gap + bar + gap + whi])
+    hh = (len(lines) + 1) * lh + 2 * pad
+    x0, y0 = round(8 * k), im.height - hh - round(8 * k)
+    assert x0 + wmax + 2 * pad <= im.width, f"chip {wmax:.0f} px wide in {im.width} px panel"
+    d.rectangle([x0, y0, x0 + wmax + 2 * pad, y0 + hh], fill=(255, 255, 255))
+    d.rectangle([x0, y0, x0 + wmax + 2 * pad, y0 + hh], outline=RULE, width=max(1, round(k)))
+    y = y0 + pad
+    for t in lines:
+        d.text((x0 + pad, y), t, font=f, fill=INK); y += lh
+    d.text((x0 + pad, y), lo, font=f, fill=INK)
+    bx = x0 + pad + wlo + gap
+    for i, col in enumerate(swatches):
+        d.rectangle([bx + i * cw, y + round(4 * k), bx + (i + 1) * cw, y + round(22 * k)],
+                    fill=col, outline=RULE, width=max(1, round(k)))
+    d.text((bx + bar + gap, y), hi, font=f, fill=INK)
+    return im
+
+
+def union_panel(g8, single, rung):
+    """The seven-radius union: the sigma = 40 cut in the same violet panel 4 draws, and
+    every pixel the OTHER six radii add coloured by the smallest radius that sees it.
+
+    The stock cut already OR-s the absolute-darkness term in, so neither sigma = 40 nor
+    that term can appear among the additions -- sem_rungs.py asserts both are zero.
+    """
+    a = np.asarray(over(g8, [(single, VIO, 0.55)])).astype(np.float32)
+    for name, col in RUNG_COL:
+        m = (rung == RUNG_IDX[name]) & ~single
+        for c in range(3):
+            a[..., c][m] = 0.08 * a[..., c][m] + 0.92 * col[c]
+    return Image.fromarray(a.clip(0, 255).astype(np.uint8))
 
 
 def sem_panels():
-    img8, flat, ves = L("sem_img8"), L("sem_flat"), L("sem_ves")
-    clean, prob, pass1 = L("sem_clean"), L("sem_prob"), L("sem_pass1")
-    mach, gated = L("sem_mach"), L("sem_gated")
-    thr = SEM["threshold"]; g8 = np.asarray(img8, np.uint8)
-    micro = locator(grey(img8, 0, 255), f"{HERE}/sem_frame_thumb.png", SEM["crop"], SEM["full"])
-
+    """The SEM arm, drawn against v1.49.2 -- what the application runs, not what the paper
+    archived. The fourth element of each tuple is unused by row(); the prose that is
+    typeset lives in CAPTION below, and duplicating numbers into a string nothing renders
+    is how a figure acquires a caption no check ever reads."""
+    img8, flat, ves = L("semp_img8"), L("semp_flat"), L("semp_ves")
+    cand, emitted = L("semp_cand"), L("semp_emitted")
+    single, rung = L("semr_single"), L("semr_rung")
+    g8 = np.asarray(img8, np.uint8)
+    micro = locator(grey(img8, 0, 255), f"{HERE}/semp_frame_thumb.png", PROD["crop"], PROD["full"])
     vhi = float(np.percentile(ves, 99.5))
-    vimg = ramp(ves, GLOW, 0, vhi, gamma=0.5)
-
-    # probability: colour by side of the decision point, lightness by distance from it
-    conf = np.clip(np.abs(prob-thr)/0.22, 0, 1)
-    al = 0.30 + 0.60*conf
-    base = np.dstack([g8]*3).astype(np.float32)*0.30 + 178
-    out = base.copy()
-    for side, col in ((prob >= thr, BLU), ((prob < thr) & clean, AMB)):
-        mm = side & clean
-        for c in range(3):
-            out[..., c][mm] = (1-al[mm])*base[..., c][mm] + al[mm]*col[c]
-    probpanel = tag(Image.fromarray(out.clip(0, 255).astype(np.uint8)),
-                    f"blue  p ≥ {thr:.3f}  keep\namber p < {thr:.3f}  drop")
 
     return [
-      ("1", "Micrograph", micro, [
-        f"16-bit back-scattered TIFF, {SEM['full'][0]}×{SEM['full'][1]} px at {SEM['nm_per_px']:.1f} nm/px, rescaled to 8-bit on its own",
-        "1–99.5 percentile by load_as_uint8. The window shown is 1200 px, 2.5% of the frame (inset).",
-        f"Crack sits at DN {SEM['crack_dn']:.0f} against a DN {SEM['matrix_dn']:.0f} matrix whose own spread is ±{SEM['matrix_sd']:.1f} DN — a",
-        f"{SEM['sep_raw_sd']:.1f} sd gap ON THIS WINDOW — 6.6 sd over the whole frame. SEM is the easy",
-        "modality, and the white specks are a second phase rather than noise."]),
-      ("2", "flatten_background", grey(flat, 0, 255), [
-        "Subtract a σ = 40 px Gaussian copy, then stretch on the 0.5–99.5 percentile.",
-        f"This is NOT a contrast step — contrast falls, {SEM['sep_raw_sd']:.1f} sd → {SEM['sep_flat_sd']:.1f} sd on this",
-        "window and 6.6 → 4.7 sd over the whole frame. It exists so that ONE",
-        "threshold can work across a frame with illumination drift. Its known cost: a void wider",
-        "than the blur radius is itself a low-frequency feature and is removed with the drift,",
-        "which is why an absolute-darkness test is OR-ed back in at the next stage."]),
-      ("3", "Frangi vesselness", tag(vimg, f"crack {SEM['ves_crack']:.4f}\nmatrix {SEM['ves_matrix']:.4f}\nratio {SEM['ves_ratio']:.1f} : 1"), [
-        "skimage.filters.frangi, σ = 1–6, black_ridges=True. The ratio of Hessian eigenvalues is",
-        "high on thin curvilinear structure and low on round blobs, so a pore and a crack of equal",
-        f"darkness separate here where darkness alone cannot tell them apart: {SEM['ves_ratio']:.1f}:1 on this window.",
-        "This map becomes one of the eight features, and it is the one the fitted classifier",
-        "weights most heavily of all — see figure 2 for the coefficients."]),
-      ("4", "Candidate regions", tag(over(g8, [(clean, VIO, 0.78)]),
-          f"{SEM['frame_components']} components → {SEM['frame_candidates']} ≥ 40 px"), [
-        "segment_dark_regions takes min(Otsu, median − 5·MAD·1.4826), so a unimodal low-contrast frame",
-        "cannot be forced into a 50/50 split, OR-ed with an absolute test at DN < 10 for wide voids.",
-        f"clean_mask then opens at r = 1, closes at r = 3, drops anything under {SEM['min_area_clean']} px — the",
-        "production value max(5, 40 // 3), not clean_mask's own default of 15 — and fills holes.",
-        f"Over the {SEM['full'][1]}×{SEM['full'][0]} extent the frame shares with its masks: {SEM['frame_dark_pct']:.2f}% dark → "
-        f"{SEM['frame_components']} components → {SEM['frame_candidates']} candidates of {SEM['min_area_candidate']} px or more. The TIFF is 4376 rows,",
-        "the masks 4096; the threshold is global, so the extent changes these counts.",
-        "No model has run yet. Everything to the left of here is deterministic image processing."]),
-      ("5", "Pass 1 · 8 features", probpanel, [
-        "Per candidate region: LogArea, Elongation, Solidity, Eccentricity, Extent, Circularity,",
-        "MeanDarkness, MeanVesselness → StandardScaler → LogisticRegression(class_weight='balanced').",
-        f"The decision point {thr:.3f} is READ FROM the model bundle rather than defaulted to 0.5, and it",
-        f"was transferred by quantile from a held-out image. Median p is {SEM['prob_median_kept']:.2f} for what it keeps",
-        f"and {SEM['prob_median_dropped']:.2f} for what it drops, so the two populations are genuinely separated."]),
-      ("6", "Pass 1 accepted", tag(over(g8, [(pass1, RED, 0.70)]),
-          f"{SEM['frame_kept']} of {SEM['frame_candidates']} regions\n{SEM['frame_pass1_pct']:.2f}% of frame"), [
-        f"Trained on {SEM['n_train']:,} hand-adjudicated regions from {SEM['n_images']} images. Pooled grouped-CV AUC",
-        f"{SEM['pooled_auc']:.3f} ± {SEM['pooled_auc_sd']:.3f}, train and test never sharing an image; leave-one-image-out on a single",
-        "frame reads 0.884, and the app quotes the pooled figure because the optimistic one is a",
-        "property of that split. Trees score HIGHER raw accuracy here (0.83, 0.85 vs 0.65) by calling",
-        "almost everything crack — specificity 0.008 — on a set that is 85% positive. Hence linear."]),
-      ("7", "Pass 2 · interior fill", tag(over(g8, [(pass1, RED, 0.55), (mach & ~pass1, AMB, 0.82)]),
-          f"red  Pass 1\namber Pass 2 adds {SEM['crop_pass2_added_pp']:.2f} pp", corner="bl"), [
-        "A second, separately fitted 11-feature model adds MeanRawBrightness, MeanFlatBrightness,",
-        "FracBoundaryTouchingCrack and MeanDistToCrack — context, not shape — alongside a geometric",
-        "rule calibrated on known positives: within 12.9 px of accepted crack and below 135.8 flat",
-        "brightness. Recall 0.82 on known positives at a 0.54 accept rate over the full pool.",
-        f"Pass 1's output is a strict subset of the result ({SEM['crop_pass1_not_mach_pp']:.2f} pp outside it), as a fill must be."]),
-      ("8", "Measured", tag(measured_panel(g8, gated), f"{SEM['crop_gated_pct']:.2f}% area \u00b7 {SEM['crop_components']} regions\n{_SKEL[0]:,} px skeleton\n{_SKEL[1]} junction clusters"), [
-        "The operator may add or remove whole regions before anything is measured; on this frame they",
-        "changed nothing, and the ledger records every frame where they did. Then, per crack: area,",
-        "mean and max width, geodesic length, skeleton length (dark red), junction order (blue),",
-        "orientation on doubled angles, and H/W elongation. Per frame: P21 line density and an",
-        "ASTM E562 interval built from BETWEEN-FIELD variance — never from pixels inside one field."]),
+      ("1", "Micrograph", micro, []),
+      ("2", "flatten_background", grey(flat, 0, 255), []),
+      ("3", "Frangi vesselness", tag(ramp(ves, GLOW, 0, vhi, gamma=0.5),
+          f"crack {PROD['ves_crack']:.4f}\nmatrix {PROD['ves_matrix']:.4f}\n"
+          f"ratio {PROD['ves_ratio']:.1f} : 1"), []),
+      ("4", "Darkness cut \u00b7 \u03c3 40", tag(over(g8, [(single, VIO, 0.78)]),
+          f"\u03c3 = 40 only\n{RUNG['crop_single_pct']:.2f} % of window"), []),
+      ("5", "Seven-radius union", union_chip(union_panel(g8, single, rung),
+          [f"\u03c3 40 alone {RUNG['crop_single_pct']:.2f} %",
+           f"all seven {RUNG['crop_union_pct']:.2f} %",
+           f"+{RUNG['crop_added_over_single_px']:,} px"],
+          [c for _, c in RUNG_COL], "\u03c3 5", "320"), []),
+      ("6", "Candidates \u00b7 all kept", tag(over(g8, [(cand, VIO, 0.78)]),
+          f"frame: {PROD['frame_candidates']:,} regions\n"
+          f"none rejected\nwindow: {PROD['crop_cand_pct']:.2f} % area"), []),
+      ("7", "Pass 2 \u00b7 interior fill", tag(over(g8, [(cand, RED, 0.55),
+                                                     (emitted & ~cand, AMB, 0.88)]),
+          f"red   Pass 1\namber Pass 2 +{PROD['crop_pass2_added_pp']:.2f} pp",
+          corner="bl"), []),
+      ("8", "Emitted mask", tag(contour(grey(img8, 0, 255), emitted, it=2),
+          f"what the app writes\nPass 1 + Pass 2\n{PROD['crop_emitted_pct']:.2f} % of window",
+          corner="bl"), []),
     ]
 
 # ---------------------------------------------------------------- TXM panels
@@ -383,42 +418,77 @@ print("wrote", out, img.size, "min_px", MIN_PX)
 # arguments at length. A caption that restates the paper's conclusions is not a caption.
 # One of them also still carried the withdrawn "0 of 22" pooled count; section 5.1 reports
 # the four arms separately and declines to pool them, and that is the only place it belongs.
-SK = (f"{SEM['crop_gated_pct']:.2f} % area over {SEM['crop_components']} regions on this "
-      f"window, {_SKEL[0]:,} px skeleton, {_SKEL[1]} junction clusters")
 CAPTION = dict(
   min_px=MIN_PX,
   lead=("What every filter and model stage actually does: the SEM arm (top) and the TXM arm "
         "(bottom), each panel real output from the shipped code — the stage function imported "
-        "from the pipeline and called on one window of one frame — rather than a schematic."),
+        "from the pipeline and called on one window of one frame — rather than a schematic. "
+        f"The SEM arm is version {PROD['version']}, the build the application runs: the darkness "
+        f"cut unioned over seven flattening radii and every candidate region kept."),
   panel_key=(
-    f"**SEM arm**, one 1200 px window (2.5 % of the frame, located by the red box in the "
-    f"inset) of `{SEM['frame']}`. **(1) Micrograph**, 16-bit back-scattered TIFF, "
-    f"{SEM['full'][0]}×{SEM['full'][1]} px at {SEM['nm_per_px']:.1f} nm/px, rescaled to 8-bit on "
-    f"its own 1–99.5 percentile; crack sits at DN {SEM['crack_dn']:.0f} against a DN "
-    f"{SEM['matrix_dn']:.0f} matrix whose own spread is ±{SEM['matrix_sd']:.1f} DN, a "
-    f"{SEM['sep_raw_sd']:.1f} sd gap on this window against 6.6 sd over the whole frame. "
-    f"**(2) `flatten_background`**, subtract a σ = 40 px Gaussian and stretch on the "
-    f"0.5–99.5 percentile; contrast *falls*, {SEM['sep_raw_sd']:.1f} → "
-    f"{SEM['sep_flat_sd']:.1f} sd here, so this is not a contrast step — it exists so that one "
-    f"threshold can work across a frame with illumination drift. **(3) Frangi vesselness**, "
-    f"σ = 1–6, `black_ridges=True`: crack {SEM['ves_crack']:.4f} against matrix "
-    f"{SEM['ves_matrix']:.4f}, a {SEM['ves_ratio']:.1f} : 1 ratio, which is what separates a "
-    f"thin curve from a round void of the same darkness. **(4) Candidate regions**, "
-    f"`segment_dark_regions` at min(Otsu, median − 5·MAD·1.4826) OR-ed with an absolute "
-    f"DN < 10 test, then `clean_mask`: {SEM['frame_dark_pct']:.2f} % dark → {SEM['frame_components']:,} "
-    f"components → {SEM['frame_candidates']:,} candidates of 40 px or more. No model has run yet; "
-    f"everything to the left of here is deterministic. **(5) Pass 1, 8 features** — LogArea, "
-    f"Elongation, Solidity, Eccentricity, Extent, Circularity, MeanDarkness, MeanVesselness "
-    f"→ `StandardScaler` → `LogisticRegression(class_weight='balanced')`; the decision point "
-    f"{SEM['threshold']:.3f} is read from the model bundle rather than defaulted to 0.5. "
-    f"**(6) Pass 1 accepted**, frame-wide {SEM['frame_kept']:,} of {SEM['frame_candidates']:,} regions, "
-    f"{SEM['frame_pass1_pct']:.2f} % of frame. **(7) Pass 2, interior fill**, a separately "
-    f"fitted 11-feature model adding MeanRawBrightness, MeanFlatBrightness, "
-    f"FracBoundaryTouchingCrack and MeanDistToCrack — context, not shape — beside a geometric "
-    f"rule; Pass 1 (red) is a strict subset of the result, as a fill must be, and Pass 2 "
-    f"(amber) adds {SEM['crop_pass2_added_pp']:.2f} pp on this window. **(8) Measured**, {SK}: the operator may add "
-    f"or remove whole regions before anything is measured, and only then are area, width, "
-    f"geodesic and skeleton length, junction order and orientation computed. "
+    f"**SEM arm, {PROD['version']} — what the application runs**, on one {PROD['crop'][2]} px window "
+    f"({RUNG['crop_frac_pct']:.2f} % of the frame, located by the red box in the inset) of "
+    f"`{PROD['frame']}`. The "
+    f"stages come from `run_unified_pipeline` driven exactly as `analysis/detect_one.py` "
+    f"drives it, with `detector_overrides.install()` binding the production darkness cut. "
+    f"**(1) Micrograph**, 16-bit back-scattered TIFF, {PROD['full'][0]}×{PROD['full'][1]} px "
+    f"at {PROD['nm_per_px']:.1f} nm/px, rescaled to 8-bit on its own 1–99.5 percentile; crack "
+    f"sits at DN {PROD['crack_dn']:.0f} against a DN {PROD['matrix_dn']:.0f} matrix whose own "
+    f"spread is ±{PROD['matrix_sd']:.1f} DN, a {PROD['sep_raw_sd']:.1f} sd gap. Crack and matrix "
+    f"are separated here by the frame's *gated* mask, and on this frame the operator made no "
+    f"edits at all — it is bit-identical to the archived detector's own output — so it marks "
+    f"where that detector found crack and is not an independent label. **(2) "
+    f"`flatten_background`**, subtract a σ = 40 px Gaussian and stretch on the 0.5–99.5 "
+    f"percentile; contrast *falls*, {PROD['sep_raw_sd']:.1f} → {PROD['sep_flat_sd']:.1f} sd, so "
+    f"this is not a contrast step — it exists so that one threshold can work across a frame "
+    f"with illumination drift, and its cost is the next two panels' whole subject. "
+    f"**(3) Frangi vesselness**, `sigmas=range(1, 6)`, so σ = 1–5 and not the 1–6 this "
+    f"caption used to say, `black_ridges=True`: crack {PROD['ves_crack']:.4f} "
+    f"against matrix {PROD['ves_matrix']:.4f}, a {PROD['ves_ratio']:.1f} : 1 ratio. It is still "
+    f"computed on every frame and is still one of the features Pass 2 scores on; with the "
+    f"region classifier off it no longer decides anything at Pass 1. It is shown beside the "
+    f"image it is computed from; in the code it runs after the next two panels. **(4) Darkness cut at ONE "
+    f"radius**, `segment_dark_regions` at min(Otsu, median − {PROD['mad_k']:.0f}·MAD·1.4826) "
+    f"OR-ed with an absolute DN < {PROD['absolute_dark_thresh']} test — the σ = 40 cut the "
+    f"detector shipped with, covering {RUNG['crop_single_pct']:.2f} % of this window and "
+    f"{PROD['frame_dark_single_pct']:.2f} % of the frame. **(5) The seven-radius union**, which "
+    f"is the change: the SAME cut taken at σ = {', '.join(str(x) for x in PROD['scale_ladder'])} "
+    f"and OR-ed, with the background estimated on a decimated copy above σ = "
+    f"{PROD['decimate_above_sigma']}. Flattening is a high-pass filter, so a feature wider than "
+    f"its own blur radius is removed along with the illumination drift and one radius sees one "
+    f"band of widths. The union reaches {RUNG['crop_union_pct']:.2f} % of this window against "
+    f"{RUNG['crop_single_pct']:.2f} %, adding {RUNG['crop_added_over_single_px']:,} px "
+    f"(+{RUNG['crop_added_over_single_pp']:.2f} pp); each added pixel is coloured by the "
+    f"smallest radius that sees it — "
+    + ", ".join(f"σ {k.split()[1]} {v:,} px" for k, v in RUNG['crop_added_by_radius_px'].items() if v)
+    + f". Frame-wide the cut goes {PROD['frame_dark_single_pct']:.2f} % → "
+    f"{PROD['frame_dark_union_pct']:.2f} % for +{RUNG['frame_added_over_single_px']:,} px, and "
+    f"σ = 40 and the absolute term add nothing by construction because the stock cut already "
+    f"contains both. No new fitted parameter is introduced: the ladder is every scale and "
+    f"`mad_k` is unchanged, and because the union keeps the σ = 40 term unchanged it cannot "
+    f"drop a pixel the single radius kept — asserted on this frame by sem_rungs.py and 0 px "
+    f"lost across the 26 hand-labelled tiles. It is a superset that deletes nothing rather "
+    f"than a demonstrated gain: this corpus cannot resolve it (docs/CLAIMS.md D6). **(6) Candidate regions, all of them kept**, `clean_mask` at open "
+    f"r = 1, close r = 3, drop under {PROD['min_area_clean']} px, fill holes, then components of "
+    f"{PROD['min_area_candidate']} px or more: {PROD['frame_candidates']:,} regions frame-wide "
+    f"against {PROD['frame_candidates_single']:,} at one radius, "
+    f"{PROD['crop_cand_pct']:.2f} % of this window. `USE_REGION_CLASSIFIER` is False, so NONE is "
+    f"rejected — the bundled logistic model would have kept {PROD['frame_archived_kept']:,} of "
+    f"the {PROD['frame_candidates']:,} and taken "
+    f"{100*PROD['frame_archived_would_drop_frac']:.1f} % "
+    f"({PROD['frame_archived_would_drop_px']:,} px) out of the emitted mask. **(7) Pass 2, "
+    f"interior fill**, concavity, bridge-corridor and interior-fill candidates, each scored by "
+    f"a separately fitted 11-feature model that adds MeanRawBrightness, MeanFlatBrightness, "
+    f"FracBoundaryTouchingCrack and MeanDistToCrack — context, not shape. "
+    f"{PROD['frame_pass2_rows']:,} are accepted frame-wide and they add "
+    f"{PROD['frame_pass2_added_px']:,} px ({PROD['crop_pass2_added_pp']:.2f} pp on this window). "
+    f"The disabled classifier has not left the path entirely: Pass 2's seed crack mask is still "
+    f"built from the `IsCrack` column it writes, so it still decides which Pass-2 candidates "
+    f"exist. **(8) The emitted mask**, `np.isin(labeled, df['Label'])` over the whole of "
+    f"`run_unified_pipeline` — Pass 1 candidates AND Pass 2, which is what `detect_one.py` "
+    f"writes to disk — outlined in red on the micrograph at {PROD['crop_emitted_pct']:.2f} % of "
+    f"this window against {PROD['frame_emitted_pct']:.2f} % of the frame. This panel is the full "
+    f"pipeline and panel 6 is the candidate stage; they differ by every Pass-2 pixel. "
     f"**TXM arm**, one 1100 px window of `HC_316L_fatigue_1200_cycles`. **(1) Raw mosaic**, "
     f"{TXM['full'][0]}×{TXM['full'][1]} px, {TXM['megapixels']:.2f} MP at {TXM['nm_per_px']:.2f} "
     f"nm/px — one magnification for the whole determination, against which the crack "
@@ -455,11 +525,16 @@ CAPTION = dict(
     f"sees. `pipeline.py` gives the reason in its own comment — the model is fed raw because "
     f"that is what it was trained on, while thin faint cracks are often visible only under "
     f"local contrast — so the two are deliberately different images sharing one geometry, and "
-    f"a mask from either registers on the other. SEM Pass 1 was trained on 7,505 "
-    f"hand-adjudicated regions from 45 images, pooled grouped-CV AUC "
-    f"{SEM['pooled_auc']:.3f} ± {SEM['pooled_auc_sd']:.3f}, grouped by image and not by "
-    f"specimen; leave-one-image-out on a single frame reads 0.884, and the pooled figure is "
-    f"quoted because the optimistic one is a property of that split. On the TXM arm, grouped "
+    f"a mask from either registers on the other. **The SEM arm no longer scores its candidate "
+    f"regions.** The logistic model over eight shape and darkness features that used to is "
+    f"still on disk and is figure 2's subject, but `USE_REGION_CLASSIFIER` is False and its "
+    f"verdict is not consulted. Deleting it beat keeping it on precision, recall, IoU and F1 "
+    f"at once with zero free parameters — paired median IoU +0.1753 over 13 specimens, 11 of "
+    f"13 better, Wilcoxon p = 0.0061, recorded with its measurement in "
+    f"`analysis/detector_overrides.py`. On this frame it would have kept "
+    f"{PROD['frame_archived_kept']:,} of {PROD['frame_candidates']:,} regions. What stays "
+    f"fitted on this arm is Pass 2's 11-feature model, which gates every pixel panel 7 adds. "
+    f"On the TXM arm, grouped "
     f"5-fold IoU is 0.811 ± 0.023 for the mean of the two members against 0.786 and 0.726 "
     f"for the members themselves, and averaging beat both in every fold. Both members were "
     f"fitted on the operator's own corrections across all 71 frames and on no external "

@@ -1,9 +1,15 @@
 """Real SEM pipeline stages on a frame that LOOKS like a crack network.
 
-Imports the shipped detector rather than reimplementing it, so every panel is the
-function the app actually runs. Picks the crop by measurement: a window whose crack
+Imports the published detector rather than reimplementing it, so every panel is a real
+stage function and not a redrawing of one. Picks the crop by measurement: a window whose crack
 is a NETWORK (many junctions, no single component dominating), because the previous
 figure's crop was 91% one blob and read as a pore.
+
+SCOPE: this is the ARCHIVED v1.47 SEM pipeline -- one flattening radius (sigma=40) and
+the logistic region classifier. The application runs neither: v1.49.1 unions the
+darkness cut over seven radii and sets USE_REGION_CLASSIFIER = False (deleting the
+classifier won on every metric with zero free parameters, paired median IoU +0.1753
+over 13 specimens, Wilcoxon p = 0.0061). See analysis/detector_overrides.py.
 """
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -87,4 +93,7 @@ stats = dict(
     removed_px=int((m & ~g).sum()), added_px=int((g & ~m).sum()),
 )
 print(json.dumps(stats, indent=1))
-json.dump(stats, open(f"{OUT}/sem_stats.json", "w"), indent=1)
+# NOT sem_stats.json. That file is the record mk_fig2.py quotes its numbers from, and
+# this script is an earlier preview no current figure draws -- running it used to
+# overwrite the record with a different schema, silently. Writes its own file instead.
+json.dump(stats, open(f"{OUT}/sem_stats_preview_stages.json", "w"), indent=1)

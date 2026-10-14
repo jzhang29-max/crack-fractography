@@ -8,6 +8,22 @@ only frame where specificity is estimable at all.
 
 So: fit each family WITHOUT this image, apply all four to it, and show what each rejects.
 Out of sample for every family, same procedure, same threshold. The difference is the figure.
+
+"DEPLOYED" IS OUT OF DATE AND THIS FIGURE'S PREMISE IS THE THING THAT CHANGED. The whole
+plate is about a region classifier choosing what to REJECT. The application stopped
+running one: v1.49.1 has USE_REGION_CLASSIFIER = False, because deleting it beat keeping
+it on every metric with zero free parameters (paired median IoU +0.1753 over 13
+specimens, 11 of 13 better, Wilcoxon p = 0.0061), and because a RETRAINED version of the
+same model -- which scores nearly double on 512 px tiles -- deletes 72.67% of
+hand-painted crack on the 48 full frames. Of six region-level precision rules tried, four
+are deleters on those same frames (72.67%, 67.54%, 62.43%, 54.62%) and two change no score;
+none survives.
+
+What the figure still shows honestly: a comparison of four classifier FAMILIES on the one
+frame where specificity is estimable, within the archived published pipeline. What it may
+no longer say: that the winning family is deployed, shipped, or what the app runs. Note
+also that 92.4% of the corpus's negatives sit in this single frame, so this is one frame's
+specificity and not the corpus's.
 """
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

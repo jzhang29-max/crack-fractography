@@ -433,10 +433,28 @@ def _by_specimen(rows, arm, field, kind, min_frames, include_thin, dropped):
             + f'<line x1="{x0}" y1="{y1}" x2="{x1}" y2="{y1}" stroke="var(--rule,#dedbd6)"/>'
             + "".join(marks))
     what = "mean" if kind == "bar_by_specimen" else "median, IQR, range"
+    #: THE ROWS BEHIND THE BOXES, which are not `rows` whenever a specimen was hidden.
+    #
+    # `g` is filtered above and `rows` is not, so returning `rows` handed the conclusions
+    # engine specimens with no box on the figure -- breaking the one rule this module
+    # exists to keep. _stage_panels already did this correctly and this path never did.
+    #
+    # Measured before the fix, driving the live endpoints on the real corpus: txm at the
+    # DEFAULT min_frames=3 drew 4 boxes under "5 specimens, median Crack area fraction
+    # from 0 (260618_b3) to 0.1751 (260618_b2)" -- and 260618_b3 is the one-field specimen
+    # the default filter hides, so the low end of that span was a point the reader cannot
+    # see. sem/gated at min_frames=11 drew ONE box and still carried a between-specimen
+    # verdict over 14. The statements did not move across min_frames 3/6/9/10/11 or across
+    # include_thin, so the filter moved the picture and never moved the words.
+    #
+    # `keys` is the set that was drawn, so this is correct by construction rather than a
+    # second filter that could drift from the first.
+    drawn = [r for r in rows if r.get("specimen", "unparsed") in set(keys)]
     return {"svg": _frame(W, H, f"{lab} by specimen ({what})",
-                          _cap(arm, len(rows), dropped, "specimen is the inferential unit"),
+                          _cap(arm, len(drawn), dropped, "specimen is the inferential unit"),
                           body, axis_label(field), ""),
-            "caption": _cap(arm, len(rows), dropped), "n": len(rows), "dropped": dropped}
+            "caption": _cap(arm, len(drawn), dropped), "n": len(drawn), "dropped": dropped,
+            "_drawn_rows": drawn}
 
 
 # =======================================================================================

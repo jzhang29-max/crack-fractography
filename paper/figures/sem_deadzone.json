@@ -1,0 +1,500 @@
+{
+ "generated": "2026-10-13",
+ "app_version": "1.49.2",
+ "what_is_drawn": "arm C is the v1.49.2 CANDIDATE STAGE, not the mask the application emits. detect_one.py runs unified_pipeline.run_unified_pipeline, which adds PASS 2 (concavity, bridge-corridor, interior-fill) and with the classifier off keeps every Pass-2 row too, so the app's mask is a superset of every arm-C mask here. Pass 2 is defined on a whole micrograph resolved from ORIGINAL_DIR, not on a 512 px crop.",
+ "arms": {
+  "v147": "A: single flattening radius sigma=40, logistic region classifier at threshold 0.5538 (analysis/research/crackpipe.py)",
+  "ablation": "B: arm A's candidate stage with the classifier bypassed, every region kept. One variable differs from A. This is the arm whose numbers analysis/detector_overrides.py publishes.",
+  "v1492": "C: what the app runs -- darkness cut unioned over flattening radii (5,10,20,40,80,160,320) at mad_k 5.0, background for sigma>64 estimated on a decimated copy, every candidate region kept. Bound out of detector_overrides.install() by analysis/research/improve/angle4_shipped.py."
+ },
+ "classifier_threshold": 0.5537592016924066,
+ "scorer": {
+  "module": "analysis/research/tilebench.py",
+  "n_tiles": 26,
+  "n_specimens": 13,
+  "excluded": [
+   "MAR_AmbB_AS"
+  ],
+  "tolerance_px": 0,
+  "aggregation": "pooled over pixels within the unit named by each key"
+ },
+ "controls": {
+  "ladder_collapse": "PASS: SCALE_LADDER=(40,) reproduces the stock single-radius cut exactly; the full ladder is a strict superset",
+  "tilebench": "PASS: oracle 1.0, empty 0.0, mark-everything precision == prevalence",
+  "parameter_free": "PASS: all three arms single-variant, overfit gap 0.0000",
+  "record_attribution": "PASS: the four values detector_overrides.py publishes (+0.1753, p 0.0061, recalls 0.3792/0.3537/0.6827) reproduce as arm B to 4 dp, NOT as arm C"
+ },
+ "pooled_26": {
+  "v147": {
+   "precision": 0.337842653446946,
+   "recall": 0.3696158553436772,
+   "iou": 0.21434070258281462,
+   "f1": 0.3530157592954391
+  },
+  "ablation": {
+   "precision": 0.40330325280720436,
+   "recall": 0.5326404516562043,
+   "iou": 0.29788831327263143,
+   "f1": 0.4590353580139799
+  },
+  "v1492": {
+   "precision": 0.4147268623901929,
+   "recall": 0.6320966086304236,
+   "iou": 0.33408366502689196,
+   "f1": 0.5008436483931576
+  }
+ },
+ "pooled_25_no_flood": {
+  "flood_tile": "MAR_H_HIP_CBS_0002__crop_3122_120_512x512",
+  "v147": {
+   "precision": 0.8925221950783531,
+   "recall": 0.37090631762963844,
+   "iou": 0.35504821139059284,
+   "f1": 0.5240377551234598
+  },
+  "ablation": {
+   "precision": 0.8329938426983696,
+   "recall": 0.5326281279868468,
+   "iou": 0.48123853416260237,
+   "f1": 0.6497785779447925
+  },
+  "v1492": {
+   "precision": 0.7654893816252296,
+   "recall": 0.6315599201691701,
+   "iou": 0.5291747580872712,
+   "f1": 0.6921050132284106
+  }
+ },
+ "paired": {
+  "ablation": {
+   "arm": "ablation",
+   "baseline": "v147",
+   "n_specimens": 13,
+   "median_delta_iou": 0.17534501167443672,
+   "n_better": 11,
+   "n_worse": 2,
+   "n_tied": 0,
+   "wilcoxon_stat": 8.0,
+   "wilcoxon_p": 0.006103515625,
+   "test": "two-sided Wilcoxon signed-rank on the per-specimen IoU difference, one pair per specimen, 13 pairs"
+  },
+  "v1492": {
+   "arm": "v1492",
+   "baseline": "v147",
+   "n_specimens": 13,
+   "median_delta_iou": 0.22956366831569952,
+   "n_better": 11,
+   "n_worse": 2,
+   "n_tied": 0,
+   "wilcoxon_stat": 5.0,
+   "wilcoxon_p": 0.00244140625,
+   "test": "two-sided Wilcoxon signed-rank on the per-specimen IoU difference, one pair per specimen, 13 pairs"
+  }
+ },
+ "v1491_committed_pooled": {
+  "value": {
+   "precision": 0.4182,
+   "recall": 0.6252,
+   "f1": 0.5012,
+   "iou": 0.3344
+  },
+  "note": "tilebench.SHIPPED_V1491['pooled'], the committed v1.49.1 row. Arm C measured here is the same settings and does not reproduce it exactly: IoU agrees to 0.0003 but precision differs by 0.0035 and recall by 0.0069. No figure quotes the committed row; every arm-C number in the plate is the one measured here."
+ },
+ "per_specimen": {
+  "260622_316_H_b2": {
+   "v147": {
+    "precision": 0.9758036640165918,
+    "recall": 0.25024377271518483,
+    "iou": 0.2487005550171791,
+    "f1": 0.3983349795400028
+   },
+   "ablation": {
+    "precision": 0.39194048357098576,
+    "recall": 0.2802056555269923,
+    "iou": 0.19530429409947483,
+    "f1": 0.3267858988938282
+   },
+   "v1492": {
+    "precision": 0.38909404234367306,
+    "recall": 0.2802056555269923,
+    "iou": 0.19459492735779366,
+    "f1": 0.32579232156660654
+   },
+   "delta_iou_ablation": -0.053396260917704275,
+   "delta_iou_v1492": -0.05410562765938545
+  },
+  "260622_316_H_b4": {
+   "v147": {
+    "precision": 0.9982040988802028,
+    "recall": 0.5057538939142536,
+    "iou": 0.5052941176470588,
+    "f1": 0.6713559984368894
+   },
+   "ablation": {
+    "precision": 0.9698697068403909,
+    "recall": 0.7012257132152224,
+    "iou": 0.68627553693033,
+    "f1": 0.8139542108042621
+   },
+   "v1492": {
+    "precision": 0.943204202232436,
+    "recall": 0.7688808007279345,
+    "iou": 0.7348577859627583,
+    "f1": 0.8471677527791703
+   },
+   "delta_iou_ablation": 0.18098141928327127,
+   "delta_iou_v1492": 0.22956366831569952
+  },
+  "260622_316_amb_b3": {
+   "v147": {
+    "precision": 0.1961220597584234,
+    "recall": 0.9167904903417533,
+    "iou": 0.19269206745783884,
+    "f1": 0.32312123592563496
+   },
+   "ablation": {
+    "precision": 0.1640521137995214,
+    "recall": 0.9167904903417533,
+    "iou": 0.16164527115535762,
+    "f1": 0.2783040144339197
+   },
+   "v1492": {
+    "precision": 0.16275389079398575,
+    "recall": 0.9167904903417533,
+    "iou": 0.16038471536262022,
+    "f1": 0.2764336917562724
+   },
+   "delta_iou_ablation": -0.031046796302481222,
+   "delta_iou_v1492": -0.03230735209521862
+  },
+  "260708_316_H_b2": {
+   "v147": {
+    "precision": 0.9720465211181392,
+    "recall": 0.412735542560104,
+    "iou": 0.40789417355195,
+    "f1": 0.5794386839784718
+   },
+   "ablation": {
+    "precision": 0.9136987454744464,
+    "recall": 0.47008880225254496,
+    "iou": 0.4501036914143509,
+    "f1": 0.6207882844230879
+   },
+   "v1492": {
+    "precision": 0.9162398810507186,
+    "recall": 0.7207277452891488,
+    "iou": 0.6761765423067545,
+    "f1": 0.8068082630200757
+   },
+   "delta_iou_ablation": 0.0422095178624009,
+   "delta_iou_v1492": 0.2682823687548045
+  },
+  "AS_24hr": {
+   "v147": {
+    "precision": 0.9152113693845598,
+    "recall": 0.5891611102496511,
+    "iou": 0.55866784296427,
+    "f1": 0.7168529786330833
+   },
+   "ablation": {
+    "precision": 0.8186228368691623,
+    "recall": 0.876570010854396,
+    "iou": 0.7340128546387067,
+    "f1": 0.8466060129544348
+   },
+   "v1492": {
+    "precision": 0.7536147312455423,
+    "recall": 0.9011474647232129,
+    "iou": 0.696071385794706,
+    "f1": 0.8208043501288795
+   },
+   "delta_iou_ablation": 0.17534501167443672,
+   "delta_iou_v1492": 0.137403542830436
+  },
+  "Cast_24hr": {
+   "v147": {
+    "precision": 0.9981447124304267,
+    "recall": 0.23436430393926194,
+    "iou": 0.23426225429211248,
+    "f1": 0.3795988307630279
+   },
+   "ablation": {
+    "precision": 0.9981921487603306,
+    "recall": 0.24052523492438857,
+    "iou": 0.2404205026125902,
+    "f1": 0.3876435484679805
+   },
+   "v1492": {
+    "precision": 0.9926431006639153,
+    "recall": 0.3442653556537432,
+    "iou": 0.34338919925512107,
+    "f1": 0.5112281674521763
+   },
+   "delta_iou_ablation": 0.006158248320477733,
+   "delta_iou_v1492": 0.10912694496300859
+  },
+  "HIP_24hr": {
+   "v147": {
+    "precision": 1.0,
+    "recall": 0.01324623480312103,
+    "iou": 0.01324623480312103,
+    "f1": 0.026146131805157593
+   },
+   "ablation": {
+    "precision": 0.9706261272867818,
+    "recall": 0.22784733563176676,
+    "iou": 0.22628701868204482,
+    "f1": 0.36906044871166843
+   },
+   "v1492": {
+    "precision": 0.9121550820817325,
+    "recall": 0.3159136272908728,
+    "iou": 0.30658605306409953,
+    "f1": 0.46929331955613457
+   },
+   "delta_iou_ablation": 0.21304078387892378,
+   "delta_iou_v1492": 0.2933398182609785
+  },
+  "MAR_AmbB_HIP": {
+   "v147": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "iou": 0.0,
+    "f1": 0.0
+   },
+   "ablation": {
+    "precision": 0.3019197207678883,
+    "recall": 0.36149253731343284,
+    "iou": 0.19691056910569105,
+    "f1": 0.3290313816057601
+   },
+   "v1492": {
+    "precision": 0.3292276964047936,
+    "recall": 0.5904477611940299,
+    "iou": 0.26802168021680217,
+    "f1": 0.4227399016883949
+   },
+   "delta_iou_ablation": 0.19691056910569105,
+   "delta_iou_v1492": 0.26802168021680217
+  },
+  "MAR_Amb_AS": {
+   "v147": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "iou": 0.0,
+    "f1": 0.0
+   },
+   "ablation": {
+    "precision": 0.8539451594851707,
+    "recall": 0.37922465208747513,
+    "iou": 0.3561260210035006,
+    "f1": 0.5252108070900018
+   },
+   "v1492": {
+    "precision": 0.8214114258281325,
+    "recall": 0.42519880715705766,
+    "iou": 0.3892174704276615,
+    "f1": 0.5603405927624038
+   },
+   "delta_iou_ablation": 0.3561260210035006,
+   "delta_iou_v1492": 0.3892174704276615
+  },
+  "MAR_Amb_Cast": {
+   "v147": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "iou": 0.0,
+    "f1": 0.0
+   },
+   "ablation": {
+    "precision": 0.9760383386581469,
+    "recall": 0.3536903039073806,
+    "iou": 0.35064562410329986,
+    "f1": 0.5192266836626301
+   },
+   "v1492": {
+    "precision": 0.9598059598059598,
+    "recall": 0.40086830680173663,
+    "iou": 0.39424992883575294,
+    "f1": 0.5655369538587178
+   },
+   "delta_iou_ablation": 0.35064562410329986,
+   "delta_iou_v1492": 0.39424992883575294
+  },
+  "MAR_Amb_HIP": {
+   "v147": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "iou": 0.0,
+    "f1": 0.0
+   },
+   "ablation": {
+    "precision": 0.8650542118432026,
+    "recall": 0.6827277514481306,
+    "iou": 0.6170136823319453,
+    "f1": 0.7631520859392245
+   },
+   "v1492": {
+    "precision": 0.7525116393040922,
+    "recall": 0.8085834649815693,
+    "iou": 0.6387271214642263,
+    "f1": 0.7795405508313239
+   },
+   "delta_iou_ablation": 0.6170136823319453,
+   "delta_iou_v1492": 0.6387271214642263
+  },
+  "MAR_H_AS": {
+   "v147": {
+    "precision": 0.905273937532002,
+    "recall": 0.555517958137961,
+    "iou": 0.5250005710500468,
+    "f1": 0.6885250812575828
+   },
+   "ablation": {
+    "precision": 0.8850004302802559,
+    "recall": 0.7456856963310291,
+    "iou": 0.679814027278937,
+    "f1": 0.8093920115432545
+   },
+   "v1492": {
+    "precision": 0.7706691392365941,
+    "recall": 0.8437424469473582,
+    "iou": 0.6744136625323597,
+    "f1": 0.8055520300908032
+   },
+   "delta_iou_ablation": 0.1548134562288902,
+   "delta_iou_v1492": 0.14941309148231285
+  },
+  "MAR_H_HIP": {
+   "v147": {
+    "precision": 0.114221760230599,
+    "recall": 0.41069913553919885,
+    "iou": 0.09813762608967229,
+    "f1": 0.17873465721983833
+   },
+   "ablation": {
+    "precision": 0.1321286987212149,
+    "recall": 0.4875834078558162,
+    "iou": 0.11601857257435304,
+    "f1": 0.20791512870028603
+   },
+   "v1492": {
+    "precision": 0.14267222036843136,
+    "recall": 0.568640939212584,
+    "iou": 0.12873903338005502,
+    "f1": 0.22811124551002857
+   },
+   "delta_iou_ablation": 0.01788094648468075,
+   "delta_iou_v1492": 0.03060140729038273
+  }
+ },
+ "dead_zone": [
+  {
+   "specimen": "MAR_Amb_AS",
+   "frame": "MAR_Amb_AS_ETD_0006__crop_3154_3352_512x512",
+   "parent": "MAR_Amb_AS_ETD_0006",
+   "box": [
+    3154,
+    3352,
+    512,
+    512
+   ],
+   "gt_px": 4024,
+   "px": {
+    "v147": 0,
+    "ablation": 1787,
+    "v1492": 2083
+   },
+   "v147": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "iou": 0.0,
+    "f1": 0.0
+   },
+   "ablation": {
+    "precision": 0.8539451594851707,
+    "recall": 0.37922465208747513,
+    "iou": 0.3561260210035006,
+    "f1": 0.5252108070900018
+   },
+   "v1492": {
+    "precision": 0.8214114258281325,
+    "recall": 0.42519880715705766,
+    "iou": 0.3892174704276615,
+    "f1": 0.5603405927624038
+   }
+  },
+  {
+   "specimen": "MAR_Amb_Cast",
+   "frame": "MAR_Amb_Cast_ETD_0003__crop_2841_1211_512x512",
+   "parent": "MAR_Amb_Cast_ETD_0003",
+   "box": [
+    2841,
+    1211,
+    512,
+    512
+   ],
+   "gt_px": 3455,
+   "px": {
+    "v147": 0,
+    "ablation": 1252,
+    "v1492": 1443
+   },
+   "v147": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "iou": 0.0,
+    "f1": 0.0
+   },
+   "ablation": {
+    "precision": 0.9760383386581469,
+    "recall": 0.3536903039073806,
+    "iou": 0.35064562410329986,
+    "f1": 0.5192266836626301
+   },
+   "v1492": {
+    "precision": 0.9598059598059598,
+    "recall": 0.40086830680173663,
+    "iou": 0.39424992883575294,
+    "f1": 0.5655369538587178
+   }
+  },
+  {
+   "specimen": "MAR_Amb_HIP",
+   "frame": "MAR_Amb_HIP_ETD_0006__crop_2960_2320_512x512",
+   "parent": "MAR_Amb_HIP_ETD_0006",
+   "box": [
+    2960,
+    2320,
+    512,
+    512
+   ],
+   "gt_px": 7596,
+   "px": {
+    "v147": 0,
+    "ablation": 5995,
+    "v1492": 8162
+   },
+   "v147": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "iou": 0.0,
+    "f1": 0.0
+   },
+   "ablation": {
+    "precision": 0.8650542118432026,
+    "recall": 0.6827277514481306,
+    "iou": 0.6170136823319453,
+    "f1": 0.7631520859392245
+   },
+   "v1492": {
+    "precision": 0.7525116393040922,
+    "recall": 0.8085834649815693,
+    "iou": 0.6387271214642263,
+    "f1": 0.7795405508313239
+   }
+  }
+ ],
+ "crop_choice": "Each dead-zone specimen contributes exactly one hand-labelled 512 px tile, so the panel is that tile and there was no crop to select. Asserted in the runner, which raises if a specimen ever gains a second tile.",
+ "seconds": 12.9
+}

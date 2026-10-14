@@ -126,3 +126,38 @@ nothing on disk is stale; what is stale is **what they draw**:
   and its numbers (a 3 px trace at IoU 0.166) are not comparable to this directory's
   (the same trace, pooled over the 26 tiles, is 0.2490). Neither is wrong; they must never
   appear in one sentence.
+
+### Addendum 2026-10-13, later the same day: plate 6 rebuilt
+
+Scoped to plate 6 only; every other statement in the snapshot above stands as taken.
+
+`mk_spec.py` is **deleted**, so the two references to it above now name a file that no
+longer exists. Its figure asked what the SEM region classifier REJECTS, and with
+`USE_REGION_CLASSIFIER = False` nothing is rejected — the subject was gone, not the
+wording. `paper/figures/mk_recover.py`, over the new stage runner `sem_deadzone.py`, draws
+the result that superseded it: the three ETD specimens that scored recall 0.0000 at every
+candidate setting ever tried were never invisible, the candidate stage had proposed their
+cracks all along and the classifier was rejecting them. The plate is
+`6 - SEM, what deleting the region classifier recovers.png`, and `mkpdf.py`'s `FIGFILE[6]`
+points at it.
+
+Two things the rebuild established that bear on the snapshot's other bullets:
+
+* **The project's published recovery numbers are not production's.** `+0.1753 median IoU,
+  11 of 13, p = 0.0061` and the recalls `0.3792 / 0.3537 / 0.6827` in
+  `analysis/detector_overrides.py` reproduce to four decimals as the SINGLE-RADIUS
+  ablation — arm A's own candidates with the classifier bypassed — not as v1.49.2. They
+  sit in the paragraph that introduces the shipped change and read as though they describe
+  it. Production is larger: `+0.2296, p = 0.0024`, recalls `0.4252 / 0.4009 / 0.8086`.
+  `sem_deadzone.py` asserts all four against the ablation arm so the attribution cannot
+  rot. Both arms are honest; they are different objects and must not be swapped.
+* **`tilebench.SHIPPED_V1491['pooled']` does not re-measure exactly.** Re-running the same
+  settings through the same harness gives precision 0.4147 / recall 0.6321 / IoU 0.3341
+  against the committed 0.4182 / 0.6252 / 0.3344. IoU agrees to 0.0003; precision and
+  recall do not. Unexplained, recorded in `sem_deadzone.json`, and no figure quotes the
+  committed row — plate 6's numbers are all the re-measurement.
+
+Stage 3 is still unrunnable here, now for two independent reasons: `paper/sections/` does
+not exist, and `reportlab` is not installed under either interpreter on this machine. So
+plate 6's type size and caption templates were checked by computing `mkpdf.py`'s own two
+gates by hand (8.79 pt against a 6.0 pt floor; no unresolved `{...}`), not by a build.

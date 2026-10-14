@@ -5,7 +5,47 @@ has seen it -- which is what makes a side-by-side ladder on it honest.
 
 Each family is built by the TRAINER's own factory (MODELS in train_v3_weighted.py) and fitted
 with the trainer's per-image weights and a StandardScaler, so the only thing that varies
-across panels is the model family. Candidate regions come from the shipped pipeline.
+across panels is the model family. Candidate regions come from the published pipeline.
+
+THIS LADDER'S RUNGS ARE THE WRONG AXIS, AND IT WAS CHECKED RATHER THAN ASSUMED. The
+question asked of this file was whether its rungs are classifier variants or candidate-
+stage settings. They are classifier variants: MODELS is {LogisticRegression, RandomForest,
+GradientBoosting, SVC (RBF)}, every rung is a region classifier, and the one thing held
+fixed across the rungs -- the candidate stage they all score -- is the single-radius cut.
+So it is wrong twice over for v1.49.2:
+
+  * the substrate is `D.segment_dark_regions(flat)` at sigma = 40 alone, where production
+    unions seven radii (451 candidate regions against 1,347 on this frame);
+  * the axis it varies is a component production does not consult at all --
+    USE_REGION_CLASSIFIER is False, so swapping LogisticRegression for RandomForest here
+    would change nothing the application emits.
+
+ADDING A "PRODUCTION RUNG" WOULD NOT FIX IT. A production rung on this axis is not a
+fifth model, it is the ABSENCE of the axis, so it would be a bar with no family on it
+sitting beside four that have one -- a comparison whose control is the thing being
+compared. See sem_specificity.py for the same premise failing the same way.
+
+WHAT IT SHOULD BECOME: a ladder over the axis production still has, which is the
+candidate stage. That ladder exists -- `sem_rungs.py`, which decomposes the seven-radius
+union by the rung that first marks each pixel, through
+`angle4_shipped.seg_fn(ladder=(sigma,))` so no rung can drift from the app, and which
+asserts both the ladder-collapse control and that the seven one-rung cuts partition the
+union. `sem_rungs.json` is its record. This file should not be rewritten into that; it
+already exists, and two runners computing the same quantity is how they come to disagree.
+
+WHAT THIS FILE IS FOR, now: it remains a correct measurement of the ARCHIVED published
+pipeline, which is a legitimate subject for the paper, and it is the evidence behind
+figure 2's "why linear" panel -- the comparison that chose the family whose verdict is now
+discarded. Nothing in the shipped figure chain reads its `lad_*.npy`; it is a research
+runner, not a figure stage. A caption built on it may say "the published region
+classifier"; it may not say deployed, shipped, or what the app runs.
+
+Scope, for the avoidance of doubt: ARCHIVED v1.47 SEM pipeline -- one flattening radius
+(sigma = 40) and the logistic region classifier. v1.49.2 runs neither. Deleting the
+classifier won on every metric with zero free parameters (paired median IoU +0.1753 over
+13 specimens, 11 of 13 better, Wilcoxon p = 0.0061), and it ended a dead zone in which
+three ETD specimens scored recall 0.0000 at every candidate setting ever tried. See
+analysis/detector_overrides.py and paper/figures/sem_production.json.
 """
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

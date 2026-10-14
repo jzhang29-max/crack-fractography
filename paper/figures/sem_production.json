@@ -1,0 +1,93 @@
+{
+ "version": "v1.49.2",
+ "frame": "MAR_H_AS_CBS_0004",
+ "crop": [
+  400,
+  1600,
+  1200
+ ],
+ "bundle_check": [
+  "dist/Crack Fractography/_internal/analysis/detector_overrides.py",
+  "dist/Crack Fractography.app/Contents/Resources/analysis/detector_overrides.py",
+  "dist/Crack Fractography/_internal/analysis/detect_one.py",
+  "dist/Crack Fractography.app/Contents/Resources/analysis/detect_one.py"
+ ],
+ "full": [
+  6144,
+  4096
+ ],
+ "raw_full": [
+  6144,
+  4376
+ ],
+ "field_of_view": [
+  0,
+  0,
+  6144,
+  4096
+ ],
+ "nm_per_px": 51.883,
+ "min_area_clean": 13,
+ "min_area_candidate": 40,
+ "scale_ladder": [
+  5,
+  10,
+  20,
+  40,
+  80,
+  160,
+  320
+ ],
+ "decimate_above_sigma": 64,
+ "mad_k": 5.0,
+ "absolute_dark_thresh": 10,
+ "use_region_classifier": false,
+ "installed": [
+  "segment_dark_regions(multiscale union over (5, 10, 20, 40, 80, 160, 320), mad_k=5.0)"
+ ],
+ "frame_dark_union_pct": 3.5433053970336914,
+ "frame_dark_single_pct": 2.443373203277588,
+ "frame_clean_pct": 3.5407026608784995,
+ "frame_candidates": 1347,
+ "frame_candidates_single": 451,
+ "frame_cand_pct": 3.4026900927225747,
+ "frame_cand_single_pct": 2.4858474731445312,
+ "frame_emitted_pct": 3.817852338155111,
+ "frame_pass1_rows": 1347,
+ "frame_pass2_rows": 431,
+ "frame_pass2_added_px": 104479,
+ "frame_pass2_added_pct": 0.4151622454325358,
+ "learned_artefacts_loaded": [
+  "interior_active_learning/models/unified_model.joblib",
+  "models/crack_classifier.joblib"
+ ],
+ "pass2_candidates_generated": 544,
+ "pass2_candidates_accepted": 431,
+ "frame_archived_kept": 783,
+ "frame_archived_pct": 2.9935280481974287,
+ "frame_archived_would_drop_px": 207448,
+ "frame_archived_would_drop_frac": 0.2159130885496787,
+ "frame_archived_drops_painted_px": 79575,
+ "frame_painted_px": 784945,
+ "frame_recall_emitted": 0.9034875054940155,
+ "frame_recall_archived": 0.8021109759282498,
+ "frame_recall_single": 0.7448139678576206,
+ "frame_recall_cand": 0.8120110326201199,
+ "crop_cand_pct": 4.438611111111111,
+ "crop_emitted_pct": 5.1113888888888885,
+ "crop_pass1_pct": 4.438611111111111,
+ "crop_archived_pct": 4.137013888888888,
+ "crop_gated_pct": 5.297152777777778,
+ "crop_pass2_added_pp": 0.6727777777777778,
+ "crop_ladder_added_pp": 1.047986111111111,
+ "crop_components": 327,
+ "crack_dn": 69.0,
+ "matrix_dn": 160.0,
+ "matrix_sd": 15.856459339418107,
+ "ves_crack": 0.008119697921085888,
+ "ves_matrix": 0.0012418471724686656,
+ "ves_ratio": 6.538403517837671,
+ "sep_raw_sd": 5.7389861161362825,
+ "sep_flat_sd": 3.884290507758857,
+ "seconds": 379.4
+}

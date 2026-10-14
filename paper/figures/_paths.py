@@ -49,3 +49,43 @@ def require(path, what, env):
             f"  set {env} to its location, or place the repositories as siblings "
             f"(see the module docstring in {__file__})")
     return path
+
+
+# --- the hand-labelled 512 px tiles -----------------------------------------------------
+# analysis/research/tilebench.py is the ONE scorer in this project, and its own copies of
+# these three locations are absolute. A figure runner repoints it at these instead, so a
+# reader who sets the env vars gets the same instrument against their own checkout.
+#
+# TILE_LABELS is the only one with no sibling-repo default: the `*_gated.png` hand labels
+# for the 512 px tiles live in the desktop app's upload store, outside all three
+# repositories. Set it, or the tile cache cannot be built (an already-built cache under
+# FIG_CACHE/tilecache needs no labels, which is the usual case).
+TILE_META = os.path.join(HERE, "sem_tiles.json")
+TILE_CACHE = _env("TILE_CACHE", os.path.join(FIG_CACHE, "tilecache"))
+TILE_LABELS = _env("TILE_LABELS", os.path.join(
+    "~", "Library", "Application Support", "Crack Fractography", "uploads"))
+ANALYSIS = os.path.join(REPO, "analysis")
+
+
+def tilebench():
+    """Import analysis/research/tilebench.py with its three absolute paths repointed.
+
+    It resolves `tiles_meta.json` from SC, its tile cache from CACHE and the hand labels
+    from UP, all hard-coded to one machine. Rebinding them is the documented route in this
+    codebase (analysis/detect_one.py rebinds pipeline stages the same way) and it leaves
+    the archived repositories untouched. The scoring functions themselves are NOT touched:
+    counts(), evaluate() and controls() are the instrument and stay as written.
+    """
+    import sys, shutil
+    for d in (os.path.join(ANALYSIS, "research"), os.path.join(ANALYSIS, "research", "improve")):
+        if d not in sys.path:
+            sys.path.insert(0, d)
+    import tilebench as TB
+    os.makedirs(TILE_CACHE, exist_ok=True)
+    # load() reads os.path.join(SC, "tiles_meta.json"); point SC at a directory holding the
+    # committed manifest rather than editing the archived-by-convention analysis module.
+    staged = os.path.join(TILE_CACHE, "tiles_meta.json")
+    if not os.path.exists(staged) or os.path.getmtime(staged) < os.path.getmtime(TILE_META):
+        shutil.copyfile(TILE_META, staged)
+    TB.SC, TB.CACHE, TB.UP = TILE_CACHE, TILE_CACHE, TILE_LABELS
+    return TB

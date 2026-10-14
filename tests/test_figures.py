@@ -388,14 +388,53 @@ def test_the_statement_is_computed_from_the_rows_the_figure_drew():
     assert len(mags) == 1, f"the drawn rows span {mags}; a raster is one magnification"
 
 
-def test_the_other_kinds_still_receive_every_row():
-    """_with_rows now reads an optional override. A bug there would silently narrow the
-    rows behind every other figure's statement."""
+def test_a_kind_that_filters_nothing_still_receives_every_row():
+    """_with_rows reads an optional override. A bug there would silently narrow the rows
+    behind a figure's statement, so the kinds that draw EVERY collapsed row must still get
+    all 86.
+
+    THIS TEST USED TO ASSERT 86 FOR box_by_specimen TOO, and that was the defect written
+    down as the expectation. A box plot hides specimens under min_frames; the full 86 then
+    reached the conclusions engine, so the sentence under a 4-box txm chart named
+    260618_b3 -- the hidden one-field specimen -- as the low end of its span, and a
+    sem/gated chart drawing ONE box at min_frames=11 still carried a verdict over 14
+    specimens. That kind now returns its own _drawn_rows and is covered by
+    test_figure_says_matches_the_points_drawn.py, which compares the statement to the
+    marks the SVG actually contains over real HTTP.
+    """
     fr = _positioned()
-    for kind in ("box_by_specimen", "histogram"):
+    for kind in ("histogram",):
         out = F.build(fr, "sem/gated", kind, y="area_fraction")
-        assert len(out["rows"]) > out["n"] or len(out["rows"]) == out["n"]
-        assert len(out["rows"]) == 86, f"{kind} received {len(out['rows'])} rows, expected 86"
+        assert len(out["rows"]) == out["n"] == 86, (
+            f"{kind} received {len(out['rows'])} rows for n={out['n']}, expected 86")
+
+
+def test_a_kind_that_hides_specimens_reports_only_the_drawn_rows():
+    """The complement: box_by_specimen must hand back exactly the fields it drew.
+
+    5 of the 14 sem/gated specimens hold fewer than 3 fields (2 + 2 + 1 + 1 + 1 = 7 fields),
+    so the default figure draws 9 specimens over 79 of the 86 collapsed fields.
+    """
+    fr = _positioned()
+    out = F.build(fr, "sem/gated", "box_by_specimen", y="area_fraction")
+    # DERIVED, NOT HARD-CODED. _positioned() reads the measured corpus off disk, so a
+    # re-measurement changes the counts; the INVARIANT is the one asserted here. (At the
+    # time of writing: 14 specimens, 86 collapsed fields, 5 thin, 9 drawn over 79 fields.)
+    hidden = out["dropped"].get("thin_specimens", 0)
+    assert hidden, ("no specimen in this corpus is under the 3-field floor, so this test "
+                    "cannot see the defect it exists for")
+    assert len(out["rows"]) == out["n"], (
+        f"{len(out['rows'])} rows travelled for a figure that drew {out['n']}")
+    specs = {r.get("specimen", "unparsed") for r in out["rows"]}
+    assert all(sum(1 for r in out["rows"] if r.get("specimen", "unparsed") == s) >= 3
+               for s in specs), (
+        "a specimen under the min_frames floor is still in the rows the statement reads")
+    # The caption's n is the drawn count too, since this figure is downloaded on its own.
+    assert f"n = {out['n']} fields" in out["caption"], out["caption"]
+    assert f"{hidden} specimens hidden" in out["caption"], out["caption"]
+    # And the whole arm really is bigger, or the two row sets were never different.
+    everything = F.build(fr, "sem/gated", "histogram", y="area_fraction")
+    assert everything["n"] > out["n"], (everything["n"], out["n"])
 
 
 def test_a_stage_figure_on_an_arm_with_no_coordinates_says_so():

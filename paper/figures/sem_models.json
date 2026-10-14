@@ -1,0 +1,168 @@
+{
+ "sem_repo_relative": true,
+ "pass1": {
+  "path": "models/crack_classifier.joblib",
+  "family": "LogisticRegression",
+  "sklearn_version": "1.9.0",
+  "n_features": 8,
+  "n_params": 9,
+  "coefficients": [
+   [
+    "MeanVesselness",
+    -0.574
+   ],
+   [
+    "Elongation",
+    0.3239
+   ],
+   [
+    "Extent",
+    -0.3155
+   ],
+   [
+    "Eccentricity",
+    0.1955
+   ],
+   [
+    "LogArea",
+    0.131
+   ],
+   [
+    "Solidity",
+    0.0902
+   ],
+   [
+    "Circularity",
+    0.0483
+   ],
+   [
+    "MeanDarkness",
+    -0.0369
+   ]
+  ],
+  "intercept": 0.1036,
+  "class_weight": "balanced",
+  "max_iter": 2000,
+  "threshold": 0.5537592016924066,
+  "threshold_provenance": "{'method': 'quantile transfer of matched-recall threshold', 'production_threshold_compared': 0.6256936458754165, 'held_out_model_threshold': 0.6632131226813005, 'quantile': 0.8787644787644787, 'held_out_image': 'AS_24hr_BSE_Side_008'}",
+  "n_train": 7505,
+  "n_pos": 6408,
+  "n_neg": 1097,
+  "n_images": 45,
+  "pooled_auc": 0.7144095177290921,
+  "pooled_auc_sd": 0.027814336565652284,
+  "families": {
+   "LogisticRegression": {
+    "accuracy": 0.6547,
+    "specificity": 0.6669,
+    "recall": 0.6527,
+    "pooled_auc": 0.7144,
+    "loio_auc_exhaustive_image": 0.884
+   },
+   "RandomForest": {
+    "accuracy": 0.8337,
+    "specificity": 0.0077,
+    "recall": 0.9751,
+    "pooled_auc": 0.5076,
+    "loio_auc_exhaustive_image": 0.5552
+   },
+   "GradientBoosting": {
+    "accuracy": 0.8486,
+    "specificity": 0.0088,
+    "recall": 0.9924,
+    "pooled_auc": 0.5332,
+    "loio_auc_exhaustive_image": 0.475
+   },
+   "SVC (RBF)": {
+    "accuracy": 0.8366,
+    "specificity": 0.0047,
+    "recall": 0.9791,
+    "pooled_auc": 0.2756,
+    "loio_auc_exhaustive_image": 0.9209
+   }
+  }
+ },
+ "pass2": {
+  "path": "interior_active_learning/models/unified_model.joblib",
+  "family": "LogisticRegression",
+  "sklearn_version": "1.9.0",
+  "n_features": 11,
+  "n_params": 12,
+  "coefficients": [
+   [
+    "MeanDistToCrack",
+    -1.9561
+   ],
+   [
+    "MeanFlatBrightness",
+    1.8902
+   ],
+   [
+    "MeanVesselness",
+    1.3643
+   ],
+   [
+    "LogArea",
+    -1.1254
+   ],
+   [
+    "MeanRawBrightness",
+    -0.8522
+   ],
+   [
+    "Extent",
+    -0.5322
+   ],
+   [
+    "Solidity",
+    -0.4394
+   ],
+   [
+    "Circularity",
+    -0.2831
+   ],
+   [
+    "FracBoundaryTouchingCrack",
+    -0.1849
+   ],
+   [
+    "Eccentricity",
+    -0.0805
+   ],
+   [
+    "Elongation",
+    0.0616
+   ]
+  ],
+  "intercept": -0.2246,
+  "class_weight": "balanced",
+  "max_iter": 2000,
+  "threshold_default": 0.5,
+  "interior_fill_rule": {
+   "dist_thr": 12.901,
+   "bri_thr": 135.8445,
+   "floor": 0.65,
+   "N_pct": 70.0,
+   "M_pct": 90.0,
+   "recall_on_known_positives": 0.8205,
+   "full_pool_accept_rate": 0.5412
+  }
+ },
+ "stages": {
+  "frangi_sigmas": [
+   1,
+   2,
+   3,
+   4,
+   5
+  ],
+  "frangi_label": "1\u20135",
+  "clean_open_radius": 1,
+  "clean_close_radius": 3,
+  "clean_min_area_px_default": 15,
+  "clean_min_area_px_production": 13,
+  "ledger_path": "manual_corrections_ledger.csv",
+  "ledger_rows": 71,
+  "ledger_frames": 11
+ }
+}
