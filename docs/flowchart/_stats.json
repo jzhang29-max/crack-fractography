@@ -1,0 +1,300 @@
+{
+ "frame": "HIP_24hr_SE_Side_006",
+ "tile": "HIP_24hr_SE_Side_006__crop_4695_807_512x512",
+ "crop": [
+  4695,
+  807,
+  512,
+  512
+ ],
+ "pick_iou": 0.4039,
+ "pick_why": "lower of the two central tiles by IoU over the 26 hand-labelled tiles (0.4039 and 0.4339 straddle the median 0.4189 at equal distance; the tie is broken downward so the page cannot flatter the detector)",
+ "frame_shape": [
+  4096,
+  6144
+ ],
+ "frame_px": 25165824,
+ "crop_px": 262144,
+ "t_total": 130.2,
+ "t_seg": 12.7,
+ "t_flat": 3.5,
+ "t_ves": 25.1,
+ "t_rung": {
+  "5": 1.8,
+  "10": 2.0,
+  "20": 2.4,
+  "40": 0.8,
+  "80": 2.4,
+  "160": 1.7,
+  "320": 1.9
+ },
+ "dark": {
+  "frame": 667935,
+  "crop": 3889
+ },
+ "clean": {
+  "frame": 666796,
+  "crop": 3763
+ },
+ "pass1": {
+  "frame": 662941,
+  "crop": 3514
+ },
+ "emitted": {
+  "frame": 704310,
+  "crop": 3514
+ },
+ "pass2": {
+  "frame": 41369,
+  "crop": 0
+ },
+ "absterm": {
+  "frame": 233102,
+  "crop": 15
+ },
+ "rungs": {
+  "5": {
+   "frame": 89464,
+   "crop": 2155
+  },
+  "10": {
+   "frame": 182900,
+   "crop": 3456
+  },
+  "20": {
+   "frame": 236262,
+   "crop": 3012
+  },
+  "40": {
+   "frame": 250889,
+   "crop": 1793
+  },
+  "80": {
+   "frame": 266073,
+   "crop": 823
+  },
+  "160": {
+   "frame": 237561,
+   "crop": 400
+  },
+  "320": {
+   "frame": 192566,
+   "crop": 230
+  }
+ },
+ "n_pass1": 465,
+ "n_final": 594,
+ "n_interior_total": 154,
+ "n_pass2_accepted": 129,
+ "mask_source": "built-in",
+ "sam2": "off",
+ "gt_crop": 6919,
+ "rung_new": {
+  "5": {
+   "frame": 89464,
+   "crop": 2155
+  },
+  "10": {
+   "frame": 97072,
+   "crop": 1382
+  },
+  "20": {
+   "frame": 83449,
+   "crop": 292
+  },
+  "40": {
+   "frame": 69784,
+   "crop": 45
+  },
+  "80": {
+   "frame": 71974,
+   "crop": 0
+  },
+  "160": {
+   "frame": 22075,
+   "crop": 0
+  },
+  "320": {
+   "frame": 1015,
+   "crop": 0
+  }
+ },
+ "single40_only": {
+  "frame": 483991,
+  "crop": 1808
+ },
+ "score": {
+  "dark": {
+   "precision": 0.8138,
+   "recall": 0.4574,
+   "iou": 0.4141
+  },
+  "clean": {
+   "precision": 0.8339,
+   "recall": 0.4535,
+   "iou": 0.416
+  },
+  "pass1": {
+   "precision": 0.8557,
+   "recall": 0.4346,
+   "iou": 0.4049
+  },
+  "emitted": {
+   "precision": 0.8557,
+   "recall": 0.4346,
+   "iou": 0.4049
+  },
+  "single40": {
+   "precision": 0.99,
+   "recall": 0.2587,
+   "iou": 0.258
+  }
+ },
+ "p2_box": [
+  0,
+  992,
+  256,
+  256
+ ],
+ "p2_big_px": 3273,
+ "loss": [
+  {
+   "stage": "never dark at any of the 7 radii",
+   "px": 3724,
+   "share_of_loss": 0.9519,
+   "share_of_painted": 0.5382
+  },
+  {
+   "stage": "dark, then removed by clean_mask (<= 13 px, or the opening)",
+   "px": 57,
+   "share_of_loss": 0.0146,
+   "share_of_painted": 0.0082
+  },
+  {
+   "stage": "in the clean mask, then below the 40 px region floor",
+   "px": 131,
+   "share_of_loss": 0.0335,
+   "share_of_painted": 0.0189
+  }
+ ],
+ "loss_total_px": 3912,
+ "rows": [
+  {
+   "crack_id": 13,
+   "area_px": 1064,
+   "TipToTipGeodesic_px": 100.15,
+   "SkeletonLength_px": 100.15,
+   "MeanWidth_px": 10.62,
+   "MaxWidth_px": 18.0,
+   "Tortuosity": 1.112,
+   "length_is_censored": false
+  },
+  {
+   "crack_id": 12,
+   "area_px": 669,
+   "TipToTipGeodesic_px": 46.14,
+   "SkeletonLength_px": 46.14,
+   "MeanWidth_px": 14.5,
+   "MaxWidth_px": 23.32,
+   "Tortuosity": 1.331,
+   "length_is_censored": false
+  },
+  {
+   "crack_id": 14,
+   "area_px": 287,
+   "TipToTipGeodesic_px": 29.49,
+   "SkeletonLength_px": 30.49,
+   "MeanWidth_px": 9.41,
+   "MaxWidth_px": 15.23,
+   "Tortuosity": "",
+   "length_is_censored": false
+  },
+  {
+   "crack_id": 10,
+   "area_px": 264,
+   "TipToTipGeodesic_px": 11.66,
+   "SkeletonLength_px": 13.66,
+   "MeanWidth_px": 19.33,
+   "MaxWidth_px": 16.0,
+   "Tortuosity": "",
+   "length_is_censored": true
+  },
+  {
+   "crack_id": 9,
+   "area_px": 233,
+   "TipToTipGeodesic_px": 33.56,
+   "SkeletonLength_px": 33.56,
+   "MeanWidth_px": 6.94,
+   "MaxWidth_px": 10.2,
+   "Tortuosity": 1.151,
+   "length_is_censored": false
+  },
+  {
+   "crack_id": 11,
+   "area_px": 168,
+   "TipToTipGeodesic_px": 17.66,
+   "SkeletonLength_px": 17.66,
+   "MeanWidth_px": 9.51,
+   "MaxWidth_px": 11.31,
+   "Tortuosity": 1.071,
+   "length_is_censored": false
+  },
+  {
+   "crack_id": 6,
+   "area_px": 123,
+   "TipToTipGeodesic_px": 3.83,
+   "SkeletonLength_px": 3.83,
+   "MeanWidth_px": 32.13,
+   "MaxWidth_px": 11.66,
+   "Tortuosity": 1.062,
+   "length_is_censored": false
+  },
+  {
+   "crack_id": 15,
+   "area_px": 111,
+   "TipToTipGeodesic_px": 13.49,
+   "SkeletonLength_px": 13.49,
+   "MeanWidth_px": 8.23,
+   "MaxWidth_px": 10.0,
+   "Tortuosity": 1.369,
+   "length_is_censored": false
+  }
+ ],
+ "summary": {
+  "crack_area_px": 3514,
+  "area_fraction": 0.013405,
+  "largest_area_px": 1064,
+  "largest_share_of_area": 0.3028,
+  "total_skeleton_length_px": 377.8,
+  "mean_width_px_median": 7.955,
+  "speck_threshold_px": 25,
+  "n_censored": 2,
+  "censored_share": 0.125,
+  "censored_share_by_area": 0.0908,
+  "censored_share_by_length": 0.0772,
+  "n_rows": 16
+ },
+ "frame_summary": {
+  "crack_area_px": 704310,
+  "area_fraction": 0.027987,
+  "largest_area_px": 183261,
+  "largest_share_of_area": 0.2602,
+  "total_skeleton_length_px": 55828.4,
+  "mean_width_px_median": 7.69,
+  "speck_threshold_px": 25,
+  "n_censored": 12,
+  "censored_share": 0.0265,
+  "censored_share_by_area": 0.2957,
+  "censored_share_by_length": 0.2043,
+  "n_rows": 452
+ },
+ "bg_range": [
+  92.8,
+  139.3
+ ],
+ "clean_removed": 168,
+ "clean_added": 42,
+ "floor_removed": 249,
+ "n_specks_dropped": 0,
+ "n_components": 16
+}

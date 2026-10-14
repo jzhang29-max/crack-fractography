@@ -1,0 +1,246 @@
+[
+ {
+  "title": "The micrograph",
+  "does": [
+   "What it does. Reads the 16-bit TIFF, stretches it to 8 bit on its 0.5/99.5 percentiles, and crops the databar off: 6144×4096 px survive."
+  ],
+  "cost": [
+   "Cost. A percentile stretch, not min/max: a hot pixel or the crack itself at 0 would otherwise own the range and flatten the background texture Otsu needs downstream."
+  ],
+  "note": [],
+  "figs": [
+   [
+    "p01_micrograph.png",
+    "8-bit, after the 0.5/99.5 percentile stretch and the field-of-view crop."
+   ]
+  ]
+ },
+ {
+  "title": "Why the next step exists: the illumination",
+  "does": [
+   "What it does. Nothing yet — this is the quantity flatten_background is about to subtract."
+  ],
+  "cost": [
+   "Why it matters. A single global threshold on the raw image would track this drift instead of the crack."
+  ],
+  "note": [],
+  "figs": [
+   [
+    "p02_background.png",
+    "The Gaussian background estimate at sigma=40 over this crop, false-coloured. It spans 92.8 to 139.3 grey levels across 512 px — drift of that size sits on top of every crack."
+   ],
+   [
+    "p01_micrograph.png",
+    "The same crop, as captured, for comparison."
+   ]
+  ]
+ },
+ {
+  "title": "flatten_background",
+  "does": [
+   "What it does. Subtracts the blurred copy, so what is left is local contrast."
+  ],
+  "cost": [
+   "What it costs. It is a high-pass filter, so it also erases anything wider than its own radius. The detector's own docstring measures this: pixels that are genuinely pitch black (raw 0–4) come out near 122 of 255 after flattening, indistinguishable from mid-grey matrix. That single sentence is why steps 5 and 6 exist."
+  ],
+  "note": [],
+  "figs": [
+   [
+    "p03_flat.png",
+    "The flattened image: raw minus the background above, rescaled to 8 bit on its own 0.5/99.5 percentiles."
+   ]
+  ]
+ },
+ {
+  "title": "The darkness cut, at one radius",
+  "does": [
+   "What it does. Keeps a pixel if the denoised flat image is below min(Otsu, median − 5×MAD), OR if the raw 8-bit image is below 10. Taking the lower of Otsu and the robust bar is what stops Otsu flagging half the frame on a unimodal histogram."
+  ],
+  "cost": [
+   "What it buys, on this crop. precision 0.9900, recall 0.2587, IoU 0.2580 against the hand paint. Almost everything it marks is crack; it finds about a quarter of it.",
+   "The absolute-darkness term alone carries 15 px here and 233,102 px frame-wide. At corpus scale it supplies roughly half of all the recall the detector has, and its threshold of 10 has no provenance; raising it is additive but three instruments disagree about whether to, so it stays put."
+  ],
+  "note": [],
+  "figs": [
+   [
+    "p04_cut40.png",
+    "carries 1,808 px in this crop (0.69% of it) · 483,991 px in the whole frame"
+   ]
+  ]
+ },
+ {
+  "title": "The same cut at each of the seven radii",
+  "does": [
+   "What it does. Re-flattens the image at sigma = 5, 10, 20, 40, 80, 160, 320 and takes the identical cut at each. A crack is only reliably dark at the scales near its own width, so one radius sees one band."
+  ],
+  "cost": [
+   "“New” counts pixels no earlier rung and not the absolute-darkness term had already claimed, taken in ascending sigma, so the seven new-counts sum to the union and no pixel is counted twice. Each rung is produced by calling the installed detector with that one rung in its ladder; the OR of the seven plus the absolute term is asserted equal, bit for bit, to the mask the pipeline itself returned."
+  ],
+  "note": [],
+  "figs": [
+   [
+    "p05_rung005.png",
+    "sigma = 5 · 2,155 px here · 2,155 of them new · 89,464 px frame-wide · 89,464 new frame-wide"
+   ],
+   [
+    "p05_rung010.png",
+    "sigma = 10 · 3,456 px here · 1,382 of them new · 182,900 px frame-wide · 97,072 new frame-wide"
+   ],
+   [
+    "p05_rung020.png",
+    "sigma = 20 · 3,012 px here · 292 of them new · 236,262 px frame-wide · 83,449 new frame-wide"
+   ],
+   [
+    "p05_rung040.png",
+    "sigma = 40 · 1,793 px here · 45 of them new · 250,889 px frame-wide · 69,784 new frame-wide"
+   ],
+   [
+    "p05_rung080.png",
+    "sigma = 80 · 823 px here · 0 of them new · 266,073 px frame-wide · 71,974 new frame-wide"
+   ],
+   [
+    "p05_rung160.png",
+    "sigma = 160 · 400 px here · 0 of them new · 237,561 px frame-wide · 22,075 new frame-wide"
+   ],
+   [
+    "p05_rung320.png",
+    "sigma = 320 · 230 px here · 0 of them new · 192,566 px frame-wide · 1,015 new frame-wide"
+   ]
+  ]
+ },
+ {
+  "title": "Their union — the change v1.49 made",
+  "does": [
+   "What it does. ORs the seven cuts. It is a strict superset of the single-radius mask by construction, so it cannot drop a pixel the older build kept — checked, not assumed: 0 px lost across the 26 labelled tiles and across 6,669,145 hand-painted pixels on 12 full frames."
+  ],
+  "cost": [
+   "What it buys, on this crop. +2,081 px here and +183,944 px frame-wide. precision 0.9900 → 0.8138, recall 0.2587 → 0.4574, IoU 0.2580 → 0.4141. Over the 26 labelled tiles the same change reads IoU 0.2979 → 0.3344 pooled, and it costs no new tuned constant: the ladder is every scale, not a chosen subset.",
+   "What it costs. Seven flattening passes instead of one: 12.7 s of this frame's 130.2 s. Above sigma=64 the background is estimated on a decimated copy, which is what keeps that from being 67 s."
+  ],
+  "note": [],
+  "figs": [
+   [
+    "p06_union.png",
+    "carries 3,889 px in this crop (1.48% of it) · 667,935 px in the whole frame"
+   ]
+  ]
+ },
+ {
+  "title": "clean_mask",
+  "does": [
+   "What it does. Drops components of 13 px or fewer, opens with a disk of radius 1, closes with a disk of radius 3, fills holes."
+  ],
+  "cost": [
+   "What it costs here. removes 168 px, adds back 42 (the closing and the hole fill are extensive), net -126 px in this crop."
+  ],
+  "note": [],
+  "figs": [
+   [
+    "p07_clean.png",
+    "carries 3,763 px in this crop (1.44% of it) · 666,796 px in the whole frame"
+   ]
+  ]
+ },
+ {
+  "title": "The 40 px region floor",
+  "does": [
+   "What it does. extract_candidates labels the clean mask with connectivity=2 and keeps only components of at least 40 px, renumbering the survivors 1..N. 465 candidate regions survive on this frame."
+  ],
+  "cost": [
+   "What it costs here. 249 px in this crop.",
+   "And what does not happen next. The region classifier is USE_REGION_CLASSIFIER = False, so every one of those regions is kept. Deleting it won on all four metrics with zero free parameters; six region-level precision rules tried since all scored well on 512 px crops and then deleted 54–75% of hand-painted crack on the 48 full frames."
+  ],
+  "note": [],
+  "figs": [
+   [
+    "p08_floor.png",
+    "carries 3,514 px in this crop (1.34% of it) · 662,941 px in the whole frame"
+   ]
+  ]
+ },
+ {
+  "title": "Pass 2",
+  "does": [
+   "What it does. With a crack mask now in hand, proposes concavity, bridge-corridor and interior-fill candidates relative to it, scores them with the unified model, and folds the accepted ones in. 154 proposed on this frame, 129 accepted."
+  ],
+  "cost": [
+   "What it buys. +41,369 px frame-wide (5.87% of the final mask) and 0 px in this crop. The second pair of panels is a different place, not a different stage, and is shown because a panel of the main crop alone would read as the stage doing nothing anywhere."
+  ],
+  "note": [],
+  "figs": [
+   [
+    "p09_pass2_main.png",
+    "carries 3,514 px in this crop (1.34% of it) · 704,310 px in the whole frame"
+   ],
+   [
+    "p09b_pass2_before.png",
+    "A different 256 px window, at x=0 y=992: the mask before Pass 2."
+   ],
+   [
+    "p09c_pass2_after.png",
+    "The same window after. Violet is Pass 2's addition — its largest accepted region is 3,273 px."
+   ]
+  ]
+ },
+ {
+  "title": "The emitted mask",
+  "does": [
+   "What it does. Unions every kept region into one boolean mask and saves it. Area fraction 2.799% on this frame, 1.341% in this crop."
+  ],
+  "cost": [],
+  "note": [],
+  "figs": [
+   [
+    "p10_emitted.png",
+    "carries 3,514 px in this crop (1.34% of it) · 704,310 px in the whole frame"
+   ],
+   [
+    "p00b_frame_mask.png",
+    "The same mask over the whole frame, for scale."
+   ]
+  ]
+ },
+ {
+  "title": "The measured output",
+  "does": [
+   "What it does. Re-labels the emitted mask and measures every component: area, tip-to-tip geodesic, skeleton length, mean and max width, tortuosity, and whether it runs off the frame edge."
+  ],
+  "cost": [
+   "What it costs. 452 rows on this frame, 16 in this crop. Length is a bracket, not a value: 2.65% of regions on this frame touch the edge, but they are 29.57% of the crack area and 20.43% of the length. No scale bar was recovered for this frame, so every column here is pixels, not microns."
+  ],
+  "note": [],
+  "figs": [
+   [
+    "p11_regions.png",
+    "One colour per measured crack; grey is a component at or below the 25 px speck floor, which the measurement step drops. 16 components in this crop, 0 of them specks."
+   ]
+  ]
+ },
+ {
+  "title": "Against the hand paint, and where the recall goes",
+  "does": [
+   "On this crop: precision 0.8557, recall 0.4346, IoU 0.4049. One crop is not a corpus figure."
+  ],
+  "cost": [
+   "The two stages worth marking are the first row and everything else. On this crop the darkness cut owns 95.19% of all missed paint and the two morphology/area filters own 4.81% between them; over the 48 hand-painted full frames the same decomposition reads 96.02% and 3.98%. Tuning the morphology cannot reach the problem.",
+   "Reproduce every panel and every number on this page: make_flowchart.py beside this file, run under the detector environment. It asserts its own ladder against the pipeline's output and asserts the loss buckets are exhaustive before it writes anything."
+  ],
+  "note": [
+   "How to read any number on this page. These are one crop of one frame, shown because the stages are comparable on it. The corpus figures, over the 26 hand-labelled tiles, move further with the aggregation than with any method change ever measured in this project, so a score is unreadable without its row and its tolerance:aggregationprecisionrecallF1IoUpooled over all pixels0.41820.62520.50120.3344median over the 26 tiles0.80560.76230.59220.4208median over 13 specimens0.78970.71590.54180.3715median over specimens, 2 px tolerance0.89880.80250.66330.4962A perfectly placed trace caps at IoU 0.4993 pooled and 0.5498 median over tiles on these labels, so 0.4208 is 84% of what the labels permit, not 42% of perfect. IoU and clDice are both width-gameable here — a no-information dilation to 1.5× area moves clDice +0.0478 on 13 of 13 specimens — so the metric to compare methods on is skeleton-F1 at a 2 px tolerance, where this detector scores 0.5507."
+  ],
+  "figs": [
+   [
+    "p14_paint.png",
+    "The hand paint for this crop: 6,919 px, 2.64% of it. Painted from blank; the detector had no hand in it."
+   ],
+   [
+    "p12_score.png",
+    "green = found, red = marked but not painted, blue = painted but missed."
+   ],
+   [
+    "p13_loss.png",
+    "The missed paint, charged to the stage that dropped it: blue = never dark, red = clean_mask, amber = the 40 px floor."
+   ]
+  ]
+ }
+]
