@@ -323,3 +323,68 @@ def test_the_segment_rose_reaches_the_comparison_table():
     assert "null" in row["definition"].lower(), "the definition must mention the null"
     assert a["orientation"]["rose_frames_beating_null"] == "1 of 1", \
         a["orientation"].get("rose_frames_beating_null")
+
+
+# ------------------------------- the group pane computed four things and rendered none of them
+def _gstats_body():
+    js = open(os.path.join(HERE, "app", "static", "app.js"), encoding="utf-8").read()
+    i = js.index("function gStatsTable")
+    return js[i:js.index("\nfunction ", i + 10)]
+
+
+def test_the_group_card_shows_the_area_censoring_share_not_only_the_count_share():
+    """The sentence quoted pct_censored alone -- the smallest of the three weightings the
+    server sends. On one real group it printed 5.5% while the area share was 24.8%."""
+    body = _gstats_body()
+    assert "pct_censored_by_area" in body, "the group card never reads the area share"
+    assert "pct_censored" in body, "the count share went missing"
+
+
+def test_the_group_card_shows_every_summary_row():
+    """The key list is hardcoded, so a row added to SUMMARY is invisible here until it is
+    added here too -- which is how rose_R reached the comparison table and not this pane."""
+    body = _gstats_body()
+    missing = [k for (k, *_rest) in GS.SUMMARY if f'"{k}"' not in body]
+    assert not missing, f"SUMMARY rows the group card never renders: {missing}"
+
+
+def test_the_group_card_renders_its_own_caveats():
+    """group_summary has returned caveats since the pane was built and nothing rendered them:
+    only the two-group compare had a block. "Measure group A" pooled across modalities and
+    across a 6.5x pixel size in silence."""
+    body = _gstats_body()
+    assert "caveats" in body, "the group card never reads s.caveats"
+    assert "s.caveats.map" in body or "caveats || []" in body, \
+        "s.caveats is mentioned but never iterated"
+    for cap in (".slice(0,", ".slice(0, 3", "[0]"):
+        assert f"s.caveats{cap}" not in body, \
+            f"the group card caps its caveats with {cap} -- a cap plus a sort has deleted " \
+            "findings in this app before"
+
+
+def test_a_lopsided_split_names_both_weightings_not_just_the_first():
+    """The loop broke after the count case, so a pair lopsided on BOTH reported only the
+    count split and the reader never learned the area split was worse."""
+    a = _summary([_cen_frame("S1", 0.30, n_cen=8, n=20)])   # 40% count, 30% area
+    b = _summary([_cen_frame("S2", 0.05, n_cen=1, n=20)])   # 5% count, 5% area
+    hit = [c for c in GS.compare(a, b, "A", "B")["caveats"] if "different amounts" in c]
+    assert hit, "no asymmetry caveat at all"
+    assert "by count" in hit[0] and "by area" in hit[0], \
+        f"only one weighting named, the other was dropped by the break: {hit[0]}"
+
+
+def test_a_side_censored_at_zero_against_a_censored_side_still_warns():
+    """min(a, b) > 0 skipped the MAXIMAL asymmetry: 0% against 40% is as lopsided as it gets
+    and no ratio exists to compare."""
+    a = _summary([_cen_frame("S1", 0.02, n_cen=8, n=20)])   # 40% by count
+    b = _summary([_cen_frame("S2", 0.02, n_cen=0, n=20)])   # 0% by count
+    cav = GS.compare(a, b, "A", "B")["caveats"]
+    assert any("different amounts" in c for c in cav), f"zero-vs-40% raised nothing: {cav}"
+
+
+def test_a_symmetric_pair_is_still_not_nagged_about_censoring():
+    """Negative control for the two tests above."""
+    a = _summary([_cen_frame("S1", 0.02, n_cen=1, n=20)])
+    b = _summary([_cen_frame("S2", 0.02, n_cen=1, n=20)])
+    cav = GS.compare(a, b, "A", "B")["caveats"]
+    assert not any("different amounts" in c for c in cav), f"nagged on a matched pair: {cav}"

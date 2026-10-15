@@ -3117,9 +3117,13 @@ const gnum = (v, dp) => v === null || v === undefined ? "—"
 
 function gStatsTable(s, title) {
   const rows = [];
-  for (const k of ["n_cracks", "density_per_Mpx", "density_per_mm2", "total_area_px",
-                   "total_area_um2", "area_fraction_pct", "mean_area_px", "median_area_px",
-                   "mean_length_px", "mean_length_uncensored_px", "mean_aspect"]) {
+  // THIS LIST IS HARDCODED, so a row added to groupstats.SUMMARY is invisible here until it
+  // is added here too. rose_R shipped to the comparison table and not to this pane for
+  // exactly that reason. Keep it in SUMMARY order.
+  for (const k of ["n_cracks", "largest_share_of_area", "density_per_Mpx", "density_per_mm2",
+                   "total_area_px", "total_area_um2", "area_fraction_pct", "mean_area_px",
+                   "median_area_px", "mean_length_px", "mean_length_uncensored_px",
+                   "mean_aspect", "rose_R"]) {
     const v = s[k]; if (!v) continue;
     rows.push(v.value === null
       ? `<tr class="na"><td>${esc(v.label)}</td><td class="num">—</td><td colspan="2">` +
@@ -3132,7 +3136,10 @@ function gStatsTable(s, title) {
   rows.push(`<tr><td>Mean orientation</td><td class="num">` +
     `${o.mean_deg === null || o.mean_deg === undefined ? "—" : gnum(o.mean_deg, 1) + "°"}</td>` +
     `<td class="u">axial</td><td class="u">R = ${gnum(o.R, 3)}${o.meaningful === false
-      ? ` — <b>below ${0.15}, so there is no preferred direction and this angle should not be quoted</b>` : ""}</td></tr>`);
+      ? ` — <b>below ${0.15}, so there is no preferred direction and this angle should not be quoted</b>` : ""}` +
+    (o.rose_frames_beating_null
+      ? ` · segment rose beats its own null on ${esc(o.rose_frames_beating_null)} frames` : "") +
+    `</td></tr>`);
   const c = s.censoring || {};
   const bracket = (s.mean_length_px && s.mean_length_uncensored_px
                    && s.mean_length_px.value && s.mean_length_uncensored_px.value)
@@ -3141,8 +3148,14 @@ function gStatsTable(s, title) {
     `${plural(s.n_frames, "frame")}, ${plural((s.specimens || []).length, "specimen")}</span></h2>` +
     `<table class="gtab"><thead><tr><th>quantity</th><th class="num">value</th>` +
     `<th>unit</th><th>spread across frames</th></tr></thead><tbody>${rows.join("")}</tbody></table>` +
+    // BY AREA AS WELL AS BY COUNT. The server computes both and this sentence quoted the
+    // count share alone -- the smallest of the three weightings, and the one the server's
+    // own note says understates the problem. On one real group that printed 5.5% while the
+    // area share was 24.8%.
     `<p class="note">${c.n_censored || 0} of ${plural(c.n_cracks || 0, "crack")} ` +
-    `(${gnum(c.pct_censored, 1)}%) ` +
+    `(${gnum(c.pct_censored, 1)}%` +
+    (c.pct_censored_by_area == null ? ""
+      : `, and ${gnum(c.pct_censored_by_area, 1)}% of the crack <b>area</b>`) + `) ` +
     `run out of their frame, so every length above is a lower bound.` +
     (bracket && bracket > 1.25
       ? ` <b>Here the two length rows differ by ${bracket.toFixed(1)}×, so no single average ` +
@@ -3150,6 +3163,17 @@ function gStatsTable(s, title) {
     (s.scale_known_frames === s.n_frames ? ""
       : `<p class="note">${s.scale_known_frames} of ${plural(s.n_frames, "frame")} have a ` +
         `recovered pixel size, so the micrometre and per-mm² rows use only those.</p>`) +
+    // THE GROUP'S OWN CAVEATS. group_summary has returned these since the pane was built and
+    // nothing rendered them: only the two-group compare had a caveat block. So "Measure
+    // group A" -- the first button anyone presses -- pooled across modalities, across a 6.5x
+    // pixel size, or around a single crack holding 90% of the area, in total silence. Not
+    // capped and not sorted: a cap plus a severity sort has already deleted findings in this
+    // app once.
+    ((s.caveats || []).length
+      ? `<div class="gcav"><b>Before reading the numbers above</b><ul>` +
+        s.caveats.map((c) => `<li>${esc(c)}</li>`).join("") + `</ul></div>`
+      : "") +
+    (o.note ? `<p class="note gonote">${esc(o.note)}</p>` : "") +
     `</section>`;
 }
 

@@ -421,12 +421,22 @@ def _caveats(a, b, na, nb, spec_overlap):
                    "length here is a lower bound.")
     # Say so when one side is censored substantially harder than the other: the lengths are
     # then biased in OPPOSITE directions and their ratio is not a ratio of lengths.
+    # BOTH WEIGHTINGS, NOT THE FIRST ONE THAT FIRES. This loop used to break after the count
+    # case, so a pair lopsided on both reported only the count split and the reader never
+    # learned the area split -- the worse of the two -- was lopsided as well. And a side at
+    # exactly 0 against a side at 40% is maximal asymmetry, which min(...) > 0 skipped
+    # entirely; an absolute gap is enough on its own.
+    lop = []
     for na_, nb_, what in ((cen_a, cen_b, "count"), (ara, arb, "area")):
-        if min(na_, nb_) > 0 and max(na_, nb_) / min(na_, nb_) >= 1.5:
-            out.append(f"The two groups are censored by different amounts ({na_}% against "
-                       f"{nb_}% by {what}). The more censored side's lengths are cut shorter, "
-                       "so the length ratio below is partly that difference, not the material.")
-            break
+        hi, lo = max(na_, nb_), min(na_, nb_)
+        if hi <= 0:
+            continue
+        if (lo > 0 and hi / lo >= 1.5) or (lo == 0 and hi >= 5) or (hi - lo) >= 10:
+            lop.append(f"{na_}% against {nb_}% by {what}")
+    if lop:
+        out.append(f"The two groups are censored by different amounts ({'; '.join(lop)}). The "
+                   "more censored side's lengths are cut shorter, so the length ratio below is "
+                   "partly that difference, not the material.")
     return out
 
 
