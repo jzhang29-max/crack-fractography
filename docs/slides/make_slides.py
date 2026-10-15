@@ -16,6 +16,8 @@ import json
 import os
 import textwrap
 
+import sys
+
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -23,6 +25,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.image import imread
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.dirname(os.path.dirname(HERE)))
 REPO = os.path.dirname(os.path.dirname(HERE))      # .../crack-fractography
 PF = os.path.join(REPO, "paper", "figures", "out")
 DF = os.path.join(REPO, "docs", "figures")
@@ -149,6 +152,47 @@ def build():
                 slide(pdf, sizes, s["title"], s["claim"], s["caveat"], img=s["img"])
             else:
                 missing.append(s["img"])
+        # --- what each measurement means, straight out of the app ------------------
+        try:
+            from crack_fractography.app import groupstats as GS   # noqa: F401
+        except Exception:
+            GS = None
+        if GS is None:
+            sys.path.insert(0, os.path.dirname(HERE))
+            try:
+                from app import groupstats as GS
+            except Exception:
+                GS = None
+        if GS is not None:
+            defs = [(lab, unit, d) for _k, lab, _h, unit, d in GS.SUMMARY]
+            per = 4
+            for pg in range(0, len(defs), per):
+                chunk = defs[pg:pg + per]
+                fig = plt.figure(figsize=SIZE); fig.patch.set_facecolor("white")
+                ax = fig.add_axes([0.055, 0.04, 0.89, 0.92]); ax.axis("off")
+                y = 1.0
+                n = f"  ({pg // per + 1} of {(len(defs) + per - 1) // per})"
+                ax.text(0, y, "What each measurement means" + n, fontsize=22,
+                        fontweight="bold", color=INK, va="top", transform=ax.transAxes)
+                sizes.append(22)
+                y -= 0.075
+                y = wrap(ax, y, "Read straight out of app/groupstats.py, so this slide "
+                                "cannot drift from what the application shows.", 11.5,
+                         color=MUTED); sizes.append(11.5)
+                y -= 0.030
+                for lab, unit, d in chunk:
+                    ax.text(0, y, lab, fontsize=15, fontweight="bold", color=INK,
+                            va="top", transform=ax.transAxes); sizes.append(15)
+                    ax.text(1.0, y, unit, fontsize=11, color=MUTED, va="top", ha="right",
+                            transform=ax.transAxes); sizes.append(11)
+                    y -= 0.042
+                    y = wrap(ax, y, d, 12.0, color=INK, width=112); sizes.append(12.0)
+                    y -= 0.026
+                pdf.savefig(fig); plt.close(fig)
+        else:
+            raise SystemExit("could not import app.groupstats -- refusing to ship a deck "
+                             "whose definitions are hand-copied")
+
         if C:
             rows = [[r["arm"], f"{r['iou']:.4f}" if r["iou"] is not None else "n/a",
                      f"{r['cldice']:.4f}" if r["cldice"] is not None else "n/a", r["note"]]
