@@ -176,6 +176,46 @@ def examples():
     return p
 
 
+def baselines():
+    """Your detector against six classical baselines, same images, same scorer.
+
+    Every arm's parameter is chosen leave-one-IMAGE-out, so none is handicapped. The
+    datasets are drawn as SEPARATE PANELS, not grouped bars on one axis: the DeepCrack
+    column is 120 images and the CrackForest column 118, and side-by-side bars on a shared
+    axis invite reading across them as if one number were larger than the other.
+    """
+    B = json.load(open(os.path.join(HERE, "public_baselines.json"), encoding="utf-8"))
+    MINE = "YOUR DETECTOR (v1.49.2)"
+    fig, axes = plt.subplots(1, 2, figsize=(13.2, 5.0))
+    fig.patch.set_facecolor("white")
+    sizes = []
+    for ax, (ds, n) in zip(axes, [("CrackForest", 118), ("DeepCrack", 120)]):
+        items = sorted(B[ds].items(), key=lambda kv: kv[1])
+        names = [k for k, _ in items]; vals = [v for _, v in items]
+        cols = [BLUE if k == MINE else GREY for k in names]
+        y = np.arange(len(names))
+        b = ax.barh(y, vals, color=cols, edgecolor="white", linewidth=1.5)
+        ax.bar_label(b, fmt="%.3f", fontsize=9.5, padding=3, color=INK); sizes.append(9.5)
+        ax.set_yticks(y)
+        ax.set_yticklabels([k.replace(" (v1.49.2)", "") for k in names], fontsize=10)
+        sizes.append(10)
+        for t, k in zip(ax.get_yticklabels(), names):
+            if k == MINE:
+                t.set_fontweight("bold"); t.set_color(BLUE)
+        rank = names[::-1].index(MINE) + 1
+        ax.set_title(f"{ds}  -- {n} images\nyours ranks {rank} of {len(names)}",
+                     fontsize=12, color=INK, pad=8); sizes.append(12)
+        ax.set_xlim(0, max(vals) * 1.22)
+        ax.set_xlabel("mean F1 per image, 0 px tolerance", fontsize=10)
+        ax.spines[["top", "right"]].set_visible(False)
+        ax.grid(axis="x", color="#eef1f4", lw=0.8); ax.set_axisbelow(True)
+    fig.tight_layout()
+    p2 = os.path.join(HERE, "fig_public_baselines.png")
+    fig.savefig(p2, dpi=170); plt.close(fig)
+    assert min(sizes) >= MIN_PT
+    return p2
+
+
 if __name__ == "__main__":
-    for p in (scores(), examples()):
+    for p in (scores(), examples(), baselines()):
         print(f"wrote {p}  ({os.path.getsize(p)/1024:.0f} KB)")

@@ -88,6 +88,16 @@ SLIDES = [
                 "95% of refitting there -- so one road-calibrated constant serves road "
                 "imagery and the SEM-calibrated 5.0 is the outlier. Still below the 0.753 "
                 "a model trained on CrackForest reports."),
+    dict(img=os.path.join(DF, "fig_public_baselines.png"),
+         title="Against six classical baselines, on the same images",
+         claim="Every arm run here, same images, same scorer, and EVERY arm's parameter "
+               "chosen leave-one-image-out so none is handicapped. It ranks 1 of 7 on "
+               "DeepCrack (0.821 against 0.730) and 3 of 7 on CrackForest, behind the "
+               "Meijering and Sato ridge filters at 0.495.",
+         caveat="So the claim is not 'better than classical methods' but 'better on wide "
+                "high-contrast cracks, behind a ridge filter on thin faint ones' -- which "
+                "is what a darkness detector should do. The two panels are 118 and 120 "
+                "images; do not read across them."),
     dict(img=os.path.join(DF, "fig_public_examples.png"),
          title="What that looks like on the public images",
          claim="Ground truth against the frozen and refitted masks, on one typical image "
