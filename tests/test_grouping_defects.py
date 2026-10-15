@@ -186,3 +186,32 @@ def test_rename_refuses_to_overwrite_and_refuses_an_unknown_group(tmp_path):
         st, _ = s.post("/api/groups", json.dumps(
             {"name": "one", "rename": "  "}).encode(), "application/json")
         assert st == 400, f"rename to a blank name returned {st}"
+
+
+# ------------------------------------- the comparison table has to be readable on its own
+def test_compare_rows_carry_their_unit_and_definition():
+    """A column of bare numbers is unreadable: "Crack area fraction 2.62" is a PERCENTAGE,
+    and nothing on screen said so. The unit was already in the payload and unrendered; the
+    definition was not sent at all."""
+    a = _summary([_frame("S1", nm=10.0)])
+    b = _summary([_frame("S2", nm=10.0, n=5)])
+    cmp = GS.compare(a, b, "A", "B")
+    assert cmp["rows"], "no rows"
+    for r in cmp["rows"]:
+        assert r.get("unit"), f"{r['key']} has no unit"
+        assert r.get("definition"), f"{r['key']} has no definition"
+        assert len(r["definition"]) > 40, f"{r['key']}'s definition is a stub"
+    frac = next(r for r in cmp["rows"] if r["key"] == "area_fraction_pct")
+    assert "%" in frac["unit"], f"the area-fraction unit must say it is a percentage: {frac['unit']}"
+
+
+def test_the_compare_table_prints_the_definition_rather_than_hiding_it():
+    """Printed, not a title= tooltip: a tooltip is invisible on a touch screen and does not
+    survive a screenshot, which is how this table actually gets shared."""
+    js = open(os.path.join(HERE, "app", "static", "app.js"), encoding="utf-8").read()
+    i = js.index("function gCompareTable")
+    body = js[i:js.index("\nfunction ", i + 10)]
+    assert "r.definition" in body, "the compare table never reads the definition"
+    assert "r.unit" in body, "the compare table never reads the unit"
+    assert 'title="' not in body.split("r.definition")[1][:200], \
+        "the definition is being put in a tooltip instead of printed"

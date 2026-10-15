@@ -3157,10 +3157,18 @@ function gCompareTable(d) {
   // DIRECTION IS SHOWN AS WELL AS SIGNED, because a column of numbers that differ only in
   // a leading minus is read wrong at a glance. The arrow says which way, the colour
   // reinforces it, and the sign is still there for anyone who reads the number.
+  // THE UNIT AND THE DEFINITION TRAVEL WITH THE ROW. Without them the table was a column
+  // of bare numbers: "Crack area fraction 2.62" reads as a fraction when it is a
+  // percentage, and nothing on screen said which. The definition is printed, not hidden in
+  // a title= tooltip -- a tooltip is invisible to anyone reading on a touch screen, and it
+  // does not print or screenshot, which is how this table is actually shared.
+  const cell = (r) => `<td class="q"><span class="qn">${esc(r.label)}</span>` +
+    (r.unit ? ` <span class="qu">${esc(r.unit)}</span>` : "") +
+    (r.definition ? `<div class="qd">${esc(r.definition)}</div>` : "") + `</td>`;
   const rows = d.rows.map((r) => r.a === null || r.b === null
-    ? `<tr class="na"><td>${esc(r.label)}</td><td class="num">—</td><td class="num">—</td>` +
+    ? `<tr class="na">${cell(r)}<td class="num">—</td><td class="num">—</td>` +
       `<td class="num">—</td><td class="u">${esc(r.note || "not available on both sides")}</td></tr>`
-    : `<tr><td class="q">${esc(r.label)}</td><td class="num">${gnum(r.a)}</td>` +
+    : `<tr>${cell(r)}<td class="num">${gnum(r.a)}</td>` +
       `<td class="num">${gnum(r.b)}</td>` +
       `<td class="num ${r.delta > 0 ? "up" : r.delta < 0 ? "down" : ""}">` +
       `${r.delta > 0 ? "\u25b2 +" : r.delta < 0 ? "\u25bc " : ""}${gnum(r.delta)}</td>` +

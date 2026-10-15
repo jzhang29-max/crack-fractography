@@ -245,11 +245,13 @@ def compare(a, b, label_a="A", label_b="B"):
     for key, label, how, unit, definition in SUMMARY:
         va, vb = a.get(key, {}).get("value"), b.get(key, {}).get("value")
         if va is None or vb is None:
-            diffs.append({"key": key, "label": label, "unit": unit, "a": va, "b": vb,
+            diffs.append({"key": key, "label": label, "unit": unit,
+                          "definition": definition, "a": va, "b": vb,
                           "delta": None, "ratio": None,
                           "note": "not available on both sides"})
             continue
         diffs.append({"key": key, "label": label, "unit": unit,
+                      "definition": definition,
                       "a": va, "b": vb, "delta": round(vb - va, 4),
                       "ratio": round(vb / va, 3) if va else None,
                       "how": how})
