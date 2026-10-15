@@ -1,0 +1,20 @@
+{
+ "CrackForest": {
+  "YOUR DETECTOR (v1.49.2)": 0.4498348341318911,
+  "global threshold (Otsu on flat)": 0.06321041656213515,
+  "percentile threshold": 0.3176877833936151,
+  "Sauvola local": 0.26752899754058257,
+  "Frangi ridge": 0.07276038044558913,
+  "Sato ridge": 0.49483328430761864,
+  "Meijering ridge": 0.4953760268584744
+ },
+ "DeepCrack": {
+  "YOUR DETECTOR (v1.49.2)": 0.8208665488760664,
+  "global threshold (Otsu on flat)": 0.6152964024140348,
+  "percentile threshold": 0.7296175426951216,
+  "Sauvola local": 0.7032762900318592,
+  "Frangi ridge": 0.3084463933346875,
+  "Sato ridge": 0.6625986993193718,
+  "Meijering ridge": 0.6723949561170823
+ }
+}
