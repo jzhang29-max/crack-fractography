@@ -138,6 +138,15 @@ def frame_stats(frame_rec, cracks):
         "median_aspect": round(_median(asp), 2) if asp else None,
         "aspect_source": asp_src,
         "orientation": axial_mean_deg(ang, angw),
+        # The segment rose and its null are measured upstream and stored per frame. They are
+        # carried through rather than recomputed: analysis/segments.py retires the
+        # whole-component orientation below and this is its replacement.
+        "rose_R": _f(frame_rec.get("rose_R")),
+        "rose_R_null": _f(frame_rec.get("rose_R_null")),
+        "rose_beats_null": frame_rec.get("rose_beats_null"),
+        # Censoring, weighted by AREA as well as by count. The count-weighted share is the
+        # smallest of the three the frame record carries, and it was the only one read.
+        "censored_share_by_area": _f(frame_rec.get("censored_share_by_area")),
     }
 
 
@@ -187,10 +196,19 @@ SUMMARY = [
     ("mean_length_uncensored_px", "Average length (uncensored only)", "mean", "px",
      "The same average over only those cracks fully inside the frame, so no length is cut "
      "short. If this is much larger than the row above, the frame is clipping your cracks."),
-    ("mean_aspect", "Average aspect ratio", "mean", "length / width",
-     "How elongated a region is: length divided by width. Around 1 is round -- porosity "
-     "rather than a crack. Painted crack in this corpus runs about 3.3; painted porosity "
-     "about 1.5."),
+    ("mean_aspect", "Average aspect ratio", "mean", "ellipse major / minor",
+     "How elongated a region's OVERALL SHAPE is: the fitted ellipse's long axis over its "
+     "short axis. Around 1 is round -- porosity rather than a crack. This is NOT length "
+     "over width: for a tortuous or branched crack the fitted ellipse is far shorter than "
+     "the centreline, so this number runs several times smaller than skeleton length over "
+     "mean width, and the two can move in different directions. Read it as a shape "
+     "descriptor, not as a length."),
+    ("rose_R", "Direction strength (segment rose)", "mean", "0 (no direction) to 1 (aligned)",
+     "How consistently the crack BRANCHES point the same way, measured per segment between "
+     "junctions. This is the orientation read-out this project trusts: it comes with a "
+     "per-frame random-shuffle null, so a value can be checked against what no preferred "
+     "direction would look like. Prefer it to the 'Orientation' line below, which measures "
+     "whole blobs."),
 ]
 
 
@@ -223,19 +241,38 @@ def group_summary(frames, cracks_by_frame):
             if o is not None and sk and sk >= MIN_SKELETON_PX:
                 ang.append(o % 180.0); angw.append(ar or 1.0)
     out["orientation"] = axial_mean_deg(ang, angw)
+    beats = [r.get("rose_beats_null") for r in rows if r.get("rose_beats_null") is not None]
     out["orientation"]["note"] = (
         "axial circular mean, area-weighted, over cracks with a skeleton of at least "
         f"{MIN_SKELETON_PX:g} px. R is the resultant length: below {R_MEANINGFUL} there is "
-        "no preferred direction and the mean angle should not be quoted.")
+        "no preferred direction and the mean angle should not be quoted. "
+        "THIS IS THE WHOLE-COMPONENT SECOND-MOMENT AXIS, which analysis/segments.py retires "
+        "by name for branched networks ('for a branched network that is noise, and for a "
+        "symmetric 4-way junction it is arbitrary'), and the area weighting makes it a "
+        "width-weighted rose. Its reference axis is not the segment rose's, so the two "
+        "typically differ by about 90 degrees -- do not read this angle as a direction on "
+        "the image. Use the 'Direction strength (segment rose)' row, which is measured per "
+        "branch and carries a null.")
+    out["orientation"]["rose_frames_beating_null"] = (
+        f"{sum(1 for b in beats if b)} of {len(beats)}" if beats else None)
     out["caveats"] = summary_caveats(rows)
     tot_c = sum(r["n_cracks"] for r in rows)
     tot_cen = sum(r["n_censored"] for r in rows)
+    # Area-weighted censoring. share_by_area is a per-frame fraction, so it is re-weighted
+    # by each frame's crack area to pool it; a plain mean over frames would let a nearly
+    # crack-free frame outvote a crowded one.
+    wa = [(r["censored_share_by_area"], r["total_area_px"]) for r in rows
+          if r.get("censored_share_by_area") is not None and r.get("total_area_px")]
+    pct_area = round(100 * sum(sh * ar for sh, ar in wa) / sum(ar for _, ar in wa), 2) if wa else None
     out["censoring"] = {
         "n_cracks": tot_c, "n_censored": tot_cen,
         "pct_censored": round(100 * tot_cen / tot_c, 2) if tot_c else None,
+        "pct_censored_by_area": pct_area,
         "note": "a censored crack runs out of the frame, so its length is a LOWER BOUND. "
                 "Compare 'all' against 'uncensored only' -- if they differ a lot, no single "
-                "average length is defensible for this group."}
+                "average length is defensible for this group. The by-area share is usually "
+                "SEVERAL TIMES the by-count share, because the cracks that reach an edge are "
+                "the big ones; the by-count share alone understates the problem."}
     return out
 
 
@@ -333,6 +370,19 @@ def _caveats(a, b, na, nb, spec_overlap):
         out.append("Both groups contain frames from the same specimen "
                    f"({', '.join(spec_overlap)}). Those frames are not independent of each "
                    "other, so a difference here is partly a within-specimen difference.")
+    # The silent case: each side resting on exactly ONE specimen. spec_overlap catches a
+    # specimen on BOTH sides and summary_caveats catches pooling SEVERAL per side, so
+    # "6 frames, 1 specimen, against 6 frames, 1 specimen" -- the design most likely to be
+    # read as a condition-level result -- fell through every test with nothing said.
+    one = [(side, g["specimens"][0], len(g.get("per_frame", [])))
+           for side, g in (("A", a), ("B", b))
+           if len(g.get("specimens", [])) == 1 and len(g.get("per_frame", [])) > 1]
+    if one:
+        bits = "; ".join(f"group {sd} is {nf} frames of {sp}" for sd, sp, nf in one)
+        out.append(f"{bits}. Frames of one specimen are not independent, so that side is "
+                   "n=1 SPECIMEN however many frames it holds. A difference here is a "
+                   "difference between two objects, not between two conditions, and imaging "
+                   "more fields of the same specimens cannot narrow it.")
     if a.get("scale_known_frames", 0) != a.get("n_frames") or \
        b.get("scale_known_frames", 0) != b.get("n_frames"):
         out.append("Not every frame has a recovered pixel size, so the micrometre and "
@@ -360,9 +410,23 @@ def _caveats(a, b, na, nb, spec_overlap):
                        "that difference in magnification, not a difference in the material.")
     cen_a = a.get("censoring", {}).get("pct_censored") or 0
     cen_b = b.get("censoring", {}).get("pct_censored") or 0
-    if max(cen_a, cen_b) >= 10:
-        out.append(f"Censoring differs or is high ({cen_a}% against {cen_b}% of cracks "
-                   "running out of frame). Every length here is a lower bound.")
+    # By AREA, not only by count. This test used to read the count-weighted share, which is
+    # the smallest of the three the frame records carry: a group at 7.4% by count and 12.2%
+    # by area passed it in silence while every length row was a lower bound.
+    ara = a.get("censoring", {}).get("pct_censored_by_area") or 0
+    arb = b.get("censoring", {}).get("pct_censored_by_area") or 0
+    if max(cen_a, cen_b, ara, arb) >= 10:
+        out.append(f"Censoring is high ({cen_a}% against {cen_b}% of cracks by count, "
+                   f"{ara}% against {arb}% of the crack AREA, running out of frame). Every "
+                   "length here is a lower bound.")
+    # Say so when one side is censored substantially harder than the other: the lengths are
+    # then biased in OPPOSITE directions and their ratio is not a ratio of lengths.
+    for na_, nb_, what in ((cen_a, cen_b, "count"), (ara, arb, "area")):
+        if min(na_, nb_) > 0 and max(na_, nb_) / min(na_, nb_) >= 1.5:
+            out.append(f"The two groups are censored by different amounts ({na_}% against "
+                       f"{nb_}% by {what}). The more censored side's lengths are cut shorter, "
+                       "so the length ratio below is partly that difference, not the material.")
+            break
     return out
 
 

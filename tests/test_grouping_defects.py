@@ -215,3 +215,111 @@ def test_the_compare_table_prints_the_definition_rather_than_hiding_it():
     assert "r.unit" in body, "the compare table never reads the unit"
     assert 'title="' not in body.split("r.definition")[1][:200], \
         "the definition is being put in a tooltip instead of printed"
+
+
+# ------------------------------- the table read cleaner than the data was: four silent rows
+def _cen_frame(spec, by_area, n_cen=0, n=4, nm=10.0):
+    """A frame whose censoring is set independently by count and by area, which is how the
+    frame records actually carry it."""
+    rec, cracks = _frame(spec, nm=nm, n=n)
+    rec["frame"] = f"{spec}_cen{by_area}_{n_cen}_{n}"
+    rec["censored_share_by_area"] = by_area
+    for c in cracks[:n_cen]:
+        c["length_is_censored"] = True
+    return rec, cracks
+
+
+def test_censoring_is_reported_and_judged_by_area_not_only_by_count():
+    """The caveat tested the COUNT-weighted share, the smallest of the three the frame
+    records carry. A real comparison sat at 7.42% by count and 12.16% by area and passed in
+    silence while every length row was a lower bound."""
+    a = _summary([_cen_frame("S1", 0.13, n_cen=0, n=20)])     # 0% by count, 13% by area
+    b = _summary([_cen_frame("S2", 0.12, n_cen=0, n=20)])
+    assert a["censoring"]["pct_censored"] == 0.0, "the count share should be zero here"
+    assert a["censoring"]["pct_censored_by_area"] == 13.0, \
+        f"area share not reported: {a['censoring']}"
+    cav = GS.compare(a, b, "A", "B")["caveats"]
+    assert any("area" in c.lower() and "lower bound" in c.lower() for c in cav), \
+        f"high area-censoring raised no caveat: {cav}"
+
+
+def test_low_censoring_on_both_weightings_raises_nothing():
+    """Negative control. The test above must be able to NOT fire, or it measures nothing."""
+    a = _summary([_cen_frame("S1", 0.02, n_cen=0, n=20)])
+    b = _summary([_cen_frame("S2", 0.02, n_cen=0, n=20)])
+    cav = GS.compare(a, b, "A", "B")["caveats"]
+    assert not any("lower bound" in c.lower() for c in cav), f"nagged on clean data: {cav}"
+
+
+def test_a_lopsided_censoring_split_is_named():
+    """Two sides censored by very different amounts bias their lengths in OPPOSITE
+    directions, so the length ratio is partly that. max() alone could never see it."""
+    a = _summary([_cen_frame("S1", 0.02, n_cen=8, n=20)])     # 40% by count
+    b = _summary([_cen_frame("S2", 0.02, n_cen=1, n=20)])     # 5% by count
+    cav = GS.compare(a, b, "A", "B")["caveats"]
+    assert any("different amounts" in c.lower() for c in cav), f"no asymmetry caveat: {cav}"
+
+
+def test_two_single_specimen_sides_are_called_n_equals_one():
+    """6 frames against 6 frames of one specimen each reads as n=6 and is n=1. spec_overlap
+    sees only a specimen on BOTH sides; summary_caveats sees only pooling SEVERAL per side.
+    This configuration fell through both."""
+    a = _summary([_frame("AS", nm=10.0, n=3), _frame("AS", nm=10.0, n=4)])
+    b = _summary([_frame("HIP", nm=10.0, n=5), _frame("HIP", nm=10.0, n=6)])
+    cav = GS.compare(a, b, "AS", "HIP")["caveats"]
+    hit = [c for c in cav if "n=1 specimen" in c.lower()]
+    assert hit, f"no single-specimen caveat: {cav}"
+    assert "2 frames of AS" in hit[0] and "2 frames of HIP" in hit[0], hit[0]
+
+
+def test_several_specimens_a_side_does_not_get_the_n_equals_one_caveat():
+    """Negative control for the test above."""
+    a = _summary([_frame("AS1", nm=10.0, n=3), _frame("AS2", nm=10.0, n=4)])
+    b = _summary([_frame("HIP1", nm=10.0, n=5), _frame("HIP2", nm=10.0, n=6)])
+    cav = GS.compare(a, b, "AS", "HIP")["caveats"]
+    assert not any("n=1 specimen" in c.lower() for c in cav), f"fired wrongly: {cav}"
+
+
+def test_the_aspect_row_does_not_claim_to_be_length_over_width():
+    """It is the fitted ellipse's major over minor. On a tortuous crack that is several
+    times SMALLER than skeleton length over mean width, and the two can move in opposite
+    directions -- so the old 'length / width' unit named a quantity it does not compute."""
+    row = next(r for r in GS.SUMMARY if r[0] == "mean_aspect")
+    key, label, how, unit, definition = row
+    assert "ellipse" in unit.lower(), f"unit still misnames the quantity: {unit!r}"
+    assert "not length" in definition.lower() or "NOT length" in definition, \
+        "the definition must say it is not length over width"
+    assert "3.3" not in definition, \
+        "the 'about 3.3' benchmark has no stated provenance in the code that ships it"
+
+
+def test_the_orientation_note_discloses_that_it_is_the_retired_measurand():
+    """analysis/segments.py retires the whole-component second-moment axis BY NAME for
+    branched networks, and the comparison shipped it with no disclosure and a reference axis
+    ~90 degrees from the segment rose's."""
+    out = _summary([_frame("S1", nm=10.0)])
+    note = out["orientation"]["note"].lower()
+    assert "whole-component" in note or "second-moment" in note, f"no disclosure: {note}"
+    assert "90 degrees" in note, "the ~90 degree axis difference is not stated"
+    assert "segments.py" in note, "the note does not point at the module that retires it"
+    doc = open(os.path.join(HERE, "analysis", "segments.py"), encoding="utf-8").read()
+    assert "second-moment major axis of the component" in doc, \
+        "segments.py no longer retires this -- the note's claim has gone stale"
+
+
+def test_the_segment_rose_reaches_the_comparison_table():
+    """rose_R is stored on every frame with a permutation null and the comparison did not
+    read it. On one real pair the retired row read 'identical' (R 0.681 vs 0.689) while
+    rose_R separated the two sides completely."""
+    fa, ca = _frame("S1", nm=10.0)
+    fb, cb = _frame("S2", nm=10.0, n=5)
+    fa["rose_R"], fa["rose_R_null"], fa["rose_beats_null"] = 0.29, 0.14, True
+    fb["rose_R"], fb["rose_R_null"], fb["rose_beats_null"] = 0.51, 0.14, True
+    a = GS.group_summary([fa], {(fa["arm"], fa["frame"]): ca})
+    b = GS.group_summary([fb], {(fb["arm"], fb["frame"]): cb})
+    row = next((r for r in GS.compare(a, b, "A", "B")["rows"] if r["key"] == "rose_R"), None)
+    assert row is not None, "rose_R never reaches the comparison"
+    assert row["a"] == 0.29 and row["b"] == 0.51, row
+    assert "null" in row["definition"].lower(), "the definition must mention the null"
+    assert a["orientation"]["rose_frames_beating_null"] == "1 of 1", \
+        a["orientation"].get("rose_frames_beating_null")
