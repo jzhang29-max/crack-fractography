@@ -1,0 +1,54 @@
+{
+ "measured": "2026-10-14",
+ "pipeline": "v1.49.2",
+ "metric": "mean F1 per image, 0 px tolerance",
+ "note": "Nothing but mad_k moves. Ladder, cleaning, 40 px floor and classifier-off are as shipped.",
+ "datasets": {
+  "CrackForest": {
+   "n": 118,
+   "prevalence": 0.0162,
+   "source": "cuilimeng/CrackForest-dataset",
+   "gt": "groundTruth[0,0][Segmentation], 1=background 2=crack",
+   "per_k": {
+    "5.0": 0.08680144485085022,
+    "4.0": 0.2086119991394323,
+    "3.0": 0.41019054901817964,
+    "2.5": 0.4498348341318911,
+    "2.0": 0.38772788525238533,
+    "1.5": 0.23255596593481534,
+    "1.0": 0.10487916083743175,
+    "0.5": 0.03881591546983702
+   },
+   "loo": 0.4498348341318911,
+   "zeros_frozen": 71,
+   "zeros_k25": 1,
+   "random": 0.0,
+   "published": {
+    "f1": 0.7535,
+    "note": "Kompanets 2024, 0 px tolerance, TRAINED on this dataset"
+   }
+  },
+  "DeepCrack": {
+   "n": 237,
+   "prevalence": 0.04327073945018409,
+   "source": "yhlleo/DeepCrack test split",
+   "gt": "binary PNG, white=crack",
+   "per_k": {
+    "5.0": 0.6310317978560467,
+    "4.0": 0.7538963759003704,
+    "3.0": 0.7931735530290641,
+    "2.5": 0.7532289742054458,
+    "2.0": 0.6675246596155162,
+    "1.5": 0.5381336085622166,
+    "1.0": 0.3783133443162133
+   },
+   "loo": 0.7931735530290641,
+   "zeros_frozen": 11,
+   "zeros_k25": 0,
+   "random": 0.047439565026385785,
+   "k25_p": 0.685993898877661,
+   "k25_r": 0.9034459691492268,
+   "published": null
+  }
+ }
+}

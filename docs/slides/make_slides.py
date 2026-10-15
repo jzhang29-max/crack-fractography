@@ -79,6 +79,23 @@ SLIDES = [
          caveat="The full-frame paint gate has the same disease: a correct 3 px trace of "
                 "the human's own paint deletes 94.63% of it, because the paint is 154 px "
                 "wide. Three instruments, one failure mode."),
+    dict(img=os.path.join(DF, "fig_public_scores.png"),
+         title="The same detector on public crack datasets",
+         claim="Frozen -- every constant as the app ships, nothing fitted -- it scores "
+               "0.631 on DeepCrack (237 images) and 0.087 on CrackForest (118). Refitting "
+               "ONE constant, mad_k, takes those to 0.793 and 0.450.",
+         caveat="CrackForest's fitted value carried BLIND to DeepCrack reaches 0.753, "
+                "95% of refitting there -- so one road-calibrated constant serves road "
+                "imagery and the SEM-calibrated 5.0 is the outlier. Still below the 0.753 "
+                "a model trained on CrackForest reports."),
+    dict(img=os.path.join(DF, "fig_public_examples.png"),
+         title="What that looks like on the public images",
+         claim="Ground truth against the frozen and refitted masks, on one typical image "
+               "from each dataset.",
+         caveat="Each image is chosen by RULE -- the one whose mad_k 2.5 score is nearest "
+                "that dataset's mean -- not by eye. The first draft hand-picked a "
+                "CrackForest image where frozen beat the refit, the reverse of the "
+                "aggregate."),
     dict(img=os.path.join(DF, "fig_operating_curve.png"),
          title="Recall alone is not a score",
          claim="The loosest setting reaches recall 0.98 and scores F1 0.162. Its precision, "
