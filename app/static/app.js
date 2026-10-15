@@ -3135,15 +3135,11 @@ function gStatsTable(s, title) {
   const o = s.orientation || {};
   rows.push(`<tr><td>Mean orientation</td><td class="num">` +
     `${o.mean_deg === null || o.mean_deg === undefined ? "—" : gnum(o.mean_deg, 1) + "°"}</td>` +
-    `<td class="u">axial</td><td class="u">R = ${gnum(o.R, 3)}${o.meaningful === false
-      ? ` — <b>below ${0.15}, so there is no preferred direction and this angle should not be quoted</b>` : ""}` +
+    `<td class="u">axial</td><td class="u">R = ${gnum(o.R, 3)}` +
     (o.rose_frames_beating_null
       ? ` · segment rose beats its own null on ${esc(o.rose_frames_beating_null)} frames` : "") +
     `</td></tr>`);
   const c = s.censoring || {};
-  const bracket = (s.mean_length_px && s.mean_length_uncensored_px
-                   && s.mean_length_px.value && s.mean_length_uncensored_px.value)
-    ? (s.mean_length_px.value / s.mean_length_uncensored_px.value) : null;
   return `<section class="card"><h2>${esc(title)} <span class="u">` +
     `${plural(s.n_frames, "frame")}, ${plural((s.specimens || []).length, "specimen")}</span></h2>` +
     `<table class="gtab"><thead><tr><th>quantity</th><th class="num">value</th>` +
@@ -3157,22 +3153,10 @@ function gStatsTable(s, title) {
     (c.pct_censored_by_area == null ? ""
       : `, and ${gnum(c.pct_censored_by_area, 1)}% of the crack <b>area</b>`) + `) ` +
     `run out of their frame, so every length above is a lower bound.` +
-    (bracket && bracket > 1.25
-      ? ` <b>Here the two length rows differ by ${bracket.toFixed(1)}×, so no single average ` +
-        `length is defensible for this group — quote the bracket.</b>` : "") + `</p>` +
+    `</p>` +
     (s.scale_known_frames === s.n_frames ? ""
       : `<p class="note">${s.scale_known_frames} of ${plural(s.n_frames, "frame")} have a ` +
         `recovered pixel size, so the micrometre and per-mm² rows use only those.</p>`) +
-    // THE GROUP'S OWN CAVEATS. group_summary has returned these since the pane was built and
-    // nothing rendered them: only the two-group compare had a caveat block. So "Measure
-    // group A" -- the first button anyone presses -- pooled across modalities, across a 6.5x
-    // pixel size, or around a single crack holding 90% of the area, in total silence. Not
-    // capped and not sorted: a cap plus a severity sort has already deleted findings in this
-    // app once.
-    ((s.caveats || []).length
-      ? `<div class="gcav"><b>Before reading the numbers above</b><ul>` +
-        s.caveats.map((c) => `<li>${esc(c)}</li>`).join("") + `</ul></div>`
-      : "") +
     `</section>`;
 }
 
@@ -3225,9 +3209,13 @@ function gCompareTable(d) {
   // how to read the numbers; this one says there is nothing to read, because both sides
   // are the same pixels. Under the table, after a "Before reading the numbers above"
   // heading, it arrives after the reader has already read them.
+  // ONLY THE FATAL BANNER IS RENDERED. The caveat list that used to sit under the table
+  // was removed on request: the pane shows measurements, and the caveats travel in the CSV
+  // download instead. This one stays because it is not a reading of the numbers -- it says
+  // the two sides are literally the same pixels, so every row below compares something
+  // with itself and agrees because it is the same thing, not because anything was measured.
   const all = d.caveats || [];
   const fatal = (d.pixel_overlaps || []).length ? all.filter((c) => c.includes("SHARE PIXELS")) : [];
-  const cav = all.filter((c) => !fatal.includes(c)).map((c) => `<li>${esc(c)}</li>`).join("");
   const top = fatal.map((c) => `<p class="banner bad gfatal">${esc(c)}</p>`).join("");
   const na = (d.a && d.a.n_frames) || 0, nb = (d.b && d.b.n_frames) || 0;
   return `<section class="card"><h2 class="ghead">` +
@@ -3240,9 +3228,7 @@ function gCompareTable(d) {
     `<th class="num">difference</th><th class="num">ratio</th></tr></thead>` +
     `<tbody>${rows}</tbody></table>` +
     `<p class="note">Orientation: ${gnum(o.a_deg, 1)}° (R ${gnum(o.a_R, 3)}) against ` +
-    `${gnum(o.b_deg, 1)}° (R ${gnum(o.b_R, 3)}) — ${gnum(o.axial_separation_deg, 1)}° apart. ` +
-    `${o.meaningful ? "" : "<b>At least one group has no preferred direction, so these two angles are not comparable.</b>"}</p>` +
-    (cav ? `<div class="gcav"><b>Before reading the numbers above</b><ul>${cav}</ul></div>` : "") +
+    `${gnum(o.b_deg, 1)}° (R ${gnum(o.b_R, 3)}) — ${gnum(o.axial_separation_deg, 1)}° apart.</p>` +
     `</section>`;
 }
 

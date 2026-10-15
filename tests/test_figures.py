@@ -491,12 +491,25 @@ def test_group_a_and_b_are_told_apart_by_more_than_colour():
         "the difference column signals direction by colour alone")
 
 
-def test_the_caveat_drawer_is_not_the_same_red_as_the_fatal_banner():
-    """The drawer holds things that qualify how to read the numbers; the banner holds the
-    one that invalidates them -- both groups being the same pixels. If everything is red
-    that distinction is gone."""
+def test_the_fatal_banner_survived_the_removal_of_the_caveat_drawer():
+    """RETIRED SUBJECT, REPOINTED TEST. This asserted that the amber caveat drawer was not
+    the same red as the fatal banner. The drawer is gone -- the group panes were asked to
+    show measurements and no caveat prose, and the caveats moved to the CSV export -- so
+    there is no drawer left to be the wrong colour, and a test comparing it against the
+    banner has no subject.
+
+    What still matters is the thing the distinction existed to protect: the ONE message that
+    does not qualify the numbers but voids them, both groups being the same pixels, is still
+    rendered and still red. Deleting the drawer must not have taken it along."""
     css = _src("app/templates/index.html")
-    i = css.index(".gcav{")
-    assert "var(--warn)" in css[i:i + 200], "the caveat drawer is red again"
-    assert "var(--bad)" not in css[i:css.index("}", i)], (
-        "the drawer uses the same colour as the banner that invalidates a comparison")
+    js = _src("app/static/app.js")
+    assert ".gcav" not in css, "the caveat drawer is back; this test needs rewriting again"
+    assert "gfatal" in js, "the same-pixels banner is no longer rendered"
+    # The red comes from .banner.bad; .gfatal only turns the one-line pill into a readable
+    # block. The element carries all three classes, so assert the class list and the rule
+    # that actually colours it, not the one that lays it out.
+    assert 'class="banner bad gfatal"' in js, (
+        "the same-pixels banner lost the classes that make it red and readable")
+    i = css.index(".banner.bad{")
+    assert "var(--bad)" in css[i:css.index("}", i)], (
+        "the banner that voids a comparison is no longer the colour that says so")

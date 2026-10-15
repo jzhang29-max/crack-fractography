@@ -352,18 +352,27 @@ def test_the_group_card_shows_every_summary_row():
     assert not missing, f"SUMMARY rows the group card never renders: {missing}"
 
 
-def test_the_group_card_renders_its_own_caveats():
-    """group_summary has returned caveats since the pane was built and nothing rendered them:
-    only the two-group compare had a block. "Measure group A" pooled across modalities and
-    across a 6.5x pixel size in silence."""
-    body = _gstats_body()
-    assert "caveats" in body, "the group card never reads s.caveats"
-    assert "s.caveats.map" in body or "caveats || []" in body, \
-        "s.caveats is mentioned but never iterated"
-    for cap in (".slice(0,", ".slice(0, 3", "[0]"):
-        assert f"s.caveats{cap}" not in body, \
-            f"the group card caps its caveats with {cap} -- a cap plus a sort has deleted " \
-            "findings in this app before"
+def test_the_panes_show_measurements_and_not_caveat_prose():
+    """REQUIREMENT CHANGED. The caveats were rendered in both panes for one version -- an
+    amber box under each table. The user asked for the box gone and for the app not to write
+    conclusions, so the panes carry numbers and the caveats travel in the CSV download. That
+    is a presentation change, not a measurement one: group_summary and compare still compute
+    every caveat, and test_the_download_carries_every_caveat holds the export to printing
+    all of them."""
+    js = open(os.path.join(HERE, "app", "static", "app.js"), encoding="utf-8").read()
+    assert 'class="gcav"' not in js, "the caveat box is back on screen"
+    # the clauses that told the reader what to conclude
+    for phrase in ("is defensible for this group",
+                   "this angle should not be quoted",
+                   "so these two angles are not comparable"):
+        assert phrase not in js, f"the app is still concluding for the reader: {phrase!r}"
+    # but the fatal same-pixels banner is not a conclusion and must survive
+    assert "gfatal" in js, \
+        "the two-groups-share-pixels banner was removed -- that one says the comparison is " \
+        "of something with itself, which no table can show"
+    import app.groupstats as _GS  # noqa: F401 -- the computation stays
+    a = _summary([_frame("S1", nm=2.0), _frame("S1", nm=498.0, n=4)])
+    assert a.get("caveats"), "group_summary stopped COMPUTING caveats -- only the box went"
 
 
 def test_a_lopsided_split_names_both_weightings_not_just_the_first():
