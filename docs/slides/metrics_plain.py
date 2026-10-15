@@ -114,24 +114,21 @@ def picture(pdf, sizes):
 
 def pages(pdf, sizes):
     picture(pdf, sizes)
-    per = 3
+    per = 8          # one page, not three: this is a reference card, not a lecture
     for pg in range(0, len(TERMS), per):
         chunk = TERMS[pg:pg + per]
         fig = plt.figure(figsize=SIZE); fig.patch.set_facecolor("white")
         ax = fig.add_axes([0.055, 0.04, 0.89, 0.92]); ax.axis("off")
-        ax.text(0, 1.0, f"The words, in plain English  ({pg // per + 1} of "
-                        f"{(len(TERMS) + per - 1) // per})",
+        ax.text(0, 1.0, "The words, in plain English",
                 fontsize=22, fontweight="bold", color=INK, va="top",
                 transform=ax.transAxes); sizes.append(22)
         y = 0.915
         for name, plain, trap, mine in chunk:
-            ax.text(0, y, name, fontsize=16, fontweight="bold", color=INK, va="top",
-                    transform=ax.transAxes); sizes.append(16)
-            y -= 0.048
-            y = wrap(ax, y, plain, 13.0); sizes.append(13.0)
-            y -= 0.008
-            y = wrap(ax, y, "Watch out:  " + trap, 11.5, color=WARN); sizes.append(11.5)
-            y -= 0.006
-            y = wrap(ax, y, "Here:  " + mine, 11.5, color=MUTED); sizes.append(11.5)
-            y -= 0.030
+            ax.text(0, y, name, fontsize=12.5, fontweight="bold", color=INK, va="top",
+                    transform=ax.transAxes); sizes.append(12.5)
+            ax.text(0.30, y, plain, fontsize=10.8, color=INK, va="top",
+                    transform=ax.transAxes); sizes.append(10.8)
+            y -= 0.030 * max(1, len(textwrap.wrap(plain, 78)))
+            y = wrap(ax, y, trap, 9.8, color=WARN, x=0.30, width=78); sizes.append(9.8)
+            y -= 0.014
         pdf.savefig(fig); plt.close(fig)
