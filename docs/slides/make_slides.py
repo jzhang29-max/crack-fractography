@@ -15,6 +15,7 @@ the comparison table is the measurement in docs/slides/comparison.json.
 import json
 import os
 import textwrap
+import json as _json  # noqa: F401
 
 import sys
 
@@ -26,6 +27,8 @@ from matplotlib.image import imread
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(os.path.dirname(HERE)))
+sys.path.insert(0, HERE)
+FLOW = os.path.join(os.path.dirname(HERE), "flowchart")
 REPO = os.path.dirname(os.path.dirname(HERE))      # .../crack-fractography
 PF = os.path.join(REPO, "paper", "figures", "out")
 DF = os.path.join(REPO, "docs", "figures")
@@ -174,6 +177,9 @@ def build():
               "not measured.",
               "Eight slides. Read each one with its caveat: most of these results were "
               "over-read at some point for exactly the reason stated underneath.")
+        import metrics_plain
+        metrics_plain.pages(pdf, sizes)
+
         for s in SLIDES:
             if os.path.exists(s["img"]):
                 slide(pdf, sizes, s["title"], s["claim"], s["caveat"], img=s["img"])
@@ -227,6 +233,57 @@ def build():
             slide(pdf, sizes, "How good is this model, against published ones?",
                   C["claim"], C["caveat"],
                   table=(rows, ["arm", "IoU", "clDice", "basis"]))
+        # --- the pipeline, stage by stage, at deck proportions ----------------------
+        cj = os.path.join(FLOW, "flow_content.json")
+        if os.path.exists(cj):
+            flow = json.load(open(cj, encoding="utf-8"))
+            st = json.load(open(os.path.join(FLOW, "_stats.json"), encoding="utf-8"))
+            slide(pdf, sizes, "The pipeline, one real image per stage",
+                  f"Frame {st['frame']}, window {st['crop_px']:,} px. Every panel is a real "
+                  f"array from the real pipeline -- no mock-ups, no schematic boxes.",
+                  "The frame is chosen by a rule that works against the detector: the lower "
+                  "of the two central tiles by IoU, tie broken downward, so the pages cannot "
+                  "flatter it.")
+            for i, stg in enumerate(flow, 1):
+                fig = plt.figure(figsize=SIZE); fig.patch.set_facecolor("white")
+                ax = fig.add_axes([0.055, 0.04, 0.89, 0.92]); ax.axis("off")
+                y = 1.0
+                ax.text(0, y, f"{i}.  {stg['title']}", fontsize=19, fontweight="bold",
+                        color=INK, va="top", transform=ax.transAxes); sizes.append(19)
+                y -= 0.062
+                for d_ in stg["does"]:
+                    y = wrap(ax, y, d_, 11.5); sizes.append(11.5)
+                for c_ in stg["cost"]:
+                    y = wrap(ax, y, c_, 10.5, color=MUTED); sizes.append(10.5)
+                for n_ in stg["note"]:
+                    y = wrap(ax, y, "Note.  " + n_, 10.5, color=WARN); sizes.append(10.5)
+                figs = [f for f in stg["figs"] if os.path.exists(os.path.join(FLOW, f[0]))]
+                if figs:
+                    ncol = min(len(figs), 4)
+                    nrow = (len(figs) + ncol - 1) // ncol
+                    top = 0.04 + 0.92 * y - 0.01
+                    cellh = (top - 0.05) / nrow
+                    cellw = 0.89 / ncol
+                    for k, (fn, cap) in enumerate(figs[:8]):
+                        arr = imread(os.path.join(FLOW, fn))
+                        r, c = divmod(k, ncol)
+                        # 9 pt is this deck's floor and it is not negotiable for a
+                        # projected slide; the caption wraps narrower instead of shrinking.
+                        cs = 10.0 if ncol <= 2 else 9.0
+                        lines = textwrap.wrap(cap, 42 if ncol <= 2 else 22)[:3]
+                        caph = len(lines) * (cs + 2.2) / 540.0
+                        aw = cellw * 0.94
+                        ah = aw * (arr.shape[0] / arr.shape[1]) * (SIZE[0] / SIZE[1])
+                        ah = min(ah, cellh - caph - 0.02)
+                        aw = ah / ((arr.shape[0] / arr.shape[1]) * (SIZE[0] / SIZE[1]))
+                        ctop = top - r * cellh
+                        axi = fig.add_axes([0.055 + c * cellw, ctop - ah - 0.004, aw, ah])
+                        axi.imshow(arr); axi.axis("off")
+                        fig.text(0.055 + c * cellw, ctop - ah - 0.012, "\n".join(lines),
+                                 fontsize=cs, color=MUTED, va="top", ha="left")
+                        sizes.append(cs)
+                pdf.savefig(fig); plt.close(fig)
+
         d = pdf.infodict()
         d["Title"] = "Crack Fractography - all figures"
         d["Author"] = "Jiaming Zhang"
