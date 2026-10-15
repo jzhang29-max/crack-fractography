@@ -2741,6 +2741,158 @@ def group_compare(payload: dict = Body(...)):
     return res
 
 
+# ---------------------------------------------------------------------------------------
+# Downloading the preliminary analysis and the comparison.
+#
+# A GET, and a Content-Disposition response, because that is the only download route that
+# works in BOTH places this UI runs. `location.href = url` and an <a download> blob are
+# browser-only: the packaged app is a WKWebView with no download manager behind it, where
+# the same navigation shows the CSV as text or silently does nothing. The existing
+# download() helper in app.js fetches the URL and hands the bytes to Python's save panel,
+# and it takes a URL -- so the frame list travels in the query string rather than a body.
+#
+# THE DEFINITIONS LIVE HERE NOW. They were printed under every row of the comparison table
+# and made it three times taller, burying the numbers it exists to show. Taking them off
+# the screen is only safe if they are somewhere -- so every row carries its definition in
+# this file, next to the number it describes, and so do the caveats.
+
+def _member_params(vals, which):
+    """`arm::frame` pairs from a repeated query parameter."""
+    out = []
+    for v in vals or []:
+        arm, sep, frame = str(v).partition("::")
+        if not sep or not arm.strip() or not frame.strip():
+            raise HTTPException(400, f"{which} must be 'arm::frame' pairs, got {v!r}")
+        out.append({"arm": arm.strip(), "frame": frame.strip()})
+    return out
+
+
+def _rows_for_csv(summary, label):
+    """One group's SUMMARY rows, flattened, with the definition beside each value."""
+    from app import groupstats as GS
+    out = []
+    for key, lab, how, unit, definition in GS.SUMMARY:
+        cell = summary.get(key) or {}
+        out.append({"group": label, "quantity": lab, "unit": unit,
+                    "value": cell.get("value"), "aggregated": cell.get("how") or how,
+                    "frames_contributing": cell.get("n"),
+                    "spread_min": cell.get("spread_min"), "spread_max": cell.get("spread_max"),
+                    "median_over_frames": cell.get("median_over_frames"),
+                    "not_available_because": cell.get("why_none") or "",
+                    "definition": definition})
+    o = summary.get("orientation") or {}
+    out.append({"group": label, "quantity": "Mean orientation", "unit": "degrees (axial)",
+                "value": o.get("mean_deg"), "aggregated": "area-weighted over cracks",
+                "frames_contributing": summary.get("n_frames"),
+                "spread_min": "", "spread_max": "", "median_over_frames": "",
+                "not_available_because": "" if o.get("meaningful") else
+                "R is below the threshold, so there is no preferred direction",
+                "definition": o.get("note") or ""})
+    return out
+
+
+@app.get("/api/group_export.csv")
+def group_export_csv(a: list[str] = Query(default=[]), b: list[str] = Query(default=[]),
+                     a_name: str = "A", b_name: str = "B"):
+    """The preliminary analysis for one group, or the comparison of two, as a CSV.
+
+    Resolved through the SAME _collect/_members/group_summary path the panes use, so the
+    file cannot quietly disagree with the screen it came from -- which is the failure the
+    frames-level export was fixed for once already.
+    """
+    import csv
+    import io
+    from app import groupstats as GS
+    mem_a = _member_params(a, "a")
+    if not mem_a:
+        raise HTTPException(400, "give at least one frame as a=arm::frame")
+    fr_a, by_a, miss_a = _collect(mem_a)
+    if not fr_a:
+        raise HTTPException(404, "none of group A's frames is measured")
+    sum_a = GS.group_summary(fr_a, by_a)
+    mem_b = _member_params(b, "b")
+    sum_b = None
+    if mem_b:
+        fr_b, by_b, miss_b = _collect(mem_b)
+        if not fr_b:
+            raise HTTPException(404, "none of group B's frames is measured")
+        sum_b = GS.group_summary(fr_b, by_b)
+
+    buf = io.StringIO()
+    two = sum_b is not None
+    buf.write(f"# crack-fractography {'comparison' if two else 'preliminary analysis'}\n")
+    buf.write(f"# {a_name}: {len(fr_a)} frames, "
+              f"{', '.join(sum_a.get('specimens') or []) or 'no specimen recorded'}\n")
+    buf.write(f"# frames: {'; '.join(f['frame'] for f in fr_a)}\n")
+    if miss_a:
+        buf.write(f"# NOT MEASURED, excluded from {a_name}: {'; '.join(miss_a)}\n")
+    if two:
+        buf.write(f"# {b_name}: {len(fr_b)} frames, "
+                  f"{', '.join(sum_b.get('specimens') or []) or 'no specimen recorded'}\n")
+        buf.write(f"# frames: {'; '.join(f['frame'] for f in fr_b)}\n")
+        if miss_b:
+            buf.write(f"# NOT MEASURED, excluded from {b_name}: {'; '.join(miss_b)}\n")
+    # EVERY CAVEAT, uncapped. A file that carries the numbers and not the warnings is the
+    # thing that gets quoted six months later.
+    res = GS.compare(sum_a, sum_b, a_name, b_name) if two else None
+    cavs = list((res or {}).get("caveats") or []) if two else list(sum_a.get("caveats") or [])
+    if two:
+        for nm, g in ((a_name, sum_a), (b_name, sum_b)):
+            for c in g.get("caveats") or []:
+                cavs.append(f"[{nm}] {c}")
+    buf.write(f"# caveats: {len(cavs)}\n")
+    for c in cavs:
+        buf.write("# CAVEAT: " + " ".join(str(c).split()) + "\n")
+    for nm, g in ((a_name, sum_a), (b_name, sum_b)) if two else ((a_name, sum_a),):
+        cen = g.get("censoring") or {}
+        buf.write(f"# {nm} censoring: {cen.get('pct_censored')}% of cracks by count, "
+                  f"{cen.get('pct_censored_by_area')}% of the crack area\n")
+
+    if two:
+        keys = ["quantity", "unit", a_name, b_name, "difference", "ratio",
+                "aggregated", "definition"]
+        w = csv.DictWriter(buf, fieldnames=keys, extrasaction="ignore")
+        w.writeheader()
+        for r in res["rows"]:
+            w.writerow({"quantity": r["label"], "unit": r.get("unit") or "",
+                        a_name: r["a"], b_name: r["b"], "difference": r.get("delta"),
+                        "ratio": r.get("ratio"), "aggregated": r.get("how") or "",
+                        "definition": r.get("definition") or ""})
+        o = res.get("orientation") or {}
+        w.writerow({"quantity": "Mean orientation", "unit": "degrees (axial)",
+                    a_name: o.get("a_deg"), b_name: o.get("b_deg"),
+                    "difference": o.get("axial_separation_deg"), "ratio": "",
+                    "aggregated": "area-weighted over cracks",
+                    "definition": (sum_a.get("orientation") or {}).get("note") or ""})
+    else:
+        rows = _rows_for_csv(sum_a, a_name)
+        w = csv.DictWriter(buf, fieldnames=list(rows[0].keys()), extrasaction="ignore")
+        w.writeheader()
+        w.writerows(rows)
+
+    # PER FRAME TOO. The spread between frames is usually larger than the difference
+    # between groups, so a file with only the group rows invites the wrong conclusion.
+    buf.write("\n# per frame\n")
+    pf = [dict(r, group=nm) for nm, g in
+          (((a_name, sum_a), (b_name, sum_b)) if two else ((a_name, sum_a),))
+          for r in g.get("per_frame") or []]
+    if pf:
+        pk, seen = ["group"], {"group"}
+        for r in pf:
+            for k in r:
+                if k not in seen and not isinstance(r[k], (dict, list)):
+                    seen.add(k); pk.append(k)
+        w2 = csv.DictWriter(buf, fieldnames=pk, extrasaction="ignore")
+        w2.writeheader()
+        w2.writerows(pf)
+
+    stem = f"{a_name}_vs_{b_name}" if two else a_name
+    stem = re.sub(r"[^A-Za-z0-9._-]", "_", stem) or "groups"
+    return Response(buf.getvalue(), media_type="text/csv",
+                    headers={"Content-Disposition":
+                             f'attachment; filename="{stem}.csv"'})
+
+
 # ============================================================================== DELETE
 #
 # The one endpoint that removes a frame, and the only arm it will touch is uploads.

@@ -41,6 +41,7 @@ COVERED = {
     ("get", "/api/original/{arm:path}/{frame}"), ("post", "/api/crop"),
     ("get", "/api/groups"), ("post", "/api/groups"),
     ("post", "/api/group_stats"), ("post", "/api/group_compare"),
+    ("get", "/api/group_export.csv"),
     ("post", "/api/send_to_parent"), ("post", "/api/delete_frame"),
     ("post", "/api/discard_edit"), ("post", "/api/hide_frame"),
     ("post", "/api/restore"),
@@ -352,6 +353,41 @@ def test_crop_makes_a_measured_frame_and_groups_can_analyse_it(srv):
     assert cmp_["rows"] and {"label", "a", "b"} <= set(cmp_["rows"][0])
     # n=1 per side is not a comparison anyone should read without being told.
     assert cmp_.get("caveats"), "a one-frame-per-side comparison carried no caveat"
+
+
+def test_the_group_export_downloads_the_analysis_and_the_comparison(srv):
+    """The analysis and the comparison come out as a file, because the table IS the product.
+
+    A GET with the frames in the query string, not a POST: the packaged app is a WKWebView
+    with no download manager, so the only route that works in both places is a GET through
+    app.js's download() helper, and that helper takes a URL.
+    """
+    frames = []
+    for i in range(2):
+        st, raw = srv.upload(f"x{i}.png", mask_png(150, 120, 26 + i * 8))
+        assert st == 200, raw[:200]
+        frames.append(json.loads(raw)["frame"])
+    a = f"uploads::{frames[0]}"
+    b = f"uploads::{frames[1]}"
+
+    st, body = srv.get(f"/api/group_export.csv?a={a}&a_name=One")
+    assert st == 200, body[:300]
+    body = body.decode() if isinstance(body, (bytes, bytearray)) else body
+    assert "preliminary analysis" in body and "Crack count" in body, body[:200]
+    # THE DEFINITIONS LIVE HERE. They were taken off the comparison table on purpose; if the
+    # export stops carrying them they are reachable from nowhere.
+    assert "A COUNT, NOT AN AMOUNT" in body, "the export dropped the definitions"
+    assert "# caveats:" in body, "the export dropped the caveats"
+
+    st, body = srv.get(f"/api/group_export.csv?a={a}&b={b}&a_name=One&b_name=Two")
+    assert st == 200, body[:300]
+    body = body.decode() if isinstance(body, (bytes, bytearray)) else body
+    assert "comparison" in body and "One" in body and "Two" in body
+    assert "ratio" in body and "# per frame" in body, "no ratio column or no per-frame rows"
+
+    for q, code in (("", 400), ("?a=nopair", 400), ("?a=uploads::missing", 404)):
+        st, _ = srv.get("/api/group_export.csv" + q)
+        assert st == code, f"{q!r} returned {st}, expected {code}"
 
 
 def test_a_group_says_which_of_its_frames_it_could_not_find(srv):

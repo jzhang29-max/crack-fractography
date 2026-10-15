@@ -205,16 +205,20 @@ def test_compare_rows_carry_their_unit_and_definition():
     assert "%" in frac["unit"], f"the area-fraction unit must say it is a percentage: {frac['unit']}"
 
 
-def test_the_compare_table_prints_the_definition_rather_than_hiding_it():
-    """Printed, not a title= tooltip: a tooltip is invisible on a touch screen and does not
-    survive a screenshot, which is how this table actually gets shared."""
+def test_the_compare_table_shows_the_unit_and_not_the_definition():
+    """REQUIREMENT CHANGED, and this test changed with it rather than being deleted. The
+    definitions were printed under every row for one version; the table came out three
+    times taller and buried the numbers it exists to show, and the user asked for the units
+    alone. They are not hidden in a title= tooltip either -- invisible on a touch screen,
+    and it survives neither print nor screenshot. They are in the CSV export, which the
+    test below holds to."""
     js = open(os.path.join(HERE, "app", "static", "app.js"), encoding="utf-8").read()
     i = js.index("function gCompareTable")
     body = js[i:js.index("\nfunction ", i + 10)]
-    assert "r.definition" in body, "the compare table never reads the definition"
     assert "r.unit" in body, "the compare table never reads the unit"
-    assert 'title="' not in body.split("r.definition")[1][:200], \
-        "the definition is being put in a tooltip instead of printed"
+    assert "r.definition" not in body, \
+        "the compare table is printing the definition again -- units only was asked for"
+    assert 'title="' not in body, "a tooltip is not a substitute for the export"
 
 
 # ------------------------------- the table read cleaner than the data was: four silent rows
@@ -388,3 +392,102 @@ def test_a_symmetric_pair_is_still_not_nagged_about_censoring():
     b = _summary([_cen_frame("S2", 0.02, n_cen=1, n=20)])
     cav = GS.compare(a, b, "A", "B")["caveats"]
     assert not any("different amounts" in c for c in cav), f"nagged on a matched pair: {cav}"
+
+
+# ---------------------------------------- the analysis and the comparison are downloadable
+def _mem(s, n):
+    """n uploaded frames in a live server, as group members."""
+    out = []
+    for i in range(n):
+        st, raw = s.upload(f"e{i}.png", mask_png(140, 110, 24 + i * 6))
+        assert st == 200, raw[:200]
+        out.append({"arm": "uploads", "frame": json.loads(raw)["frame"]})
+    return out
+
+
+def _export(s, a, b=None, a_name="A", b_name="B"):
+    import urllib.parse
+    q = [("a", f"{m['arm']}::{m['frame']}") for m in a]
+    if b:
+        q += [("b", f"{m['arm']}::{m['frame']}") for m in b] + [("b_name", b_name)]
+    q += [("a_name", a_name)]
+    st, raw = s.get("/api/group_export.csv?" + urllib.parse.urlencode(q))
+    return st, raw.decode() if isinstance(raw, (bytes, bytearray)) else raw
+
+
+def test_a_single_group_analysis_downloads_as_csv(tmp_path):
+    with Server(tmp_path / "d") as s:
+        st, body = _export(s, _mem(s, 2), a_name="Alpha")
+        assert st == 200, body[:300]
+        assert "preliminary analysis" in body, body[:200]
+        assert "Crack count" in body, "the SUMMARY rows are missing"
+        assert "spread_min" in body and "median_over_frames" in body, \
+            "the per-frame spread is what stops a group row being read as a population"
+
+
+def test_a_comparison_downloads_as_csv_with_both_sides(tmp_path):
+    with Server(tmp_path / "d") as s:
+        st, body = _export(s, _mem(s, 2), _mem(s, 2), "Alpha", "Beta")
+        assert st == 200, body[:300]
+        assert "comparison" in body and "Alpha" in body and "Beta" in body
+        assert "difference" in body and "ratio" in body
+        assert "# per frame" in body, "the per-frame rows did not travel with the summary"
+
+
+def test_the_download_carries_the_definitions_the_table_no_longer_prints(tmp_path):
+    """This is the whole justification for taking them off screen. If the export ever stops
+    carrying them they exist nowhere a user can reach."""
+    with Server(tmp_path / "d") as s:
+        st, body = _export(s, _mem(s, 2), _mem(s, 2), "Alpha", "Beta")
+        assert st == 200, body[:300]
+        assert "definition" in body.splitlines()[next(
+            i for i, l in enumerate(body.splitlines()) if l.startswith("quantity,"))], \
+            "no definition column"
+        assert "A COUNT, NOT AN AMOUNT" in body, \
+            "the crack-count definition is not in the export"
+        assert "ellipse" in body, "the aspect definition is not in the export"
+
+
+def test_the_download_carries_every_caveat(tmp_path):
+    """A file with the numbers and not the warnings is the thing that gets quoted later."""
+    with Server(tmp_path / "d") as s:
+        a, b = _mem(s, 2), _mem(s, 2)
+        st, body = _export(s, a, b, "Alpha", "Beta")
+        assert st == 200, body[:300]
+        assert "# caveats:" in body, "no caveat count"
+        n = int(body.split("# caveats:")[1].split("\n")[0].strip())
+        assert body.count("# CAVEAT:") == n, \
+            f"says {n} caveats and prints {body.count('# CAVEAT:')}"
+        assert n > 0, "an uploads-only comparison should at least warn about missing scale"
+
+
+def test_the_download_reports_censoring_on_both_weightings(tmp_path):
+    with Server(tmp_path / "d") as s:
+        st, body = _export(s, _mem(s, 2), a_name="Alpha")
+        assert st == 200, body[:300]
+        assert "of cracks by count" in body and "of the crack area" in body, \
+            "the export quotes only one censoring weighting"
+
+
+@pytest.mark.parametrize("params,code", [
+    ("", 400),                                  # no frames at all
+    ("?a=no-separator", 400),                   # not an arm::frame pair
+    ("?a=uploads::nope", 404),                  # well-formed and not measured
+    ("?a=%20::%20", 400),                       # blank either side of the separator
+])
+def test_the_export_refuses_bad_requests(tmp_path, params, code):
+    with Server(tmp_path / "d") as s:
+        st, _ = s.get("/api/group_export.csv" + params)
+        assert st == code, f"{params!r} returned {st}, expected {code}"
+
+
+def test_the_groups_pane_offers_the_download_after_both_actions(tmp_path):
+    """A button that exists only on the comparison leaves the single-group analysis -- the
+    first thing anyone runs -- with no way out."""
+    js = open(os.path.join(HERE, "app", "static", "app.js"), encoding="utf-8").read()
+    assert "gDownloadBar" in js and "group_export.csv" in js
+    assert js.count("gDownloadBar(") >= 3, \
+        "expected the builder plus a call after the analysis AND after the comparison"
+    assert "data-gdl" in js, "the button carries no url"
+    assert "out.addEventListener" in js, \
+        "the cards are rebuilt on every run, so the handler must be delegated"
