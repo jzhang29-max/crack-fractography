@@ -99,9 +99,19 @@ a test. They were committed on 2026-10-09 and 2026-10-11 and cannot be regenerat
 checked. `packaging/appicon.svg` is an asset, not a figure.
 
 **The paper plates (6).** `paper/figures/mk_fig1.py`, `mk_fig2.py`, `mk_compare.py`,
-`mk_transfer.py`, `mk_txm.py`, `mk_spec.py`. All six **still run** and all six wrote a PNG
-and a caption on 2026-10-13. None of their outputs is committed (`out/` is gitignored), so
-nothing on disk is stale; what is stale is **what they draw**:
+`mk_transfer.py`, `mk_txm.py`, `mk_recover.py`.
+
+CORRECTED 2026-10-14: this list said `mk_spec.py`, which no longer exists. Figure 6 drew
+what the region classifier REJECTS, and v1.49.2 rejects nothing, so the plate had no
+subject; `mk_recover.py` replaced it with what deleting the classifier RECOVERS. A reader
+following this list would have run a script that is not there.
+
+STALENESS RE-CHECKED 2026-10-14 by regenerating rather than by reading timestamps: all
+four plates in `paper/figures/out/` and all four metric figures in `docs/figures/` come
+back **byte-identical**, so they are current. The check is worth describing because the
+first pass gave a FALSE PASS: `mk_spec.py` failed to run (it is deleted), nothing rewrote
+Figure 6, and comparing the file with itself reported "SAME". A regeneration check must
+confirm the generator actually ran.
 
 * Their `.npy` caches date from 2026-10-02 and 2026-10-06. Every detector change this
   project shipped — the 7-scale union, the region classifier switched off — landed on
