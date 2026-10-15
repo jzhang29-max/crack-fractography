@@ -1949,6 +1949,21 @@ def groups_set(payload: dict = Body(...)):
         raise HTTPException(400, "a group needs a name")
     with _DATASET_LOCK:
         g = _read_groups()
+        # RENAME. There was no way to rename a group: the only route was save-under-a-
+        # new-name then delete, which leaves a duplicate if the user stops halfway, and
+        # nothing in the pane offered it.
+        rename = payload.get("rename")
+        if rename is not None:
+            new = (rename if isinstance(rename, str) else "").strip()
+            if not new:
+                raise HTTPException(400, "a group needs a name to be renamed to")
+            if name not in g:
+                raise HTTPException(404, f"no saved group called {name!r}")
+            if new != name and new in g:
+                raise HTTPException(409, f"a group called {new!r} already exists")
+            g[new] = g.pop(name)
+            _write_json(_groups_path(), g)
+            return {"ok": True, "renamed": [name, new], "groups": g}
         if payload.get("delete"):
             g.pop(name, None)
         else:
@@ -2091,6 +2106,18 @@ def _root_box(arm, frame, by_key, _seen=None):
     return (rarm, rframe, px + x, py + y, w, h)
 
 
+def _pixel_source(arm):
+    """The IMAGE an arm's masks are drawn on. Two arms that share one share their pixels.
+
+    sem/gated and sem/machine are the operator-gated and model-only masks of the SAME
+    micrograph; txm and txm/machine likewise. Keying overlap on the arm instead of the
+    image is what let the same frame appear on both sides of a comparison with no warning.
+    """
+    if not arm:
+        return arm
+    return arm.split("/", 1)[0] if arm.split("/", 1)[0] in ("sem", "txm") else arm
+
+
 def _pixel_overlaps(members_a, members_b):
     """Pairs across the two groups that are literally the same pixels, with how much.
 
@@ -2110,7 +2137,12 @@ def _pixel_overlaps(members_a, members_b):
         if not a:
             continue
         for mb, b in rb:
-            if not b or a[0] != b[0] or a[1] != b[1]:
+            # Compare the IMAGE, not the mask. sem/gated and sem/machine are two masks of
+            # ONE micrograph, and so are txm and txm/machine -- which made the most
+            # obvious A/B this app invites (the same frames, operator-gated against
+            # model-only) report zero shared pixels and never raise the banner. 142 frames
+            # in this corpus exist in both SEM arms.
+            if not b or _pixel_source(a[0]) != _pixel_source(b[0]) or a[1] != b[1]:
                 continue
             ax0, ay0, aw, ah = a[2], a[3], a[4], a[5]
             bx0, by0, bw, bh = b[2], b[3], b[4], b[5]
@@ -2683,6 +2715,27 @@ def group_compare(payload: dict = Body(...)):
             f"smaller one). A crop is not an independent frame: comparing it against its "
             f"own parent compares the same pixels with themselves, and they agree because "
             f"they are the same, not because anything was measured."))
+    # WITHIN a side too. A group holding a frame AND its own crop measures as two frames
+    # and sums the same pixels twice -- it inflates every "sum" row and tightens the
+    # spread, and _pixel_overlaps had exactly one call site so nothing ever looked.
+    for side, mem in (("A", mem_a), ("B", mem_b)):
+        self_ov = [o for o in _pixel_overlaps(mem, mem) if o["a"] != o["b"]]
+        if self_ov:
+            seen, pairs = set(), []
+            for o in self_ov:
+                k = tuple(sorted((o["a"], o["b"])))
+                if k not in seen:
+                    seen.add(k); pairs.append(o)
+            w = max(pairs, key=lambda o: o["share_of_smaller"] or 0)
+            res.setdefault("caveats", [])
+            res["caveats"].insert(0, (
+                f"GROUP {side} COUNTS THE SAME PIXELS TWICE. {len(pairs)} pair"
+                f"{'' if len(pairs) == 1 else 's'} of its own frames overlap -- "
+                f"{w['a']} and {w['b']} cover the same part of {w['root']} "
+                f"({(w['share_of_smaller'] or 0) * 100:.0f}% of the smaller). Every total "
+                f"row double-counts that area, and the spread between 'frames' is "
+                f"narrower than it looks because they are not separate frames."))
+            res.setdefault("self_overlaps", {})[side] = pairs
     res["pixel_overlaps"] = ov
     res["a"], res["b"] = a, b
     return res
