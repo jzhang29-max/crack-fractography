@@ -37,60 +37,36 @@ SIZE = (13.333, 7.5)          # 16:9
 INK, MUTED, WARN = "#15181c", "#59606a", "#8a4b00"
 MIN_PT = 9.0
 
-SLIDES = [
-    dict(img=os.path.join(PF, "1 - what each stage does.png"),
-         title="What each stage does",
-         claim=["The pipeline the app runs, panel by panel.",
-                "Seven flattening radii, unioned.",
-                "Every candidate region kept."],
-         caveat="The retired classifier would have deleted 21.6% of this."),
-    dict(img=os.path.join(PF, "3 - method comparison, identical data.png"),
-         title="Every method, identical data",
-         claim=["11 arms, same 15 tiles, same budget.",
-                "The ranking REVERSES between the two metrics."],
-         caveat="Dashed line = a correct 3 px trace. Above it means fatter, not better."),
-    dict(img=os.path.join(PF, "6 - SEM, what deleting the region classifier recovers.png"),
-         title="What deleting the classifier recovers",
-         claim=["Three specimens went from recall 0.000 to 0.35-0.68.",
-                "The cracks were always found; the model rejected them."],
-         caveat="It costs precision on clean fields: 0.89 to 0.78."),
-    dict(img=os.path.join(DF, "fig_aggregation.png"),
-         title="How you report it matters more than the method",
-         claim=["One set of masks, six ways of reporting it.",
-                "IoU spans 0.1985 across them."],
-         caveat="That span is larger than any method change measured here."),
-    dict(img=os.path.join(DF, "fig_ceiling.png"),
-         title="A correct answer caps at IoU 0.50",
-         claim=["A perfectly placed trace peaks at 0.4993.",
-                "So IoU 0.42 is ~75% of possible, not 42%."],
-         caveat="Always quote IoU with this ceiling."),
-    dict(img=os.path.join(DF, "fig_gameability.png"),
-         title="The metrics reward thickness",
-         claim=["Dilating the mask adds no information.",
-                "It still moves clDice +0.048 on 13 of 13.",
-                "Skeleton-F1 moves +0.0015."],
-         caveat="IoU, clDice and the paint gate all have this fault."),
-    dict(img=os.path.join(DF, "fig_public_scores.png"),
-         title="On public datasets",
-         claim=["Frozen: 0.631 on DeepCrack, 0.087 on CrackForest.",
-                "Refitting one constant: 0.793 and 0.450."],
-         caveat="CrackForest's fitted value reaches 95% of refitting on DeepCrack."),
-    dict(img=os.path.join(DF, "fig_public_baselines.png"),
-         title="Against six classical baselines",
-         claim=["1st of 7 on DeepCrack (0.821 vs 0.730).",
-                "3rd of 7 on CrackForest, behind two ridge filters."],
-         caveat="Better on wide bright cracks, worse on thin faint ones. Panels are 118 and 120 images -- don't read across."),
-    dict(img=os.path.join(DF, "fig_public_examples.png"),
-         title="The same, on the images",
-         claim=["Ground truth, frozen, and refitted.",
-                "One typical image per dataset."],
-         caveat="Images picked by rule (nearest the mean), not by eye."),
-    dict(img=os.path.join(DF, "fig_operating_curve.png"),
-         title="Recall alone is not a score",
-         claim=["The loosest setting reaches recall 0.98.",
-                "Its F1 is 0.162 and its precision equals plain Otsu."],
-         caveat="Read precision against the floor: 0.081 on TXM, 0.030 on your tiles."),
-]
+def load_slides():
+    """The deck's content lives in slides.json so it can be edited without touching code.
+
+    'docs:x.png' resolves against docs/figures, 'paper:x.png' against paper/figures/out.
+    A figure that does not exist STOPS the build -- a slide with a hole in it is worse
+    than a failed build, and an earlier path bug silently produced a 42 KB deck with no
+    figures at all.
+    """
+    p = os.path.join(HERE, "slides.json")
+    if not os.path.exists(p):
+        raise SystemExit(f"missing {p} -- it holds the slide content")
+    doc = json.load(open(p, encoding="utf-8"))
+    out = []
+    for i, d in enumerate(doc.get("slides", []), 1):
+        f = d.get("figure", "")
+        if f.startswith("paper:"):
+            img = os.path.join(PF, f[6:])
+        elif f.startswith("docs:"):
+            img = os.path.join(DF, f[5:])
+        else:
+            img = os.path.join(HERE, f)
+        if not d.get("title"):
+            raise SystemExit(f"slide {i} in slides.json has no title")
+        out.append(dict(img=img, title=d["title"],
+                        claim=d.get("bullets") or [],
+                        caveat=d.get("caveat") or None))
+    return out
+
+
+SLIDES = load_slides()
 
 
 def wrap(ax, y, text, size, color=INK, weight="normal", width=118, style="normal"):

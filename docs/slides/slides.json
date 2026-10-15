@@ -1,0 +1,105 @@
+{
+ "_how_to_edit": [
+  "This file IS the deck. Edit it and run:  python3 docs/slides/make_slides.py",
+  "figure : 'docs:name.png' looks in docs/figures, 'paper:name.png' in paper/figures/out.",
+  "title  : the heading beside the figure. Keep it under about 30 characters.",
+  "bullets: 2-4 very short lines. They are printed as a bulleted list.",
+  "caveat : one line, printed in amber under the bullets. Leave '' for none.",
+  "Reorder, delete or add entries freely. A figure that does not exist stops the build",
+  "rather than producing a slide with a hole in it."
+ ],
+ "slides": [
+  {
+   "figure": "paper:1 - what each stage does.png",
+   "title": "What each stage does",
+   "bullets": [
+    "The pipeline the app runs, panel by panel.",
+    "Seven flattening radii, unioned.",
+    "Every candidate region kept."
+   ],
+   "caveat": "The retired classifier would have deleted 21.6% of this."
+  },
+  {
+   "figure": "paper:3 - method comparison, identical data.png",
+   "title": "Every method, identical data",
+   "bullets": [
+    "11 arms, same 15 tiles, same budget.",
+    "The ranking REVERSES between the two metrics."
+   ],
+   "caveat": "Dashed line = a correct 3 px trace. Above it means fatter, not better."
+  },
+  {
+   "figure": "paper:6 - SEM, what deleting the region classifier recovers.png",
+   "title": "What deleting the classifier recovers",
+   "bullets": [
+    "Three specimens went from recall 0.000 to 0.35-0.68.",
+    "The cracks were always found; the model rejected them."
+   ],
+   "caveat": "It costs precision on clean fields: 0.89 to 0.78."
+  },
+  {
+   "figure": "docs:fig_aggregation.png",
+   "title": "How you report it matters more than the method",
+   "bullets": [
+    "One set of masks, six ways of reporting it.",
+    "IoU spans 0.1985 across them."
+   ],
+   "caveat": "That span is larger than any method change measured here."
+  },
+  {
+   "figure": "docs:fig_ceiling.png",
+   "title": "A correct answer caps at IoU 0.50",
+   "bullets": [
+    "A perfectly placed trace peaks at 0.4993.",
+    "So IoU 0.42 is ~75% of possible, not 42%."
+   ],
+   "caveat": "Always quote IoU with this ceiling."
+  },
+  {
+   "figure": "docs:fig_gameability.png",
+   "title": "The metrics reward thickness",
+   "bullets": [
+    "Dilating the mask adds no information.",
+    "It still moves clDice +0.048 on 13 of 13.",
+    "Skeleton-F1 moves +0.0015."
+   ],
+   "caveat": "IoU, clDice and the paint gate all have this fault."
+  },
+  {
+   "figure": "docs:fig_public_scores.png",
+   "title": "On public datasets",
+   "bullets": [
+    "Frozen: 0.631 on DeepCrack, 0.087 on CrackForest.",
+    "Refitting one constant: 0.793 and 0.450."
+   ],
+   "caveat": "CrackForest's fitted value reaches 95% of refitting on DeepCrack."
+  },
+  {
+   "figure": "docs:fig_public_baselines.png",
+   "title": "Against six classical baselines",
+   "bullets": [
+    "1st of 7 on DeepCrack (0.821 vs 0.730).",
+    "3rd of 7 on CrackForest, behind two ridge filters."
+   ],
+   "caveat": "Better on wide bright cracks, worse on thin faint ones. Panels are 118 and 120 images -- don't read across."
+  },
+  {
+   "figure": "docs:fig_public_examples.png",
+   "title": "The same, on the images",
+   "bullets": [
+    "Ground truth, frozen, and refitted.",
+    "One typical image per dataset."
+   ],
+   "caveat": "Images picked by rule (nearest the mean), not by eye."
+  },
+  {
+   "figure": "docs:fig_operating_curve.png",
+   "title": "Recall alone is not a score",
+   "bullets": [
+    "The loosest setting reaches recall 0.98.",
+    "Its F1 is 0.162 and its precision equals plain Otsu."
+   ],
+   "caveat": "Read precision against the floor: 0.081 on TXM, 0.030 on your tiles."
+  }
+ ]
+}
