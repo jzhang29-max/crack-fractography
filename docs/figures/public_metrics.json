@@ -1,0 +1,161 @@
+{
+ "measured": "2026-10-15",
+ "pipeline": "v1.56.0 detector path (identical to v1.49.2; only UI has changed since)",
+ "metric": "mean per image, 0 px tolerance",
+ "selection": "mad_k chosen leave-one-IMAGE-out. Image-level grouping is the right unit here: these are independent road scenes, not frames of one specimen.",
+ "instrument": "scratchpad/pubmetrics/pub_prfi.py; emit() copied verbatim from analysis/research/improve/pubeval.py so F1 sits on the same scale as public_benchmarks.json -- and it reproduces it exactly (0.7932 / 0.4498).",
+ "why": "public_benchmarks.json measured F1 only. IoU had never been measured on public data, and precision/recall existed for DeepCrack at one operating point only.",
+ "PROVENANCE WARNING": "public_baselines.json reports DeepCrack detector F1 0.8209 where this file and public_benchmarks.json both report 0.7932. The cause is the IMAGE SET, not the method: analysis/research/improve/baselines.py calls load_dc(limit=120) and scores the first 120 of the 237 test images, and its detector k-grid omits 1.0. The six-baseline ranking is therefore computed on a 120-image subset and must never be quoted in the same sentence as the 237-image F1.",
+ "datasets": {
+  "DeepCrack": {
+   "n": 237,
+   "prevalence": 0.04327073945018409,
+   "per_k": {
+    "5.0": {
+     "precision": 0.8781141931794245,
+     "recall": 0.5773513188004545,
+     "f1": 0.6310317978560467,
+     "iou": 0.525107383486132
+    },
+    "4.0": {
+     "precision": 0.8767933747011062,
+     "recall": 0.7222302038806829,
+     "f1": 0.7538963759003704,
+     "iou": 0.6369540949829339
+    },
+    "3.0": {
+     "precision": 0.7762346123406626,
+     "recall": 0.8556205354517998,
+     "f1": 0.7931735530290641,
+     "iou": 0.6809338118894128
+    },
+    "2.5": {
+     "precision": 0.685993898877661,
+     "recall": 0.9034459691492268,
+     "f1": 0.7532289742054458,
+     "iou": 0.6349456987754701
+    },
+    "2.0": {
+     "precision": 0.5690054750089385,
+     "recall": 0.9354263651556775,
+     "f1": 0.6675246596155162,
+     "iou": 0.5413623051976465
+    },
+    "1.5": {
+     "precision": 0.42748667561690395,
+     "recall": 0.9551354781390876,
+     "f1": 0.5381336085622166,
+     "iou": 0.4121649822868965
+    },
+    "1.0": {
+     "precision": 0.2838239564866883,
+     "recall": 0.9665465819501694,
+     "f1": 0.3783133443162133,
+     "iou": 0.27454459777540813
+    }
+   },
+   "loo": {
+    "precision": 0.7762346123406626,
+    "recall": 0.8556205354517998,
+    "f1": 0.7931735530290641,
+    "iou": 0.6809338118894128
+   },
+   "best_k_pooled": 3.0,
+   "controls": {
+    "mark_everything": {
+     "precision": 0.04327073945018409,
+     "recall": 1.0,
+     "f1": 0.0808596410094611,
+     "iou": 0.04327073945018409
+    },
+    "equal_area_random": {
+     "precision": 0.041815210717307254,
+     "recall": 0.02875769991178427,
+     "f1": 0.031124655611148168,
+     "iou": 0.01608963408256548
+    },
+    "oracle": {
+     "precision": 1.0,
+     "recall": 1.0,
+     "f1": 1.0,
+     "iou": 1.0
+    }
+   }
+  },
+  "CrackForest": {
+   "n": 118,
+   "prevalence": 0.016159350723870057,
+   "per_k": {
+    "5.0": {
+     "precision": 0.277935164070675,
+     "recall": 0.06540568415652957,
+     "f1": 0.08680144485085022,
+     "iou": 0.056741960528273266
+    },
+    "4.0": {
+     "precision": 0.45595011752352643,
+     "recall": 0.172241004636598,
+     "f1": 0.2086119991394323,
+     "iou": 0.13837516143255768
+    },
+    "3.0": {
+     "precision": 0.5062689632008327,
+     "recall": 0.4167068101463505,
+     "f1": 0.41019054901817964,
+     "iou": 0.28084236879071284
+    },
+    "2.5": {
+     "precision": 0.41569465688028545,
+     "recall": 0.5712405001407536,
+     "f1": 0.4498348341318911,
+     "iou": 0.30695955519832807
+    },
+    "2.0": {
+     "precision": 0.28148677703231356,
+     "recall": 0.7242506144710257,
+     "f1": 0.38772788525238533,
+     "iou": 0.2501783994052998
+    },
+    "1.5": {
+     "precision": 0.13941112357818095,
+     "recall": 0.8433947198237937,
+     "f1": 0.23255596593481534,
+     "iou": 0.13519056655336983
+    },
+    "1.0": {
+     "precision": 0.05640495622356905,
+     "recall": 0.9306858137088176,
+     "f1": 0.10487916083743175,
+     "iou": 0.05612781721344062
+    }
+   },
+   "loo": {
+    "precision": 0.41569465688028545,
+    "recall": 0.5712405001407536,
+    "f1": 0.4498348341318911,
+    "iou": 0.30695955519832807
+   },
+   "best_k_pooled": 2.5,
+   "controls": {
+    "mark_everything": {
+     "precision": 0.016159350723870057,
+     "recall": 1.0,
+     "f1": 0.031596793603281804,
+     "iou": 0.016159350723870057
+    },
+    "equal_area_random": {
+     "precision": 0.017183936082019388,
+     "recall": 0.0017034877440238896,
+     "f1": 0.002314726780315668,
+     "iou": 0.0011631695640500035
+    },
+    "oracle": {
+     "precision": 1.0,
+     "recall": 1.0,
+     "f1": 1.0,
+     "iou": 1.0
+    }
+   }
+  }
+ }
+}

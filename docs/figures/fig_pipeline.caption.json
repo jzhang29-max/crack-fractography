@@ -1,0 +1,31 @@
+{
+ "figure": "fig_pipeline.png",
+ "title": "How the crack detector works, end to end",
+ "stages": [
+  "Micrograph",
+  "Flatten the background",
+  "Propose dark candidates",
+  "Clean and label",
+  "Pass 1: score each region",
+  "Pass 2: grow into the mask",
+  "Measure",
+  "Human correction"
+ ],
+ "settings_read_from_code": {
+  "SCALE_LADDER": [
+   5,
+   10,
+   20,
+   40,
+   80,
+   160,
+   320
+  ],
+  "ABSOLUTE_DARK_THRESH": 10,
+  "USE_REGION_CLASSIFIER": false,
+  "USE_MULTISCALE_UNION": true,
+  "DECIMATE_ABOVE_SIGMA": 64,
+  "mad_k": 5.0
+ },
+ "note": "Drawn by docs/figures/mk_pipeline.py. Constants are read from analysis/detector_overrides.py at draw time, so the figure cannot quote a value the shipped detector does not use."
+}
