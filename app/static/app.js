@@ -3204,38 +3204,60 @@ function gHist(g) {
   if (g.why_none) {
     return `<div class="ghist"><b>${esc(g.label)}</b> <span class="u">${esc(g.why_none)}</span></div>`;
   }
-  const W = 320, H = 86, PAD = 2;
+  // BIGGER, AND WITH AN AXIS. The first version packed four plots across and drew both
+  // series as bars; at that size the outline and the fill read as one grey mass and there
+  // was no way to tell what the x range was. Group A is now a stepped OUTLINE and group B
+  // a filled area, which separate at any size, and the axis prints its own end values --
+  // a log-binned histogram without them is unreadable.
+  const W = 420, H = 132, L = 4, R = 4, TOP = 6, AX = 26;
   const n = g.a.counts.length;
   const top = Math.max(1, ...g.a.counts, ...g.b.counts);
-  const bw = (W - PAD * 2) / n;
-  const bar = (counts, cls) => counts.map((c, i) => {
-    const h = (c / top) * (H - 16);
-    return h <= 0 ? "" :
-      `<rect class="${cls}" x="${(PAD + i * bw).toFixed(2)}" y="${(H - 14 - h).toFixed(2)}" ` +
-      `width="${Math.max(bw - 0.8, 0.6).toFixed(2)}" height="${h.toFixed(2)}"/>`;
-  }).join("");
-  // the median tick sits at the bin the median falls in, on the same axis as the bars
+  const plotH = H - AX - TOP;
+  const bw = (W - L - R) / n;
+  const yOf = (c) => TOP + plotH - (c / top) * plotH;
+
+  // B: filled area, drawn first so the outline sits on top of it
+  const areaPts = [];
+  g.b.counts.forEach((c, i) => {
+    areaPts.push(`${(L + i * bw).toFixed(1)},${yOf(c).toFixed(1)}`);
+    areaPts.push(`${(L + (i + 1) * bw).toFixed(1)},${yOf(c).toFixed(1)}`);
+  });
+  const base = TOP + plotH;
+  const bPoly = `<polygon class="hbfill" points="${L},${base} ${areaPts.join(" ")} ${(W - R).toFixed(1)},${base}"/>`;
+
+  // A: stepped outline
+  const aPts = [];
+  g.a.counts.forEach((c, i) => {
+    aPts.push(`${(L + i * bw).toFixed(1)},${yOf(c).toFixed(1)}`);
+    aPts.push(`${(L + (i + 1) * bw).toFixed(1)},${yOf(c).toFixed(1)}`);
+  });
+  const aPoly = `<polyline class="haline" points="${aPts.join(" ")}"/>`;
+
   const tickAt = (v) => {
     const e = g.edges;
     let i = 0;
     while (i < e.length - 1 && v >= e[i + 1]) i += 1;
-    return PAD + (i + 0.5) * bw;
+    return L + (i + 0.5) * bw;
   };
-  const scaleNote = g.scale === "log" ? "log bins" : "linear bins";
+  const med = (v, cls, dy) =>
+    `<line class="${cls}" x1="${tickAt(v).toFixed(1)}" y1="${base}" ` +
+    `x2="${tickAt(v).toFixed(1)}" y2="${(base + dy).toFixed(1)}"/>`;
+
+  const ax = (v) => gnum(v, v < 10 ? 1 : 0);
   return `<div class="ghist">` +
-    `<div class="ghh"><b>${esc(g.label)}</b> <span class="u">${esc(g.unit)} · ${scaleNote} · ` +
-    `${g.a.n.toLocaleString()} vs ${g.b.n.toLocaleString()} regions</span></div>` +
+    `<div class="ghh"><b>${esc(g.label)}</b> <span class="u">${esc(g.unit)} · ` +
+    `${g.scale === "log" ? "log" : "linear"} bins</span></div>` +
     `<svg viewBox="0 0 ${W} ${H}" class="ghsvg" role="img" ` +
-    `aria-label="${esc(g.label)} distribution, ${esc(g.a.label)} against ${esc(g.b.label)}">` +
-    bar(g.a.counts, "hba") + bar(g.b.counts, "hbb") +
-    `<line class="hax" x1="${PAD}" y1="${H - 14}" x2="${W - PAD}" y2="${H - 14}"/>` +
-    `<line class="hma" x1="${tickAt(g.a.median).toFixed(2)}" y1="${H - 14}" ` +
-    `x2="${tickAt(g.a.median).toFixed(2)}" y2="${H - 7}"/>` +
-    `<line class="hmb" x1="${tickAt(g.b.median).toFixed(2)}" y1="${H - 14}" ` +
-    `x2="${tickAt(g.b.median).toFixed(2)}" y2="${H - 1}"/>` +
-    `</svg>` +
-    `<div class="u ghm">median ${gnum(g.a.median)} vs ${gnum(g.b.median)} ` +
-    `${esc(g.unit)}</div></div>`;
+    `aria-label="${esc(g.label)}: ${esc(g.a.label)} median ${g.a.median}, ` +
+    `${esc(g.b.label)} median ${g.b.median} ${esc(g.unit)}">` +
+    bPoly + aPoly +
+    `<line class="hax" x1="${L}" y1="${base}" x2="${W - R}" y2="${base}"/>` +
+    med(g.a.median, "hma", 7) + med(g.b.median, "hmb", 11) +
+    `<text class="haxt" x="${L}" y="${H - 12}" text-anchor="start">${esc(ax(g.edges[0]))}</text>` +
+    `<text class="haxt" x="${W - R}" y="${H - 12}" text-anchor="end">${esc(ax(g.edges[g.edges.length - 1]))}</text>` +
+    `<text class="haxt" x="${W / 2}" y="${H - 1}" text-anchor="middle">` +
+    `median ${esc(gnum(g.a.median))} vs ${esc(gnum(g.b.median))}</text>` +
+    `</svg></div>`;
 }
 
 function gDistributions(d) {

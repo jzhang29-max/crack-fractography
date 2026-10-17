@@ -8,6 +8,7 @@ ETD, two instruments that differ by 2.29x on the same physical field. That numbe
 heading for a paper caption.
 """
 import os
+import re
 import sys
 
 import pytest
@@ -513,3 +514,26 @@ def test_the_fatal_banner_survived_the_removal_of_the_caveat_drawer():
     i = css.index(".banner.bad{")
     assert "var(--bad)" in css[i:css.index("}", i)], (
         "the banner that voids a comparison is no longer the colour that says so")
+
+
+def test_no_css_variable_is_used_without_being_defined():
+    """An undefined custom property renders as NOTHING, silently.
+
+    `stroke: var(--text)` on the distribution overlay resolved to `none` because this
+    stylesheet calls it `--text-primary`. The result was a two-group histogram that drew
+    one group: the data was all there, every point differed, and the series was invisible.
+    Two older rules had the same defect -- `.undo:hover` had no hover colour and the group
+    name box fell back to inherit -- so this is a class of bug, not one mistake.
+
+    A fallback (`var(--x, red)`) is legal and is not flagged.
+    """
+    css = _src("app/templates/index.html")
+    defined = set(re.findall(r"(--[A-Za-z0-9_-]+)\s*:", css))
+    used = set()
+    for m in re.finditer(r"var\(\s*(--[A-Za-z0-9_-]+)\s*([,)])", css):
+        if m.group(2) == ")":          # no fallback, so the name must exist
+            used.add(m.group(1))
+    missing = sorted(used - defined)
+    assert not missing, (
+        f"these custom properties are used with no fallback and never defined, so every "
+        f"rule using them renders as nothing: {missing}")

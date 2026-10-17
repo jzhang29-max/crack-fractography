@@ -298,14 +298,14 @@ tr:hover .rowdel,.rowdel:focus-visible{opacity:1}
    live control in a line that is otherwise plain text. */
 .undo{background:none;border:0;color:var(--accent,#5a9ffb);cursor:pointer;padding:0;
   font:inherit;text-decoration:underline;font-weight:600}
-.undo:hover{color:var(--text)}
+.undo:hover{color:var(--text-primary)}
 .undo:disabled{color:var(--text-muted);text-decoration:none;cursor:default}
 .linky{background:none;border:0;color:var(--accent,#5a9ffb);cursor:pointer;padding:0;
   font-size:inherit;text-decoration:underline}
 .cropbox{position:absolute;border:2px dashed var(--warn);background:rgba(255,190,70,.14);
   pointer-events:none;z-index:40}
 .grprow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:var(--sp2)}
-.grpname{background:var(--bg2);color:var(--text);border:1px solid var(--line);
+.grpname{background:var(--surface-2);color:var(--text-primary);border:1px solid var(--rule);
   border-radius:5px;padding:5px 9px;font-size:var(--t-small);min-width:12rem}
 /* A BUTTON IN A HEADING INHERITS THE HEADING. #ga-clear sits inside the card's <h2> for
    layout, so it rendered at the h2's 21px -- 44px tall inside a 32px heading, overflowing
@@ -393,32 +393,34 @@ tr:hover .rowdel,.rowdel:focus-visible{opacity:1}
     /* The quantity column carries the name, its unit and a one-line definition. Three
        sizes so the eye lands on the name first and the definition reads as support, not
        as another row. */
-    /* Distributions. The two series are separated by FILL and OUTLINE, not by hue, so the
-       pair survives printing and a colour-blind reader; the medians are also printed as
-       numbers under each plot rather than left to the eye. */
-    .ghwrap { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 6px; }
-    .ghist { flex: 1 1 320px; min-width: 280px; max-width: 380px; }
-    .ghh { font-size: var(--t-small); margin-bottom: 2px; }
-    .ghm { margin-top: 1px; }
+    /* Distributions. The two series are separated by SHAPE -- a stepped outline against a
+       filled area -- not by hue, so the pair survives printing and a colour-blind reader.
+       Two per row, not four: at four across the outline and the fill read as one grey
+       mass and the axis had no room for its end values. */
+    .ghwrap { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 8px; }
+    .ghist { flex: 1 1 420px; min-width: 360px; max-width: 520px; }
+    .ghh { font-size: var(--t-small); margin-bottom: 3px; }
     .ghsvg { width: 100%; height: auto; display: block; }
-    .ghsvg .hba { fill: none; stroke: var(--text); stroke-width: .9; }
-    .ghsvg .hbb { fill: var(--text-muted); fill-opacity: .55; }
+    .ghsvg .hbfill { fill: var(--text-muted); fill-opacity: .38; stroke: none; }
+    .ghsvg .haline { fill: none; stroke: var(--text-primary); stroke-width: 1.6;
+      stroke-linejoin: round; }
     .ghsvg .hax { stroke: var(--rule); stroke-width: 1; }
-    .ghsvg .hma { stroke: var(--text); stroke-width: 1.6; }
-    .ghsvg .hmb { stroke: var(--text-muted); stroke-width: 1.6; }
+    .ghsvg .hma { stroke: var(--text-primary); stroke-width: 2; }
+    .ghsvg .hmb { stroke: var(--text-muted); stroke-width: 2; }
+    .ghsvg .haxt { fill: var(--text-muted); font-size: 9.5px; }
     .gtab td.weak { opacity: .45; }
     .gdl { margin-top: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .gtab td.q { max-width: 27rem; }
     .gtab .qn { font-weight: 600; }
-    .gtab .qu { color: var(--muted); font-size: .82em; white-space: nowrap; }
+    .gtab .qu { color: var(--text-muted); font-size: .82em; white-space: nowrap; }
 
 .gtab tbody tr:hover{background:var(--surface-2)}
 .gtab th.a{color:var(--ga)} .gtab th.b{color:var(--gb)}
 .gtab td.up{color:var(--s3)} .gtab td.down{color:var(--bad)}
 .gtab td.q{color:var(--text-primary)}
 .gtab th{text-align:left;color:var(--text-muted);font-weight:600;padding:5px 8px;
-  border-bottom:1px solid var(--line)}
-.gtab td{padding:5px 8px;border-bottom:1px solid var(--line)}
+  border-bottom:1px solid var(--rule)}
+.gtab td{padding:5px 8px;border-bottom:1px solid var(--rule)}
 .gtab td.num{text-align:right;font-variant-numeric:tabular-nums}
 .gtab tr.na td{color:var(--text-muted)}
 .note{color:var(--text-muted);font-size:var(--t-small);margin:0 0 var(--sp3)}
