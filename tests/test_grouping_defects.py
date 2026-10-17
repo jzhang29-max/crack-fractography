@@ -500,3 +500,55 @@ def test_the_groups_pane_offers_the_download_after_both_actions(tmp_path):
     assert "data-gdl" in js, "the button carries no url"
     assert "out.addEventListener" in js, \
         "the cards are rebuilt on every run, so the handler must be delegated"
+
+
+def test_the_download_carries_the_histogram_bins(tmp_path):
+    """The picture on screen must be reconstructable from the file.
+
+    The export carried the summary rows, the caveats and the per-frame values but not the
+    distributions, so the shape -- the thing a histogram is for -- existed only as pixels
+    in the app. The bins are written long-format, one row per bin per group, which is what
+    a spreadsheet can chart without rearranging.
+    """
+    import csv as _csv
+    import io as _io
+    with Server(tmp_path / "d") as s:
+        st, body = _export(s, _mem(s, 2), _mem(s, 2), "Alpha", "Beta")
+        assert st == 200, body[:300]
+        assert "# distributions" in body, "the export has no distributions section"
+        head = body.index("# distributions")
+        block = body[head:].split("\n# per frame")[0].split("\n", 1)[1]
+        rows = list(_csv.DictReader(_io.StringIO(block)))
+        assert rows, "the distributions section has a header and no rows"
+        # the counts in the file must sum to the group n the file itself states
+        totals = {}
+        for r in rows:
+            if not r.get("count"):
+                continue
+            k = (r["quantity"], r["group"])
+            totals.setdefault(k, [0, int(r["group_n"])])
+            totals[k][0] += int(r["count"])
+        assert totals, "no countable bins"
+        for (q, g), (got, want) in totals.items():
+            assert got == want, f"{q} / {g}: bins sum to {got} but group_n says {want}"
+        # both groups are present and share their edges
+        for q in {r["quantity"] for r in rows if r.get("count")}:
+            gs = {r["group"] for r in rows if r["quantity"] == q and r.get("count")}
+            assert gs == {"Alpha", "Beta"}, f"{q}: only {gs} in the file"
+            for side in gs:
+                pass
+            edges = {}
+            for r in rows:
+                if r["quantity"] != q or not r.get("count"):
+                    continue
+                edges.setdefault(r["group"], []).append((r["bin_lo"], r["bin_hi"]))
+            a_e, b_e = edges["Alpha"], edges["Beta"]
+            assert a_e == b_e, f"{q}: the two groups were written on DIFFERENT bins"
+
+
+def test_a_single_group_export_still_carries_its_distribution(tmp_path):
+    with Server(tmp_path / "d") as s:
+        st, body = _export(s, _mem(s, 2), a_name="Solo")
+        assert st == 200, body[:300]
+        assert "# distributions" in body
+        assert "Solo" in body.split("# distributions")[1]

@@ -2902,6 +2902,32 @@ def group_export_csv(a: list[str] = Query(default=[]), b: list[str] = Query(defa
         w.writeheader()
         w.writerows(rows)
 
+    # THE HISTOGRAM BINS, so the file carries the shape and not only the averages. The
+    # picture on screen is computed from exactly these numbers, by the same function, so a
+    # reader can redraw it or check it. Long format -- one row per bin per group -- because
+    # that is what a spreadsheet can chart without being rearranged first.
+    buf.write("\n# distributions: per CRACK, shared bins across both groups\n")
+    dists = GS.distributions(fr_a, by_a, fr_b, by_b, a_name, b_name) if two \
+        else GS.distributions(fr_a, by_a, fr_a, by_a, a_name, a_name)
+    dk = ["quantity", "unit", "scale", "group", "bin", "bin_lo", "bin_hi", "count",
+          "group_median", "group_n"]
+    w3 = csv.DictWriter(buf, fieldnames=dk, extrasaction="ignore")
+    w3.writeheader()
+    for g in dists:
+        if g.get("why_none"):
+            w3.writerow({"quantity": g["label"], "unit": g.get("unit", ""),
+                         "scale": "", "group": "", "bin": "", "bin_lo": "", "bin_hi": "",
+                         "count": "", "group_median": g["why_none"], "group_n": ""})
+            continue
+        sides = [("a", g["a"])] if not two else [("a", g["a"]), ("b", g["b"])]
+        for _side, sd in sides:
+            for i, c in enumerate(sd["counts"]):
+                w3.writerow({"quantity": g["label"], "unit": g["unit"],
+                             "scale": g["scale"], "group": sd["label"], "bin": i,
+                             "bin_lo": g["edges"][i], "bin_hi": g["edges"][i + 1],
+                             "count": c, "group_median": sd["median"],
+                             "group_n": sd["n"]})
+
     # PER FRAME TOO. The spread between frames is usually larger than the difference
     # between groups, so a file with only the group rows invites the wrong conclusion.
     buf.write("\n# per frame\n")

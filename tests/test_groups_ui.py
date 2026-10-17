@@ -74,6 +74,12 @@ def test_every_id_the_group_code_reaches_for_exists_in_the_markup():
         want |= {f"{pre}a{post}", f"{pre}b{post}"}
     assert len(want) > 8, f"only found {want} -- the block was not located"
     have = set(re.findall(r'id="([a-z0-9][a-z0-9-]*)"', HTML))
+    # An id the group code WRITES ITSELF counts as existing. The distributions placeholder
+    # is emitted into the results container a line before it is read, so it is never in
+    # index.html -- but it is still subject to this test's real point, that the name on the
+    # left of the lookup matches the name on the right of the markup, because both spellings
+    # are in this same block and a rename of one without the other still fails here.
+    have |= set(re.findall(r'id="([a-z0-9][a-z0-9-]*)"', block))
     missing = sorted(w for w in want if w not in have)
     assert not missing, f"the group code reaches for ids that do not exist: {missing}"
 

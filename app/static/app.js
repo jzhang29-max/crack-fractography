@@ -3181,7 +3181,7 @@ function gDownloadBar(aFrames, aName, bFrames, bName) {
     `data-gdlname="${esc(stem.replace(/[^A-Za-z0-9._-]/g, "_") || "groups")}.csv">` +
     `Download ${two ? "comparison" : "analysis"} (CSV)</button> ` +
     `<span class="u">every row with its full definition, each group's per-frame values, ` +
-    `and every caveat</span></p>`;
+    `the histogram bins, and every caveat</span></p>`;
 }
 
 //: Under one frame-to-frame SD the two groups differ by less than the ordinary variation
@@ -3429,7 +3429,11 @@ function wireGroups() {
       const d = await gPost("/api/group_compare", {
         a: { frames: G.a, name: $("#ga-name")?.value || "A" },
         b: { frames: G.b, name: $("#gb-name")?.value || "B" } });
+      // A PLACEHOLDER, so the histograms land DIRECTLY under the comparison they belong
+      // to. Appended at the end they sat after both group cards, which put about sixty
+      // rows of per-group table between a difference and the shape behind it.
       out.innerHTML = gCompareTable(d) +
+        `<div id="gdist"></div>` +
         gDownloadBar(G.a, d.label_a, G.b, d.label_b) +
         gStatsTable(d.a, d.label_a) + gStatsTable(d.b, d.label_b);
       busy("");
@@ -3440,11 +3444,14 @@ function wireGroups() {
           a: { frames: G.a, name: $("#ga-name")?.value || "A" },
           b: { frames: G.b, name: $("#gb-name")?.value || "B" } });
         const html = gDistributions(dist);
-        if (html) out.insertAdjacentHTML("beforeend", html);
+        const slot = $("#gdist");
+        if (html && slot) slot.innerHTML = html;
       } catch (e) {
-        out.insertAdjacentHTML("beforeend",
-          `<section class="card"><p class="note">Distributions unavailable: ` +
-          `${esc(e.message)}</p></section>`);
+        const slot = $("#gdist");
+        if (slot) {
+          slot.innerHTML = `<section class="card"><p class="note">Distributions ` +
+            `unavailable: ${esc(e.message)}</p></section>`;
+        }
       }
     } catch (err) { busy(""); out.innerHTML = `<section class="card"><p class="note bad">${esc(err.message)}</p></section>`; }
   });
