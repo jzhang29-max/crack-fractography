@@ -32,7 +32,7 @@ REPO = os.path.abspath(os.path.join(SPECPATH, ".."))
 #: GITHUB_REF_NAME is set on every tagged CI build; FRACTOGRAPHY_VERSION is the manual
 #: override; the literal is the fallback for a local build off a branch, where there is no
 #: tag to read and a wrong-but-obvious number beats a crash.
-FALLBACK_VERSION = "1.56.0"
+FALLBACK_VERSION = "1.57.0"
 
 
 def _version():

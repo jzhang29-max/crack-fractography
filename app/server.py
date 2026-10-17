@@ -2741,6 +2741,38 @@ def group_compare(payload: dict = Body(...)):
     return res
 
 
+@app.post("/api/group_distributions")
+def group_distributions(payload: dict = Body(...)):
+    """Overlapping per-crack histograms for two groups, on shared bins.
+
+    Same payload shape as /api/group_compare, and resolved through the same _members /
+    _collect path, so the picture cannot be of a different frame set than the table above
+    it. Binning happens here rather than in the browser: the groups hold thousands of
+    regions each and the counts are a few hundred bytes where the values are megabytes.
+    """
+    from app import groupstats as GS
+    saved = _read_groups()
+
+    def side(k, default_label):
+        spec = payload.get(k) or {}
+        if not isinstance(spec, dict):
+            raise HTTPException(400, f"side {k!r} must be an object with frames or a name")
+        nm = spec.get("name") if isinstance(spec.get("name"), str) else ""
+        members = _members(spec["frames"], f"side {k!r} frames") if spec.get("frames") \
+            else saved.get(nm or "", [])
+        if not members:
+            raise HTTPException(400, f"side {k!r} has no frames")
+        fr, by, _miss = _collect(members)
+        if not fr:
+            raise HTTPException(404, f"side {k!r}: none of those frames is measured")
+        return fr, by, (nm or default_label)
+
+    fa, ba, la = side("a", "A")
+    fb, bb, lb = side("b", "B")
+    return {"label_a": la, "label_b": lb,
+            "distributions": GS.distributions(fa, ba, fb, bb, la, lb)}
+
+
 # ---------------------------------------------------------------------------------------
 # Downloading the preliminary analysis and the comparison.
 #

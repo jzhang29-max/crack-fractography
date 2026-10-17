@@ -58,6 +58,16 @@ def _mean(xs):
     return (sum(xs) / len(xs)) if xs else None
 
 
+def _sd(vals):
+    """Sample standard deviation over frames. None below 2 frames, where it is undefined --
+    NOT 0.0, which would read as "no spread" and make every change look infinitely large."""
+    v = [x for x in vals if x is not None]
+    if len(v) < 2:
+        return None
+    m = sum(v) / len(v)
+    return (sum((x - m) ** 2 for x in v) / (len(v) - 1)) ** 0.5
+
+
 def axial_mean_deg(angles, weights=None):
     """Mean ORIENTATION of a set of axes, plus how concentrated they are.
 
@@ -232,7 +242,13 @@ def group_summary(frames, cracks_by_frame):
                     "definition": definition,
                     "how": how, "spread_min": round(min(vals), 4),
                     "spread_max": round(max(vals), 4),
-                    "median_over_frames": round(_median(vals), 4)}
+                    "median_over_frames": round(_median(vals), 4),
+                    # THE SPREAD BETWEEN FRAMES, as a number and not only as a range. A
+                    # difference between two groups is only readable beside it: on one real
+                    # pair the ratios flipped sign when the frame set changed, because the
+                    # frame-to-frame spread was wider than the gap being quoted.
+                    "sd_over_frames": (lambda d: round(d, 4) if d is not None else None)(_sd(vals)),
+                    "frame_values": [round(x, 4) for x in vals]}
     # orientation is pooled over CRACKS, area-weighted, not averaged over frame means
     ang, angw = [], []
     for f in frames:
@@ -276,6 +292,93 @@ def group_summary(frames, cracks_by_frame):
     return out
 
 
+#: The per-CRACK quantities worth a histogram, with the SUMMARY row each one underlies.
+#: Per-frame values are too few to bin -- six numbers are a dot plot, not a distribution --
+#: but these run to thousands of regions per group and span orders of magnitude, which is
+#: exactly where an average hides the shape.
+DISTRIBUTIONS = [
+    ("Area_px", "Crack area", "px2", True, "mean_area_px"),
+    ("SkeletonLength_px", "Crack length", "px", True, "mean_length_px"),
+    ("MeanWidth_px", "Mean width", "px", True, None),
+    ("_aspect", "Aspect ratio (ellipse)", "major / minor", False, "mean_aspect"),
+]
+
+
+def _crack_values(cracks_by_frame, field):
+    out = []
+    for rows in cracks_by_frame.values():
+        for c in rows:
+            if field == "_aspect":
+                a_, b_ = _f(c.get("EllipseMajorAxis_px")), _f(c.get("EllipseMinorAxis_px"))
+                v = (a_ / b_) if (a_ and b_ and b_ > 0) else None
+            else:
+                v = _f(c.get(field))
+            if v is not None and v > 0:
+                out.append(v)
+    return out
+
+
+def distributions(a_frames, a_cracks, b_frames, b_cracks, label_a="A", label_b="B", bins=26):
+    """Overlapping histograms of the per-crack quantities, on bins SHARED by both groups.
+
+    SHARED EDGES, OR THE PICTURE LIES. Two histograms binned separately put different
+    values in the same-looking bar, and the eye reads the overlay as a comparison when it
+    is not one. The edges here are computed from BOTH groups' pooled range and handed back
+    with the counts, so the two series are always on one axis.
+
+    Log spacing where the quantity spans orders of magnitude -- crack area runs from tens
+    of pixels to millions, and on linear bins every region lands in the first bar.
+    """
+    out = []
+    for field, label, unit, log, row_key in DISTRIBUTIONS:
+        va = _crack_values(a_cracks, field)
+        vb = _crack_values(b_cracks, field)
+        if len(va) < 2 or len(vb) < 2:
+            out.append({"key": field, "label": label, "unit": unit,
+                        "why_none": "fewer than 2 measured regions on one side"})
+            continue
+        lo, hi = min(min(va), min(vb)), max(max(va), max(vb))
+        if hi <= lo:
+            out.append({"key": field, "label": label, "unit": unit,
+                        "why_none": "every region has the same value"})
+            continue
+        use_log = bool(log and lo > 0 and hi / lo >= 50)
+        if use_log:
+            import math
+            l0, l1 = math.log10(lo), math.log10(hi)
+            edges = [10 ** (l0 + (l1 - l0) * i / bins) for i in range(bins + 1)]
+        else:
+            edges = [lo + (hi - lo) * i / bins for i in range(bins + 1)]
+        edges[-1] *= 1.000001  # so the maximum lands inside the last bin
+
+        def hist(vals):
+            import bisect
+            cnt = [0] * bins
+            for v in vals:
+                i = bisect.bisect_right(edges, v) - 1
+                if i < 0:
+                    i = 0
+                elif i >= bins:
+                    i = bins - 1
+                cnt[i] += 1
+            return cnt
+
+        out.append({
+            "key": field, "label": label, "unit": unit,
+            "scale": "log" if use_log else "linear",
+            "edges": [round(e, 4) for e in edges],
+            "a": {"label": label_a, "counts": hist(va), "n": len(va),
+                  "median": round(_median(va), 2)},
+            "b": {"label": label_b, "counts": hist(vb), "n": len(vb),
+                  "median": round(_median(vb), 2)},
+            "summary_row": row_key,
+            "note": ("counts are per CRACK, not per frame, so the two series have different "
+                     "totals by construction: a group with more regions has a taller "
+                     "histogram everywhere. Compare the SHAPE and the medians."),
+        })
+    return out
+
+
 def compare(a, b, label_a="A", label_b="B"):
     """Two groups side by side. Differences only; no p-value unless the design can carry one."""
     diffs = []
@@ -287,10 +390,37 @@ def compare(a, b, label_a="A", label_b="B"):
                           "delta": None, "ratio": None,
                           "note": "not available on both sides"})
             continue
+        # PERCENT CHANGE, AND THE CHANGE MEASURED IN SPREADS. The ratio says how big the
+        # change is; delta_sd says whether it is bigger than the variation already present
+        # between frames of the SAME group. A ratio of 0.65 means nothing if single frames
+        # of one group range over more than that.
+        sa = a.get(key, {}).get("sd_over_frames")
+        sb = b.get(key, {}).get("sd_over_frames")
+        na = a.get(key, {}).get("n") or 0
+        nb = b.get(key, {}).get("n") or 0
+        pooled = None
+        if sa is not None and sb is not None and na > 1 and nb > 1:
+            # pooled sample SD; this is the denominator of a standardised difference
+            pooled = (((na - 1) * sa ** 2 + (nb - 1) * sb ** 2) / (na + nb - 2)) ** 0.5
+        # THE NUMERATOR MUST BE THE SAME OBJECT AS THE DENOMINATOR. sd_over_frames is the
+        # spread of ONE FRAME's value, so a sum row's difference -- 795 cracks across six
+        # frames -- cannot be divided by it. Standardise the difference of the per-frame
+        # MEANS in that case; for a sum row over equal frame counts this is the same number
+        # the matching per-frame row reports, which is the check that it is right. Before
+        # this, Crack count read 13.81 SDs where the honest value is 2.30.
+        num = (vb - va)
+        if how == "sum" and na and nb:
+            num = (vb / nb) - (va / na)
         diffs.append({"key": key, "label": label, "unit": unit,
                       "definition": definition,
                       "a": va, "b": vb, "delta": round(vb - va, 4),
                       "ratio": round(vb / va, 3) if va else None,
+                      "pct_change": round(100 * (vb - va) / va, 1) if va else None,
+                      "sd_a": sa, "sd_b": sb,
+                      "pooled_sd": round(pooled, 4) if pooled else None,
+                      "delta_sd": round(num / pooled, 2) if pooled else None,
+                      "delta_sd_basis": ("difference of per-frame means" if how == "sum"
+                                         else "difference of the values above"),
                       "how": how})
     oa, ob = a.get("orientation", {}), b.get("orientation", {})
     da = None

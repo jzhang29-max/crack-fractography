@@ -393,6 +393,20 @@ tr:hover .rowdel,.rowdel:focus-visible{opacity:1}
     /* The quantity column carries the name, its unit and a one-line definition. Three
        sizes so the eye lands on the name first and the definition reads as support, not
        as another row. */
+    /* Distributions. The two series are separated by FILL and OUTLINE, not by hue, so the
+       pair survives printing and a colour-blind reader; the medians are also printed as
+       numbers under each plot rather than left to the eye. */
+    .ghwrap { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 6px; }
+    .ghist { flex: 1 1 320px; min-width: 280px; max-width: 380px; }
+    .ghh { font-size: var(--t-small); margin-bottom: 2px; }
+    .ghm { margin-top: 1px; }
+    .ghsvg { width: 100%; height: auto; display: block; }
+    .ghsvg .hba { fill: none; stroke: var(--text); stroke-width: .9; }
+    .ghsvg .hbb { fill: var(--text-muted); fill-opacity: .55; }
+    .ghsvg .hax { stroke: var(--rule); stroke-width: 1; }
+    .ghsvg .hma { stroke: var(--text); stroke-width: 1.6; }
+    .ghsvg .hmb { stroke: var(--text-muted); stroke-width: 1.6; }
+    .gtab td.weak { opacity: .45; }
     .gdl { margin-top: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .gtab td.q { max-width: 27rem; }
     .gtab .qn { font-weight: 600; }

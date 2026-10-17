@@ -41,7 +41,7 @@ COVERED = {
     ("get", "/api/original/{arm:path}/{frame}"), ("post", "/api/crop"),
     ("get", "/api/groups"), ("post", "/api/groups"),
     ("post", "/api/group_stats"), ("post", "/api/group_compare"),
-    ("get", "/api/group_export.csv"),
+    ("get", "/api/group_export.csv"), ("post", "/api/group_distributions"),
     ("post", "/api/send_to_parent"), ("post", "/api/delete_frame"),
     ("post", "/api/discard_edit"), ("post", "/api/hide_frame"),
     ("post", "/api/restore"),
@@ -388,6 +388,73 @@ def test_the_group_export_downloads_the_analysis_and_the_comparison(srv):
     for q, code in (("", 400), ("?a=nopair", 400), ("?a=uploads::missing", 404)):
         st, _ = srv.get("/api/group_export.csv" + q)
         assert st == code, f"{q!r} returned {st}, expected {code}"
+
+
+def test_group_distributions_bins_both_sides_on_shared_edges(srv):
+    """Overlapping histograms of the per-crack quantities.
+
+    The edges must be SHARED: two histograms binned separately put different values in the
+    same-looking bar, and an overlay of those reads as a comparison when it is not one.
+    """
+    frames = []
+    for i in range(3):
+        st, raw = srv.upload(f"d{i}.png", mask_png(170, 140, 30 + i * 9))
+        assert st == 200, raw[:200]
+        frames.append(json.loads(raw)["frame"])
+    a = [{"arm": "uploads", "frame": frames[0]}, {"arm": "uploads", "frame": frames[1]}]
+    b = [{"arm": "uploads", "frame": frames[2]}]
+    st, got = _json_post(srv, "/api/group_distributions",
+                         {"a": {"frames": a, "name": "One"}, "b": {"frames": b, "name": "Two"}})
+    assert st == 200, got
+    assert got["label_a"] == "One" and got["label_b"] == "Two"
+    ds = got["distributions"]
+    assert ds, "no distributions returned"
+    for g in ds:
+        if g.get("why_none"):
+            continue
+        # one axis for both series
+        assert len(g["edges"]) == len(g["a"]["counts"]) + 1 == len(g["b"]["counts"]) + 1
+        # NO REGION IS LOST TO BINNING. If the counts do not sum to n, a value fell outside
+        # the edges and the picture is of a subset.
+        assert sum(g["a"]["counts"]) == g["a"]["n"], f"{g['key']}: side A lost regions"
+        assert sum(g["b"]["counts"]) == g["b"]["n"], f"{g['key']}: side B lost regions"
+        assert g["edges"] == sorted(g["edges"]), f"{g['key']}: edges not ascending"
+        assert g["scale"] in ("log", "linear")
+
+    st, _ = _json_post(srv, "/api/group_distributions", {"a": {"frames": a}})
+    assert st == 400, "a one-sided request should be refused"
+
+
+def test_the_comparison_reports_change_against_the_frame_to_frame_spread(srv):
+    """A ratio cannot say whether a difference exceeds the variation already inside each
+    group. delta_sd does, and its numerator must be the same object as its denominator: a
+    SUM row's difference is over all frames while the SD is of one frame, so sum rows
+    standardise the per-frame MEAN difference. Crack count once read 13.81 SDs where the
+    honest value was 2.30."""
+    frames = []
+    for i in range(3):
+        st, raw = srv.upload(f"s{i}.png", mask_png(170, 140, 30 + i * 9))
+        assert st == 200, raw[:200]
+        frames.append(json.loads(raw)["frame"])
+    a = [{"arm": "uploads", "frame": frames[0]}, {"arm": "uploads", "frame": frames[1]}]
+    b = [{"arm": "uploads", "frame": frames[1]}, {"arm": "uploads", "frame": frames[2]}]
+    st, cmp_ = _json_post(srv, "/api/group_compare",
+                          {"a": {"frames": a, "name": "A"}, "b": {"frames": b, "name": "B"}})
+    assert st == 200, cmp_
+    rows = {r["key"]: r for r in cmp_["rows"]}
+    for key in ("n_cracks", "mean_area_px"):
+        assert "pct_change" in rows[key], f"{key} has no percent change"
+        assert "delta_sd" in rows[key], f"{key} has no change-per-SD"
+    # a sum row must say it standardised the per-frame mean, not the total
+    assert rows["n_cracks"]["delta_sd_basis"] == "difference of per-frame means"
+    assert rows["mean_area_px"]["delta_sd_basis"] == "difference of the values above"
+    # and the sum row must AGREE with its own per-frame counterpart: crack count and
+    # number density differ only by a constant frame area, so their standardised
+    # differences must match. This is the check that caught the 13.81.
+    if rows["n_cracks"]["delta_sd"] is not None and rows["density_per_Mpx"]["delta_sd"] is not None:
+        assert abs(rows["n_cracks"]["delta_sd"] - rows["density_per_Mpx"]["delta_sd"]) < 0.02, \
+            (f"crack count standardises to {rows['n_cracks']['delta_sd']} but its own "
+             f"per-frame density row says {rows['density_per_Mpx']['delta_sd']}")
 
 
 def test_a_group_says_which_of_its_frames_it_could_not_find(srv):

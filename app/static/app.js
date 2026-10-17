@@ -3184,6 +3184,71 @@ function gDownloadBar(aFrames, aName, bFrames, bName) {
     `and every caveat</span></p>`;
 }
 
+//: Under one frame-to-frame SD the two groups differ by less than the ordinary variation
+//: inside each of them, so the row is dimmed rather than hidden -- the number is still the
+//: measurement, it just should not carry an argument on its own.
+function sdWeak(v) {
+  return v !== null && v !== undefined && Math.abs(v) < 1;
+}
+
+// OVERLAPPING DISTRIBUTIONS, drawn as inline SVG so they print and screenshot with the
+// table. The two series are drawn on SHARED bin edges computed by the server over both
+// groups pooled -- binning each side separately puts different values in the same-looking
+// bar and the eye reads that as a comparison when it is not one.
+//
+// A is an outlined bar, B is a filled one, and the medians are two tick marks underneath,
+// so the pair is readable without colour. Counts are per CRACK: a group with more regions
+// is taller everywhere by construction, which is why the axis is labelled "regions" and the
+// medians are printed as numbers rather than left to the eye.
+function gHist(g) {
+  if (g.why_none) {
+    return `<div class="ghist"><b>${esc(g.label)}</b> <span class="u">${esc(g.why_none)}</span></div>`;
+  }
+  const W = 320, H = 86, PAD = 2;
+  const n = g.a.counts.length;
+  const top = Math.max(1, ...g.a.counts, ...g.b.counts);
+  const bw = (W - PAD * 2) / n;
+  const bar = (counts, cls) => counts.map((c, i) => {
+    const h = (c / top) * (H - 16);
+    return h <= 0 ? "" :
+      `<rect class="${cls}" x="${(PAD + i * bw).toFixed(2)}" y="${(H - 14 - h).toFixed(2)}" ` +
+      `width="${Math.max(bw - 0.8, 0.6).toFixed(2)}" height="${h.toFixed(2)}"/>`;
+  }).join("");
+  // the median tick sits at the bin the median falls in, on the same axis as the bars
+  const tickAt = (v) => {
+    const e = g.edges;
+    let i = 0;
+    while (i < e.length - 1 && v >= e[i + 1]) i += 1;
+    return PAD + (i + 0.5) * bw;
+  };
+  const scaleNote = g.scale === "log" ? "log bins" : "linear bins";
+  return `<div class="ghist">` +
+    `<div class="ghh"><b>${esc(g.label)}</b> <span class="u">${esc(g.unit)} · ${scaleNote} · ` +
+    `${g.a.n.toLocaleString()} vs ${g.b.n.toLocaleString()} regions</span></div>` +
+    `<svg viewBox="0 0 ${W} ${H}" class="ghsvg" role="img" ` +
+    `aria-label="${esc(g.label)} distribution, ${esc(g.a.label)} against ${esc(g.b.label)}">` +
+    bar(g.a.counts, "hba") + bar(g.b.counts, "hbb") +
+    `<line class="hax" x1="${PAD}" y1="${H - 14}" x2="${W - PAD}" y2="${H - 14}"/>` +
+    `<line class="hma" x1="${tickAt(g.a.median).toFixed(2)}" y1="${H - 14}" ` +
+    `x2="${tickAt(g.a.median).toFixed(2)}" y2="${H - 7}"/>` +
+    `<line class="hmb" x1="${tickAt(g.b.median).toFixed(2)}" y1="${H - 14}" ` +
+    `x2="${tickAt(g.b.median).toFixed(2)}" y2="${H - 1}"/>` +
+    `</svg>` +
+    `<div class="u ghm">median ${gnum(g.a.median)} vs ${gnum(g.b.median)} ` +
+    `${esc(g.unit)}</div></div>`;
+}
+
+function gDistributions(d) {
+  const gs = (d && d.distributions) || [];
+  if (!gs.length) return "";
+  return `<section class="card"><h2>Distributions <span class="u">` +
+    `<span class="side-a"><span class="gdot"></span> ${esc(d.label_a)}</span> outlined · ` +
+    `<span class="side-b"><span class="gdot"></span> ${esc(d.label_b)}</span> filled</span></h2>` +
+    `<div class="ghwrap">${gs.map(gHist).join("")}</div>` +
+    `<p class="note">Per crack, not per frame. Shared bins across both groups. The two ` +
+    `ticks under each axis are the medians.</p></section>`;
+}
+
 function gCompareTable(d) {
   // DIRECTION IS SHOWN AS WELL AS SIGNED, because a column of numbers that differ only in
   // a leading minus is read wrong at a glance. The arrow says which way, the colour
@@ -3198,12 +3263,22 @@ function gCompareTable(d) {
     (r.unit ? ` <span class="qu">${esc(r.unit)}</span>` : "") + `</td>`;
   const rows = d.rows.map((r) => r.a === null || r.b === null
     ? `<tr class="na">${cell(r)}<td class="num">—</td><td class="num">—</td>` +
-      `<td class="num">—</td><td class="u">${esc(r.note || "not available on both sides")}</td></tr>`
+      `<td class="num">—</td><td class="num">—</td><td class="num">—</td>` +
+      `<td class="u">${esc(r.note || "not available on both sides")}</td></tr>`
     : `<tr>${cell(r)}<td class="num">${gnum(r.a)}</td>` +
       `<td class="num">${gnum(r.b)}</td>` +
       `<td class="num ${r.delta > 0 ? "up" : r.delta < 0 ? "down" : ""}">` +
       `${r.delta > 0 ? "\u25b2 +" : r.delta < 0 ? "\u25bc " : ""}${gnum(r.delta)}</td>` +
-      `<td class="num">${r.ratio === null ? "—" : gnum(r.ratio, 2) + "×"}</td></tr>`).join("");
+      `<td class="num">${r.ratio === null ? "—" : gnum(r.ratio, 2) + "×"}</td>` +
+      `<td class="num">${r.pct_change === null || r.pct_change === undefined ? "—"
+        : (r.pct_change > 0 ? "+" : "") + gnum(r.pct_change, 1) + "%"}</td>` +
+      // CHANGE MEASURED IN FRAME-TO-FRAME SPREADS. A ratio cannot say whether a difference
+      // is bigger than the variation already present between frames of the SAME group; on
+      // one real pair the ratios reversed sign when the frame set changed. |d| under 1 means
+      // the two groups differ by less than one frame's worth of ordinary spread.
+      `<td class="num${sdWeak(r.delta_sd) ? " weak" : ""}">${r.delta_sd === null
+        || r.delta_sd === undefined ? "—" : (r.delta_sd > 0 ? "+" : "") + gnum(r.delta_sd, 2)}</td>`
+      + `</tr>`).join("");
   const o = d.orientation || {};
   // A CAVEAT THAT INVALIDATES THE COMPARISON DOES NOT BELONG UNDER IT. The rest qualify
   // how to read the numbers; this one says there is nothing to read, because both sides
@@ -3225,7 +3300,8 @@ function gCompareTable(d) {
     `<span class="gsum">${plural(na, "frame")} vs ${plural(nb, "frame")}</span></h2>` + top +
     `<table class="gtab"><thead><tr><th>quantity</th>` +
     `<th class="num a">${esc(d.label_a)}</th><th class="num b">${esc(d.label_b)}</th>` +
-    `<th class="num">difference</th><th class="num">ratio</th></tr></thead>` +
+    `<th class="num">difference</th><th class="num">ratio</th>` +
+    `<th class="num">% change</th><th class="num">change / SD</th></tr></thead>` +
     `<tbody>${rows}</tbody></table>` +
     `<p class="note">Orientation: ${gnum(o.a_deg, 1)}° (R ${gnum(o.a_R, 3)}) against ` +
     `${gnum(o.b_deg, 1)}° (R ${gnum(o.b_R, 3)}) — ${gnum(o.axial_separation_deg, 1)}° apart.</p>` +
@@ -3335,6 +3411,19 @@ function wireGroups() {
         gDownloadBar(G.a, d.label_a, G.b, d.label_b) +
         gStatsTable(d.a, d.label_a) + gStatsTable(d.b, d.label_b);
       busy("");
+      // The histograms are a second request on purpose: they bin thousands of regions and
+      // the table should not wait on them. A failure here leaves the table standing.
+      try {
+        const dist = await gPost("/api/group_distributions", {
+          a: { frames: G.a, name: $("#ga-name")?.value || "A" },
+          b: { frames: G.b, name: $("#gb-name")?.value || "B" } });
+        const html = gDistributions(dist);
+        if (html) out.insertAdjacentHTML("beforeend", html);
+      } catch (e) {
+        out.insertAdjacentHTML("beforeend",
+          `<section class="card"><p class="note">Distributions unavailable: ` +
+          `${esc(e.message)}</p></section>`);
+      }
     } catch (err) { busy(""); out.innerHTML = `<section class="card"><p class="note bad">${esc(err.message)}</p></section>`; }
   });
   gRender();
