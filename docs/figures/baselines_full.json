@@ -1,0 +1,23 @@
+{
+ "note": "full test splits; DeepCrack 237 not 120; detector grid includes k=1.0",
+ "results": {
+  "CrackForest": {
+   "YOUR DETECTOR": 0.4498348341318911,
+   "global threshold (Otsu on flat)": 0.06321041656213515,
+   "percentile threshold": 0.3176877833936151,
+   "Sauvola local": 0.26752899754058257,
+   "Frangi ridge": 0.07276038044558913,
+   "Sato ridge": 0.49483328430761864,
+   "Meijering ridge": 0.4953760268584744
+  },
+  "DeepCrack": {
+   "YOUR DETECTOR": 0.7931735530290641,
+   "global threshold (Otsu on flat)": 0.5278287363491185,
+   "percentile threshold": 0.7099533592476291,
+   "Sauvola local": 0.6319751614178517,
+   "Frangi ridge": 0.38198613785041796,
+   "Sato ridge": 0.643521716936659,
+   "Meijering ridge": 0.6379336590000678
+  }
+ }
+}
