@@ -58,9 +58,13 @@ MF = load(os.path.join(REPO, "docs/figures/metric_figures.json"), "corpus metric
 
 # ---------------------------------------------------------------- plate: public scores
 def plate_scores():
-    ds = ["DeepCrack", "CrackForest"]
+    # CRACKFOREST IS OUT OF THE PAPER. It is road-surface imagery and the application this
+    # detector is built for is micrographs; the measurement stays in
+    # docs/figures/public_metrics.json as a record, it is simply not argued from here.
+    ds = ["DeepCrack"]
     mets = ["precision", "recall", "f1", "iou"]
-    fig, axes = plt.subplots(1, 2, figsize=(8.4, 3.3))
+    fig, axes = plt.subplots(1, 1, figsize=(5.0, 3.3), squeeze=False)
+    axes = axes[0]
     for ax, d in zip(axes, ds):
         r = PM[d]
         det = [r["loo"][m] for m in mets]
@@ -81,8 +85,8 @@ def plate_scores():
         ax.spines[["top", "right"]].set_visible(False)
     axes[0].set_ylabel("score", fontsize=BODY)
     axes[0].legend(fontsize=SMALL, frameon=False, loc="upper right")
-    fig.suptitle("The detector on public crack datasets, against its own no-information "
-                 "floors", fontsize=TITLE, y=1.02)
+    fig.suptitle("The detector on DeepCrack, against its own no-information floors",
+                 fontsize=TITLE, y=1.02)
     save(fig, "P1 - public scores", {
         "what": "precision, recall, F1 and IoU at 0 px tolerance, mad_k chosen "
                 "leave-one-image-out, against two controls",
@@ -96,7 +100,10 @@ def plate_scores():
 # ------------------------------------------------------- plate: one constant transfers
 def plate_transfer():
     fig, ax = plt.subplots(figsize=(5.4, 3.4))
-    marks = {"DeepCrack": ("o", "-", "0.2"), "CrackForest": ("s", "--", "0.5")}
+    # ONE SERIES NOW. This plate used to carry two datasets and the sentence "one refitted
+    # constant transfers". With CrackForest out of the paper there is one dataset left and
+    # no transfer can be shown, so the plate is an operating curve and the claim is gone.
+    marks = {"DeepCrack": ("o", "-", "0.2")}
     for d, (mk, ls, col) in marks.items():
         pk = PM[d]["per_k"]
         ks = sorted((float(k) for k in pk), reverse=True)
@@ -111,9 +118,12 @@ def plate_transfer():
     ax.tick_params(labelsize=SMALL)
     ax.spines[["top", "right"]].set_visible(False)
     ax.legend(fontsize=SMALL, frameon=False)
-    ax.set_title("One free constant, two datasets", fontsize=TITLE)
-    save(fig, "P2 - transfer", {
-        "what": "mean F1 against the detector's single free constant on each dataset",
+    ax.set_title("The detector's one free constant on DeepCrack", fontsize=TITLE)
+    # RENAMED. It was "P2 - transfer" while it carried two datasets and argued that a
+    # refitted constant transfers between them. With one dataset it is an operating curve
+    # and the old name would print under a figure that no longer shows transfer.
+    save(fig, "P2 - operating curve", {
+        "what": "mean F1 against the detector's single free constant",
         "per_k": {d: {k: v["f1"] for k, v in PM[d]["per_k"].items()} for d in PM},
         "source": "docs/figures/public_metrics.json"})
 
@@ -122,8 +132,7 @@ def plate_transfer():
 def plate_width():
     fig, ax = plt.subplots(figsize=(6.0, 3.8))
     series = []
-    for d, (mk, ls, col) in {"DeepCrack": ("o", "-", "0.2"),
-                             "CrackForest": ("s", "--", "0.5")}.items():
+    for d, (mk, ls, col) in {"DeepCrack": ("o", "-", "0.2")}.items():
         c = WC[d]["iou_by_trace_width"]
         ws = sorted(int(k) for k in c)
         ax.plot(ws, [c[str(w)] for w in ws], marker=mk, linestyle=ls, color=col,
@@ -139,7 +148,7 @@ def plate_width():
     # this machine, so the annotation is dropped rather than guessed.
     ax.plot(cw, corpus, marker="^", linestyle="-.", color="0.0", markersize=4,
             linewidth=1.4, label="this corpus, 26 tiles")
-    for d, col in (("DeepCrack", "0.2"), ("CrackForest", "0.5")):
+    for d, col in (("DeepCrack", "0.2"),):
         ax.axhline(PM[d]["loo"]["iou"], color=col, linewidth=.9, linestyle=":")
         ax.text(40, PM[d]["loo"]["iou"] - .028, f"detector on {d}", fontsize=SMALL,
                 ha="right", color=col)
@@ -178,8 +187,9 @@ def plate_baselines():
              "Sauvola local", "global threshold (Otsu on flat)", "Frangi ridge"]
     nice = {"YOUR DETECTOR": "this detector",
             "global threshold (Otsu on flat)": "Otsu on flattened"}
-    fig, axes = plt.subplots(1, 2, figsize=(9.2, 3.4))
-    for ax, d in zip(axes, ["DeepCrack", "CrackForest"]):
+    fig, axes = plt.subplots(1, 1, figsize=(5.6, 3.4), squeeze=False)
+    axes = axes[0]
+    for ax, d in zip(axes, ["DeepCrack"]):
         vals = [bl[d][k] for k in order]
         names = [nice.get(k, k) for k in order]
         ypos = list(range(len(order)))[::-1]

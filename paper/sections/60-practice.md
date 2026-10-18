@@ -3,8 +3,7 @@
 Stated as rules because each one followed a specific error of ours.
 
 1. **Report the no-information floor beside every score.** Marking every pixel scores
-   F1 {dc_me_f1} on DeepCrack and {cf_me_f1} on CrackForest. A bare score cannot be read
-   without them.
+   F1 {dc_me_f1} on DeepCrack. A bare score cannot be read without it.
 2. **Choose parameters by grouped hold-out, and say what the group is.** Regrouping alone
    moved an AUC by +0.0458 in our data, which is larger than most effects we chased.
 3. **A difference of medians is not a paired difference.** One result moved 0.0742 as

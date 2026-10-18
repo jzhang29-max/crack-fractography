@@ -6,9 +6,9 @@ This is the part we would most want another group to check.
 
 Take the ground truth, reduce it to its centreline, and redraw it at a fixed width. The
 result is exactly right about where every crack is and wrong only about how wide. Scored
-against the label it should be nearly perfect, and it is not: on CrackForest the best such
-reconstruction reaches IoU {wc_cf_iou} and on DeepCrack {wc_dc_iou}. Most of the available
-IoU is being spent on agreeing about width.
+against the label it should be nearly perfect, and it is not: on DeepCrack the best such
+reconstruction reaches IoU {wc_dc_iou}. Most of the available IoU is being spent on
+agreeing about width.
 
 Two consequences.
 

@@ -68,27 +68,20 @@ def _n(x, d=4):
     return f"{x:.{d}f}"
 
 
+# CrackForest's values are deliberately absent: it is road imagery and was removed from
+# the draft. If a section reintroduces a {cf_...} placeholder the renderer fails on an
+# unresolved name rather than quietly printing a dataset the paper no longer argues from.
 VALUES = {
     "dc_f1": _n(PM["DeepCrack"]["loo"]["f1"]),
     "dc_iou": _n(PM["DeepCrack"]["loo"]["iou"]),
-    "cf_f1": _n(PM["CrackForest"]["loo"]["f1"]),
-    "cf_iou": _n(PM["CrackForest"]["loo"]["iou"]),
     "dc_me_f1": _n(PM["DeepCrack"]["controls"]["mark_everything"]["f1"]),
-    "cf_me_f1": _n(PM["CrackForest"]["controls"]["mark_everything"]["f1"]),
     "dc_rnd_f1": _n(PM["DeepCrack"]["controls"]["equal_area_random"]["f1"]),
-    "cf_rnd_f1": _n(PM["CrackForest"]["controls"]["equal_area_random"]["f1"]),
     "dc_lift_f1": _n(PM["DeepCrack"]["loo"]["f1"]
                      / PM["DeepCrack"]["controls"]["mark_everything"]["f1"], 1),
     "dc_lift_iou": _n(PM["DeepCrack"]["loo"]["iou"]
                       / PM["DeepCrack"]["controls"]["mark_everything"]["iou"], 1),
-    "cf_lift_f1": _n(PM["CrackForest"]["loo"]["f1"]
-                     / PM["CrackForest"]["controls"]["mark_everything"]["f1"], 1),
-    "cf_lift_iou": _n(PM["CrackForest"]["loo"]["iou"]
-                      / PM["CrackForest"]["controls"]["mark_everything"]["iou"], 1),
     "dc_frozen": _n(PM["DeepCrack"]["per_k"]["5.0"]["f1"]),
-    "cf_frozen": _n(PM["CrackForest"]["per_k"]["5.0"]["f1"]),
     "wc_dc_iou": _n(WC["DeepCrack"]["ceiling_iou"]),
-    "wc_cf_iou": _n(WC["CrackForest"]["ceiling_iou"]),
     "wc_corpus_iou": _n(max(_corpus)),
 }
 
