@@ -1,4 +1,4 @@
-# A one-parameter crack detector, measured on SEM micrographs and on pavement
+# A one-parameter crack detector, measured on SEM micrographs
 
 DRAFT — not submitted. Every number is generated from measurement files by
 `paper/make_paper.py`; nothing in this document is typed by hand twice.
@@ -6,19 +6,18 @@ DRAFT — not submitted. Every number is generated from measurement files by
 ## Abstract
 
 We describe a crack segmentation detector with a single free parameter and no learned
-weights, and measure it on public crack data with pixel-exact ground truth in two
-modalities. On SEM micrographs of Inconel 718 it reaches mean per-image F1 {in_f1} and IoU
-{in_iou}, {in_lift_f1} times the F1 of marking every pixel. On a pavement benchmark,
-DeepCrack, the same detector reaches F1 {dc_f1} and IoU {dc_iou}. The difference between
-those two numbers is the paper: the detector is not worse on micrographs by accident, and
-the gap is not explained by annotation width, which we show by measuring it.
+weights, and measure it on the only public crack data we could find in its own modality:
+scanning-electron micrographs of metals and coatings with pixel-exact masks. On whole
+fields of Inconel 718 it reaches mean per-image F1 {in_f1} and IoU {in_iou}, which is
+{in_lift_f1} times the F1 and {in_lift_iou} times the IoU of marking every pixel. Its one
+constant, fitted years earlier on SEM steel, is the best of seven values tested here
+without being refitted.
 
-The detector's one constant, fitted originally on SEM steel, is **optimal unchanged** on
-the SEM alloy data and wants a different value on pavement — so it transfers within a
-modality and not across one. Two results cut against the method: on an SEM coating with
-{ebc_prev}% crack prevalence it fails outright at {ebc_p} precision, and against classical
-detectors tuned identically it ranks first of seven on pavement but only third of seven on
-the SEM alloy, where Sauvola thresholding and a Sato ridge filter score as well or better.
-We report both rather than omit them.
+Three results cut against the method and we report them with the first. Against seven
+classical detectors tuned identically on the same images it ranks **{in_rank} of seven** —
+a local threshold and a ridge filter score as well or better. On an SEM coating at
+{ebc_prev}% crack prevalence it fails at {ebc_p} precision. And cropping the same images
+around their cracks, as the dataset's own released test split does, raises F1 from {in_f1}
+to {in_crop_f1} without changing the detector at all.
 
 **Status of this draft.** Section 7 lists what is missing before submission.

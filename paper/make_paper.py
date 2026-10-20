@@ -75,7 +75,16 @@ def _n(x, d=4):
 # CrackForest's values are deliberately absent: it is road imagery and was removed from
 # the draft. If a section reintroduces a {cf_...} placeholder the renderer fails on an
 # unresolved name rather than quietly printing a dataset the paper no longer argues from.
-IN, EBC = SP["Inconel718_crack"], SP["EBC_crack"]
+SO = _f(os.path.join(REPO, "docs/figures/sem_originals_metrics.json"),
+        "SEM originals")["datasets"]
+# WHOLE FIELDS are the paper's primary numbers. The released crops are quoted only where
+# the text says so, and the baseline comparison is crops-only because that is the one set
+# all seven arms share.
+IN, EBC = SO["Inconel718_crack"], SO["EBC_crack"]
+IN_CROP = SP["Inconel718_crack"]
+_rank_i = len(SB["Inconel718_crack"]) - sorted(
+    SB["Inconel718_crack"].items(), key=lambda kv: kv[1]).index(
+        ("YOUR DETECTOR", SB["Inconel718_crack"]["YOUR DETECTOR"]))
 _dc_rank = sorted(PB["DeepCrack"].items(), key=lambda kv: -kv[1])
 _in_rank = sorted(SB["Inconel718_crack"].items(), key=lambda kv: -kv[1])
 
@@ -94,6 +103,13 @@ VALUES = {
     "in_spread": _n(_in_rank[0][1] - _in_rank[2][1]),
     "in_stroke": _n(SW["Inconel718_crack"]["label_stroke_px_median"], 1),
     "wc_in_iou": _n(SW["Inconel718_crack"]["ceiling_iou"]),
+    "in_crop_f1": _n(IN_CROP["loo"]["f1"]),
+    "in_crop_prev": _n(100 * IN_CROP["prevalence"], 2),
+    "in_crop_src": "18",
+    "in_crop_gain": _n(IN_CROP["loo"]["f1"] - IN["loo"]["f1"]),
+    "in_rank": {1: "first", 2: "second", 3: "third", 4: "fourth", 5: "fifth",
+                6: "sixth", 7: "seventh"}[_rank_i],
+    "ebc_me_f1": _n(EBC["controls"]["mark_everything"]["f1"]),
     # --- SEM coating, the failure case ---
     "ebc_stroke": _n(SW["EBC_crack"]["label_stroke_px_median"], 1),
     "wc_ebc_iou": _n(SW["EBC_crack"]["ceiling_iou"]),
@@ -102,20 +118,6 @@ VALUES = {
     "ebc_p": _n(EBC["loo"]["precision"]),
     "ebc_r": _n(EBC["loo"]["recall"]),
     # --- pavement, the cross-modality check ---
-    "dc_n": str(PM["DeepCrack"]["n"]),
-    "dc_prev": _n(100 * PM["DeepCrack"]["prevalence"], 2),
-    "dc_next": _n(_dc_rank[1][1]),
-    "dc_frozen_loss": _n(PM["DeepCrack"]["loo"]["f1"] - PM["DeepCrack"]["per_k"]["5.0"]["f1"]),
-    "dc_f1": _n(PM["DeepCrack"]["loo"]["f1"]),
-    "dc_iou": _n(PM["DeepCrack"]["loo"]["iou"]),
-    "dc_me_f1": _n(PM["DeepCrack"]["controls"]["mark_everything"]["f1"]),
-    "dc_rnd_f1": _n(PM["DeepCrack"]["controls"]["equal_area_random"]["f1"]),
-    "dc_lift_f1": _n(PM["DeepCrack"]["loo"]["f1"]
-                     / PM["DeepCrack"]["controls"]["mark_everything"]["f1"], 1),
-    "dc_lift_iou": _n(PM["DeepCrack"]["loo"]["iou"]
-                      / PM["DeepCrack"]["controls"]["mark_everything"]["iou"], 1),
-    "dc_frozen": _n(PM["DeepCrack"]["per_k"]["5.0"]["f1"]),
-    "wc_dc_iou": _n(WC["DeepCrack"]["ceiling_iou"]),
     "wc_corpus_iou": _n(max(_corpus)),
 }
 

@@ -1,76 +1,67 @@
-## 3  On public data with pixel-exact ground truth
+## 3  On public SEM data with pixel-exact ground truth
 
-Three public sets, all scored by one instrument at 0 px tolerance with `mad_k` chosen
-leave-one-image-out. Image-level grouping is the right unit: these are independent fields,
-not repeated views of one specimen.
+Two sets, the crack classes of a public cross-material microstructure collection (Zenodo
+23045328, CC BY 4.0). They are the only public crack segmentation data we found in this
+modality; Section 7 records what else was searched and rejected.
 
-| set | modality | material | n | crack prevalence |
+| set | material | n | crack prevalence | masks |
 |---|---|---|---|---|
-| Inconel 718 | SEM | nickel superalloy | {in_n} | {in_prev}% |
-| EBC | SEM | environmental barrier coating | {ebc_n} | {ebc_prev}% |
-| DeepCrack | optical | concrete and asphalt | {dc_n} | {dc_prev}% |
+| Inconel 718 | nickel superalloy | {in_n} | {in_prev}% | anti-aliased binary |
+| EBC | environmental barrier coating | {ebc_n} | {ebc_prev}% | binary |
 
-The two SEM sets are the crack classes of a public cross-material microstructure
-collection (Zenodo 23045328, CC BY 4.0). Their masks were checked rather than assumed: the
-coating masks are strictly binary, the alloy masks are anti-aliased binary — 94.7% of
-pixels exactly 0, 4.3% at 246 or above, 0.52% in between — so a mid-grey threshold is safe,
-and the scorer refuses to run on a mask that is not bimodal.
+Everything is scored at 0 px tolerance with `mad_k` chosen leave-one-image-out.
+
+Two properties of the data had to be established before any score could be trusted. The
+**mask encodings differ between the two sets** — the coating's are strictly 0 or 255, the
+alloy's span the full byte range as anti-aliased binary, 94.7% exactly 0 and 4.3% at 246 or
+above — so the scorer checks bimodality and refuses a mask that fails it. And the images
+are **16-bit TIFFs**: PIL's ordinary 8-bit conversion turns them nearly white, mean 254.8
+against the data's 15510 of 65535, which drove the detector's recall to 0.0012 before it
+was caught. Taking the high byte reproduces the dataset authors' own 8-bit PNGs exactly,
+so that is the conversion used.
 
 [FIGURE P1 - public scores]
 
-### 3.1  The detector is much worse on micrographs, and that is the result
+### 3.1  Whole fields, not the released crops
 
-On SEM alloy the detector reaches IoU {in_iou}; on pavement, {dc_iou}. Both are far above
-their own no-information floors — {in_lift_iou} and {dc_lift_iou} times the IoU of marking
-every pixel — so neither is a failure to detect anything. They are a factor of two apart on
-the same metric with the same code.
+The collection ships a test split of 1024 px crops. We do not use it as the primary
+measurement for two reasons. Every one of the {in_crop_src} source images behind those
+crops also appears among the originals, so the two are not independent sets. And the crops
+are cut around their cracks: prevalence rises from {in_prev}% to {in_crop_prev}% and F1
+with it, from {in_f1} to {in_crop_f1}, with no change to the detector. Figure 2 shows both
+curves. The difference between them is what a benchmark's framing is worth, and it is
+larger than most differences between methods in this literature.
 
-This matters beyond the benchmark. The same detector scores IoU roughly 0.33–0.42 on our
-own laboratory SEM corpus, which is within the range it reaches on Inconel 718 here. An
-independent laboratory's alloy micrographs, annotated by other people to pixel precision,
-put the detector in the same place our own data does. Whatever makes micrographs harder is
-a property of the imagery, not of our annotation.
-
-### 3.2  One constant, and the limit of its transfer
+### 3.2  The one free constant
 
 [FIGURE P2 - operating curve]
 
-The shipped constant `mad_k = 5.0` was fitted on SEM steel. On the SEM alloy set it is the
-best of the seven values tested, and the curve falls away monotonically below it. On
-pavement the same detector wants a smaller value and loses {dc_frozen_loss} F1 if the SEM
-constant is used unchanged.
-
-So the constant transfers *within* a modality and not *across* one. That is a weaker claim
-than "one refit covers everything" and a more useful one for a tool: a laboratory that
-calibrates once on its own microscope does not recalibrate per specimen.
+`mad_k = 5.0` was fitted on SEM steel in a different laboratory, on a different alloy,
+years before this dataset existed. On these whole fields it is the best of the seven values
+tested and the curve falls away monotonically below it. That is the strongest positive
+result here: the constant did not need refitting for a new SEM corpus.
 
 ### 3.3  The failure case
 
 On the EBC coating the detector reaches precision {ebc_p} at a crack prevalence of
-{ebc_prev}%. Recall is high ({ebc_r}) — the cracks are found — but the detector marks far
-too much besides, and at this prevalence a small absolute false-positive area destroys
-precision. We report it because a method paper that shows only the sets where a method
-works is not reporting a method.
+{ebc_prev}%. Recall is {ebc_r} — the cracks are found — but far too much else is marked,
+and at this prevalence a small absolute false-positive area destroys precision. A method
+paper that shows only the sets where a method works is not reporting a method.
 
-### 3.4  Against classical detectors, the detector does not lead on SEM
+### 3.4  Against classical detectors, the detector does not lead
 
 [FIGURE P4 - baselines]
 
 Every arm gets its own best parameter by the same leave-one-image-out rule, on the same
-images, through the same scoring function. The result is the opposite of convenient.
+images, through the same scoring function. On the SEM alloy this detector ranks
+**{in_rank} of seven**: Sauvola local thresholding reaches {in_sauvola} and Sato ridge
+{in_sato} against our {in_crop_f1}. On the coating it ranks fifth of seven.
 
-On pavement this detector ranks **first of seven** ({dc_f1} against {dc_next} for the next
-arm). On the SEM alloy it ranks **third of seven**: Sauvola local thresholding reaches
-{in_sauvola} and Sato ridge {in_sato} against our {in_f1}. On the SEM coating it ranks
-**fifth of seven**.
+The top three on the alloy are separated by {in_spread} F1, about the width of a gap this
+project has elsewhere called irresolvable at this sample size, so the honest statement is
+that on SEM alloy this detector and two classical filters are indistinguishable. We built
+it for micrographs and on micrographs it is matched by a local threshold from 2000 and a
+ridge filter from 1998.
 
-We built this detector for micrographs and it is beaten on micrographs by a local
-threshold from 2000 and a ridge filter from 1998. The three leading arms on Inconel 718 are
-separated by {in_spread} F1 — about the width of the gap we have previously called
-irresolvable on a corpus this size — so the honest statement is that on SEM alloy this
-detector and two classical filters are indistinguishable, and that the margin it enjoys on
-pavement does not survive the change of modality.
-
-What survives is the comparison's premise rather than its winner: none of these arms is
-trained, all are tuned identically, and a reader can see what the whole classical family
-reaches on each set.
+This comparison was run on the released crops, the only set all seven arms have been scored
+on, so every arm in it is flattered by the same cropping described in §3.1.

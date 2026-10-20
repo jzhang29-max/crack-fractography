@@ -16,14 +16,13 @@ median {in_stroke} px and the coating's at {ebc_stroke} px — a factor of four 
 the best constant-width reconstruction reaches {wc_in_iou} and {wc_ebc_iou} respectively.
 Four times the brush width, the same ceiling to within 0.007.
 
-**This does not explain our own gap, and we initially claimed it did.** The obvious reading
-of a detector scoring IoU {dc_iou} on pavement and {in_iou} on SEM alloy is that the
-annotations differ in breadth. Measured, that reading fails: the constant-width curve peaks
-at {wc_dc_iou} on DeepCrack and {wc_corpus_iou} on our own corpus tiles — within 0.01 of
-each other despite a large difference in brush width. Whatever makes micrographs harder for
-this detector, it is not how wide the labels are drawn.
+**This does not set a ceiling, and we presented it as one.** A real label varies in
+width along its length, so a detector that tracks that variation can score above a
+constant-width redraw of the same centreline. We had to be told this by the measurement.
 
-**The reconstruction is not an upper bound, and we presented it as one.** The detector
-*exceeds* it on DeepCrack ({dc_iou} against {wc_dc_iou}), because a real label varies in
-width along its length and a detector that tracks that variation beats a constant-width
-redraw of the same centreline. We had to be told this by the measurement.
+**And width does not explain the detector's difficulty here, which we initially claimed it
+did.** The two SEM sets are annotated at a median {in_stroke} px and {ebc_stroke} px — four
+times apart — and their best constant-width reconstructions reach {wc_in_iou} and
+{wc_ebc_iou}, the same ceiling to within 0.007. Our own laboratory corpus, scored by the
+same construction, peaks at {wc_corpus_iou}. Whatever makes these images hard for this
+detector, it is not how wide the labels are drawn.

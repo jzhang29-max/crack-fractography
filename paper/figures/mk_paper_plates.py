@@ -2,7 +2,10 @@
 """Plates for the paper draft, all from measured JSON and none of them hand-drawn.
 
 Sources, all written by a measuring script and never edited by hand:
-    docs/figures/public_metrics.json      P/R/F1/IoU + controls, CrackForest + DeepCrack
+    docs/figures/sem_originals_metrics.json  P/R/F1/IoU + controls, SEM whole fields
+    docs/figures/sem_public_metrics.json     the same, on the released crops
+    docs/figures/sem_baselines.json          seven classical arms on the crops
+    docs/figures/sem_width_ceiling.json      constant-width reconstruction curves
     <scratch>/paperfigs/width_ceiling.json  constant-width trace vs label, both datasets
     docs/figures/metric_figures.json      the same width construction on the 26 corpus tiles
 
@@ -54,11 +57,15 @@ def load(path, what):
 PM = load(os.path.join(REPO, "docs/figures/public_metrics.json"), "public metrics")["datasets"]
 SEM_PM = load(os.path.join(REPO, "docs/figures/sem_public_metrics.json"), "SEM metrics")["datasets"]
 SEM_WC = load(os.path.join(REPO, "docs/figures/sem_width_ceiling.json"), "SEM width ceiling")
-# One table for all three sets, SEM first: the application is micrographs and the pavement
-# set is the cross-modality check, not the headline.
-ALL = {"Inconel 718\n(SEM alloy)": SEM_PM["Inconel718_crack"],
-       "EBC\n(SEM coating)": SEM_PM["EBC_crack"],
-       "DeepCrack\n(pavement)": PM["DeepCrack"]}
+SEM_OR = load(os.path.join(REPO, "docs/figures/sem_originals_metrics.json"),
+              "SEM originals")["datasets"]
+# SEM ONLY. Pavement is out of the paper: the application is micrographs, and a road-surface
+# benchmark says nothing about one. The primary numbers are the ORIGINAL 1024x1024 fields
+# rather than the released crops -- every source image behind the crops also appears among
+# the originals, so the two are not independent, and the crops are cut around cracks, which
+# lifts prevalence from 1.80% to 4.53% and the score with it.
+ALL = {"Inconel 718\n(SEM alloy, whole fields)": SEM_OR["Inconel718_crack"],
+       "EBC\n(SEM coating, whole fields)": SEM_OR["EBC_crack"]}
 WC = load(os.path.join(SCRATCH, "width_ceiling.json"), "width ceiling")
 MF = load(os.path.join(REPO, "docs/figures/metric_figures.json"), "corpus metric figures")
 
@@ -66,7 +73,7 @@ MF = load(os.path.join(REPO, "docs/figures/metric_figures.json"), "corpus metric
 # ---------------------------------------------------------------- plate: public scores
 def plate_scores():
     mets = ["precision", "recall", "f1", "iou"]
-    fig, axes = plt.subplots(1, 3, figsize=(11.0, 3.3))
+    fig, axes = plt.subplots(1, 2, figsize=(8.0, 3.3))
     for ax, (name, r) in zip(axes, ALL.items()):
         det = [r["loo"][m] for m in mets]
         floor = [r["controls"]["mark_everything"][m] for m in mets]
@@ -86,7 +93,7 @@ def plate_scores():
         ax.spines[["top", "right"]].set_visible(False)
     axes[0].set_ylabel("score", fontsize=BODY)
     axes[0].legend(fontsize=SMALL, frameon=False, loc="upper left")
-    fig.suptitle("The detector on three public crack sets, against its own "
+    fig.suptitle("The detector on public SEM crack data, against its own "
                  "no-information floors", fontsize=TITLE, y=1.04)
     save(fig, "P1 - public scores", {
         "what": "P/R/F1/IoU at 0 px tolerance, mad_k leave-one-image-out, three controls",
@@ -102,7 +109,6 @@ def plate_transfer():
     # ONE SERIES NOW. This plate used to carry two datasets and the sentence "one refitted
     # constant transfers". With CrackForest out of the paper there is one dataset left and
     # no transfer can be shown, so the plate is an operating curve and the claim is gone.
-    marks = {"DeepCrack": ("o", "-", "0.55")}
     sem = SEM_PM["Inconel718_crack"]["per_k"]
     ks = sorted((float(k) for k in sem), reverse=True)
     def pick(d, k):
@@ -112,13 +118,15 @@ def plate_transfer():
         raise KeyError(f"{k} not in {sorted(d)}")
 
     ax.plot(ks, [pick(sem, k)["f1"] for k in ks], marker="^", linestyle="-",
-            color="0.0", label="Inconel 718 (SEM alloy)", markersize=4.5, linewidth=1.6)
-    for d, (mk, ls, col) in marks.items():
-        pk = PM[d]["per_k"]
-        ks = sorted((float(k) for k in pk), reverse=True)
-        ax.plot(ks, [pick(pk, k)["f1"] for k in ks],
-                marker=mk, linestyle="--", color=col, label=d + " (pavement)",
-                markersize=4, linewidth=1.4)
+            color="0.0", label="Inconel 718, whole fields", markersize=4.5, linewidth=1.6)
+    # THE SAME IMAGES, CROPPED. Not a second dataset: the released crops come from these
+    # very fields, cut around the cracks, and that alone lifts F1 by about 0.15 at every
+    # setting. It is the clearest statement in the paper of how much a benchmark's framing
+    # is worth, and it costs one extra line to show.
+    crop = SEM_PM["Inconel718_crack"]["per_k"]
+    ax.plot(ks, [pick(crop, k)["f1"] for k in ks], marker="s", linestyle="--",
+            color="0.55", label="the same images, cropped around cracks", markersize=4,
+            linewidth=1.3)
     ax.axvline(5.0, color="0.7", linewidth=1, linestyle=":")
     ax.text(5.0, 0.03, " shipped (fitted on SEM steel)", fontsize=SMALL, color="0.4",
             rotation=90, va="bottom")
@@ -128,13 +136,14 @@ def plate_transfer():
     ax.tick_params(labelsize=SMALL)
     ax.spines[["top", "right"]].set_visible(False)
     ax.legend(fontsize=SMALL, frameon=False)
-    ax.set_title("The one free constant: optimal unchanged on SEM, not on pavement",
+    ax.set_title("The one free constant on SEM: the shipped value is the best one",
                  fontsize=TITLE)
     # RENAMED. It was "P2 - transfer" while it carried two datasets and argued that a
     # refitted constant transfers between them. With one dataset it is an operating curve
     # and the old name would print under a figure that no longer shows transfer.
     save(fig, "P2 - operating curve", {
-        "what": "mean F1 against the detector's single free constant",
+        "what": "mean F1 against the detector's single free constant, on whole SEM "
+                "fields and on the released crops of those same fields",
         "per_k": {d: {k: v["f1"] for k, v in PM[d]["per_k"].items()} for d in PM},
         "source": "docs/figures/public_metrics.json"})
 
@@ -148,13 +157,11 @@ def plate_width():
     ax.plot(ws, [sw["iou_by_trace_width"][str(w)] for w in ws], marker="^", linestyle="-",
             color="0.0", markersize=4.5, linewidth=1.6,
             label=f"Inconel 718, SEM  (label {sw['label_stroke_px_median']:.0f} px)")
-    for d, (mk, ls, col) in {"DeepCrack": ("o", "--", "0.55")}.items():
-        c = WC[d]["iou_by_trace_width"]
-        ws = sorted(int(k) for k in c)
-        ax.plot(ws, [c[str(w)] for w in ws], marker=mk, linestyle=ls, color=col,
-                markersize=4, linewidth=1.4,
-                label=f"{d}, pavement  (label {WC[d]['label_stroke_px_median']:.0f} px)")
-        series.append((d, ws, [c[str(w)] for w in ws]))
+    ew = SEM_WC["EBC_crack"]
+    ews = sorted(int(k) for k in ew["iou_by_trace_width"])
+    ax.plot(ews, [ew["iou_by_trace_width"][str(w)] for w in ews], marker="s",
+            linestyle="--", color="0.55", markersize=4, linewidth=1.4,
+            label=f"EBC coating, SEM  (label {ew['label_stroke_px_median']:.0f} px)")
     ce, cw = MF["ceiling"], MF["ceiling_widths"]
     corpus = [sum(ce[str(w)]["iou"]) / len(ce[str(w)]["iou"]) for w in cw]
     # NO STROKE WIDTH ON THIS SERIES. An earlier draft annotated it "label 35 px" from a
@@ -162,16 +169,14 @@ def plate_width():
     # own peak at 9 px contradicts it, and a 35 px label is best reconstructed by a 35 px
     # redraw. The tile cache that would let it be re-measured with half_width() is not on
     # this machine, so the annotation is dropped rather than guessed.
-    ax.plot(cw, corpus, marker="^", linestyle="-.", color="0.0", markersize=4,
-            linewidth=1.4, label="this corpus, 26 tiles")
-    ax.axhline(SEM_PM["Inconel718_crack"]["loo"]["iou"], color="0.0", linewidth=.9,
+    ax.plot(cw, corpus, marker="o", linestyle="-.", color="0.3", markersize=3.6,
+            linewidth=1.3, markerfacecolor="white", label="this corpus, 26 tiles")
+    ax.axhline(SEM_OR["Inconel718_crack"]["loo"]["iou"], color="0.0", linewidth=.9,
                linestyle=":")
-    ax.text(40, SEM_PM["Inconel718_crack"]["loo"]["iou"] + .012, "detector on Inconel 718",
-            fontsize=SMALL, ha="right", color="0.0")
-    for d, col in (("DeepCrack", "0.55"),):
-        ax.axhline(PM[d]["loo"]["iou"], color=col, linewidth=.9, linestyle=":")
-        ax.text(40, PM[d]["loo"]["iou"] - .028, f"detector on {d}", fontsize=SMALL,
-                ha="right", color=col)
+    ax.text(1.5, SEM_OR["Inconel718_crack"]["loo"]["iou"] - .030,
+            "detector on Inconel 718, whole fields", fontsize=SMALL, ha="left",
+            color="0.0")
+
     ax.set_xlabel("width the centreline is redrawn at (px)", fontsize=BODY)
     ax.set_ylabel("IoU against the label", fontsize=BODY)
     ax.tick_params(labelsize=SMALL)
@@ -184,37 +189,38 @@ def plate_width():
                 "the label. Zero localisation error by construction.",
         "NOT A CEILING": "this is a constant-width reconstruction, not an oracle. A real "
                          "label varies in width along its length, so a detector that "
-                         "tracks that variation can and does score ABOVE this curve -- "
-                         "the detector reaches IoU 0.681 on DeepCrack where the best "
-                         "constant-width redraw reaches 0.554.",
+                         "tracks that variation can score ABOVE this curve.",
         "peaks": {d: {"iou": WC[d]["ceiling_iou"], "at_width_px": WC[d]["ceiling_at_width"],
                       "label_stroke_px": WC[d]["label_stroke_px_median"]} for d in WC},
         "corpus_peak": {"iou": max(corpus), "at_width_px": cw[corpus.index(max(corpus))]},
         "corpus_stroke_width": "NOT MEASURED HERE. The tile cache tilebench.load() needs "
                                "is absent on this machine, so no stroke width is claimed "
                                "for the corpus series.",
-        "the finding": "the corpus and DeepCrack curves nearly coincide (peaks 0.547 at "
-                       "9 px and 0.554 at 7 px), so label stroke width does NOT explain "
-                       "why the detector scores IoU 0.68 on DeepCrack and about 0.33-0.42 "
-                       "on the corpus.",
+        "the finding": "Inconel 718's labels are drawn at 25.8 px and the EBC coating's "
+                       "at 6.4 px, four times apart, and their best constant-width "
+                       "reconstructions reach 0.5861 and 0.5797 -- the same ceiling to "
+                       "within 0.007. Label stroke width does not set the ceiling, which "
+                       "is what an earlier draft of this paper claimed.",
         "source": "width_ceiling.json + docs/figures/metric_figures.json"})
 
 
 # ----------------------------------------------------- plate: against classical methods
 def plate_baselines():
-    bl = load(os.path.join(SCRATCH, "baselines_full.json"), "pavement baselines")["results"]
     sb = load(os.path.join(REPO, "docs/figures/sem_baselines.json"), "SEM baselines")["results"]
+    # The baseline sweep was run on the released CROPS, which is the only set every arm has
+    # been scored on. It is labelled as such: the detector's own whole-field score is lower
+    # (F1 0.3444 against 0.4958), so this panel flatters every arm equally and must not be
+    # read as a whole-field result.
     sets = [("Inconel 718 (SEM alloy)", sb["Inconel718_crack"], SEM_PM["Inconel718_crack"]["n"]),
-            ("EBC (SEM coating)", sb["EBC_crack"], SEM_PM["EBC_crack"]["n"]),
-            ("DeepCrack (pavement)", bl["DeepCrack"], PM["DeepCrack"]["n"])]
+            ("EBC (SEM coating)", sb["EBC_crack"], SEM_PM["EBC_crack"]["n"])]
     nice = {"YOUR DETECTOR": "this detector",
             "global threshold (Otsu on flat)": "Otsu on flattened"}
     # WIDE GUTTERS. At the default spacing each panel's value labels ran into the next
     # panel's arm names and the plate was unreadable at the right-hand edge.
-    fig, axes = plt.subplots(1, 3, figsize=(13.6, 3.5))
-    fig.subplots_adjust(wspace=0.62)
+    fig, axes = plt.subplots(1, 2, figsize=(9.6, 3.5))
+    fig.subplots_adjust(wspace=0.58)
     for ax, (name, r, n) in zip(axes, sets):
-        # SORTED BY SCORE, not by a fixed arm order. The detector is first on pavement and
+        # SORTED BY SCORE, not by a fixed arm order. The detector is
         # third and fifth on the two SEM sets; a fixed order would bury that.
         rank = sorted(r.items(), key=lambda kv: kv[1])
         vals = [v for _, v in rank]
@@ -228,11 +234,12 @@ def plate_baselines():
         ax.set_yticks(ypos); ax.set_yticklabels(names, fontsize=SMALL)
         ax.set_xlim(0, max(vals) * 1.34)
         ax.set_xlabel("mean F1 per image", fontsize=BODY)
-        ax.set_title(f"{name}\nn={n} \u2014 this detector ranks {pos} of {len(rank)}",
+        ax.set_title(f"{name}, released crops\nn={n} \u2014 this detector ranks "
+                     f"{pos} of {len(rank)}",
                      fontsize=SMALL)
         ax.tick_params(labelsize=SMALL)
         ax.spines[["top", "right"]].set_visible(False)
-    fig.suptitle("Against classical detectors: first on pavement, not on either SEM set",
+    fig.suptitle("Against classical detectors on SEM: this detector does not lead",
                  fontsize=TITLE, y=1.05)
     save(fig, "P4 - baselines", {
         "what": "every arm's own best parameter chosen leave-one-image-out, same images, "
@@ -241,14 +248,13 @@ def plate_baselines():
                          "rank": len(r) - sorted(r.items(), key=lambda kv: kv[1]).index(
                              ("YOUR DETECTOR", r["YOUR DETECTOR"])),
                          "all": r} for name, r, _ in sets},
-        "THE RESULT": "the detector leads on pavement and does not lead on either SEM "
-                      "set: 3 of 7 on Inconel 718, beaten by Sauvola and Sato, and 5 of 7 "
-                      "on the EBC coating. It was built for micrographs.",
-        "FIXES A PRIOR NUMBER": "docs/figures/public_baselines.json reports the detector "
-                                "at 0.8209 on DeepCrack; that run scored the first 120 of "
-                                "237 images and omitted k=1.0. The full split gives "
-                                "0.7932.",
-        "source": "sem_baselines.json + baselines_full.json"})
+        "THE RESULT": "the detector does not lead on either SEM set: 3 of 7 on Inconel "
+                      "718, beaten by Sauvola local thresholding and a Sato ridge filter, "
+                      "and 5 of 7 on the EBC coating. It was built for micrographs.",
+        "SCOPE": "run on the released crops, the only set all seven arms share. The "
+                 "detector's whole-field score is lower (0.3444 against 0.4958), so every "
+                 "arm here is flattered by the same cropping.",
+        "source": "sem_baselines.json"})
 
 
 if __name__ == "__main__":
