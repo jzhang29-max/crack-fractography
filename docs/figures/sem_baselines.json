@@ -1,0 +1,23 @@
+{
+ "note": "full SEM crack classes, same arms and rule as the pavement run",
+ "results": {
+  "Inconel718_crack": {
+   "YOUR DETECTOR": 0.4958370495713153,
+   "global threshold (Otsu on flat)": 0.08162692472152858,
+   "percentile threshold": 0.44133204701225515,
+   "Sauvola local": 0.5144809732944982,
+   "Frangi ridge": 0.4710232292545813,
+   "Sato ridge": 0.4985218044909488,
+   "Meijering ridge": 0.49236669161765145
+  },
+  "EBC_crack": {
+   "YOUR DETECTOR": 0.0503579483506774,
+   "global threshold (Otsu on flat)": 0.05761866613262046,
+   "percentile threshold": 0.08491125363009033,
+   "Sauvola local": 0.07727702966941534,
+   "Frangi ridge": 0.03862692155887154,
+   "Sato ridge": 0.04233135563874981,
+   "Meijering ridge": 0.05047155808479773
+  }
+ }
+}

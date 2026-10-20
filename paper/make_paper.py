@@ -57,6 +57,10 @@ def _f(path, what):
 
 
 PM = _f(os.path.join(REPO, "docs/figures/public_metrics.json"), "public metrics")["datasets"]
+SP = _f(os.path.join(REPO, "docs/figures/sem_public_metrics.json"), "SEM metrics")["datasets"]
+SB = _f(os.path.join(REPO, "docs/figures/sem_baselines.json"), "SEM baselines")["results"]
+PB = _f(os.path.join(SCRATCH, "baselines_full.json"), "pavement baselines")["results"]
+SW = _f(os.path.join(REPO, "docs/figures/sem_width_ceiling.json"), "SEM width ceiling")
 WC = _f(os.path.join(SCRATCH, "width_ceiling.json"), "width ceiling")
 MF = _f(os.path.join(REPO, "docs/figures/metric_figures.json"), "corpus ceiling")
 
@@ -71,7 +75,37 @@ def _n(x, d=4):
 # CrackForest's values are deliberately absent: it is road imagery and was removed from
 # the draft. If a section reintroduces a {cf_...} placeholder the renderer fails on an
 # unresolved name rather than quietly printing a dataset the paper no longer argues from.
+IN, EBC = SP["Inconel718_crack"], SP["EBC_crack"]
+_dc_rank = sorted(PB["DeepCrack"].items(), key=lambda kv: -kv[1])
+_in_rank = sorted(SB["Inconel718_crack"].items(), key=lambda kv: -kv[1])
+
 VALUES = {
+    # --- SEM alloy, the paper's primary set ---
+    "in_n": str(IN["n"]),
+    "in_prev": _n(100 * IN["prevalence"], 2),
+    "in_f1": _n(IN["loo"]["f1"]),
+    "in_iou": _n(IN["loo"]["iou"]),
+    "in_me_f1": _n(IN["controls"]["mark_everything"]["f1"]),
+    "in_lift_f1": _n(IN["loo"]["f1"] / IN["controls"]["mark_everything"]["f1"], 1),
+    "in_lift_iou": _n(IN["loo"]["iou"] / IN["controls"]["mark_everything"]["iou"], 1),
+    "in_sauvola": _n(SB["Inconel718_crack"]["Sauvola local"]),
+    "in_sato": _n(SB["Inconel718_crack"]["Sato ridge"]),
+    # the spread across the three leading arms, which is the "indistinguishable" claim
+    "in_spread": _n(_in_rank[0][1] - _in_rank[2][1]),
+    "in_stroke": _n(SW["Inconel718_crack"]["label_stroke_px_median"], 1),
+    "wc_in_iou": _n(SW["Inconel718_crack"]["ceiling_iou"]),
+    # --- SEM coating, the failure case ---
+    "ebc_stroke": _n(SW["EBC_crack"]["label_stroke_px_median"], 1),
+    "wc_ebc_iou": _n(SW["EBC_crack"]["ceiling_iou"]),
+    "ebc_n": str(EBC["n"]),
+    "ebc_prev": _n(100 * EBC["prevalence"], 2),
+    "ebc_p": _n(EBC["loo"]["precision"]),
+    "ebc_r": _n(EBC["loo"]["recall"]),
+    # --- pavement, the cross-modality check ---
+    "dc_n": str(PM["DeepCrack"]["n"]),
+    "dc_prev": _n(100 * PM["DeepCrack"]["prevalence"], 2),
+    "dc_next": _n(_dc_rank[1][1]),
+    "dc_frozen_loss": _n(PM["DeepCrack"]["loo"]["f1"] - PM["DeepCrack"]["per_k"]["5.0"]["f1"]),
     "dc_f1": _n(PM["DeepCrack"]["loo"]["f1"]),
     "dc_iou": _n(PM["DeepCrack"]["loo"]["iou"]),
     "dc_me_f1": _n(PM["DeepCrack"]["controls"]["mark_everything"]["f1"]),
@@ -146,6 +180,27 @@ class Doc:
                            va="top", ha="left", transform=self.page.transFigure)
             self.y -= LEAD["body"]
 
+    def table(self, rows, size):
+        """Pipe tables were printing as raw markdown. Rendered as aligned columns in a
+        monospaced face, which is honest for a draft and needs no column model."""
+        cols = max(len(r) for r in rows)
+        rows = [r + [""] * (cols - len(r)) for r in rows]
+        w = [max(len(r[c]) for r in rows) for c in range(cols)]
+        for i, r in enumerate(rows):
+            line = "  ".join(r[c].ljust(w[c]) for c in range(cols)).rstrip()
+            self.space(LEAD["body"])
+            self.page.text(ML / PAGE[0], self.y / PAGE[1], line, fontsize=size,
+                           fontweight="bold" if i == 0 else "normal", va="top", ha="left",
+                           family="monospace", transform=self.page.transFigure)
+            self.y -= LEAD["body"]
+            if i == 0:
+                self.space(0.05)
+                self.page.text(ML / PAGE[0], self.y / PAGE[1],
+                               "-" * len(line), fontsize=size, va="top", ha="left",
+                               family="monospace", color="0.55",
+                               transform=self.page.transFigure)
+                self.y -= 0.09
+
     def figure(self, path, caption):
         img = mpimg.imread(path)
         w_in = PAGE[0] - ML - MR
@@ -191,6 +246,7 @@ def main():
         doc = Doc(pdf)
         fign = 0
         # the pipeline plate leads, before any section
+        pending_table = []
         for src in files:
             for raw in open(os.path.join(SECT, src), encoding="utf-8").read().split("\n"):
                 line = resolve(raw.rstrip())
@@ -200,6 +256,15 @@ def main():
                     p = plate_for(m.group(1))
                     doc.figure(p, f"Figure {fign}.  {os.path.splitext(os.path.basename(p))[0]}")
                     continue
+                if line.lstrip().startswith("|"):
+                    pending_table.append([c.strip() for c in
+                                          line.strip().strip("|").split("|")])
+                    continue
+                if pending_table:
+                    doc.table([r for r in pending_table
+                               if not all(set(c) <= set("-: ") for c in r)], SMALL)
+                    pending_table = []
+                    doc.y -= 0.06
                 if not line.strip():
                     doc.y -= 0.07
                 elif line.startswith("### "):
@@ -214,6 +279,10 @@ def main():
                     doc.bullet(line.split(". ", 1)[1], BODY)
                 else:
                     doc.text(line, BODY)
+            if pending_table:
+                doc.table([r for r in pending_table
+                           if not all(set(c) <= set("-: ") for c in r)], SMALL)
+                pending_table = []
             doc.y -= 0.10
         # the pipeline figure at the end of the method section is easier as an appendix
         doc.text("Appendix A.  The detector, end to end", H2, "bold", LEAD["h2"], gap=0.25, wrap="h2")

@@ -52,49 +52,48 @@ def load(path, what):
 
 
 PM = load(os.path.join(REPO, "docs/figures/public_metrics.json"), "public metrics")["datasets"]
+SEM_PM = load(os.path.join(REPO, "docs/figures/sem_public_metrics.json"), "SEM metrics")["datasets"]
+SEM_WC = load(os.path.join(REPO, "docs/figures/sem_width_ceiling.json"), "SEM width ceiling")
+# One table for all three sets, SEM first: the application is micrographs and the pavement
+# set is the cross-modality check, not the headline.
+ALL = {"Inconel 718\n(SEM alloy)": SEM_PM["Inconel718_crack"],
+       "EBC\n(SEM coating)": SEM_PM["EBC_crack"],
+       "DeepCrack\n(pavement)": PM["DeepCrack"]}
 WC = load(os.path.join(SCRATCH, "width_ceiling.json"), "width ceiling")
 MF = load(os.path.join(REPO, "docs/figures/metric_figures.json"), "corpus metric figures")
 
 
 # ---------------------------------------------------------------- plate: public scores
 def plate_scores():
-    # CRACKFOREST IS OUT OF THE PAPER. It is road-surface imagery and the application this
-    # detector is built for is micrographs; the measurement stays in
-    # docs/figures/public_metrics.json as a record, it is simply not argued from here.
-    ds = ["DeepCrack"]
     mets = ["precision", "recall", "f1", "iou"]
-    fig, axes = plt.subplots(1, 1, figsize=(5.0, 3.3), squeeze=False)
-    axes = axes[0]
-    for ax, d in zip(axes, ds):
-        r = PM[d]
+    fig, axes = plt.subplots(1, 3, figsize=(11.0, 3.3))
+    for ax, (name, r) in zip(axes, ALL.items()):
         det = [r["loo"][m] for m in mets]
         floor = [r["controls"]["mark_everything"][m] for m in mets]
         rnd = [r["controls"]["equal_area_random"][m] for m in mets]
         x = range(len(mets))
         ax.bar([i - 0.26 for i in x], det, 0.26, color="0.25", label="detector")
-        ax.bar([i for i in x], floor, 0.26, color="0.62", label="mark everything")
+        ax.bar(list(x), floor, 0.26, color="0.62", label="mark everything")
         ax.bar([i + 0.26 for i in x], rnd, 0.26, color="0.85", edgecolor="0.4",
                linewidth=.6, label="equal-area random")
         for i, v in enumerate(det):
             ax.text(i - 0.26, v + .02, f"{v:.2f}", ha="center", fontsize=SMALL)
         ax.set_xticks(list(x)); ax.set_xticklabels(["P", "R", "F1", "IoU"], fontsize=BODY)
         ax.set_ylim(0, 1.0)
-        ax.set_title(f"{d}  (n={r['n']}, prevalence {100 * r['prevalence']:.2f}%)",
-                     fontsize=BODY)
+        ax.set_title(f"{name}\nn={r['n']}, prevalence {100 * r['prevalence']:.2f}%",
+                     fontsize=SMALL)
         ax.tick_params(labelsize=SMALL)
         ax.spines[["top", "right"]].set_visible(False)
     axes[0].set_ylabel("score", fontsize=BODY)
-    axes[0].legend(fontsize=SMALL, frameon=False, loc="upper right")
-    fig.suptitle("The detector on DeepCrack, against its own no-information floors",
-                 fontsize=TITLE, y=1.02)
+    axes[0].legend(fontsize=SMALL, frameon=False, loc="upper left")
+    fig.suptitle("The detector on three public crack sets, against its own "
+                 "no-information floors", fontsize=TITLE, y=1.04)
     save(fig, "P1 - public scores", {
-        "what": "precision, recall, F1 and IoU at 0 px tolerance, mad_k chosen "
-                "leave-one-image-out, against two controls",
-        "values": {d: {"detector": PM[d]["loo"],
-                       "mark_everything": PM[d]["controls"]["mark_everything"],
-                       "equal_area_random": PM[d]["controls"]["equal_area_random"],
-                       "n": PM[d]["n"], "prevalence": PM[d]["prevalence"]} for d in ds},
-        "source": "docs/figures/public_metrics.json"})
+        "what": "P/R/F1/IoU at 0 px tolerance, mad_k leave-one-image-out, three controls",
+        "values": {k: {"detector": v["loo"], "mark_everything":
+                       v["controls"]["mark_everything"], "n": v["n"],
+                       "prevalence": v["prevalence"]} for k, v in ALL.items()},
+        "source": "sem_public_metrics.json + public_metrics.json"})
 
 
 # ------------------------------------------------------- plate: one constant transfers
@@ -103,12 +102,23 @@ def plate_transfer():
     # ONE SERIES NOW. This plate used to carry two datasets and the sentence "one refitted
     # constant transfers". With CrackForest out of the paper there is one dataset left and
     # no transfer can be shown, so the plate is an operating curve and the claim is gone.
-    marks = {"DeepCrack": ("o", "-", "0.2")}
+    marks = {"DeepCrack": ("o", "-", "0.55")}
+    sem = SEM_PM["Inconel718_crack"]["per_k"]
+    ks = sorted((float(k) for k in sem), reverse=True)
+    def pick(d, k):
+        for cand in (str(k), f"{k:g}", f"{k:.1f}"):
+            if cand in d:
+                return d[cand]
+        raise KeyError(f"{k} not in {sorted(d)}")
+
+    ax.plot(ks, [pick(sem, k)["f1"] for k in ks], marker="^", linestyle="-",
+            color="0.0", label="Inconel 718 (SEM alloy)", markersize=4.5, linewidth=1.6)
     for d, (mk, ls, col) in marks.items():
         pk = PM[d]["per_k"]
         ks = sorted((float(k) for k in pk), reverse=True)
-        ax.plot(ks, [pk[str(k) if str(k) in pk else f"{k:g}"]["f1"] for k in ks],
-                marker=mk, linestyle=ls, color=col, label=d, markersize=4, linewidth=1.4)
+        ax.plot(ks, [pick(pk, k)["f1"] for k in ks],
+                marker=mk, linestyle="--", color=col, label=d + " (pavement)",
+                markersize=4, linewidth=1.4)
     ax.axvline(5.0, color="0.7", linewidth=1, linestyle=":")
     ax.text(5.0, 0.03, " shipped (fitted on SEM steel)", fontsize=SMALL, color="0.4",
             rotation=90, va="bottom")
@@ -118,7 +128,8 @@ def plate_transfer():
     ax.tick_params(labelsize=SMALL)
     ax.spines[["top", "right"]].set_visible(False)
     ax.legend(fontsize=SMALL, frameon=False)
-    ax.set_title("The detector's one free constant on DeepCrack", fontsize=TITLE)
+    ax.set_title("The one free constant: optimal unchanged on SEM, not on pavement",
+                 fontsize=TITLE)
     # RENAMED. It was "P2 - transfer" while it carried two datasets and argued that a
     # refitted constant transfers between them. With one dataset it is an operating curve
     # and the old name would print under a figure that no longer shows transfer.
@@ -132,12 +143,17 @@ def plate_transfer():
 def plate_width():
     fig, ax = plt.subplots(figsize=(6.0, 3.8))
     series = []
-    for d, (mk, ls, col) in {"DeepCrack": ("o", "-", "0.2")}.items():
+    sw = SEM_WC["Inconel718_crack"]
+    ws = sorted(int(k) for k in sw["iou_by_trace_width"])
+    ax.plot(ws, [sw["iou_by_trace_width"][str(w)] for w in ws], marker="^", linestyle="-",
+            color="0.0", markersize=4.5, linewidth=1.6,
+            label=f"Inconel 718, SEM  (label {sw['label_stroke_px_median']:.0f} px)")
+    for d, (mk, ls, col) in {"DeepCrack": ("o", "--", "0.55")}.items():
         c = WC[d]["iou_by_trace_width"]
         ws = sorted(int(k) for k in c)
         ax.plot(ws, [c[str(w)] for w in ws], marker=mk, linestyle=ls, color=col,
                 markersize=4, linewidth=1.4,
-                label=f"{d}  (label {WC[d]['label_stroke_px_median']:.0f} px)")
+                label=f"{d}, pavement  (label {WC[d]['label_stroke_px_median']:.0f} px)")
         series.append((d, ws, [c[str(w)] for w in ws]))
     ce, cw = MF["ceiling"], MF["ceiling_widths"]
     corpus = [sum(ce[str(w)]["iou"]) / len(ce[str(w)]["iou"]) for w in cw]
@@ -148,7 +164,11 @@ def plate_width():
     # this machine, so the annotation is dropped rather than guessed.
     ax.plot(cw, corpus, marker="^", linestyle="-.", color="0.0", markersize=4,
             linewidth=1.4, label="this corpus, 26 tiles")
-    for d, col in (("DeepCrack", "0.2"),):
+    ax.axhline(SEM_PM["Inconel718_crack"]["loo"]["iou"], color="0.0", linewidth=.9,
+               linestyle=":")
+    ax.text(40, SEM_PM["Inconel718_crack"]["loo"]["iou"] + .012, "detector on Inconel 718",
+            fontsize=SMALL, ha="right", color="0.0")
+    for d, col in (("DeepCrack", "0.55"),):
         ax.axhline(PM[d]["loo"]["iou"], color=col, linewidth=.9, linestyle=":")
         ax.text(40, PM[d]["loo"]["iou"] - .028, f"detector on {d}", fontsize=SMALL,
                 ha="right", color=col)
@@ -182,42 +202,53 @@ def plate_width():
 
 # ----------------------------------------------------- plate: against classical methods
 def plate_baselines():
-    bl = load(os.path.join(SCRATCH, "baselines_full.json"), "full-split baselines")["results"]
-    order = ["YOUR DETECTOR", "percentile threshold", "Sato ridge", "Meijering ridge",
-             "Sauvola local", "global threshold (Otsu on flat)", "Frangi ridge"]
+    bl = load(os.path.join(SCRATCH, "baselines_full.json"), "pavement baselines")["results"]
+    sb = load(os.path.join(REPO, "docs/figures/sem_baselines.json"), "SEM baselines")["results"]
+    sets = [("Inconel 718 (SEM alloy)", sb["Inconel718_crack"], SEM_PM["Inconel718_crack"]["n"]),
+            ("EBC (SEM coating)", sb["EBC_crack"], SEM_PM["EBC_crack"]["n"]),
+            ("DeepCrack (pavement)", bl["DeepCrack"], PM["DeepCrack"]["n"])]
     nice = {"YOUR DETECTOR": "this detector",
             "global threshold (Otsu on flat)": "Otsu on flattened"}
-    fig, axes = plt.subplots(1, 1, figsize=(5.6, 3.4), squeeze=False)
-    axes = axes[0]
-    for ax, d in zip(axes, ["DeepCrack"]):
-        vals = [bl[d][k] for k in order]
-        names = [nice.get(k, k) for k in order]
-        ypos = list(range(len(order)))[::-1]
-        cols = ["0.2" if k == "YOUR DETECTOR" else "0.72" for k in order]
+    # WIDE GUTTERS. At the default spacing each panel's value labels ran into the next
+    # panel's arm names and the plate was unreadable at the right-hand edge.
+    fig, axes = plt.subplots(1, 3, figsize=(13.6, 3.5))
+    fig.subplots_adjust(wspace=0.62)
+    for ax, (name, r, n) in zip(axes, sets):
+        # SORTED BY SCORE, not by a fixed arm order. The detector is first on pavement and
+        # third and fifth on the two SEM sets; a fixed order would bury that.
+        rank = sorted(r.items(), key=lambda kv: kv[1])
+        vals = [v for _, v in rank]
+        names = [nice.get(k, k) for k, _ in rank]
+        cols = ["0.15" if k == "YOUR DETECTOR" else "0.72" for k, _ in rank]
+        ypos = list(range(len(rank)))
         ax.barh(ypos, vals, 0.62, color=cols)
         for y, v in zip(ypos, vals):
             ax.text(v + .012, y, f"{v:.3f}", va="center", fontsize=SMALL)
+        pos = len(rank) - [k for k, _ in rank].index("YOUR DETECTOR")
         ax.set_yticks(ypos); ax.set_yticklabels(names, fontsize=SMALL)
-        ax.set_xlim(0, 1.0); ax.set_xlabel("mean F1 per image", fontsize=BODY)
-        n = PM[d]["n"]
-        ax.set_title(f"{d}  (n={n})", fontsize=BODY)
+        ax.set_xlim(0, max(vals) * 1.34)
+        ax.set_xlabel("mean F1 per image", fontsize=BODY)
+        ax.set_title(f"{name}\nn={n} \u2014 this detector ranks {pos} of {len(rank)}",
+                     fontsize=SMALL)
         ax.tick_params(labelsize=SMALL)
         ax.spines[["top", "right"]].set_visible(False)
-    fig.suptitle("Against classical detectors, every arm tuned the same way on the same "
-                 "images", fontsize=TITLE, y=1.03)
+    fig.suptitle("Against classical detectors: first on pavement, not on either SEM set",
+                 fontsize=TITLE, y=1.05)
     save(fig, "P4 - baselines", {
-        "what": "every arm's own best parameter chosen leave-one-image-out, 0 px "
-                "tolerance, same images, same scoring function",
-        "values": bl,
+        "what": "every arm's own best parameter chosen leave-one-image-out, same images, "
+                "same scoring function",
+        "ranks": {name: {"detector": r["YOUR DETECTOR"],
+                         "rank": len(r) - sorted(r.items(), key=lambda kv: kv[1]).index(
+                             ("YOUR DETECTOR", r["YOUR DETECTOR"])),
+                         "all": r} for name, r, _ in sets},
+        "THE RESULT": "the detector leads on pavement and does not lead on either SEM "
+                      "set: 3 of 7 on Inconel 718, beaten by Sauvola and Sato, and 5 of 7 "
+                      "on the EBC coating. It was built for micrographs.",
         "FIXES A PRIOR NUMBER": "docs/figures/public_baselines.json reports the detector "
-                                "at 0.8209 on DeepCrack. That run scored the FIRST 120 of "
-                                "the 237 test images and omitted k=1.0 from the "
-                                "detector's grid. On the full split the detector is "
-                                "0.7932, which agrees with public_metrics.json to four "
-                                "decimals. The ranking is unchanged -- 1 of 7 on "
-                                "DeepCrack, 3 of 7 on CrackForest -- but the number is "
-                                "not the same and must not be quoted from the old file.",
-        "source": "baselines_full.json, re-run on the complete test splits"})
+                                "at 0.8209 on DeepCrack; that run scored the first 120 of "
+                                "237 images and omitted k=1.0. The full split gives "
+                                "0.7932.",
+        "source": "sem_baselines.json + baselines_full.json"})
 
 
 if __name__ == "__main__":

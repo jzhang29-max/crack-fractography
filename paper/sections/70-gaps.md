@@ -2,16 +2,16 @@
 
 Listed rather than hidden.
 
-* **The only public dataset here is pavement, and the application is micrographs.**
-  DeepCrack is concrete and asphalt surfaces. A second public set, CrackForest, was
-  measured and removed from this draft for the same reason, and every other public crack
-  dataset we could obtain is also road imagery. So the benchmark section establishes that
-  the detector is competitive on *a* pixel-exact crack benchmark, and establishes nothing
-  about micrographs. Closing this needs a public materials-microscopy crack dataset with
-  pixel ground truth, and we have not found one.
-* **No transfer claim.** An earlier draft argued that one refitted constant carries
-  between datasets. That argument needed two datasets and this draft has one; the
-  measurement still exists in docs/figures/public_metrics.json.
+* **The SEM evidence is {in_n} images of one alloy and {ebc_n} of one coating**, from a
+  single released collection whose record is one sentence long and names no pixel size, no
+  microscope and no annotation protocol. Two crack classes out of eighteen targets. That
+  is enough to place the detector and not enough to characterise it, and a second
+  independent SEM crack set would change this section more than anything else here.
+* **CrackForest was measured and removed** from this draft as road imagery, like
+  DeepCrack. Its numbers remain in docs/figures/public_metrics.json.
+* **The transfer claim is now within-modality only** and rests on one SEM set. "The
+  constant is optimal unchanged on SEM alloy" is one dataset agreeing with the corpus it
+  was fitted on; it is suggestive, not established.
 * **No laboratory results are reported.** By choice: the specimen measurements are not
   being published here. Sections 2 and 5 cite effects measured on that corpus as
   methodological evidence; a reviewer cannot check those without the data, and they should
