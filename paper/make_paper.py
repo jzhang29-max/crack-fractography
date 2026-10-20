@@ -109,7 +109,8 @@ VALUES = {
     "in_crop_gain": _n(IN_CROP["loo"]["f1"] - IN["loo"]["f1"]),
     "in_rank": {1: "first", 2: "second", 3: "third", 4: "fourth", 5: "fifth",
                 6: "sixth", 7: "seventh"}[_rank_i],
-    "ebc_me_f1": _n(EBC["controls"]["mark_everything"]["f1"]),
+    "wc_in_at": str(SW["Inconel718_crack"]["ceiling_at_width"]),
+    "wc_corpus_at": str(MF["ceiling_widths"][_corpus.index(max(_corpus))]),
     # --- SEM coating, the failure case ---
     "ebc_stroke": _n(SW["EBC_crack"]["label_stroke_px_median"], 1),
     "wc_ebc_iou": _n(SW["EBC_crack"]["ceiling_iou"]),

@@ -2,10 +2,16 @@
 
 Listed rather than hidden.
 
-* **The SEM evidence is {in_n} images of one alloy and {ebc_n} of one coating**, from a
-  single released collection whose record is one sentence long and names no pixel size, no
-  microscope and no annotation protocol. Two crack classes out of eighteen targets. That is
-  enough to place the detector and not enough to characterise it.
+* **The evidence is {in_n} images of one alloy**, from a single released collection whose
+  record is one sentence long and names no pixel size, no microscope and no annotation
+  protocol. One crack class out of eighteen targets. That is enough to place the detector
+  and not enough to characterise it, and it is the single largest weakness of this draft.
+* **A second class from the same collection was measured and removed.** The EBC
+  environmental barrier coating ({ebc_n} fields, {ebc_prev}% prevalence) is a ceramic
+  coating rather than a metal and is outside the application. The detector failed on it —
+  {ebc_p} precision at {ebc_r} recall — and that failure is not reported above. Removing it
+  also cost Section 4 its strongest form, which compared two sets annotated four times
+  apart in brush width. Both measurements remain in docs/figures/.
 * **What was searched for and not found.** Public crack segmentation data in this modality
   is close to non-existent. Ruled out, each for a stated reason: road and pavement sets
   (CrackForest, DeepCrack, Crack500, CrackSeg9k and the aggregated collections) are the

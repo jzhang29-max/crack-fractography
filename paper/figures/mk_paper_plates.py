@@ -64,8 +64,10 @@ SEM_OR = load(os.path.join(REPO, "docs/figures/sem_originals_metrics.json"),
 # rather than the released crops -- every source image behind the crops also appears among
 # the originals, so the two are not independent, and the crops are cut around cracks, which
 # lifts prevalence from 1.80% to 4.53% and the score with it.
-ALL = {"Inconel 718\n(SEM alloy, whole fields)": SEM_OR["Inconel718_crack"],
-       "EBC\n(SEM coating, whole fields)": SEM_OR["EBC_crack"]}
+# INCONEL 718 ALONE. The EBC coating is out of the paper: it is a ceramic barrier
+# coating, not a metal, and the application is cracks in alloys. Its measurements stay in
+# docs/figures/sem_originals_metrics.json and sem_baselines.json as a record.
+ALL = {"Inconel 718\n(SEM alloy, whole fields)": SEM_OR["Inconel718_crack"]}
 WC = load(os.path.join(SCRATCH, "width_ceiling.json"), "width ceiling")
 MF = load(os.path.join(REPO, "docs/figures/metric_figures.json"), "corpus metric figures")
 
@@ -73,7 +75,8 @@ MF = load(os.path.join(REPO, "docs/figures/metric_figures.json"), "corpus metric
 # ---------------------------------------------------------------- plate: public scores
 def plate_scores():
     mets = ["precision", "recall", "f1", "iou"]
-    fig, axes = plt.subplots(1, 2, figsize=(8.0, 3.3))
+    fig, axes = plt.subplots(1, 1, figsize=(4.6, 3.3), squeeze=False)
+    axes = axes[0]
     for ax, (name, r) in zip(axes, ALL.items()):
         det = [r["loo"][m] for m in mets]
         floor = [r["controls"]["mark_everything"][m] for m in mets]
@@ -87,14 +90,14 @@ def plate_scores():
             ax.text(i - 0.26, v + .02, f"{v:.2f}", ha="center", fontsize=SMALL)
         ax.set_xticks(list(x)); ax.set_xticklabels(["P", "R", "F1", "IoU"], fontsize=BODY)
         ax.set_ylim(0, 1.0)
-        ax.set_title(f"{name}\nn={r['n']}, prevalence {100 * r['prevalence']:.2f}%",
-                     fontsize=SMALL)
+        ax.set_title(f"n={r['n']} whole fields, prevalence "
+                     f"{100 * r['prevalence']:.2f}%", fontsize=SMALL)
         ax.tick_params(labelsize=SMALL)
         ax.spines[["top", "right"]].set_visible(False)
     axes[0].set_ylabel("score", fontsize=BODY)
     axes[0].legend(fontsize=SMALL, frameon=False, loc="upper left")
-    fig.suptitle("The detector on public SEM crack data, against its own "
-                 "no-information floors", fontsize=TITLE, y=1.04)
+    fig.suptitle("Inconel 718 against its own no-information floors",
+                 fontsize=TITLE, y=1.02)
     save(fig, "P1 - public scores", {
         "what": "P/R/F1/IoU at 0 px tolerance, mad_k leave-one-image-out, three controls",
         "values": {k: {"detector": v["loo"], "mark_everything":
@@ -157,11 +160,7 @@ def plate_width():
     ax.plot(ws, [sw["iou_by_trace_width"][str(w)] for w in ws], marker="^", linestyle="-",
             color="0.0", markersize=4.5, linewidth=1.6,
             label=f"Inconel 718, SEM  (label {sw['label_stroke_px_median']:.0f} px)")
-    ew = SEM_WC["EBC_crack"]
-    ews = sorted(int(k) for k in ew["iou_by_trace_width"])
-    ax.plot(ews, [ew["iou_by_trace_width"][str(w)] for w in ews], marker="s",
-            linestyle="--", color="0.55", markersize=4, linewidth=1.4,
-            label=f"EBC coating, SEM  (label {ew['label_stroke_px_median']:.0f} px)")
+
     ce, cw = MF["ceiling"], MF["ceiling_widths"]
     corpus = [sum(ce[str(w)]["iou"]) / len(ce[str(w)]["iou"]) for w in cw]
     # NO STROKE WIDTH ON THIS SERIES. An earlier draft annotated it "label 35 px" from a
@@ -196,11 +195,12 @@ def plate_width():
         "corpus_stroke_width": "NOT MEASURED HERE. The tile cache tilebench.load() needs "
                                "is absent on this machine, so no stroke width is claimed "
                                "for the corpus series.",
-        "the finding": "Inconel 718's labels are drawn at 25.8 px and the EBC coating's "
-                       "at 6.4 px, four times apart, and their best constant-width "
-                       "reconstructions reach 0.5861 and 0.5797 -- the same ceiling to "
-                       "within 0.007. Label stroke width does not set the ceiling, which "
-                       "is what an earlier draft of this paper claimed.",
+        "the finding": "the two curves peak at different widths -- 21 px for Inconel 718's "
+                       "labels and 9 px for this project's corpus tiles -- so an IoU is not "
+                       "comparable across corpora whose annotation differs. The stronger "
+                       "version of this argument, two SEM sets four times apart in brush "
+                       "width reaching the same ceiling to within 0.007, used the EBC "
+                       "coating and was withdrawn with it.",
         "source": "width_ceiling.json + docs/figures/metric_figures.json"})
 
 
@@ -211,14 +211,14 @@ def plate_baselines():
     # been scored on. It is labelled as such: the detector's own whole-field score is lower
     # (F1 0.3444 against 0.4958), so this panel flatters every arm equally and must not be
     # read as a whole-field result.
-    sets = [("Inconel 718 (SEM alloy)", sb["Inconel718_crack"], SEM_PM["Inconel718_crack"]["n"]),
-            ("EBC (SEM coating)", sb["EBC_crack"], SEM_PM["EBC_crack"]["n"])]
+    sets = [("Inconel 718 (SEM alloy)", sb["Inconel718_crack"],
+             SEM_PM["Inconel718_crack"]["n"])]
     nice = {"YOUR DETECTOR": "this detector",
             "global threshold (Otsu on flat)": "Otsu on flattened"}
     # WIDE GUTTERS. At the default spacing each panel's value labels ran into the next
     # panel's arm names and the plate was unreadable at the right-hand edge.
-    fig, axes = plt.subplots(1, 2, figsize=(9.6, 3.5))
-    fig.subplots_adjust(wspace=0.58)
+    fig, axes = plt.subplots(1, 1, figsize=(5.6, 3.5), squeeze=False)
+    axes = axes[0]
     for ax, (name, r, n) in zip(axes, sets):
         # SORTED BY SCORE, not by a fixed arm order. The detector is
         # third and fifth on the two SEM sets; a fixed order would bury that.
@@ -239,7 +239,7 @@ def plate_baselines():
                      fontsize=SMALL)
         ax.tick_params(labelsize=SMALL)
         ax.spines[["top", "right"]].set_visible(False)
-    fig.suptitle("Against classical detectors on SEM: this detector does not lead",
+    fig.suptitle("Against classical detectors on Inconel 718: this detector does not lead",
                  fontsize=TITLE, y=1.05)
     save(fig, "P4 - baselines", {
         "what": "every arm's own best parameter chosen leave-one-image-out, same images, "
@@ -248,9 +248,9 @@ def plate_baselines():
                          "rank": len(r) - sorted(r.items(), key=lambda kv: kv[1]).index(
                              ("YOUR DETECTOR", r["YOUR DETECTOR"])),
                          "all": r} for name, r, _ in sets},
-        "THE RESULT": "the detector does not lead on either SEM set: 3 of 7 on Inconel "
-                      "718, beaten by Sauvola local thresholding and a Sato ridge filter, "
-                      "and 5 of 7 on the EBC coating. It was built for micrographs.",
+        "THE RESULT": "the detector ranks 3 of 7 on Inconel 718, beaten by Sauvola local "
+                      "thresholding and a Sato ridge filter. It was built for micrographs "
+                      "and does not lead on them.",
         "SCOPE": "run on the released crops, the only set all seven arms share. The "
                  "detector's whole-field score is lower (0.3444 against 0.4958), so every "
                  "arm here is flattered by the same cropping.",

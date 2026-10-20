@@ -3,9 +3,8 @@
 Stated as rules because each one followed a specific error of ours.
 
 1. **Report the no-information floor beside every score.** Marking every pixel scores
-   F1 {in_me_f1} on the SEM alloy and {ebc_me_f1} on the coating. A bare score cannot be
-   read without it, and the floor moves by a factor of seven between those two sets
-   alone.
+   F1 {in_me_f1} on this dataset. A bare score cannot be read without it, and across the
+   sets measured for this project the floor moves by more than a factor of seven.
 2. **Choose parameters by grouped hold-out, and say what the group is.** Regrouping alone
    moved an AUC by +0.0458 in our data, which is larger than most effects we chased.
 3. **A difference of medians is not a paired difference.** One result moved 0.0742 as
@@ -14,8 +13,8 @@ Stated as rules because each one followed a specific error of ours.
    F1 for a new method; we reported smaller differences for weeks before measuring this.
 5. **Controls must be able to fail.** Every control we built was broken on purpose to check
    it noticed; two did not and were rewritten.
-6. **Check the mask encoding and the bit depth before scoring anything.** The two SEM
-   crack sets use different mask conventions, and the images are 16-bit: an ordinary 8-bit
+6. **Check the mask encoding and the bit depth before scoring anything.** This set's masks
+   are anti-aliased rather than two-valued and its images are 16-bit; an ordinary 8-bit
    conversion drove recall to 0.0012 and looked like a detector failure rather than a
    loading bug.
 7. **Score whole fields, not crops of them.** Cropping these images around their own cracks
