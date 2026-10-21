@@ -257,9 +257,87 @@ def plate_baselines():
         "source": "sem_baselines.json"})
 
 
+# --------------------------------------------------- plate: the pixel budget
+def plate_budget():
+    """What the detector marks, as a share of the image, beside what the human marked.
+
+    P/R/F1/IoU all discard the true negatives. On a 1.8%-crack image that is 98% of the
+    evidence, and it lets two very different detectors share a score: one marking 0.3% of
+    the frame and one marking 5% can land on the same IoU. The quantity a user of this tool
+    reads off the screen IS a pixel percentage -- area fraction -- so the figure reports it
+    in those units, and the over-marking ratio says directly how wrong that read-out is.
+    """
+    PA = load(os.path.join(REPO, "docs/figures/pixel_accounting.json"),
+              "pixel accounting")["sets"]
+    # EBC is out of the paper, so it is out of this plate. Its budget is the most
+    # dramatic -- 20.29% marked against 0.27% labelled, 76.65x -- and it lives in
+    # docs/figures/pixel_accounting.json and in Section 7 instead.
+    sets = [k for k in ("Inconel 718, whole fields", "Inconel 718, released crops")
+            if PA.get(k)]
+    fig, (ax, ax2) = plt.subplots(1, 2, figsize=(10.4, 3.6),
+                                  gridspec_kw={"width_ratios": [1.35, 1]})
+    y = range(len(sets))
+    for i, k in enumerate(sets):
+        r = PA[k]["detector"]
+        # the human's share, as an outline above the detector's stacked bar
+        ax.barh(i + 0.18, r["labelled_pct"], 0.3, facecolor="none", edgecolor="0.1",
+                linewidth=1.3)
+        ax.barh(i - 0.18, r["tp_pct"], 0.3, color="0.25")
+        ax.barh(i - 0.18, r["fp_pct"], 0.3, left=r["tp_pct"], color="0.72")
+        ax.text(r["labelled_pct"] + 0.4, i + 0.18, f"human {r['labelled_pct']:.2f}%",
+                va="center", fontsize=SMALL)
+        ax.text(r["tp_pct"] + r["fp_pct"] + 0.4, i - 0.18,
+                f"detector {r['marked_pct']:.2f}%  ({r['tp_pct']:.2f} right + "
+                f"{r['fp_pct']:.2f} wrong)", va="center", fontsize=SMALL)
+    ax.set_yticks(list(y))
+    ax.set_yticklabels([k.replace(", ", "\n") for k in sets], fontsize=SMALL)
+    ax.set_xlabel("percent of all image pixels", fontsize=BODY)
+    ax.set_xlim(0, max(max(PA[k]["detector"]["marked_pct"],
+                           PA[k]["detector"]["labelled_pct"]) for k in sets) * 1.95)
+    ax.tick_params(labelsize=SMALL)
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.set_title("What was marked, as a share of the image", fontsize=BODY)
+
+    # the over-marking ratio, which is the number a user of the tool actually feels
+    ratios = [PA[k]["detector"]["marked_pct"] / PA[k]["detector"]["labelled_pct"]
+              for k in sets]
+    ax2.barh(list(y), ratios, 0.5, color=["0.25" if r < 2 else "0.72" for r in ratios])
+    ax2.axvline(1.0, color="0.1", linewidth=1.1, linestyle="--")
+    # LINEAR, not log: with two values between 0.78 and 1.30 a log axis adds nothing and
+    # its tick labels collided with the annotation.
+    ax2.text(1.0, len(sets) - 0.35, "  1.0 = the right amount of area", fontsize=SMALL,
+             color="0.3", ha="left", va="center")
+    for i, r in enumerate(ratios):
+        ax2.text(r + 0.04, i, f"{r:.2f}x", va="center", fontsize=SMALL)
+    ax2.set_yticks(list(y)); ax2.set_yticklabels([])
+    ax2.set_xlim(0, max(max(ratios) * 1.45, 1.6))
+    ax2.set_xlabel("area fraction reported / true", fontsize=BODY)
+    ax2.tick_params(labelsize=SMALL)
+    ax2.spines[["top", "right"]].set_visible(False)
+    ax2.set_title("How wrong the area fraction is", fontsize=BODY)
+    fig.subplots_adjust(wspace=0.12)
+    save(fig, "P5 - pixel budget", {
+        "what": "the confusion matrix as a percentage of image pixels, and the ratio of "
+                "marked area to labelled area",
+        "why": "P/R/F1/IoU discard the true negatives, which are 98% of a 1.8%-crack "
+               "image; and area fraction is what this tool actually reports to a user, so "
+               "the over-marking ratio is the error they feel",
+        "values": {k: PA[k]["detector"] for k in sets},
+        "read this first": "on whole fields the detector marks 2.34% where the human "
+                           "marked 1.80%, so an area fraction read off this tool is about "
+                           "1.30x too high. On the released crops it marks 3.53% against "
+                           "4.53%, so there it UNDER-reports at 0.78x -- the same detector, "
+                           "opposite bias, and the only difference is how the images were "
+                           "cut. Accuracy is 97.42% and 96.17% and is worthless at these "
+                           "prevalences; MCC is 0.3402 and 0.4840.",
+        "EBC, withdrawn from the paper": "20.29% marked against 0.27% labelled, 76.65x",
+        "source": "docs/figures/pixel_accounting.json"})
+
+
 if __name__ == "__main__":
     plate_scores()
     plate_transfer()
     plate_width()
     plate_baselines()
+    plate_budget()
     print("\nplates in", OUT)

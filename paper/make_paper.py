@@ -61,6 +61,9 @@ SP = _f(os.path.join(REPO, "docs/figures/sem_public_metrics.json"), "SEM metrics
 SB = _f(os.path.join(REPO, "docs/figures/sem_baselines.json"), "SEM baselines")["results"]
 PB = _f(os.path.join(SCRATCH, "baselines_full.json"), "pavement baselines")["results"]
 SW = _f(os.path.join(REPO, "docs/figures/sem_width_ceiling.json"), "SEM width ceiling")
+PA = _f(os.path.join(REPO, "docs/figures/pixel_accounting.json"), "pixel accounting")["sets"]
+PA_W = PA["Inconel 718, whole fields"]["detector"]
+PA_C = PA["Inconel 718, released crops"]["detector"]
 WC = _f(os.path.join(SCRATCH, "width_ceiling.json"), "width ceiling")
 MF = _f(os.path.join(REPO, "docs/figures/metric_figures.json"), "corpus ceiling")
 
@@ -111,6 +114,24 @@ VALUES = {
                 6: "sixth", 7: "seventh"}[_rank_i],
     "wc_in_at": str(SW["Inconel718_crack"]["ceiling_at_width"]),
     "wc_corpus_at": str(MF["ceiling_widths"][_corpus.index(max(_corpus))]),
+    # --- the pixel budget: the same result in the units the tool actually reports ---
+    "in_lab_pct": _n(PA_W["labelled_pct"], 2),
+    "in_mark_pct": _n(PA_W["marked_pct"], 2),
+    "in_tp_pct": _n(PA_W["tp_pct"], 2),
+    "in_fp_pct": _n(PA_W["fp_pct"], 2),
+    "in_tn_plus": _n(100 * (1 - PA_W["labelled_pct"] / 100), 2),
+    "in_ratio": _n(PA_W["marked_pct"] / PA_W["labelled_pct"], 2),
+    "in_acc": _n(100 * PA_W["accuracy"], 2),
+    "in_bacc": _n(100 * PA_W["balanced_accuracy"], 2),
+    "in_mcc": _n(PA_W["mcc"]),
+    "in_crop_lab_pct": _n(PA_C["labelled_pct"], 2),
+    "in_crop_mark_pct": _n(PA_C["marked_pct"], 2),
+    "in_crop_tp_pct": _n(PA_C["tp_pct"], 2),
+    "in_crop_fp_pct": _n(PA_C["fp_pct"], 2),
+    "in_crop_ratio": _n(PA_C["marked_pct"] / PA_C["labelled_pct"], 2),
+    "in_crop_acc": _n(100 * PA_C["accuracy"], 2),
+    "in_crop_bacc": _n(100 * PA_C["balanced_accuracy"], 2),
+    "in_crop_mcc": _n(PA_C["mcc"]),
     # --- SEM coating, the failure case ---
     "ebc_stroke": _n(SW["EBC_crack"]["label_stroke_px_median"], 1),
     "wc_ebc_iou": _n(SW["EBC_crack"]["ceiling_iou"]),

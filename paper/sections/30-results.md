@@ -28,7 +28,42 @@ with it, from {in_f1} to {in_crop_f1}, with no change to the detector. Figure 2 
 curves. The difference between them is what a benchmark's framing is worth, and it is
 larger than most differences between methods in this literature.
 
-### 3.2  The one free constant
+### 3.2  Scored as a pixel budget
+
+[FIGURE P5 - pixel budget]
+
+Precision, recall, F1 and IoU all discard the true negatives. On an image that is
+{in_prev}% crack that is 98% of the evidence, and it lets two very different detectors
+share a score — one marking 0.3% of a frame and one marking 5% can land on the same IoU.
+The quantity this tool actually reports to a user is an **area fraction**, a pixel
+percentage, so the scores belong in the same units as the answer.
+
+| | whole fields | released crops |
+|---|---|---|
+| labelled crack | {in_lab_pct}% | {in_crop_lab_pct}% |
+| detector marked | {in_mark_pct}% | {in_crop_mark_pct}% |
+| of which correct | {in_tp_pct}% | {in_crop_tp_pct}% |
+| of which wrong | {in_fp_pct}% | {in_crop_fp_pct}% |
+| **area fraction reported / true** | **{in_ratio}x** | **{in_crop_ratio}x** |
+| accuracy | {in_acc}% | {in_crop_acc}% |
+| balanced accuracy | {in_bacc}% | {in_crop_bacc}% |
+| MCC | {in_mcc} | {in_crop_mcc} |
+
+Three things only this view shows.
+
+**The area fraction a user reads off this tool is about {in_ratio} times too high** on
+whole fields. That is the error that reaches a materials conclusion, and no F1 or IoU
+states it.
+
+**The bias reverses between the two framings of the same images** — {in_ratio}x on whole
+fields, {in_crop_ratio}x on the crops cut from them. The detector did not change.
+
+**Accuracy is {in_acc}% and is worthless.** Marking nothing at all would score
+{in_tn_plus}%. It is printed here only so that it is never quoted: at this prevalence the
+measures worth reading are balanced accuracy and MCC, and those are {in_bacc}% and
+{in_mcc}.
+
+### 3.3  The one free constant
 
 [FIGURE P2 - operating curve]
 
@@ -37,7 +72,7 @@ years before this dataset existed. On these whole fields it is the best of the s
 tested and the curve falls away monotonically below it. That is the strongest positive
 result here: the constant did not need refitting for a new SEM corpus.
 
-### 3.3  Against classical detectors, the detector does not lead
+### 3.4  Against classical detectors, the detector does not lead
 
 [FIGURE P4 - baselines]
 
