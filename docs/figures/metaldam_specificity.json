@@ -1,0 +1,326 @@
+{
+ "what": "class decomposition of the detector's output on MetalDAM; NOT a crack benchmark -- MetalDAM labels no cracks",
+ "source": "github.com/ari-dasci/OD-MetalDAM release 1.0, MetalDAM_labeled.zip",
+ "caveats": [
+  "released images are JPEG, so a darkness threshold sees compression artefacts",
+  "5,000-15,000x, a magnification range the detector was never tuned on"
+ ],
+ "n": 42,
+ "class_share_of_image": {
+  "matrix": 0.34632480538594873,
+  "austenite": 0.5548553716991739,
+  "martensite/austenite": 0.08958611696167841,
+  "precipitate": 0.0023751832436716275,
+  "defect/void": 0.006858522709527305
+ },
+ "class_share_of_marks": {
+  "matrix": 0.00960086808831855,
+  "austenite": 0.02048735610492546,
+  "martensite/austenite": 0.00033025099075297226,
+  "precipitate": 0.0,
+  "defect/void": 0.969581524816003
+ },
+ "recall_by_class": {
+  "matrix": 7.1686911026856e-05,
+  "austenite": 9.548146736050966e-05,
+  "martensite/austenite": 9.532709962192591e-06,
+  "precipitate": 0.0,
+  "defect/void": 0.3655667719126606
+ },
+ "per_image": [
+  {
+   "frame": "micrograph0",
+   "marked_frac": 0.07798330814366998,
+   "defect_frac": 0.12455686566500711,
+   "recall_on_defect": 0.6115095076116657,
+   "share_of_marks_on_defect": 0.976718087569917
+  },
+  {
+   "frame": "micrograph1",
+   "marked_frac": 0.002460159583926031,
+   "defect_frac": 0.01541801875889047,
+   "recall_on_defect": 0.15812235336516803,
+   "share_of_marks_on_defect": 0.9909655561829475
+  },
+  {
+   "frame": "micrograph10",
+   "marked_frac": 0.0001569723506401138,
+   "defect_frac": 0.00068206570056899,
+   "recall_on_defect": 0.23014256619144602,
+   "share_of_marks_on_defect": 1.0
+  },
+  {
+   "frame": "micrograph11",
+   "marked_frac": 0.0,
+   "defect_frac": 0.0,
+   "recall_on_defect": 0.0,
+   "share_of_marks_on_defect": 0.0
+  },
+  {
+   "frame": "micrograph12",
+   "marked_frac": 0.0,
+   "defect_frac": 0.0,
+   "recall_on_defect": 0.0,
+   "share_of_marks_on_defect": 0.0
+  },
+  {
+   "frame": "micrograph13",
+   "marked_frac": 0.0,
+   "defect_frac": 0.0,
+   "recall_on_defect": 0.0,
+   "share_of_marks_on_defect": 0.0
+  },
+  {
+   "frame": "micrograph14",
+   "marked_frac": 0.0,
+   "defect_frac": 0.0,
+   "recall_on_defect": 0.0,
+   "share_of_marks_on_defect": 0.0
+  },
+  {
+   "frame": "micrograph15",
+   "marked_frac": 0.0,
+   "defect_frac": 0.0,
+   "recall_on_defect": 0.0,
+   "share_of_marks_on_defect": 0.0
+  },
+  {
+   "frame": "micrograph16",
+   "marked_frac": 0.00012502222617354197,
+   "defect_frac": 0.0005639891536273115,
+   "recall_on_defect": 0.22167487684729065,
+   "share_of_marks_on_defect": 1.0
+  },
+  {
+   "frame": "micrograph17",
+   "marked_frac": 0.007825002222617354,
+   "defect_frac": 0.020018836682076813,
+   "recall_on_defect": 0.38928596211227534,
+   "share_of_marks_on_defect": 0.9959169181608379
+  },
+  {
+   "frame": "micrograph18",
+   "marked_frac": 0.0,
+   "defect_frac": 0.0,
+   "recall_on_defect": 0.0,
+   "share_of_marks_on_defect": 0.0
+  },
+  {
+   "frame": "micrograph19",
+   "marked_frac": 0.0016832487535612536,
+   "defect_frac": 0.005339098112535612,
+   "recall_on_defect": 0.3129233976029182,
+   "share_of_marks_on_defect": 0.9925619834710744
+  },
+  {
+   "frame": "micrograph2",
+   "marked_frac": 0.015594439011379801,
+   "defect_frac": 0.029280205369843527,
+   "recall_on_defect": 0.5237688585254768,
+   "share_of_marks_on_defect": 0.9834313201496526
+  },
+  {
+   "frame": "micrograph20",
+   "marked_frac": 0.0002292074146514936,
+   "defect_frac": 0.0336254222972973,
+   "recall_on_defect": 0.0068164917788977935,
+   "share_of_marks_on_defect": 1.0
+  },
+  {
+   "frame": "micrograph21",
+   "marked_frac": 0.0,
+   "defect_frac": 0.0,
+   "recall_on_defect": 0.0,
+   "share_of_marks_on_defect": 0.0
+  },
+  {
+   "frame": "micrograph22",
+   "marked_frac": 0.0,
+   "defect_frac": 0.0,
+   "recall_on_defect": 0.0,
+   "share_of_marks_on_defect": 0.0
+  },
+  {
+   "frame": "micrograph23",
+   "marked_frac": 0.0,
+   "defect_frac": 0.0,
+   "recall_on_defect": 0.0,
+   "share_of_marks_on_defect": 0.0
+  },
+  {
+   "frame": "micrograph24",
+   "marked_frac": 0.0,
+   "defect_frac": 0.0,
+   "recall_on_defect": 0.0,
+   "share_of_marks_on_defect": 0.0
+  },
+  {
+   "frame": "micrograph25",
+   "marked_frac": 0.0,
+   "defect_frac": 0.0,
+   "recall_on_defect": 0.0,
+   "share_of_marks_on_defect": 0.0
+  },
+  {
+   "frame": "micrograph26",
+   "marked_frac": 5.695456970128023e-05,
+   "defect_frac": 0.0,
+   "recall_on_defect": 0.0,
+   "share_of_marks_on_defect": 0.0
+  },
+  {
+   "frame": "micrograph27",
+   "marked_frac": 0.001329403004978663,
+   "defect_frac": 0.0,
+   "recall_on_defect": 0.0,
+   "share_of_marks_on_defect": 0.0
+  },
+  {
+   "frame": "micrograph28",
+   "marked_frac": 0.0,
+   "defect_frac": 0.0,
+   "recall_on_defect": 0.0,
+   "share_of_marks_on_defect": 0.0
+  },
+  {
+   "frame": "micrograph29",
+   "marked_frac": 0.0,
+   "defect_frac": 0.0,
+   "recall_on_defect": 0.0,
+   "share_of_marks_on_defect": 0.0
+  },
+  {
+   "frame": "micrograph3",
+   "marked_frac": 0.0,
+   "defect_frac": 0.00039590371621621624,
+   "recall_on_defect": 0.0,
+   "share_of_marks_on_defect": 0.0
+  },
+  {
+   "frame": "micrograph30",
+   "marked_frac": 0.008080603218349929,
+   "defect_frac": 0.03984736175320057,
+   "recall_on_defect": 0.20163848701411888,
+   "share_of_marks_on_defect": 0.9943269726663229
+  },
+  {
+   "frame": "micrograph31",
+   "marked_frac": 0.0,
+   "defect_frac": 0.0,
+   "recall_on_defect": 0.0,
+   "share_of_marks_on_defect": 0.0
+  },
+  {
+   "frame": "micrograph32",
+   "marked_frac": 0.0,
+   "defect_frac": 0.0,
+   "recall_on_defect": 0.0,
+   "share_of_marks_on_defect": 0.0
+  },
+  {
+   "frame": "micrograph33",
+   "marked_frac": 0.0003181121088193457,
+   "defect_frac": 0.0031894559032716926,
+   "recall_on_defect": 0.09973867595818815,
+   "share_of_marks_on_defect": 1.0
+  },
+  {
+   "frame": "micrograph34",
+   "marked_frac": 0.0,
+   "defect_frac": 0.0,
+   "recall_on_defect": 0.0,
+   "share_of_marks_on_defect": 0.0
+  },
+  {
+   "frame": "micrograph35",
+   "marked_frac": 0.0,
+   "defect_frac": 8.33481507823613e-05,
+   "recall_on_defect": 0.0,
+   "share_of_marks_on_defect": 0.0
+  },
+  {
+   "frame": "micrograph36",
+   "marked_frac": 0.0009515580547652916,
+   "defect_frac": 0.020987064366998577,
+   "recall_on_defect": 0.044876886417791896,
+   "share_of_marks_on_defect": 0.9897810218978103
+  },
+  {
+   "frame": "micrograph37",
+   "marked_frac": 0.0,
+   "defect_frac": 0.0,
+   "recall_on_defect": 0.0,
+   "share_of_marks_on_defect": 0.0
+  },
+  {
+   "frame": "micrograph38",
+   "marked_frac": 0.0,
+   "defect_frac": 0.01302037028805121,
+   "recall_on_defect": 0.0,
+   "share_of_marks_on_defect": 0.0
+  },
+  {
+   "frame": "micrograph39",
+   "marked_frac": 0.000984897315078236,
+   "defect_frac": 0.005264824857752489,
+   "recall_on_defect": 0.1870712401055409,
+   "share_of_marks_on_defect": 1.0
+  },
+  {
+   "frame": "micrograph4",
+   "marked_frac": 0.0,
+   "defect_frac": 0.0,
+   "recall_on_defect": 0.0,
+   "share_of_marks_on_defect": 0.0
+  },
+  {
+   "frame": "micrograph40",
+   "marked_frac": 0.0,
+   "defect_frac": 0.0,
+   "recall_on_defect": 0.0,
+   "share_of_marks_on_defect": 0.0
+  },
+  {
+   "frame": "micrograph41",
+   "marked_frac": 0.0,
+   "defect_frac": 0.0,
+   "recall_on_defect": 0.0,
+   "share_of_marks_on_defect": 0.0
+  },
+  {
+   "frame": "micrograph5",
+   "marked_frac": 0.0,
+   "defect_frac": 0.0,
+   "recall_on_defect": 0.0,
+   "share_of_marks_on_defect": 0.0
+  },
+  {
+   "frame": "micrograph6",
+   "marked_frac": 0.0,
+   "defect_frac": 0.00010974173186344239,
+   "recall_on_defect": 0.0,
+   "share_of_marks_on_defect": 0.0
+  },
+  {
+   "frame": "micrograph7",
+   "marked_frac": 0.0,
+   "defect_frac": 0.0,
+   "recall_on_defect": 0.0,
+   "share_of_marks_on_defect": 0.0
+  },
+  {
+   "frame": "micrograph8",
+   "marked_frac": 0.0,
+   "defect_frac": 0.0,
+   "recall_on_defect": 0.0,
+   "share_of_marks_on_defect": 0.0
+  },
+  {
+   "frame": "micrograph9",
+   "marked_frac": 0.0,
+   "defect_frac": 0.0,
+   "recall_on_defect": 0.0,
+   "share_of_marks_on_defect": 0.0
+  }
+ ]
+}
