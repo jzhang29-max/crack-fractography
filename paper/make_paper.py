@@ -117,6 +117,7 @@ VALUES = {
     "in_me_f1": _n(IN["controls"]["mark_everything"]["f1"]),
     "in_lift_f1": _n(IN["loo"]["f1"] / IN["controls"]["mark_everything"]["f1"], 1),
     "in_lift_iou": _n(IN["loo"]["iou"] / IN["controls"]["mark_everything"]["iou"], 1),
+    "in_rnd_f1": _n(IN["controls"]["equal_area_random"]["f1"]),
     "in_sauvola": _n(SB["Inconel718_crack"]["Sauvola local"]),
     "in_sato": _n(SB["Inconel718_crack"]["Sato ridge"]),
     # the spread across the three leading arms, which is the "indistinguishable" claim

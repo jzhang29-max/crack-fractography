@@ -16,6 +16,6 @@ Reporting such a thing honestly turns out to be harder than building it, and mos
 paper is about the reporting. The detector is a threshold; what is less obvious is that the
 scores conventionally used to grade one — F1 and IoU — cannot express the error a
 materials laboratory actually suffers, which is a crack area fraction that comes out too
-high or too low by some factor. Section 3.2 reports that factor, and Appendix A gives it
+high or too low by some factor. Section 3.3 reports that factor, and Appendix A gives it
 for every set we measured. It ranges from {md_ratio}x to {ebc_ratio}x for the same
 unchanged detector.

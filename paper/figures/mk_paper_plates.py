@@ -32,6 +32,35 @@ os.makedirs(OUT, exist_ok=True)
 FLOOR = 7.0
 BODY, SMALL, TITLE = 9.0, 8.0, 10.5
 
+# ONE HOUSE STYLE, SET ONCE. Each plate was being tuned on its own, so the five of them
+# disagreed about tick size, spine weight and grid. Greyscale only: every series in this
+# paper is separated by shape, fill or dash, never by hue, so the plates survive printing
+# and a colour-blind reader.
+plt.rcParams.update({
+    "font.size": BODY,
+    "axes.titlesize": BODY,
+    "axes.labelsize": BODY,
+    "xtick.labelsize": SMALL,
+    "ytick.labelsize": SMALL,
+    "legend.fontsize": SMALL,
+    "axes.spines.top": False,
+    "axes.spines.right": False,
+    "axes.edgecolor": "0.35",
+    "axes.linewidth": 0.9,
+    "xtick.color": "0.35",
+    "ytick.color": "0.35",
+    "xtick.labelcolor": "0.1",
+    "ytick.labelcolor": "0.1",
+    "xtick.major.width": 0.9,
+    "ytick.major.width": 0.9,
+    "xtick.major.size": 3.2,
+    "ytick.major.size": 3.2,
+    "axes.grid": False,
+    "legend.frameon": False,
+    "figure.facecolor": "white",
+    "savefig.facecolor": "white",
+})
+
 
 def check(fig):
     sizes = [t.get_fontsize() for t in fig.findobj(plt.Text) if t.get_text().strip()]
@@ -236,6 +265,8 @@ def plate_baselines():
         pos = len(rank) - [k for k, _ in rank].index("YOUR DETECTOR")
         ax.set_yticks(ypos); ax.set_yticklabels(names, fontsize=SMALL)
         ax.set_xlim(0, max(vals) * 1.34)
+        ax.set_axisbelow(True)
+        ax.xaxis.grid(True, color="0.88", linewidth=0.7)
         ax.set_xlabel("mean F1 per image", fontsize=BODY)
         ax.set_title(f"{name}, released crops\nn={n} \u2014 this detector ranks "
                      f"{pos} of {len(rank)}",
@@ -297,6 +328,8 @@ def plate_budget():
     ax.set_xlabel("percent of all image pixels", fontsize=BODY)
     ax.set_xlim(0, max(max(PA[k]["detector"]["marked_pct"],
                            PA[k]["detector"]["labelled_pct"]) for k in sets) * 1.95)
+    ax.set_axisbelow(True)
+    ax.xaxis.grid(True, color="0.88", linewidth=0.7)
     ax.tick_params(labelsize=SMALL)
     ax.spines[["top", "right"]].set_visible(False)
     ax.set_title("What was marked, as a share of the image", fontsize=BODY)

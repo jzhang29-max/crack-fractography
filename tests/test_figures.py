@@ -537,3 +537,27 @@ def test_no_css_variable_is_used_without_being_defined():
     assert not missing, (
         f"these custom properties are used with no fallback and never defined, so every "
         f"rule using them renders as nothing: {missing}")
+
+
+def test_the_paper_has_no_dangling_section_reference():
+    """A renumbering redirects every pointer at it, silently.
+
+    Section 3.2 became 3.3 when the pixel budget moved behind the transfer result, and the
+    introduction went on pointing at 3.2 -- which still existed, and was now a different
+    section. A dangling-reference check would not have caught that; this checks every
+    referenced number against the headings that actually exist.
+    """
+    import glob
+    sect = os.path.join(REPO, "paper", "sections")
+    if not os.path.isdir(sect):
+        pytest.skip("no paper/sections in this checkout")
+    heads, refs = set(), {}
+    for f in sorted(glob.glob(os.path.join(sect, "*.md"))):
+        txt = open(f, encoding="utf-8").read()
+        for m in re.finditer(r"^#{2,3}\s+([0-9]+(?:\.[0-9]+)?)\s", txt, re.M):
+            heads.add(m.group(1))
+        for m in re.finditer(r"(?:Section|§)\s*([0-9]+(?:\.[0-9]+)?)", txt):
+            refs.setdefault(m.group(1), set()).add(os.path.basename(f))
+    assert heads, "no numbered headings found -- the parser is wrong, not the paper"
+    missing = {r: sorted(v) for r, v in refs.items() if r not in heads}
+    assert not missing, f"references to sections that do not exist: {missing}"

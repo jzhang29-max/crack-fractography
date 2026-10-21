@@ -18,8 +18,9 @@ the generator is named.
 
 ## The paper
 
-    <sem-crack-detector>/.venv/bin/python -B paper/figures/mk_paper_plates.py   # plates
-    <sem-crack-detector>/.venv/bin/python -B paper/make_paper.py                # -> draft.pdf
+    <sem-crack-detector>/.venv/bin/python -B paper/figures/mk_paper_plates.py     # P1-P5
+    <sem-crack-detector>/.venv/bin/python -B paper/figures/mk_pipeline_visual.py  # P6
+    <sem-crack-detector>/.venv/bin/python -B paper/make_paper.py                  # -> draft.pdf
 
 Prose lives in `paper/sections/*.md`. Numbers are `{placeholders}` resolved from the JSON
 below at render time — **the build fails if one cannot be resolved**, so a number cannot go
@@ -32,6 +33,7 @@ stale. `[FIGURE name]` on its own line embeds a plate, and a missing plate is an
 | `P3 - width sensitivity` | what IoU costs for getting width wrong with location right |
 | `P4 - baselines` | seven classical detectors, tuned identically |
 | `P5 - pixel budget` | the confusion matrix as a share of the image, and how wrong the area fraction is |
+| `P6 - pipeline in pictures` | **every step as a real image panel**, captured by running the shipped detector on one public field — `paper/figures/mk_pipeline_visual.py` |
 
 The paper now has an **Appendix A** giving the pixel budget for all five SEM sets measured, including the two that are not crack benchmarks, and an **Appendix B** with the pipeline plate.
 
