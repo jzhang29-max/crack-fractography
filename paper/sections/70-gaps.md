@@ -32,6 +32,12 @@ Listed rather than hidden.
   be read as weaker than the public-dataset numbers.
 * **The corpus series in Figure 3 carries no stroke width.** The instrument that would
   measure it comparably needs a tile cache not present on this machine.
+* **The detector's best score in this project is not on cracks.** On MetalDAM's voids —
+  compact, dark, high-contrast objects in SEM steel — it reaches MCC {md_mcc} against
+  {in_mcc} on cracks in the superalloy, and reports an area fraction {md_ratio}x the truth
+  against {in_ratio}x. That is what a multi-scale darkness threshold should do, and it
+  bounds how much of this paper is about cracks specifically rather than about dark thin
+  objects. Appendix A gives the full span.
 * **No timing, and no comparison against a trained network on equal footing.** A fair
   speed claim needs matched hardware, and an earlier attempt found this detector 1.6x
   slower than a single-pass U-Net at p = 0.0001.

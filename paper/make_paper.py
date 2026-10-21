@@ -46,6 +46,12 @@ def _markup(s):
     import re as _re
     s = _re.sub(r"\*\*(.+?)\*\*", r"\1", s)
     s = _re.sub(r"\*(.+?)\*", r"\1", s)
+    # EMPHASIS THAT SPANS A SOURCE LINE BREAK leaves its markers behind, because this
+    # renderer processes one source line at a time and the regexes above need both ends on
+    # the same line. "**an area fraction ... is 1.30 times too high**" shipped with its
+    # asterisks for one build. Strip any survivors rather than require the author to keep
+    # emphasis on one line.
+    s = s.replace("**", "")
     s = s.replace("`", "")
     return s
 
@@ -64,6 +70,17 @@ SW = _f(os.path.join(REPO, "docs/figures/sem_width_ceiling.json"), "SEM width ce
 PA = _f(os.path.join(REPO, "docs/figures/pixel_accounting.json"), "pixel accounting")["sets"]
 PA_W = PA["Inconel 718, whole fields"]["detector"]
 PA_C = PA["Inconel 718, released crops"]["detector"]
+PA_E = PA["EBC coating, whole fields"]["detector"]
+PA_EC = PA["EBC coating, released crops"]["detector"]
+PA_M = PA["MetalDAM voids (not cracks)"]["detector"]
+
+
+def _pct(d, k):
+    return _n(d[k], 2)
+
+
+def _ratio(d):
+    return _n(d["marked_pct"] / d["labelled_pct"], 2)
 WC = _f(os.path.join(SCRATCH, "width_ceiling.json"), "width ceiling")
 MF = _f(os.path.join(REPO, "docs/figures/metric_figures.json"), "corpus ceiling")
 
@@ -132,6 +149,20 @@ VALUES = {
     "in_crop_acc": _n(100 * PA_C["accuracy"], 2),
     "in_crop_bacc": _n(100 * PA_C["balanced_accuracy"], 2),
     "in_crop_mcc": _n(PA_C["mcc"]),
+    # --- appendix A: every set measured ---
+    "ebc_lab_pct": _pct(PA_E, "labelled_pct"), "ebc_mark_pct": _pct(PA_E, "marked_pct"),
+    "ebc_tp_pct": _pct(PA_E, "tp_pct"), "ebc_fp_pct": _pct(PA_E, "fp_pct"),
+    "ebc_ratio": _ratio(PA_E), "ebc_bacc": _n(100 * PA_E["balanced_accuracy"], 2),
+    "ebc_mcc": _n(PA_E["mcc"]),
+    "ebcc_lab_pct": _pct(PA_EC, "labelled_pct"), "ebcc_mark_pct": _pct(PA_EC, "marked_pct"),
+    "ebcc_tp_pct": _pct(PA_EC, "tp_pct"), "ebcc_fp_pct": _pct(PA_EC, "fp_pct"),
+    "ebcc_ratio": _ratio(PA_EC), "ebcc_bacc": _n(100 * PA_EC["balanced_accuracy"], 2),
+    "ebcc_mcc": _n(PA_EC["mcc"]),
+    "md_n": str(PA["MetalDAM voids (not cracks)"]["n"]),
+    "md_lab_pct": _pct(PA_M, "labelled_pct"), "md_mark_pct": _pct(PA_M, "marked_pct"),
+    "md_tp_pct": _pct(PA_M, "tp_pct"), "md_fp_pct": _pct(PA_M, "fp_pct"),
+    "md_ratio": _ratio(PA_M), "md_bacc": _n(100 * PA_M["balanced_accuracy"], 2),
+    "md_mcc": _n(PA_M["mcc"]),
     # --- SEM coating, the failure case ---
     "ebc_stroke": _n(SW["EBC_crack"]["label_stroke_px_median"], 1),
     "wc_ebc_iou": _n(SW["EBC_crack"]["ceiling_iou"]),
@@ -207,11 +238,27 @@ class Doc:
     def table(self, rows, size):
         """Pipe tables were printing as raw markdown. Rendered as aligned columns in a
         monospaced face, which is honest for a draft and needs no column model."""
+        # TABLE CELLS NEED THE SAME MARKUP STRIP AS BODY TEXT. They did not get it, so
+        # "**1.30x**" printed with its asterisks inside the table while the same emphasis
+        # was stripped correctly in the paragraph above it.
+        rows = [[_markup(c) for c in r] for r in rows]
         cols = max(len(r) for r in rows)
         rows = [r + [""] * (cols - len(r)) for r in rows]
         w = [max(len(r[c]) for r in rows) for c in range(cols)]
-        for i, r in enumerate(rows):
-            line = "  ".join(r[c].ljust(w[c]) for c in range(cols)).rstrip()
+        lines = ["  ".join(r[c].ljust(w[c]) for c in range(cols)).rstrip() for r in rows]
+        # SHRINK TO FIT, OR THE TABLE IS SILENTLY CUT OFF. A monospace line is about
+        # 0.6*size wide per character; Appendix A's widest row ran past the right margin
+        # and its last two columns simply vanished off the page with nothing to say so.
+        avail_pt = (PAGE[0] - ML - MR) * 72.0
+        widest = max(len(x) for x in lines)
+        fit = avail_pt / (0.6 * max(widest, 1))
+        if fit < size:
+            size = max(fit, FLOOR)
+        if widest * 0.6 * size > avail_pt + 0.5:
+            raise SystemExit(
+                f"table needs {widest} characters and will not fit at the {FLOOR} pt floor "
+                f"-- drop or shorten a column rather than letting it run off the page")
+        for i, (r, line) in enumerate(zip(rows, lines)):
             self.space(LEAD["body"])
             self.page.text(ML / PAGE[0], self.y / PAGE[1], line, fontsize=size,
                            fontweight="bold" if i == 0 else "normal", va="top", ha="left",
@@ -309,7 +356,7 @@ def main():
                 pending_table = []
             doc.y -= 0.10
         # the pipeline figure at the end of the method section is easier as an appendix
-        doc.text("Appendix A.  The detector, end to end", H2, "bold", LEAD["h2"], gap=0.25, wrap="h2")
+        doc.text("Appendix B.  The detector, end to end", H2, "bold", LEAD["h2"], gap=0.25, wrap="h2")
         doc.figure(os.path.join(REPO, "docs/figures/fig_pipeline.png"),
                    f"Figure {fign + 1}.  Every constant read from "
                    f"analysis/detector_overrides.py when the plate was drawn.")

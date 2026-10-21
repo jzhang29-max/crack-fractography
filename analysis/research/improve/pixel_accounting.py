@@ -142,16 +142,83 @@ def load_sem(root, cls, sub_img, sub_mask, tif16=False):
     return out
 
 
+def load_deepcrack():
+    d = os.path.join(SCR, "pub_deepcrack/DeepCrack-master/dataset")
+    if not os.path.isdir(os.path.join(d, "test_img")):
+        return []
+    out = []
+    for f in sorted(os.listdir(os.path.join(d, "test_img"))):
+        g = os.path.join(d, "test_lab", os.path.splitext(f)[0] + ".png")
+        if not os.path.exists(g):
+            continue
+        im = np.array(Image.open(os.path.join(d, "test_img", f)).convert("L"))
+        gt = np.array(Image.open(g).convert("L")) > 127
+        if gt.sum() >= 50 and gt.mean() <= 0.6:
+            out.append((im, gt))
+    return out
+
+
+def load_crackforest():
+    import scipy.io as sio
+    d = os.path.join(SCR, "pub_cfd/CrackForest-dataset-master")
+    if not os.path.isdir(os.path.join(d, "groundTruth")):
+        return []
+    out = []
+    for f in sorted(x[:-4] for x in os.listdir(os.path.join(d, "groundTruth"))
+                    if x.endswith(".mat")):
+        ip = os.path.join(d, "image", f + ".jpg")
+        if not os.path.exists(ip):
+            continue
+        seg = np.array(sio.loadmat(os.path.join(d, "groundTruth", f + ".mat"))
+                       ["groundTruth"][0, 0]["Segmentation"])
+        gt = seg == 2
+        if gt.sum() >= 50 and gt.mean() <= 0.6:
+            out.append((np.array(Image.open(ip).convert("L")), gt))
+    return out
+
+
+def load_metaldam():
+    """NOT a crack set. Class 4 is 'defects, voids and artifacts'; scored here only so the
+    pixel budget exists for every set measured in this project. The released images carry
+    a 65-row information band the labels were cropped of."""
+    d = os.path.join(SCR, "pub_metaldam/extracted/MetalDAM")
+    if not os.path.isdir(d):
+        return []
+    out = []
+    for f in sorted(os.listdir(os.path.join(d, "images"))):
+        lp = os.path.join(d, "labels", os.path.splitext(f)[0] + ".png")
+        if not os.path.exists(lp):
+            continue
+        im = np.array(Image.open(os.path.join(d, "images", f)).convert("L"))
+        lb = np.array(Image.open(lp))
+        if lb.ndim == 3:
+            lb = lb[..., 0]
+        if im.shape[1] == lb.shape[1] and im.shape[0] > lb.shape[0]:
+            im = im[:lb.shape[0], :]
+        if im.shape != lb.shape:
+            continue
+        gt = lb == 4
+        if gt.sum() >= 50:
+            out.append((im, gt))
+    return out
+
+
 RES = {}
 tr = os.path.join(SCR, "pub_ebc_download/train_subset")
 te = os.path.join(SCR, "pub_ebc_download/extracted/testsem")
-RES["Inconel 718, whole fields"] = score_set(
-    "Inconel 718, whole fields", load_sem(tr, "Inconel718_crack", "image", "mask"))
-RES["Inconel 718, released crops"] = score_set(
-    "Inconel 718, released crops",
-    load_sem(te, "Inconel718_crack", "image_cropped", "mask_cropped"))
-RES["EBC coating, whole fields"] = score_set(
-    "EBC coating, whole fields", load_sem(tr, "EBC_crack", "image", "mask"))
+for name, pairs in (
+        ("Inconel 718, whole fields", load_sem(tr, "Inconel718_crack", "image", "mask")),
+        ("Inconel 718, released crops",
+         load_sem(te, "Inconel718_crack", "image_cropped", "mask_cropped")),
+        ("EBC coating, whole fields", load_sem(tr, "EBC_crack", "image", "mask")),
+        ("EBC coating, released crops",
+         load_sem(te, "EBC_crack", "image_cropped", "mask_cropped")),
+        ("MetalDAM voids (not cracks)", load_metaldam()),
+        ("DeepCrack, pavement", load_deepcrack()),
+        ("CrackForest, pavement", load_crackforest())):
+    r = score_set(name, pairs)
+    if r:
+        RES[name] = r
 
 out = os.path.join(REPO, "docs/figures/pixel_accounting.json")
 json.dump({"what": "the full confusion matrix as a percentage of image pixels, plus the "

@@ -33,12 +33,14 @@ stale. `[FIGURE name]` on its own line embeds a plate, and a missing plate is an
 | `P4 - baselines` | seven classical detectors, tuned identically |
 | `P5 - pixel budget` | the confusion matrix as a share of the image, and how wrong the area fraction is |
 
+The paper now has an **Appendix A** giving the pixel budget for all five SEM sets measured, including the two that are not crack benchmarks, and an **Appendix B** with the pipeline plate.
+
 ## Measurement files — the numbers everything else is drawn from
 
 | file | what it holds | generator |
 |---|---|---|
 | `figures/sem_originals_metrics.json` | **the paper's primary numbers.** P/R/F1/IoU + controls, SEM whole fields | `analysis/research/improve/sem_originals_eval.py` |
-| `figures/pixel_accounting.json` | the full confusion matrix as a percentage of pixels, plus accuracy, specificity, balanced accuracy and MCC | `analysis/research/improve/pixel_accounting.py` |
+| `figures/pixel_accounting.json` | **the primary measurement.** The full confusion matrix as a percentage of pixels for all five SEM sets, plus accuracy, specificity, balanced accuracy and MCC | `analysis/research/improve/pixel_accounting.py` |
 | `figures/sem_public_metrics.json` | the same, on the released crops | `analysis/research/improve/sem_public_eval.py` |
 | `figures/sem_baselines.json` | seven classical arms on the SEM sets | `analysis/research/improve/sem_extras.py` |
 | `figures/sem_width_ceiling.json` | constant-width reconstruction curves, SEM | `analysis/research/improve/sem_extras.py` |

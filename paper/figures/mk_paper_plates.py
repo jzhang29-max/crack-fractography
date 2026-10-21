@@ -112,7 +112,10 @@ def plate_transfer():
     # ONE SERIES NOW. This plate used to carry two datasets and the sentence "one refitted
     # constant transfers". With CrackForest out of the paper there is one dataset left and
     # no transfer can be shown, so the plate is an operating curve and the claim is gone.
-    sem = SEM_PM["Inconel718_crack"]["per_k"]
+    # WHOLE FIELDS. This read SEM_PM -- the crops -- for one build, so both series on this
+    # plate were the same data drawn twice and the curves lay exactly on top of each other
+    # while the legend claimed they were different sets.
+    sem = SEM_OR["Inconel718_crack"]["per_k"]
     ks = sorted((float(k) for k in sem), reverse=True)
     def pick(d, k):
         for cand in (str(k), f"{k:g}", f"{k:.1f}"):
