@@ -44,8 +44,13 @@ stale. `[FIGURE name]` on its own line embeds a plate, and a missing plate is an
 | `figures/sem_width_ceiling.json` | constant-width reconstruction curves, SEM | `analysis/research/improve/sem_extras.py` |
 | `figures/metaldam_specificity.json` | what the detector marks on SEM steel with no cracks labelled | `analysis/research/improve/metaldam_specificity.py` |
 | `figures/metric_figures.json` | the corpus-side measurements, including the width curve on 26 tiles | `figures/measure_metrics.py` |
-| `figures/public_metrics.json` | pavement sets. **Measured, then removed from the paper** as the wrong modality | `analysis/research/improve/pub_prfi.py` |
+| `figures/public_metrics.json` | pavement sets. **Measured, then removed from the paper** as the wrong modality | **generator not retained** — written in scratch and pruned. The numbers reproduce `public_benchmarks.json`'s F1 to four decimals, which is the only check on them now |
 | `figures/public_benchmarks.json`, `figures/public_baselines.json`, `figures/baselines_full.json`, `figures/width_ceiling.json` | earlier pavement runs, kept as a record | see `PUBLIC_CRACK_DATA_SEARCH.md` |
+
+**One file has no live generator**, which this project's own figures README treats as a
+defect: `figures/public_metrics.json` was produced by a script kept in scratch that has
+since been pruned. It is pavement data, removed from the paper, and is kept only as a
+record; do not build anything new on it.
 
 **One stale number is on disk on purpose.** `figures/public_baselines.json` reports the
 detector at 0.8209 on DeepCrack; that run scored the first 120 of 237 images and dropped
