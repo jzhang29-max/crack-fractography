@@ -26,22 +26,34 @@ stereological volume-fraction estimate [6].
 **Related work.** Reporting a segmentation in the units of the downstream measurement
 rather than as an overlap score is established practice outside materials science: in
 land-cover accuracy assessment, Olofsson et al. set out the error matrix in units of area
-proportion together with a bias-adjusted area estimator [5]. Within materials microscopy
-the same instinct appears in several recent forms. Work on domain-informed segmentation
-targets argues that classical methods retain an advantage because domain knowledge such as
-a known phase volume fraction can be imposed explicitly, and evaluates volume-fraction
-alignment rather than overlap [14]. Segment-anything-based models for material micrographs
-have added boundary-sensitive scores for the same reason [15]. A 2026 analysis of
-architecture choice in materials segmentation warns that segmentation errors propagate
-undetected into porosity fractions and grain-size distributions [16]. Classical,
-threshold-based crack-area measurement in SEM has direct precedent: histogram-threshold
-binarisation of crack networks in chromium electrodeposits [17] and a filter-and-threshold
-pipeline reporting crack length per unit area [18]. Crack quantification in a different
-material system has independently reported modest overlap scores on narrow cracks,
-attributed them to one-to-two-pixel boundary placement, and reported area fraction and width
-as the primary quantities [19]. The present study claims no novelty for the framing; its
-contribution is the measurement, made in those units, for one deterministic detector on one
-alloy, together with the ways the conventional scores mislead about it.
+proportion together with a bias-adjusted area estimator [5]. Within materials microscopy the
+same instinct appears in several recent forms. Work on domain-informed segmentation targets
+argues that classical methods retain an advantage because domain knowledge such as a known
+phase volume fraction can be imposed explicitly, and evaluates volume-fraction alignment
+rather than overlap [14]. Segment-anything-based models for material micrographs have added
+boundary-sensitive scores for the same reason [15]. A 2026 analysis of architecture choice
+in materials segmentation warns that segmentation errors propagate undetected into porosity
+fractions and grain-size distributions [16].
+
+Classical, threshold-based crack-area measurement in SEM has direct precedent: Vidal et al.
+binarise SEM images of chromium electrodeposits with a histogram threshold chosen by a
+Laplacian-of-Gaussian criterion and report the cracked area [17], and unsupervised
+segmentation has recently been used for quantitative fractography of quasi-cleavage
+fractures [21]. Deterministic geometric quantification of two-dimensional SEM fracture
+morphology across metallic materials has also been reported [20], and classical
+measurement methodology for SEM has been applied to microscale fatigue crack propagation
+through moire-based distortion correction [22]. Crack quantification in a
+different material system has independently reported modest overlap scores on narrow cracks,
+attributed them to one-to-two-pixel boundary placement, and reported area fraction, width
+and tortuosity as the primary quantities [18]; the present study reaches the same position
+from a different direction. A counterpoint worth stating is that non-learned segmentation
+has been reported to struggle on rough fracture surfaces precisely because a manual
+intensity threshold varies across features [19], which is the difficulty the background
+correction and multiscale stages of Section 2.2 exist to address.
+
+The present study claims no novelty for the framing; its contribution is the measurement,
+made in those units, for one deterministic detector on one alloy, together with the ways the
+conventional scores mislead about it.
 
 We examine the reported behaviour of a multiscale darkness detector on Inconel 718
 whole-field images. The analysis centres on aggregate area agreement at a selected operating

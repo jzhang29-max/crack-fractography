@@ -1,8 +1,17 @@
 # Recent papers doing what this paper does
 
-Searched 2026-10-22. Grouped by how they relate to this work, not by date. **Flagged
-throughout: the bibliographic details below come from search results, not from full texts
-read in the original. Confirm each before citing.**
+Searched 2026-10-22, **every identifier verified against the Crossref or DataCite registry
+on the same day** and confirmed to resolve to the work named. Grouped by how they relate to
+this work, not by date.
+
+Three DOIs in the first version of this document were wrong, and the correction is recorded
+here rather than quietly applied: two of them were plausible-looking strings constructed
+from a journal name and year that resolved to real but unrelated papers (a magnesium-alloy
+thermal-conductivity paper and a plasma-electrolytic-oxidation paper), and one did not
+resolve at all. A fabricated DOI that lands on a real paper is worse than one that 404s,
+because nothing alerts the reader. Claims about *content* below still rest on abstracts and
+search results rather than full texts read in the original; identifiers and authorship are
+now verified.
 
 ## A. The closest relatives — same argument, different field or material
 
@@ -15,8 +24,9 @@ one-to-two-pixel boundary placement, and **pivots to area fraction, width and to
 the reported quantities**. That is your argument, arriving from battery science, in the same
 year. If a reviewer asks whether the framing is novel, this is the paper they will find.
 
-**2. ExpertSegmentation: segmentation for microscopy with domain-informed targets via custom
-loss.** Acta Materialia, 2025. Argues that classical methods retain an advantage *because*
+**2. Prakash et al., "ExpertSegmentation: Segmentation for microscopy with domain-informed
+targets via custom loss."** *Acta Materialia*, 2025, **doi:10.1016/j.actamat.2025.120993**
+(also SSRN 10.2139/ssrn.5098869). Argues that classical methods retain an advantage *because*
 domain knowledge such as a known phase volume fraction can be imposed explicitly, and
 evaluates volume-fraction alignment (KL divergence) rather than overlap. The nearest thing to
 your thesis inside materials science.
@@ -29,22 +39,23 @@ a worked measurement, and saying so protects the paper.
 
 ## B. Classical, threshold-based crack-area measurement in SEM — your methodological ancestors
 
-**4. Analysis of SEM digital images to quantify crack network pattern area in chromium
-electrodeposits.** *Surface and Coatings Technology*, 2015. The closest methodological
-ancestor found: histogram-threshold binarisation of SEM crack networks, with a
+**4. Vidal et al., "Analysis of SEM digital images to quantify crack network pattern area
+in chromium electrodeposits."** *Surface and Coatings Technology*, **2016**,
+**doi:10.1016/j.surfcoat.2015.11.049**. The closest methodological ancestor found: histogram-threshold binarisation of SEM crack networks, with a
 Laplacian-of-Gaussian second-derivative step to choose the threshold, reporting cracked area
 and arguing it is more objective than visual assessment. Deterministic, no training, SEM,
 crack area. Cite it — a reviewer who knows it and finds it uncited will not be generous.
 
-**5. Improvement of qualitative analysis of SEM images by computational tools.** *Journal of
-Microscopy*, 2016. Binarisation, Otsu, Laplacian filters and reverse binarisation, reporting
-crack length, angle and **total crack length per unit area**. Same family, same reasoning,
-a decade earlier.
+**5. WITHDRAWN.** A *Journal of Microscopy* 2016 paper on binarisation, Otsu and Laplacian
+filtering reporting crack length per unit area appeared in the search results, but no
+Crossref record matching it could be found and no identifier could be established. It is
+removed rather than cited from a search snippet.
 
 ## C. Why a deterministic threshold is defensible on fracture surfaces
 
-**6. Image-based fracture surface defect characterization methods for additively manufactured
-Ti-6Al-4V tested in fatigue.** *JOM*, 2024, doi:10.1007/s11837-024-06655-7. Reports that
+**6. Ngo et al., "Image-Based Fracture Surface Defect Characterization Methods for
+Additively Manufactured Ti-6Al-4V Tested in Fatigue."** *JOM*, 2024,
+doi:10.1007/s11837-024-06655-7 — **verified**. Reports that
 non-learned segmentation struggles on rough fracture surfaces because manual intensity
 thresholds vary across features. That is exactly the difficulty your background-correction
 and multiscale stages exist to address, and it is a citable statement of the problem from
@@ -73,10 +84,12 @@ median solidity 0.92, every labelled site a rounded cavity.
 
 ## E. Metric critique — the line your paper joins
 
-**11. Maier-Hein, Reinke, Godau et al. (2024),** *Nature Methods* 21:195-212, "Metrics
+**11. Maier-Hein, Reinke, Godau et al. (2024),** doi:10.1038/s41592-023-02151-z —
+verified. *Nature Methods* 21:195-212, "Metrics
 reloaded" — already cited.
-**12. Reinke, Tizabi, Baumgartner et al. (2024),** *Nature Methods* 21:182-194, "Understanding
-metric-related pitfalls" — already cited.
+**12. Reinke, Tizabi, Baumgartner et al. (2024),** *Nature Methods* 21:182-194,
+doi:10.1038/s41592-023-02150-0 — verified. "Understanding metric-related pitfalls" —
+already cited.
 
 **The gap, confirmed by four independent searches: no materials-domain paper applies this
 critique to a materials measurement.** The general literature supports the mechanism — Dice
@@ -91,20 +104,27 @@ measurement error itself.
 
 ## F. Precedent in your two target venues
 
-**13.** *Measurement Science and Technology*, March 2025, doi:10.1088/1361-6501/adbc08 — SEM
-measurement methodology on fatigue cracks in **GH4169, which is Inconel 718 under its Chinese
-designation**, with no learned weights. A second 2025 MST paper does in-situ SEM-DIC crack
-characterisation on another nickel superalloy. Same modality, same alloy, same object, same
-classical approach: this is the single closest venue precedent found.
+**13. CORRECTED.** The MST paper at doi:10.1088/1361-6501/adbc08 is real but was
+mischaracterised in the first version of this document. It is **Chen, Zhang, Xue, Li, Xie &
+Zhang, "Distortion correction method for SEM images based on sampling moire patterns and its
+application to characterization of the microscale fatigue crack propagation"**, *Measurement
+Science and Technology*, 20 March 2025. It *is* classical SEM measurement methodology with
+no learned weights, applied to microscale fatigue crack propagation, and it *is* in one of
+your target venues — so the venue argument holds. But it is a distortion-correction method,
+not a crack-area measurement, and **nothing in its title or record identifies GH4169**. Do
+not repeat the "same alloy" claim; it was the search agent's, not the paper's.
 
-**14.** *Materials Characterization* 2026, doi:10.1016/j.matchar.2026.116319 — Jiao,
-"Curvature-driven quantification of 2D SEM fracture morphology across metallic materials".
-Deterministic geometric quantification of 2D SEM fracture morphology. Same genre, same
-modality, this year.
+**14. Jiao et al., "Curvature-driven quantification of 2D SEM fracture morphology across
+metallic materials."** *Materials Characterization*, 2026, doi:10.1016/j.matchar.2026.116319
+— **verified**. Deterministic geometric quantification of 2D SEM fracture morphology. Same
+genre, same modality, this year, in your first-choice venue.
 
-**15.** *Engineering Failure Analysis* 2026, doi:10.1016/j.engfailanal.2026.111235 —
-quantitative fractography as a standalone training-free image-measurement method paper.
-Evidence that EFA takes this article type.
+**15. Zheng et al., "Quantitative fractography of quasi-cleavage fractures via unsupervised
+image segmentation."** *Engineering Failure Analysis*, 2026,
+doi:10.1016/j.engfailanal.2026.111235 — **verified**, and a better fit than first described:
+*unsupervised* segmentation for quantitative fractography is a standalone training-free
+image-measurement method paper in a Q1 venue. Strong evidence that EFA takes this article
+type, and worth citing in the manuscript itself.
 
 ---
 
@@ -114,8 +134,12 @@ Four of them change the paper rather than just its reference list:
 
 * **[1] and [2]** mean the framing is not novel and the draft should say so explicitly. It
   already concedes novelty in Section 1; name these two when it does.
-* **[4] and [5]** are direct methodological ancestors in SEM crack area and are currently
-  uncited. Add them to Section 1.
+* **[4]** is a direct methodological ancestor in SEM crack area and was uncited. It is now
+  reference [17] in the manuscript. [5] was withdrawn: no record for it could be found.
+* **[14] and [15]** — the Jiao and Zheng papers — are both in target venues, both 2026, and
+  both now cited in the manuscript as [20] and [21].
 * **[6]** gives you an external statement of why a naive global threshold fails on fracture
   surfaces, which is the justification for your background-correction stage.
-* **[13]** is the strongest single argument for the venue choice.
+* **[13]** still supports the venue choice, in its corrected form: MST publishes classical
+  SEM measurement methodology applied to fatigue cracks. It does not support a "same alloy"
+  claim.
