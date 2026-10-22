@@ -236,11 +236,19 @@ USE_REGION_CLASSIFIER = False
 #
 # To try it: install(up, absolute_dark_thresh=20). Expect area fraction to rise by roughly
 # a seventh and crack counts with it; re-measure anything already reported.
-# The MAD multiplier the paper selects. It lives here rather than as a literal in the
-# figure generator because a plate that fell back to its own default printed 5.0 while the
-# manuscript had moved to 6.0, and the figure silently contradicted the text beside it.
-# Anything that needs this value reads it from here and fails if it is absent.
-MAD_K = 6.0
+# TWO VALUES, AND THEY ARE NOT THE SAME. OVERRIDES below is empty, so the running
+# detector takes mad_k from segment_dark_regions' own default, which is 5.0. The paper
+# evaluates at 6.0, where the reported crack area fraction agrees with the annotation to
+# 1.3% on 31 public whole fields -- but that is 31 images of one alloy and the shipped
+# default has NOT been changed on it.
+#
+# Both names exist because a figure generator that fell back to its own literal printed
+# 5.0 while the manuscript had moved to 6.0, and the plate silently contradicted the text
+# beside it. Anything that draws or documents either value reads it from here, so the two
+# cannot drift apart again, and a reader of this file can see at a glance that the paper's
+# setting is not the app's.
+SHIPPED_MAD_K = 5.0        # what the application actually runs
+PAPER_MAD_K = 6.0          # what the manuscript evaluates and reports
 
 ABSOLUTE_DARK_THRESH = 10
 

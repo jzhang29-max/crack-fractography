@@ -38,10 +38,13 @@ LADDER = ", ".join(str(s) for s in DO.SCALE_LADDER)
 # READ IT, DO NOT FALL BACK. A getattr default meant this plate printed 5.0 while the
 # manuscript selected 6.0, so the figure silently contradicted the text it illustrates.
 # A missing name is now a hard error, like every other constant on this plate.
-if not hasattr(DO, "MAD_K"):
-    raise SystemExit("detector_overrides.py defines no MAD_K; this plate must not guess "
-                     "one -- add it there so the figure and the paper cannot disagree")
-MAD_K = DO.MAD_K
+for _n in ("SHIPPED_MAD_K", "PAPER_MAD_K"):
+    if not hasattr(DO, _n):
+        raise SystemExit(f"detector_overrides.py defines no {_n}; this plate must not "
+                         f"guess one -- add it there so the figure and the paper cannot "
+                         f"disagree")
+MAD_K = DO.SHIPPED_MAD_K          # this plate documents the APPLICATION
+PAPER_MAD_K = DO.PAPER_MAD_K
 
 BODY, SMALL, TITLE = 8.6, 7.6, 11.0
 FLOOR = 7.0
@@ -58,6 +61,9 @@ STAGES = [
     ("Propose dark candidates",
      f"{'Union over all ' + str(len(DO.SCALE_LADDER)) + ' scales' if DO.USE_MULTISCALE_UNION else 'Single scale'}: a pixel is a candidate if it is dark at ANY scale.\n"
      f"Two gates, and they are the whole detector: a robust MAD cut at mad_k = {MAD_K}\n"
+     f"as shipped. The paper evaluates at {PAPER_MAD_K}, where the reported area\n"
+     f"fraction agrees with the annotation to 1.3%; the shipped default is\n"
+     f"unchanged on 31 images of one alloy.\n"
      f"sigma, and an absolute floor at intensity {DO.ABSOLUTE_DARK_THRESH}. Measured on this corpus the\n"
      "absolute floor alone accounts for about half of all recall that is lost.", "stage"),
     ("Clean and label",
