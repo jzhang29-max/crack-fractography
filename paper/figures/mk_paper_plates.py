@@ -88,6 +88,10 @@ SEM_PM = load(os.path.join(REPO, "docs/figures/sem_public_metrics.json"), "SEM m
 SEM_WC = load(os.path.join(REPO, "docs/figures/sem_width_ceiling.json"), "SEM width ceiling")
 SEM_OR = load(os.path.join(REPO, "docs/figures/sem_originals_metrics.json"),
               "SEM originals")["datasets"]
+# The sweep EXTENDED above the shipped constant. Every older file stops at mad_k = 5.0,
+# which is the shipped value, so a plate drawn from one of them cannot show a peak.
+MK = load(os.path.join(REPO, "docs/figures/madk_above_five.json"),
+          "mad_k above five")["sets"]
 # SEM ONLY. Pavement is out of the paper: the application is micrographs, and a road-surface
 # benchmark says nothing about one. The primary numbers are the ORIGINAL 1024x1024 fields
 # rather than the released crops -- every source image behind the crops also appears among
@@ -144,8 +148,16 @@ def plate_transfer():
     # WHOLE FIELDS. This read SEM_PM -- the crops -- for one build, so both series on this
     # plate were the same data drawn twice and the curves lay exactly on top of each other
     # while the legend claimed they were different sets.
-    sem = SEM_OR["Inconel718_crack"]["per_k"]
-    ks = sorted((float(k) for k in sem), reverse=True)
+    #
+    # EXTENDED ABOVE THE SHIPPED VALUE. The source was sem_originals_metrics.json, whose
+    # sweep stops at mad_k = 5.0 -- the shipped constant -- with F1 still rising. Drawing
+    # that grid under a caption calling 5.0 the optimum was the figure asserting a peak it
+    # had not reached; the curve is now read from the extended sweep so the peak is visible
+    # and so is the fall on the far side of it.
+    sem = MK["whole_fields"]["per_k"]
+    crop = MK["crops"]["per_k"]
+    ks = sorted(float(k) for k in sem)
+
     def pick(d, k):
         for cand in (str(k), f"{k:g}", f"{k:.1f}"):
             if cand in d:
@@ -158,29 +170,41 @@ def plate_transfer():
     # very fields, cut around the cracks, and that alone lifts F1 by about 0.15 at every
     # setting. It is the clearest statement in the paper of how much a benchmark's framing
     # is worth, and it costs one extra line to show.
-    crop = SEM_PM["Inconel718_crack"]["per_k"]
     ax.plot(ks, [pick(crop, k)["f1"] for k in ks], marker="s", linestyle="--",
             color="0.55", label="the same images, cropped around cracks", markersize=4,
             linewidth=1.3)
+
+    best = float(MK["whole_fields"]["best_in_sample"])
     ax.axvline(5.0, color="0.7", linewidth=1, linestyle=":")
-    ax.text(5.0, 0.03, " shipped (fitted on SEM steel)", fontsize=SMALL, color="0.4",
-            rotation=90, va="bottom")
+    ax.axvline(best, color="#b3401a", linewidth=1.1, linestyle="-", alpha=0.8)
+    # labels at the TOP: the lower half of this axes carries the legend, and a
+    # rotated label behind legend text is unreadable at page scale
+    ax.text(5.0, 0.545, "shipped 5.0 ", fontsize=SMALL, color="0.4", rotation=90,
+            va="top", ha="right")
+    ax.text(best, 0.545, f" optimum {best:g}", fontsize=SMALL, color="#b3401a",
+            rotation=90, va="top", ha="left")
+    # the grid the earlier draft used, so a reader can see where it stopped and why the
+    # old claim looked true
+    ax.axvspan(1.0, 5.0, color="0.92", zorder=0)
+    ax.text(1.9, 0.455, "the grid the\nfirst draft swept", fontsize=SMALL,
+            color="0.45", ha="center", va="center", linespacing=1.25)
+    ax.set_xscale("log")
+    ax.set_xticks([1, 2, 3, 5, 8, 12, 20, 40])
+    ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
     ax.set_xlabel("mad_k  (robust outlier threshold)", fontsize=BODY)
     ax.set_ylabel("mean F1 per image", fontsize=BODY)
-    ax.invert_xaxis()
     ax.tick_params(labelsize=SMALL)
     ax.spines[["top", "right"]].set_visible(False)
-    ax.legend(fontsize=SMALL, frameon=False)
-    ax.set_title("The one free constant on SEM: the shipped value is the best one",
+    ax.legend(fontsize=SMALL, frameon=False, loc="lower left",
+              bbox_to_anchor=(0.02, 0.02))
+    ax.set_ylim(0, 0.56)
+    ax.set_title("The shipped constant is one rung below the optimum",
                  fontsize=TITLE)
-    # RENAMED. It was "P2 - transfer" while it carried two datasets and argued that a
-    # refitted constant transfers between them. With one dataset it is an operating curve
-    # and the old name would print under a figure that no longer shows transfer.
     save(fig, "P2 - operating curve", {
         "what": "mean F1 against the detector's single free constant, on whole SEM "
                 "fields and on the released crops of those same fields",
-        "per_k": {d: {k: v["f1"] for k, v in PM[d]["per_k"].items()} for d in PM},
-        "source": "docs/figures/public_metrics.json"})
+        "per_k": {d: {k: v["f1"] for k, v in MK[d]["per_k"].items()} for d in MK},
+        "source": "docs/figures/madk_above_five.json"})
 
 
 # ------------------------------------------------- plate: what width alone does to IoU

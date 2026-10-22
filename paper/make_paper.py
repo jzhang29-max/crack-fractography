@@ -75,6 +75,18 @@ DC = _f(os.path.join(REPO, "docs/figures/dilation_costs_measurements.json"),
         "what dilation costs the measurements")["sets"]
 # Where the recall goes, stage by stage, with both gates opened to their limit so the
 # ceiling below is the proposal mechanism's own and not a threshold choice.
+# The mad_k sweep EXTENDED ABOVE the shipped value. The published sweep stopped at 5.0
+# with F1 still rising, so the claimed optimum was the edge of the grid; this carries the
+# two-sided curve and the paired test against the neighbouring rungs.
+MK = _f(os.path.join(REPO, "docs/figures/madk_above_five.json"), "mad_k above five")["sets"]
+MKT = _f(os.path.join(REPO, "docs/figures/madk_paired_test.json"),
+         "mad_k paired test")["tests"]
+RVD = _f(os.path.join(REPO, "docs/figures/ridge_vs_dilation_loo.json"),
+         "ridge vs dilation")["sets"]
+RFA = _f(os.path.join(REPO, "docs/figures/recall_fix_attempts.json"),
+         "recall fix attempts")
+TXP = _f(os.path.join(REPO, "docs/figures/texture_prototype.json"),
+         "texture prototype")["sets"]
 RD = _f(os.path.join(REPO, "docs/figures/recall_decomposition_inconel.json"),
         "recall decomposition")
 RG = _f(os.path.join(REPO, "docs/figures/ridge_grow_controls.json"),
@@ -122,6 +134,13 @@ def _n(x, d=4):
     return f"{x:.{d}f}"
 
 
+def _p(x):
+    """A p-value. Rounding an exact test's result to 0.0000 states a certainty no
+    finite sample can deliver, so anything below the printable floor is given as an
+    inequality instead."""
+    return "< 0.0001" if x < 0.0001 else f"= {x:.4f}"
+
+
 # CrackForest's values are deliberately absent: it is road imagery and was removed from
 # the draft. If a section reintroduces a {cf_...} placeholder the renderer fails on an
 # unresolved name rather than quietly printing a dataset the paper no longer argues from.
@@ -160,6 +179,7 @@ VALUES = {
     "in_crop_f1": _n(IN_CROP["loo"]["f1"]),
     "in_crop_prev": _n(100 * IN_CROP["prevalence"], 2),
     "in_crop_src": "18",
+    "in_crop_n": str(RFA["n"]),
     "in_crop_gain": _n(IN_CROP["loo"]["f1"] - IN["loo"]["f1"]),
     "in_rank": _ORD[_rank_i],
     # the same comparison on the whole fields the rest of the paper reports
@@ -198,6 +218,38 @@ VALUES = {
     # the ridge-growing arm against the same arm fed another field entirely
     "rg_real": _n(RG["whole_fields"]["B grown through REAL ridge"]["f1"]),
     "rg_other": _n(RG["whole_fields"]["D grown through ANOTHER FIELD ridge"]["f1"]),
+    # --- the two-sided mad_k curve, and whether its peak is resolvable ---
+    "mk_ship": "5.0",   # the shipped constant, named so the prose cannot drift
+    "mk_best": str(MK["whole_fields"]["best_in_sample"]),
+    "mk_ship_f1": _n(MK["whole_fields"]["per_k"]["5.0"]["f1"]),
+    "mk_best_f1": _n(MK["whole_fields"]["per_k"]["6.0"]["f1"]),
+    "mk_ship_ratio": _n(MK["whole_fields"]["per_k"]["5.0"]["area_ratio"], 2),
+    "mk_6_ratio": _n(MK["whole_fields"]["per_k"]["6.0"]["area_ratio"], 2),
+    "mk_7_ratio": _n(MK["whole_fields"]["per_k"]["7.0"]["area_ratio"], 2),
+    "mk_7_f1": _n(MK["whole_fields"]["per_k"]["7.0"]["f1"]),
+    "mk_top": str(max(float(k) for k in MK["whole_fields"]["per_k"])),
+    "mk_f1_gain": _n(MKT["whole_fields"]["F1"]["6.0"]["paired_median_gain"]),
+    "mk_f1_wins": str(MKT["whole_fields"]["F1"]["6.0"]["images_favouring"]),
+    "mk_f1_p": _p(MKT["whole_fields"]["F1"]["6.0"]["wilcoxon_p"]),
+    "mk_area_wins": str(MKT["whole_fields"]["|area error| pp"]["6.0"]["images_favouring"]),
+    "mk_area_p": _p(MKT["whole_fields"]["|area error| pp"]["6.0"]["wilcoxon_p"]),
+    "mk_n": str(MKT["whole_fields"]["n"]),
+    "mk_crop_f1_p": _p(MKT["crops"]["F1"]["6.0"]["wilcoxon_p"]),
+    "mk_crop_area_p": _p(MKT["crops"]["|area error| pp"]["6.0"]["wilcoxon_p"]),
+    "mk_crop_ship_ratio": _n(MK["crops"]["per_k"]["5.0"]["area_ratio"], 2),
+    "mk_crop_6_ratio": _n(MK["crops"]["per_k"]["6.0"]["area_ratio"], 2),
+    # the whole-field form of the decoy gain, which the cost sentence needs
+    "dec_gain_fields": _n(SK["whole_fields"][_DECOY]["pixel_f1"]
+                          - SK["whole_fields"][_DET]["pixel_f1"]),
+    "dec_rank_fields_pixel": _ORD[_decoy_rank("whole_fields", "pixel_f1")],
+    "rgd_fields_ridge": _n(RVD["whole_fields"]["grown through RIDGE (2 params)"]["f1"]),
+    "rgd_fields_dil": _n(RVD["whole_fields"]["just DILATED (2 params)"]["f1"]),
+    "rgd_crop_ridge": _n(RVD["crops"]["grown through RIDGE (2 params)"]["f1"]),
+    "rgd_crop_dil": _n(RVD["crops"]["just DILATED (2 params)"]["f1"]),
+    "tx_margin": _n(TXP["whole_fields"]["+ TEXTURE attached to seed"]["sel_by_f1"]["f1"]
+                    - TXP["whole_fields"]["decoy: WRONG-IMAGE texture"]["sel_by_f1"]["f1"]),
+    "tx_ratio": _n(TXP["whole_fields"]["+ TEXTURE attached to seed"]["sel_by_f1"]
+                   ["area_ratio"], 2),
     "wc_in_at": str(SW["Inconel718_crack"]["ceiling_at_width"]),
     "wc_corpus_at": str(MF["ceiling_widths"][_corpus.index(max(_corpus))]),
     # --- the pixel budget: the same result in the units the tool actually reports ---
@@ -426,9 +478,16 @@ def main():
             doc.y -= 0.10
         # the pipeline figure at the end of the method section is easier as an appendix
         doc.text("Appendix B.  The detector, end to end", H2, "bold", LEAD["h2"], gap=0.25, wrap="h2")
+        # The caption used to say every constant was read from the source file. Five are;
+        # mad_k falls back to a literal in the generator when the name is absent, and the
+        # stage text carries typed values. Claiming provenance the plate does not have is
+        # the defect this paper spends Section 6 on.
         doc.figure(os.path.join(REPO, "docs/figures/fig_pipeline.png"),
-                   f"Figure {fign + 1}.  Every constant read from "
-                   f"analysis/detector_overrides.py when the plate was drawn.")
+                   f"Figure {fign + 1}.  The shipped pipeline. Five constants are read from "
+                   f"analysis/detector_overrides.py when the plate is drawn; mad_k and the "
+                   f"two size floors are typed into the generator and are not yet under "
+                   f"that check. Pass 2 and the hand-correction layer are stages of the "
+                   f"application and are not in the scored path.")
         doc.close()
     print("wrote", out)
     print("resolved", len(VALUES), "values; sections:", len(files))

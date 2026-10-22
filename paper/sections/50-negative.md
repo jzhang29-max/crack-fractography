@@ -19,4 +19,6 @@ by-construction-correct 3 px crack scores F1 0.1260, *below* marking every pixel
 while F1 climbs to 0.64 on marked width alone. "Beats the no-information floor on F1" is
 necessary and not sufficient; precision lift separates where F1 does not.
 
-**Six precision rules validated on crops were deleters on frames.** See §2.
+**Six region-level precision rules validated on 512 px crops were rejected on whole
+frames.** Four of them delete 54–75% of hand-marked crack; the other two change no score.
+See §2.

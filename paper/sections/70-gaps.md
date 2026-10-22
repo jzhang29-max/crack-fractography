@@ -30,7 +30,7 @@ Listed rather than hidden.
   being published here. Sections 2 and 5 cite effects measured on that corpus as
   methodological evidence; a reviewer cannot check those without the data, and they should
   be read as weaker than the public-dataset numbers.
-* **The corpus series in Figure 3 carries no stroke width.** The instrument that would
+* **The corpus series in Figure 6 carries no stroke width.** The instrument that would
   measure it comparably needs a tile cache not present on this machine.
 * **The detector's best score in this project is not on cracks.** On MetalDAM's voids —
   compact, dark, high-contrast objects in SEM steel — it reaches MCC {md_mcc} against
@@ -43,3 +43,20 @@ Listed rather than hidden.
   slower than a single-pass U-Net at p = 0.0001.
 * **Novelty is not claimed.** Fifty-five framings of this work were checked against prior
   art and all were already owned. What is offered is measurement.
+
+## Data and code availability
+
+The images and masks in Section 3 are the Inconel 718 crack class of a public collection,
+Zenodo record 23045328, CC BY 4.0 (doi:10.5281/zenodo.23045328). The whole fields are its
+`image`/`mask` directories and the released crops its `image_cropped`/`mask_cropped`
+directories; both are used unmodified except for the 16-bit to 8-bit conversion described
+in Section 3, which takes the high byte.
+
+Every measurement file this paper draws a number from is listed in `docs/INDEX.md` with the
+script that produced it, and the paper itself is built by `paper/make_paper.py`, which fails
+rather than renders if a number has no source. **The repository is not yet public and no
+archival DOI or commit hash is quoted here; both are required before submission**, and
+until they exist a reader cannot check any of the above. The hand-corrected micrographs of
+our own laboratory referred to in Sections 2, 5 and 6 are not in a public release either;
+`docs/DATASET_RELEASE_SCOPE.md` measures what releasing them would cost and lists the
+decisions still open.

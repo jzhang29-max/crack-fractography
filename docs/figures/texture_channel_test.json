@@ -1,0 +1,19 @@
+{
+ "n_fields": 31,
+ "auc_missed_interior_vs_matrix": {
+  "raw_grey_level": 0.9323965922348305,
+  "local_sd_3px": 0.9600016869413108,
+  "local_sd_5px": 0.969275589871604,
+  "local_sd_9px": 0.9830277521469118,
+  "local_sd_15px": 0.9910137293012258
+ },
+ "auc_dark_core_vs_matrix_same_feature": {
+  "local_sd_3px": 0.8537864003469934,
+  "local_sd_5px": 0.8931943942980956,
+  "local_sd_9px": 0.9477101973372902,
+  "local_sd_15px": 0.9828067033876953
+ },
+ "best_scale_px": 15,
+ "best_auc": 0.9910137293012258,
+ "what_the_missed_region_is": "the lit, rough fracture surface visible inside a wide-open crack; the detector marks only the shadowed void beside it"
+}

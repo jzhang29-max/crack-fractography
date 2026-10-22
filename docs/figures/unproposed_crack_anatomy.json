@@ -1,0 +1,43 @@
+{
+ "n_fields": 31,
+ "labelled_px": 586096,
+ "never_reached_px": 246651,
+ "never_reached_frac": 0.42083720073162073,
+ "contrast_vs_background_cohens_d": {
+  "found_by_open_gate": 1.9539145806189497,
+  "never_found": -3.5564529647299916
+ },
+ "ridge_coverage_of_missed": {
+  "0.5": {
+   "coverage": 0.0080437541303299,
+   "image_marked": 0.005000114440917969,
+   "lift_over_chance": 1.6087140055244717
+  },
+  "1": {
+   "coverage": 0.03140064301381304,
+   "image_marked": 0.010000228881835938,
+   "lift_over_chance": 3.139992432658022
+  },
+  "2": {
+   "coverage": 0.09135174801642806,
+   "image_marked": 0.020000457763671875,
+   "lift_over_chance": 4.567482859435155
+  },
+  "4": {
+   "coverage": 0.19733956075588585,
+   "image_marked": 0.04000091552734375,
+   "lift_over_chance": 4.9333761028791665
+  },
+  "8": {
+   "coverage": 0.344024552910793,
+   "image_marked": 0.0800008773803711,
+   "lift_over_chance": 4.300259749341229
+  }
+ },
+ "missed_within_px_of_found": {
+  "2": 0.5470563670935856,
+  "5": 0.9173934020133712,
+  "10": 0.9852950119804906
+ },
+ "reading": "lift over chance is the only honest form of the coverage number: a filter that marks x% of the image covers x% of anything for free"
+}

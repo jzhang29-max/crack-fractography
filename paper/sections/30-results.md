@@ -26,19 +26,42 @@ F1 {in_f1} and IoU {in_iou}, against {in_lift_f1} times the F1 and {in_lift_iou}
 IoU of marking every pixel. A mask of the same area with its pixels scattered at random
 scores F1 {in_rnd_f1}.
 
-### 3.2  The one free constant, unrefitted
+### 3.2  The one free constant, and where the sweep stopped
 
 [FIGURE P2 - operating curve]
 
-`mad_k = 5.0` was fitted on SEM steel in a different laboratory, on a different alloy,
-years before this dataset existed. On these whole fields it is the best of the seven values
-tested, and the curve falls away monotonically below it.
+`mad_k = {mk_ship}` was fitted on SEM steel in a different laboratory, on a different alloy,
+years before this dataset existed. An earlier draft of this paper reported that it was the
+best of the seven values tested here and that the curve fell away on either side of it, and
+offered that as the paper's strongest result.
 
-That is the strongest result in this paper. A detector with one free parameter, carried
-unchanged to an independent laboratory's alloy, lands on that laboratory's optimum. The
-dashed series is the same images cropped around their cracks, which shifts the whole curve
-up by about 0.15 F1 without moving its peak — the framing changes the score, not the
-setting.
+**It was the largest value tested.** The seven rungs ran from 1.0 to {mk_ship}, F1 was still
+climbing at the top of them, and nothing above the shipped constant had been scored. A claim
+that a constant lands on an independent laboratory's optimum cannot be made from a grid whose
+maximum is that constant, and we made it.
+
+Extending the sweep to {mk_top} gives the two-sided curve the claim needed. The optimum is
+**{mk_best}**, one rung above the shipped value, and the difference survives the test this
+paper demands of everyone else: across the {mk_n} whole fields, {mk_best} beats {mk_ship} on
+F1 in {mk_f1_wins} of {mk_n} images, paired Wilcoxon p {mk_f1_p}, median gain
+{mk_f1_gain}. On the area fraction it is the larger effect — {mk_ship_ratio}x the labelled
+value at {mk_ship} against {mk_6_ratio}x at {mk_best}, better in {mk_area_wins} of {mk_n}
+images, p {mk_area_p} — and {mk_7_ratio}x at the next rung up, where F1 is {mk_7_f1}.
+
+The direction matters more than the magnitude. Every attempt in this paper to raise the score
+by marking **more** either failed its controls or wrecked the area fraction (Section 3.5).
+The one change that improves both marks **less**.
+
+On the released crops the same change is a wash on F1 (p {mk_crop_f1_p}) and makes the area
+fraction worse, {mk_crop_ship_ratio}x to {mk_crop_6_ratio}x (p {mk_crop_area_p}), because
+those crops are cut around their cracks and the detector already under-marks on them. The two
+framings disagree about the right operating point, which is a further reason not to read a
+single tuned constant as a property of the method.
+
+What survives of the original claim is weaker and still worth stating: a constant carried
+unchanged from another laboratory's alloy lands one rung from the optimum, and every value
+tested below it is worse. We have not changed the shipped default on the strength of 31
+images of one alloy; Section 7 says what would be needed.
 
 ### 3.3  Scored as a pixel budget
 
@@ -115,20 +138,33 @@ agreement within 5 px — a measure that cannot see how wide a mask is drawn —
 mask still ranks {dec_rank_skel}, at {dec_skel_crop} against the shipped {det_skel_crop}.
 Dilation closes gaps in a fragmented mask, and gap-closing moves a centreline score.
 
-Two further arms were run before this one and did worse. Growing the proposal through a
-Sato ridge response, which at least reads the image, was beaten by the plain dilation at
-matched parameter count; and on whole fields, growing it through **a different field's**
+Two further arms were run before this one and did no better. Growing the proposal through a
+Sato ridge response, which at least reads the image, lost to the plain dilation on the crops
+({rgd_crop_ridge} against {rgd_crop_dil}) and beat it by a similar margin on the whole fields
+({rgd_fields_ridge} against {rgd_fields_dil}) — the two framings disagree in sign, which is
+itself the answer. And on whole fields, growing the proposal through **a different field's**
 ridge response scored {rg_other} against the real field's {rg_real}. A step whose output
 barely changes when you feed it the wrong image is not reading the image.
 
-So the rank can be fixed. What it costs is the two numbers this tool exists to report:
+Three more channels were built and tested the same way and none survived. A local-roughness
+channel, motivated by what the missed crack turns out to be (Section 3.6), beat a
+wrong-image control by {tx_margin} F1 on the whole fields and took the area fraction to
+{tx_ratio}x. A watershed grown from the dark core out to the gradient ridge along the crack
+lip — the one construction whose stopping rule is the crack edge rather than a percentile —
+scored *below* both of its own controls. Every attempt to raise the score by marking more
+has now failed in the same way.
+
+So the rank can be fixed. What it costs is the two numbers this tool exists to
+report — both rows below are whole-field values, where the dilated mask ranks
+{dec_rank_fields_pixel} by pixel F1 and {dec_rank_skel} by skeleton F1; its first place
+is a released-crops result:
 
 | | area fraction, reported / true | mean width, reported / true |
 |---|---|---|
 | shipped detector | {in_ratio}x | {ship_width_fields}x |
-| dilated, ranks first | {dec_area_fields}x | {dec_width_fields}x |
+| dilated | {dec_area_fields}x | {dec_width_fields}x |
 
-On whole fields, buying {dec_gain_crop} F1 takes the area fraction from {in_ratio} times
+On whole fields, buying {dec_gain_fields} F1 takes the area fraction from {in_ratio} times
 the labelled value to {dec_area_fields} times it, and the mean width from
 {ship_width_fields}x to {dec_width_fields}x. A reader of this tool would be told that
 {dec_area_fields} times as much of the field had cracked as the annotator marked. The

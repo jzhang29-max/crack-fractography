@@ -1,0 +1,122 @@
+{
+ "shipped": "5.0",
+ "neighbours": [
+  "4.0",
+  "6.0",
+  "7.0"
+ ],
+ "tests": {
+  "whole_fields": {
+   "n": 31,
+   "F1": {
+    "4.0": {
+     "mean": 0.3228094962471235,
+     "paired_median_gain": -0.028250346716300445,
+     "images_favouring": 6,
+     "images_against": 25,
+     "wilcoxon_p": 0.0011555561795830727,
+     "resolved_at_0.05": true
+    },
+    "6.0": {
+     "mean": 0.3564031488986503,
+     "paired_median_gain": 0.012203327368372652,
+     "images_favouring": 27,
+     "images_against": 4,
+     "wilcoxon_p": 4.003755748271942e-06,
+     "resolved_at_0.05": true
+    },
+    "7.0": {
+     "mean": 0.3521467314458664,
+     "paired_median_gain": 0.010834485092704793,
+     "images_favouring": 22,
+     "images_against": 9,
+     "wilcoxon_p": 0.00973692536354065,
+     "resolved_at_0.05": true
+    }
+   },
+   "|area error| pp": {
+    "4.0": {
+     "mean": 1.50009278328188,
+     "paired_median_gain": -0.7409095764160156,
+     "images_favouring": 2,
+     "images_against": 29,
+     "wilcoxon_p": 1.1743977665901184e-06,
+     "resolved_at_0.05": true
+    },
+    "6.0": {
+     "mean": 0.4905177700904108,
+     "paired_median_gain": 0.33359527587890625,
+     "images_favouring": 23,
+     "images_against": 8,
+     "wilcoxon_p": 0.012432587333023548,
+     "resolved_at_0.05": true
+    },
+    "7.0": {
+     "mean": 0.5223058885143649,
+     "paired_median_gain": 0.4077911376953125,
+     "images_favouring": 20,
+     "images_against": 11,
+     "wilcoxon_p": 0.09416095819324255,
+     "resolved_at_0.05": false
+    }
+   }
+  },
+  "crops": {
+   "n": 26,
+   "F1": {
+    "4.0": {
+     "mean": 0.4708608295552074,
+     "paired_median_gain": -0.026179197873014287,
+     "images_favouring": 2,
+     "images_against": 24,
+     "wilcoxon_p": 1.4901161193847656e-07,
+     "resolved_at_0.05": true
+    },
+    "6.0": {
+     "mean": 0.49915534314924687,
+     "paired_median_gain": 0.0002796953654524842,
+     "images_favouring": 13,
+     "images_against": 13,
+     "wilcoxon_p": 0.35332122445106506,
+     "resolved_at_0.05": false
+    },
+    "7.0": {
+     "mean": 0.48599445896885113,
+     "paired_median_gain": -0.00927332039107337,
+     "images_favouring": 9,
+     "images_against": 17,
+     "wilcoxon_p": 0.017613530158996582,
+     "resolved_at_0.05": true
+    }
+   },
+   "|area error| pp": {
+    "4.0": {
+     "mean": 0.751187251164363,
+     "paired_median_gain": 0.8812427520751953,
+     "images_favouring": 18,
+     "images_against": 8,
+     "wilcoxon_p": 0.025350749492645264,
+     "resolved_at_0.05": true
+    },
+    "6.0": {
+     "mean": 1.8201497884897084,
+     "paired_median_gain": -0.7507801055908203,
+     "images_favouring": 4,
+     "images_against": 22,
+     "wilcoxon_p": 2.2709369659423828e-05,
+     "resolved_at_0.05": true
+    },
+    "7.0": {
+     "mean": 2.2714321429912863,
+     "paired_median_gain": -1.2177467346191406,
+     "images_favouring": 3,
+     "images_against": 23,
+     "wilcoxon_p": 1.6391277313232422e-06,
+     "resolved_at_0.05": true
+    }
+   }
+  }
+ },
+ "test": "exact Wilcoxon signed-rank on per-image paired differences",
+ "why_two_metrics": "F1 is what the benchmark rewards; the absolute area-fraction error in percentage points is what the tool reports to a reader, and the two do not have to agree"
+}

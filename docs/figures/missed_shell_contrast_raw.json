@@ -1,0 +1,20 @@
+{
+ "n_fields": 31,
+ "cohens_d_vs_background": {
+  "raw": {
+   "found": 1.7185976195454482,
+   "missed": -3.388544983158237
+  },
+  "flattened": {
+   "found": 1.9504301198323697,
+   "missed": -3.55176788242626
+  }
+ },
+ "mean_grey_level": {
+  "background": 81.95461741935482,
+  "found": 59.00655682214283,
+  "missed": 127.0192078528094
+ },
+ "missed_vs_found_raw_d": -2.180635442347292,
+ "note": "the flattened figure is reported only so the artefact is on record; the raw grey levels are the measurement"
+}

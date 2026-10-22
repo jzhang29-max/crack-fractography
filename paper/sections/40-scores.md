@@ -1,6 +1,9 @@
 ## 4  What the scores measure
 
-This is the part we would most want another group to check.
+This is the part we would most want another group to check. **Every number in this section
+is measured on the {in_crop_n} released crops, not the whole fields the rest of the paper
+reports**, because the constant-width construction was built against that split; Figure 6
+draws its reference line from the same set. The whole-field version has not been run.
 
 [FIGURE P3 - width sensitivity]
 
@@ -8,7 +11,7 @@ Take the ground truth, reduce it to its centreline, and redraw it at a fixed wid
 result is exactly right about where every crack is and wrong only about how wide. Scored
 against the label it should be nearly perfect, and it is not: the best such reconstruction
 reaches IoU {wc_in_iou}. Most of the available IoU is being spent on agreeing about width,
-and the two curves in Figure 3 peak at different widths — {wc_in_at} px for this dataset's
+and the two curves in Figure 6 peak at different widths — {wc_in_at} px for this dataset's
 labels against {wc_corpus_at} px for our own corpus tiles — so the same detector's IoU can
 differ between corpora without its localisation differing at all.
 
@@ -16,12 +19,13 @@ differ between corpora without its localisation differing at all.
 along its length, so a detector that tracks that variation can score above a constant-width
 redraw of the same centreline. We had to be told that by the measurement.
 
-**And width does not explain the detector's difficulty, which we initially claimed it did.**
-This dataset's labels are drawn at a median {in_stroke} px and its best constant-width
-reconstruction reaches {wc_in_iou}; our own corpus tiles, scored by the same construction,
-peak at {wc_corpus_iou}. Two corpora whose brush widths differ substantially reach
-comparable ceilings, so whatever makes these images hard for this detector, it is not how
-wide the labels are drawn.
+**We also claimed width does not explain the detector's difficulty. That claim is now
+withdrawn as well.** This dataset's labels are drawn at a median {in_stroke} px and its best
+constant-width reconstruction reaches {wc_in_iou}; our own corpus tiles, scored by the same
+construction, peak at {wc_corpus_iou}. The two ceilings are comparable. What we cannot say
+is that the two brush widths differ substantially, because the corpus stroke width is not
+measured here — Section 7 records it as unmeasured — so the inference that drew the two
+facts together had nothing holding it up.
 
 That argument was stronger one draft ago. It rested on two SEM sets annotated four times
 apart in stroke width — 25.8 px and 6.4 px — reaching the same ceiling to within 0.007. The
