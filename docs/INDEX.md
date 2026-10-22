@@ -15,6 +15,7 @@ the generator is named.
 | [`REPORTING_GUIDE.md`](REPORTING_GUIDE.md) | how a number must be reported here, and the error each rule came from |
 | [`PRACTICE_AND_PRIOR_ART.md`](PRACTICE_AND_PRIOR_ART.md) | prior-art checks; every novelty framing tested so far and its outcome |
 | [`MAR_H_AS_vs_MAR_H_HIP.md`](MAR_H_AS_vs_MAR_H_HIP.md) | initial conclusions on that specimen comparison, with the confounds that limit it |
+| [`SIMILAR_RECENT_PAPERS.md`](SIMILAR_RECENT_PAPERS.md) | recent papers doing comparable work, grouped by how they relate; four of them change the paper rather than just its reference list |
 | [`DATASET_AND_JOURNAL_TARGETS.md`](DATASET_AND_JOURNAL_TARGETS.md) | the public-SEM-benchmark search (essentially none for metal cracks) and the Q1 journal shortlist, with what is verified and what is not |
 | [`TXM_READINESS.md`](TXM_READINESS.md) | **is the TXM work ready for the paper? No, not as a capability.** The SEM detector on TXM in pixel-percentage units: below an empty mask pooled, but one specimen group of four transfers cleanly. Also what the TXM repo still needs from the author |
 | [`CAN_THE_MODEL_BE_IMPROVED.md`](CAN_THE_MODEL_BE_IMPROVED.md) | **yes, by marking less.** The shipped mad_k sits one rung below the optimum; four channels that tried to mark more all failed their decoys; and the missing 42% of labelled crack is the lit fracture surface inside open cracks, brighter than matrix |
