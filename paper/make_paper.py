@@ -94,6 +94,11 @@ LSC = _f(os.path.join(REPO, "docs/figures/lab_scoring_positive_control.json"),
          "lab-corpus scoring control")
 UCA = _f(os.path.join(REPO, "docs/figures/unproposed_crack_anatomy.json"),
          "unproposed crack anatomy")
+# The region-classifier ablation re-scored over every pixel. Its own guard asserts the
+# three arms still reproduce the overlap numbers Section 2 used to quote, so these are
+# the same arms measured differently and not a different experiment.
+DZ = _f(os.path.join(REPO, "docs/figures/sem_deadzone_background_units.json"),
+        "classifier ablation, background units")
 _WF = BC["sweeps"]["whole_fields"]
 _CR = BC["sweeps"]["crops"]
 # the operating point whose reported area fraction is closest to the annotator's, and the
@@ -112,6 +117,10 @@ _ARM_AREA_RANK = {1: "first", 2: "second", 3: "third", 4: "fourth",
 _ARM_AREA_2ND = next(kv for kv in _ARM_AREA
                      if kv[0] not in ("DETECTOR (shipped)", "UNION darkness OR Sato"))
 _ARM_UNION = _ARM_W["UNION darkness OR Sato"]
+# the specimen that owns the pooled area ratio, named because the pooled and
+# per-specimen aggregations disagree about the ablation and a reader needs to know
+# which one specimen is responsible
+_DZ_HOG = max(DZ["labelled_share_by_specimen"].items(), key=lambda kv: kv[1])
 
 
 def _WFK(k):
@@ -273,6 +282,31 @@ VALUES = {
     "arm_area_2nd_name": _ARM_AREA_2ND[0],
     "arm_n_earned": str(sum(1 for v in _ARM_W.values() if v["beats_empty_mask"])),
     "arm_union_area": _n(_ARM_UNION["area_agreement"], 3),
+    # --- Section 2: the classifier ablation in background-counting units ---
+    "dz_n_tiles": str(DZ["n_tiles"]), "dz_n_spec": str(DZ["n_specimens"]),
+    "dz_lab": _n(DZ["pooled"]["v147"]["labelled_pct"], 3),
+    "dz_empty": _n(DZ["pooled"]["v147"]["empty_mask_accuracy_pct"], 3),
+    "dz_a_acc": _n(DZ["pooled"]["v147"]["accuracy_pct"], 3),
+    "dz_b_acc": _n(DZ["pooled"]["ablation"]["accuracy_pct"], 3),
+    "dz_a_area": _n(DZ["pooled"]["v147"]["area_agreement"], 3),
+    "dz_b_area": _n(DZ["pooled"]["ablation"]["area_agreement"], 3),
+    "dz_c_area": _n(DZ["pooled"]["v1492"]["area_agreement"], 3),
+    "dz_a_spec": _n(DZ["pooled"]["v147"]["specificity_pct"], 3),
+    "dz_b_spec": _n(DZ["pooled"]["ablation"]["specificity_pct"], 3),
+    "dz_acc_gain": _n(DZ["paired_vs_v147"]["ablation"]["accuracy (pp)"]["median_gain"], 4),
+    "dz_acc_wins": str(DZ["paired_vs_v147"]["ablation"]["accuracy (pp)"]
+                       ["specimens_better"]),
+    "dz_acc_p": _p(DZ["paired_vs_v147"]["ablation"]["accuracy (pp)"]["wilcoxon_p"]),
+    "dz_area_wins": str(DZ["paired_vs_v147"]["ablation"]["|area agreement - 1|"]
+                        ["specimens_better"]),
+    "dz_area_p": _p(DZ["paired_vs_v147"]["ablation"]["|area agreement - 1|"]
+                    ["wilcoxon_p"]),
+    "dz_spec_worse": str(DZ["paired_vs_v147"]["ablation"]["specificity (pp)"]
+                         ["specimens_worse"]),
+    "dz_spec_p": _p(DZ["paired_vs_v147"]["ablation"]["specificity (pp)"]["wilcoxon_p"]),
+    "dz_hog": _DZ_HOG[0], "dz_hog_share": _n(100 * _DZ_HOG[1], 1),
+    "dz_hog_a": _n(DZ["per_specimen"]["v147"][_DZ_HOG[0]]["area_agreement"], 3),
+    "dz_hog_b": _n(DZ["per_specimen"]["ablation"][_DZ_HOG[0]]["area_agreement"], 3),
     # the sweep in background-counting units, at the three rungs the text names
     "wf5_area": _n(_WFK(5.0)["area_agreement_corpus"], 3),
     "wf6_area": _n(_WFK(6.0)["area_agreement_corpus"], 4),

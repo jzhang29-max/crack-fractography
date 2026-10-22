@@ -22,11 +22,18 @@ Listed rather than hidden.
   no masks at all; and the published nickel-superalloy fatigue-crack segmentation work we
   found is tomography with no data release. A second independent SEM crack set would change
   this paper more than any further work on the method.
-* **Pavement results were measured and removed.** The detector was scored in overlap units there, reaching F1 0.7932 and IoU
-  0.6809 on DeepCrack, ranking first of seven there. It is not reported above because a
-  road-surface benchmark says nothing about micrographs, and the contrast between that
-  ranking and the third-of-seven on SEM is better read as a warning about cross-modality
-  benchmarking than as a result. The numbers remain in docs/figures/public_metrics.json.
+* **The pavement result cannot be restated in this paper's units, so it is withdrawn
+  rather than converted.** The detector was once scored on DeepCrack and ranked first of
+  seven there. Those were overlap scores; every other result in this paper has since been
+  recomputed over every pixel, and this one cannot be, because the downloaded images were
+  not retained and there is nothing left to re-score. We will not convert a measurement by
+  arithmetic on a stored summary. Two reasons not to re-download and re-run it: a
+  road-surface benchmark says nothing about micrographs, which is why it left the argument
+  in the first place, and the contrast between that ranking and the {in_rank_fields}-of-seven
+  on the SEM whole fields was always better read as a warning about cross-modality
+  benchmarking than as a result. The old figures survive in
+  `docs/figures/public_metrics.json` and in the git history; they are not quoted here and
+  should not be quoted from there.
 * **No laboratory results are reported.** By choice: the specimen measurements are not
   being published here. Sections 2 and 5 cite effects measured on that corpus as
   methodological evidence; a reviewer cannot check those without the data, and they should

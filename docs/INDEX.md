@@ -55,6 +55,12 @@ The paper now has an **Appendix A** giving the pixel budget for all five SEM set
 | `figures/ridge_vs_dilation_loo.json` | ridge-growing against a plain dilation at matched parameter count | `analysis/research/improve/ridge_vs_dilation_loo.py` |
 | `figures/skelf1_ranking.json` | every arm on both sets by pixel F1 and width-blind skeleton F1, carrying the dilation decoy as a control on the metric | `analysis/research/improve/skelf1_ranking.py` |
 | `figures/dilation_costs_measurements.json` | what ranking first costs the area fraction and the width | `analysis/research/improve/dilation_costs_measurements.py` |
+| `figures/background_counting_table.json` | **the paper's primary table.** Every operating point scored only in measures that count the background: pixel budget, accuracy with the empty-mask baseline, specificity, area agreement | `analysis/research/improve/background_counting_table.py` |
+| `figures/arms_background_units.json` | the eight classical arms re-ranked in those units; the detector places first on area agreement | `analysis/research/improve/arms_background_units.py` |
+| `figures/width_ceiling_background_units.json` | the constant-width construction re-scored over every pixel: the whole competitive range is 0.71 pp on whole fields | `analysis/research/improve/width_ceiling_background_units.py` |
+| `figures/sem_deadzone_background_units.json` | the region-classifier ablation re-run in those units. Its guard asserts the three arms still reproduce the stored IoU record before reporting anything | `paper/figures/sem_deadzone_background_units.py` |
+| `figures/lab_scoring_positive_control.json` | whether our own corpus can referee a detector at all: 99.1% of refereed pixels are crack | `analysis/research/improve/lab_scoring_positive_control.py` |
+| `figures/lab_madk_sweep.json` | the mad_k sweep on our own 45 frames, recall and precision on separate frame sets | `analysis/research/improve/lab_madk_sweep.py` |
 | `figures/madk_above_five.json` | **the mad_k sweep extended above the shipped value.** Every older file stops at 5.0 | `analysis/research/improve/madk_above_five.py` |
 | `figures/madk_paired_test.json` | whether mad_k 6.0 beats 5.0 per-image, paired Wilcoxon, on F1 and on area error | `analysis/research/improve/madk_paired_test.py` |
 | `figures/arms_pixel_budget.json` | all eight arms as a pixel budget AND as precision/recall/F1/IoU, tuned two ways | `analysis/research/improve/arms_pixel_budget.py` |

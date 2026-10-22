@@ -98,3 +98,36 @@ The request was to raise recall so the detector ranks higher. Recall *can* be ra
 
 The change that actually improves the tool moves the other way: **mark less, at mad_k 6–7**,
 where the area fraction a reader gets goes from 65% too high to within 6% of the label.
+
+
+## 6. The two legacy measurements, re-run (2026-10-21)
+
+Both overlap-unit results left in the paper were re-run over every pixel.
+
+**The region-classifier ablation.** Its guard asserts the three arms still reproduce the
+stored record (+0.1753 median IoU, 11/13, p = 0.0061) before reporting anything, so these
+are the same arms measured differently. Over 26 tiles and 13 specimens at 2.973% crack:
+
+| | classifier ON | classifier OFF |
+|---|---|---|
+| accuracy | 95.972% | 96.268% |
+| an empty mask scores | 97.027% | 97.027% |
+| specificity | 97.780% | 97.585% |
+| area reported / marked, pooled | 1.094x | 1.321x |
+
+Paired per specimen: **+0.3635 pp accuracy in 11 of 13 (p = 0.0479)** and the area fraction
+closer to the annotator's in **11 of 13 (p = 0.0398)** — but **specificity worse in 12 of 13
+(p = 0.0005)**. The earlier claim that switching it off "improved every metric" is
+**withdrawn**: it marks more, so more background is marked, and the overlap score could not
+show that. Neither arm's accuracy beats an empty mask on these tiles.
+
+Pooled and per-specimen disagree about the area fraction and the paper reports both.
+MAR_H_HIP carries 21.5% of all labelled crack here and over-marks in both arms
+(3.596x → 3.690x), so it owns a pooled ratio while counting once in a per-specimen test.
+
+**The DeepCrack result could not be re-run.** The downloaded images were not retained — the
+pavement directories are 0 bytes — so there is nothing left to re-score, and a number
+cannot be converted into these units by arithmetic on a stored summary. It is **withdrawn
+from the paper** rather than converted. Re-downloading was rejected on two grounds: pavement
+was removed from this paper as the wrong modality at the author's direction, and the result
+was always a warning about cross-modality benchmarking rather than a finding.
