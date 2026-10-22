@@ -1,86 +1,125 @@
 # A public SEM-only benchmark, and where to send this
 
-Searched 2026-10-22 by five parallel agents (repository sweep, literature trail,
-challenges/adjacent, journal scope, journal precedent), each finding verified by a second
-agent. **Caveat on provenance:** the finder→verifier pairing in the run log could not be
-fully reconciled, and my own confirming search was cut off by this turn's web-search
-budget. Items below are marked by how well they are actually established.
+Searched 2026-10-22. Five parallel finders, every candidate re-checked by a second agent
+that was told to refute it. 15 of 30 candidates survived. **The verifiers did real work** —
+HTTP range requests into ZIP64 central directories, downloading and measuring mask
+morphology, rendering tiles and looking at them — and three of them overturned their
+finder's headline claim.
 
-## 1. Is there a public SEM-only crack benchmark? Essentially no — and that is narrower than it sounds
+## 1. Is there a public SEM-only crack benchmark? No.
 
-**The defensible negative result, which belongs in the paper:**
+**The defensible statement:**
 
 > There is no public **SEM metal/alloy crack pixel-mask** dataset other than the Inconel 718
 > folders in Zenodo 23045328.
 
-Not "no public SEM crack masks exist" — those do exist, for ceramics and coatings. The
-claim has to carry *metal/alloy* and *cracks* together, and that is where it holds.
+Not "no public SEM crack masks exist" — they do, for ceramic coatings. The claim needs
+*metal/alloy* **and** *cracks* together, and there it holds. Nine candidates were checked
+and every one failed on a specific, measured point.
 
-**VERIFIED HARD.** One agent did not take the Zenodo record's word for its contents: it
-pulled the ZIP64 central directory of `train.zip` by HTTP range request (4,389,010,246
-bytes, 30,840 entries), located `class_id.txt` at local-header offset 96,049,044, and
-range-fetched and inflated it. `train.zip` holds **21** target folders — the 15 declared
-plus six Inconel 718 folders — and the archive root is `trainSemData_swin_384`.
+### The candidate that looked best, and why it is dead
 
-### The one candidate worth chasing
+**Medghalchi et al., DP800 dual-phase steel, Zenodo 11224127** (*Materials & Design* 243
+(2024) 113031). Panoramic SEM of a metal, hand-drawn pixel masks, CC BY, 3.65 GB. It fails
+on content, and the verifier measured rather than inferred:
 
-| | |
+- Downloaded all 171 labelled masks and measured every damage object ≥20 px (n = 296):
+  **median aspect ratio 1.74**, only 1 of 296 above aspect 5, 87.8% below aspect 3, median
+  solidity 0.92 with 91.2% above 0.8, median equivalent diameter 0.42 µm.
+- Rendered the seven highest-damage tiles with contours over the SEM and looked at them:
+  **every labelled site is a rounded, near-convex cavity.** Not one elongated or branching
+  crack in the top-damage set. Mask registration checked (mean grey 19–47 inside damage vs
+  83–162 outside), so these really are the dark voids.
+
+It is **void labelling, morphologically the inverse** of Inconel 718 fatigue cracks, where
+one connected tortuous structure carries ~97% of the area. Do not use it.
+
+### Everything else
+
+| candidate | measured reason it fails |
 |---|---|
-| **DP800 dual-phase steel, panoramic SEM** | Medghalchi et al., Zenodo **11224127**, paper *Materials & Design* 2024, doi:10.1016/j.matdes.2024.113031 |
-| what it has | panoramic SEM of DP800 with ferrite / martensite / **damage** masks |
-| why it nearly fits | electron microscopy, a metal, pixel masks, public |
-| why it does not quite | "damage" is a **union class**, not cracks alone — it will include voids and decohesion |
+| NASA MicroNet EBC-1/2/3 | ceramic **coating**. The only maintained SEM crack-mask benchmark there is, and it is the wrong material |
+| BAM hot-cracking TIG weld (Zenodo 16919145) | the record's own description says the images are **light microscopy** |
+| Ti-6Al-4V fractography, CWRU SDLE | labels are **lack-of-fusion and keyhole porosity**, not cracks |
+| Ti-6Al-4V CT, Materials Data Facility | fails "pixel masks of cracks" on three independent grounds |
+| Cold-spray Cr on Zr (Zenodo 10478594) | the record **contains no images at all** |
+| ORNL tungsten thermal-shock (arXiv 2610.03505) | not public, and the verifier found that permanent |
+| DeepFract 316L CSCC (SSRN 5012225) | artifact **not retrievable**, confirmed on re-check |
+| Al-Mg-Si SCC, CWRU SDLE | X-ray CT, weak labels |
+| NMC cathode cracks (figshare 32975921) | **NMC811 is an oxide ceramic**, not a metal — see §3, it matters for another reason |
 
-*Status: reported by two independent agents, not confirmed by me.* If the damage class can
-be split, or if cracks dominate it, this is a genuine second SEM metal benchmark and would
-change the paper more than any further work on the method.
+## 2. A provenance problem in the benchmark this paper already uses
 
-### Everything else, and why each fails
+A verifier pulled the ZIP64 central directory of `train.zip` from Zenodo 23045328 by HTTP
+range request (4,389,010,246 bytes, 30,840 entries, central directory at offset
+4,384,583,366), located `class_id.txt` at local-header offset 96,049,044, range-fetched and
+inflated it, and read all 15 lines verbatim:
 
-| candidate | disqualified because |
-|---|---|
-| NASA MicroNet EBC-1/2/3 (github.com/nasa/pretrained-microscopy-models) | **ceramic coating**, which you excluded. It is the only crack-mask SEM benchmark with a real maintainer |
-| Hot-cracking TIG weld set (BAM) | one agent reports **light microscopy, not SEM** |
-| Tungsten thermal-shock SEM cracks (arXiv 2610.03505, ORNL) | **no data repository found**; author contact only |
-| `nmc-crack-segmentation-data` | lithium-ion **cathode**, not a metal |
-| Ti-6Al-4V fractography, CWRU SDLE | **voids**, not cracks |
-| DeepFract, 316L CSCC fractography (SSRN 5012225) | claimed public, **not retrievable** |
-| High-chromium cast iron SEM | **phases**, not cracks |
-| Al-Mg-Si stress corrosion, CWRU SDLE | **X-ray CT**, weak labels |
+```
+0 Al-Zn_cooling      5 MetalDAM_defect      10 UHCS_cementite_network
+1 EBC_background     6 MetalDAM_ma&au       11 UHCS_cementite_particles
+2 EBC_crack(24)      7 MetalDAM_matrix      12 UHCS_ferrite
+3 EBC_oxide(24)      8 Ni-super_secondary   13 UHCS_information
+4 MetalDAM_austenite 9 Ni-super_terriary    14 UHCS_Widman
+```
 
-## 2. Target journals
+**`Inconel718_crack` is not in it.** `train.zip` holds 21 target folders: these 15 plus
+exactly six Inconel 718 folders (`Inconel718_crack`, `Inconel718_twin_grain`,
+`inconel718_carbides`, `_inter_delta`, `_intra_delta`, `_matrix`). The undeclared folders
+and the Inconel 718 folders are the same set. The only crack class the record declares is
+`EBC_crack` — the ceramic coating this paper withdrew.
 
-**The strongest single finding is a near-exact precedent:** Jiao, *"Curvature-driven
-quantification of 2D SEM fracture morphology across metallic materials"*, **Materials
-Characterization** 2026, doi:10.1016/j.matchar.2026.116319 — deterministic geometric
-quantification of 2D SEM fracture morphology. That is this paper's genre, this paper's
-modality, and this year. *Reported by a verifier, not confirmed by me.*
+The data is real, has masks, and is CC BY. But it is **undeclared extra content**: no class
+definition, no stated provenance, and (checked separately) no pixel size anywhere — no TIFF
+resolution tag, no databar, nothing in the record, and the collection's subsets come from
+different microscopes.
 
-| journal | standing (as reported) | why it fits | the risk |
-|---|---|---|---|
-| **Materials Characterization** (Elsevier) | SJR 1.29, Q1 | the 2026 Jiao precedent is almost the same genre; SEM measurement methodology is its core | wants a materials conclusion, not only a method |
-| **Measurement Science and Technology** (IOP) | JCR Q1 in Eng. Multidisciplinary, Q2 in Instruments & Instrumentation | remit is literally measurement method; a Mar 2025 MST paper does SEM measurement methodology on fatigue cracks | quartile depends which index you count |
-| **Measurement** (Elsevier / IMEKO) | Q1 by SJR 0.946 | same remit, broader readership | less microscopy-specific |
-| **Engineering Failure Analysis** (Elsevier) | Q1 | verified to publish standalone **training-free** image-measurement method papers, e.g. doi:10.1016/j.engfailanal.2026.111235 | expects a failure case |
-| **Journal of Microscopy** (Wiley, RMS) | **Q3** | best topical fit for the metric argument itself | quartile fails your Q1 requirement |
-| Ultramicroscopy | JCR may be **Q2**, IF ~2.6 | instrument/measurement methodology | quartile |
-| Scientific Data | IF 7.2 | if you release the lab corpus, a Data Descriptor | **two article types only**; not for an argument paper |
-| Scientific Reports | Q1, SCIE | safe fallback | no topical community |
+**This belongs in the paper's limitations.** The honest sentence is that the evaluation
+class is present in the archive but absent from the collection's own class list, so its
+annotation protocol is undocumented. It does not invalidate the measurement — the masks
+exist and the area fraction is dimensionless — but a reviewer who checks will find it, and
+it is better found in your own limitations section.
 
-**Recommendation: Materials Characterization first, Measurement Science and Technology
-second.** MatChar for the precedent and the readership; MST if a reviewer says the paper
-is a measurement argument rather than a materials result — because at MST that is the
-point rather than the objection.
+## 3. Prior art that must be read before any novelty claim
 
-## 3. The novelty opening the search turned up
+**Tegetmeyer-Kleine et al.**, arXiv:2608.27162 — *"Data-efficient crack quantification in
+lithium-ion cathodes using foundation model transfer"* (also circulating as *"Multi-class
+crack mapping in NMC811 cathodes with frozen DINOv3 features"*, Nature Computational
+Science 2026). Data at figshare 32975921, 482 BSE-SEM tile/mask pairs at 22.3 nm/px.
 
-Four independent searches for a materials-domain paper applying Maier-Hein-style metric
-critique (*Metrics Reloaded*, Nature Methods 2024) returned **zero**. The argument that
-overlap scores misstate a materials measurement has not been made in this field.
+Wrong material, so not a benchmark. But it **independently reports modest Dice (0.580) on
+narrow cracks, blames one-to-two-pixel boundary placement, and pivots to area fraction,
+width and tortuosity as the reported quantities.** That is this manuscript's own argument
+arriving from another field, in the same year. Read it before claiming the framing.
 
-Read this carefully: the *idea* is owned — Olofsson et al. 2014 set out area-proportion
-accounting in remote sensing a decade ago, and this paper already cites it. What appears
-unoccupied is the **transfer to materials microscopy with a worked measurement**. That is
-a weaker claim than novelty and a stronger one than nothing, and it is the first framing
-in this project's prior-art log that has not come back owned outright. State it as
-transfer, not invention.
+Separately, four searches for a materials-domain paper applying Maier-Hein-style metric
+critique returned **zero**. But the idea is owned — Olofsson et al. 2014 in remote sensing,
+already cited here. State the contribution as **transfer with a worked measurement**, not
+invention.
+
+## 4. Target journals — verified metrics
+
+2025 JCR, released June 2026.
+
+| journal | 2025 JIF | JCR rank | speed | why |
+|---|---|---|---|---|
+| **Engineering Failure Analysis** | **7.0** | **1/37** Mat. Sci. Characterization & Testing; 13/184 Eng. Mechanical | ~5.6 mo review; rated "easy" | highest metrics of the set, in exactly the right category. Verified to publish standalone **training-free** image-measurement method papers |
+| **Materials Characterization** | **6.2** | **3/37** same category; 13/97 Metallurgy | **8 days to first decision**, 96 days to acceptance | the topical home. APC USD 3,300, or free by the subscription route |
+| **Measurement Science and Technology** | 3.7 | Q1 Eng. Multidisciplinary 40/179; Q2 Instruments | ~4 mo | **the closest precedent exists here** (below) |
+| **Measurement** (IMEKO) | — | Q1, SJR 1.145 | — | all of metrology; broader readership |
+
+**The single strongest precedent is at MST:** a March 2025 paper doing SEM measurement
+methodology on fatigue cracks in **GH4169 — Inconel 718 under its Chinese designation** —
+doi:10.1088/1361-6501/adbc08, with no learned weights. A second 2025 MST paper does in-situ
+SEM-DIC crack characterisation on another nickel superalloy. Same modality, same alloy, same
+object, same classical approach.
+
+**Recommendation.** Submit to **Engineering Failure Analysis** or **Materials
+Characterization** — EFA for the metrics and category rank, MatChar for the eight-day first
+decision and the topical readership. Hold **MST** as the second venue: if a reviewer objects
+that this is a measurement argument rather than a materials result, at MST that is the point
+rather than the objection, and the GH4169 precedent is already there.
+
+Journal of Microscopy is the best topical fit for the metric argument and is **Q3** by SJR,
+so it fails the stated requirement. Scientific Data takes only Data Descriptors and Articles
+— relevant only if the lab corpus is released.
