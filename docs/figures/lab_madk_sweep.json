@@ -1,0 +1,258 @@
+{
+ "grid": [
+  3.0,
+  4.0,
+  5.0,
+  6.0,
+  7.0,
+  8.0,
+  10.0
+ ],
+ "n_recall_frames": 45,
+ "n_precision_frames": 18,
+ "recall_frames": [
+  "260622_316_H_b2_back_CBS_01",
+  "260622_316_H_b2_front_CBS_01",
+  "260622_316_H_b2_front_CBS_03",
+  "260622_316_H_b2_front_CBS_04",
+  "260622_316_H_b4_CBS_02",
+  "260708_316_H_b2_front_CBS_001",
+  "260708_316_H_b2_front_CBS_002",
+  "260708_316_H_b2_front_CBS_003",
+  "260708_316_H_b2_front_CBS_004",
+  "260708_316_H_b2_front_CBS_005",
+  "260708_316_H_b2_front_CBS_006",
+  "260708_316_H_b2_front_CBS_007",
+  "260708_316_H_b2_front_CBS_008",
+  "260708_316_H_b2_front_CBS_011",
+  "260708_316_H_b2_front_CBS_012",
+  "260708_316_H_b2_front_CBS_013",
+  "260708_316_H_b2_front_CBS_014",
+  "260708_316_H_b2_front_CBS_015",
+  "260708_316_H_b2_front_CBS_016",
+  "AS_24hr_BSE_Side_008",
+  "Cast_24hr_SE_Side_006",
+  "HIP_24hr_SE_Side_006",
+  "MAR_AmbB_AS_CBS_0004",
+  "MAR_Amb_AS_CBS_0001",
+  "MAR_Amb_AS_CBS_0003",
+  "MAR_Amb_AS_CBS_0004",
+  "MAR_Amb_AS_CBS_0005",
+  "MAR_Amb_AS_ETD_0001",
+  "MAR_Amb_AS_ETD_0002",
+  "MAR_Amb_AS_ETD_0003",
+  "MAR_Amb_AS_ETD_0004",
+  "MAR_Amb_Cast_CBS_0005",
+  "MAR_Amb_Cast_ETD_0003",
+  "MAR_Amb_Cast_ETD_0004",
+  "MAR_Amb_HIP_CBS_0003",
+  "MAR_Amb_HIP_CBS_0005",
+  "MAR_Amb_HIP_CBS_0006",
+  "MAR_Amb_HIP_CBS_0008",
+  "MAR_Amb_HIP_CBS_0010",
+  "MAR_Amb_HIP_ETD_0003",
+  "MAR_Amb_HIP_ETD_0005",
+  "MAR_Amb_HIP_ETD_0006",
+  "MAR_Amb_HIP_ETD_0007",
+  "MAR_Amb_HIP_ETD_0008",
+  "MAR_Amb_HIP_ETD_0010"
+ ],
+ "precision_frames": [
+  "260622_316_H_b2_back_CBS_01",
+  "260622_316_H_b2_front_CBS_04",
+  "260708_316_H_b2_front_CBS_002",
+  "260708_316_H_b2_front_CBS_003",
+  "260708_316_H_b2_front_CBS_007",
+  "260708_316_H_b2_front_CBS_011",
+  "260708_316_H_b2_front_CBS_012",
+  "260708_316_H_b2_front_CBS_013",
+  "260708_316_H_b2_front_CBS_014",
+  "260708_316_H_b2_front_CBS_015",
+  "260708_316_H_b2_front_CBS_016",
+  "AS_24hr_BSE_Side_008",
+  "MAR_Amb_AS_CBS_0003",
+  "MAR_Amb_AS_ETD_0002",
+  "MAR_Amb_AS_ETD_0003",
+  "MAR_Amb_Cast_ETD_0003",
+  "MAR_Amb_HIP_CBS_0006",
+  "MAR_Amb_HIP_ETD_0005"
+ ],
+ "means": {
+  "3.0": {
+   "recall": 0.6925980548623023,
+   "precision": 0.9541081194117188,
+   "marked_pct_of_body": 6.796770806929195
+  },
+  "4.0": {
+   "recall": 0.647075708781039,
+   "precision": 0.9527292666655374,
+   "marked_pct_of_body": 4.639668145832824
+  },
+  "5.0": {
+   "recall": 0.5997555749677776,
+   "precision": 0.9492157565564787,
+   "marked_pct_of_body": 3.5198052573934837
+  },
+  "6.0": {
+   "recall": 0.5586910789301756,
+   "precision": 0.9485558626714199,
+   "marked_pct_of_body": 2.860248835556366
+  },
+  "7.0": {
+   "recall": 0.5151342397582059,
+   "precision": 0.9472073774844483,
+   "marked_pct_of_body": 2.379545730034837
+  },
+  "8.0": {
+   "recall": 0.4864631811153958,
+   "precision": 0.9492893027951391,
+   "marked_pct_of_body": 2.040963049727656
+  },
+  "10.0": {
+   "recall": 0.4458933597416583,
+   "precision": 0.9566003944264408,
+   "marked_pct_of_body": 1.548246487273879
+  }
+ },
+ "paired_vs_shipped_5": {
+  "3.0": {
+   "recall": {
+    "n": 45,
+    "p": 3.5693882044660326e-08,
+    "median_delta": 0.0640295005028495,
+    "frames_up": 40,
+    "frames_down": 0
+   },
+   "precision": {
+    "n": 18,
+    "p": 0.00035153256850746316,
+    "median_delta": 0.0012506536718559502,
+    "frames_up": 16,
+    "frames_down": 1
+   },
+   "marked% of body": {
+    "n": 45,
+    "p": 1.1201596434767778e-08,
+    "median_delta": 2.059545844784184,
+    "frames_up": 43,
+    "frames_down": 0
+   }
+  },
+  "4.0": {
+   "recall": {
+    "n": 45,
+    "p": 3.5693882044660326e-08,
+    "median_delta": 0.034441616270906694,
+    "frames_up": 40,
+    "frames_down": 0
+   },
+   "precision": {
+    "n": 18,
+    "p": 0.00035153256850746316,
+    "median_delta": 0.000570921622168874,
+    "frames_up": 16,
+    "frames_down": 1
+   },
+   "marked% of body": {
+    "n": 45,
+    "p": 1.1201596434767778e-08,
+    "median_delta": 0.6467429272627316,
+    "frames_up": 43,
+    "frames_down": 0
+   }
+  },
+  "6.0": {
+   "recall": {
+    "n": 45,
+    "p": 2.4249905341003525e-08,
+    "median_delta": -0.027888595705536312,
+    "frames_up": 0,
+    "frames_down": 41
+   },
+   "precision": {
+    "n": 18,
+    "p": 0.30105418162259867,
+    "median_delta": -3.358796672270348e-05,
+    "frames_up": 6,
+    "frames_down": 10
+   },
+   "marked% of body": {
+    "n": 45,
+    "p": 1.6479364449501875e-08,
+    "median_delta": -0.5466504271037649,
+    "frames_up": 0,
+    "frames_down": 42
+   }
+  },
+  "7.0": {
+   "recall": {
+    "n": 45,
+    "p": 2.4249905341003525e-08,
+    "median_delta": -0.053727584948111085,
+    "frames_up": 0,
+    "frames_down": 41
+   },
+   "precision": {
+    "n": 18,
+    "p": 0.5349252131384397,
+    "median_delta": -6.563853161056787e-05,
+    "frames_up": 6,
+    "frames_down": 10
+   },
+   "marked% of body": {
+    "n": 45,
+    "p": 1.6479364449501875e-08,
+    "median_delta": -0.9863577888758992,
+    "frames_up": 0,
+    "frames_down": 42
+   }
+  },
+  "8.0": {
+   "recall": {
+    "n": 45,
+    "p": 2.4249905341003525e-08,
+    "median_delta": -0.07201402906917964,
+    "frames_up": 0,
+    "frames_down": 41
+   },
+   "precision": {
+    "n": 18,
+    "p": 0.9587607499379828,
+    "median_delta": -1.0142758904985172e-07,
+    "frames_up": 7,
+    "frames_down": 9
+   },
+   "marked% of body": {
+    "n": 45,
+    "p": 1.6479364449501875e-08,
+    "median_delta": -1.3498076850959615,
+    "frames_up": 0,
+    "frames_down": 42
+   }
+  },
+  "10.0": {
+   "recall": {
+    "n": 45,
+    "p": 1.6479364449501875e-08,
+    "median_delta": -0.11923525520886383,
+    "frames_up": 0,
+    "frames_down": 42
+   },
+   "precision": {
+    "n": 18,
+    "p": 0.02618364809706873,
+    "median_delta": 0.0017522288293149724,
+    "frames_up": 11,
+    "frames_down": 5
+   },
+   "marked% of body": {
+    "n": 45,
+    "p": 1.1201596434767778e-08,
+    "median_delta": -1.8474324005614549,
+    "frames_up": 0,
+    "frames_down": 43
+   }
+  }
+ },
+ "scoring": "positives corr==1; negatives corr==2 or 3; corr==0 unrefereed and excluded. Recall and precision use DIFFERENT frame sets and are never pooled into an F1."
+}

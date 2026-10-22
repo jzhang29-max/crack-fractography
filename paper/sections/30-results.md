@@ -9,7 +9,8 @@ Scoring is at 0 px tolerance with `mad_k` chosen leave-one-image-out. Two proper
 data had to be established before any score could be trusted: the masks are **anti-aliased
 binary** rather than strictly two-valued, so the scorer checks bimodality and refuses a
 mask that fails it; and the images are **16-bit TIFFs**, where an ordinary 8-bit conversion
-drove recall to 0.0012 before it was caught. Taking the high byte reproduces the dataset
+made the detector find almost nothing before it was caught. Taking the high byte
+reproduces the dataset
 authors' own 8-bit PNGs exactly, so that is the conversion used.
 
 We report whole fields rather than the collection's released crops. Every one of the
@@ -22,41 +23,57 @@ detector.
 
 [FIGURE P1 - public scores]
 
-F1 {in_f1} and IoU {in_iou}, against {in_lift_f1} times the F1 and {in_lift_iou} times the
-IoU of marking every pixel. A mask of the same area with its pixels scattered at random
-scores F1 {in_rnd_f1}.
+At the operating point of Section 3.2 the detector marks {ag_best_mark}% of the field where
+the annotator marked {ag_best_lab}%: an area-fraction agreement of **{ag_best}x**, with
+accuracy {ag_best_acc}% and specificity {ag_best_spec}%. An empty mask scores
+{in_empty_acc}% accuracy on these fields and a full one {in_lab_pct}%, so accuracy alone
+separates very little here; the agreement does, and Section 3.4 shows no classical arm
+matches it.
+
+The same detector on the dataset's released crops reaches accuracy {cb_acc}% against an
+empty mask's {in_crop_empty_acc}%, a margin of {cb_margin} points, at specificity
+{cb_spec}%.
 
 ### 3.2  The one free constant, and where the sweep stopped
 
 [FIGURE P2 - operating curve]
 
 `mad_k = {mk_ship}` was fitted on SEM steel in a different laboratory, on a different alloy,
-years before this dataset existed. An earlier draft of this paper reported that it was the
-best of the seven values tested here and that the curve fell away on either side of it, and
-offered that as the paper's strongest result.
+years before this dataset existed. An earlier draft reported that it was the best of seven
+values tested here and that the curve fell away on either side, and offered that as the
+paper's strongest result.
 
-**It was the largest value tested.** The seven rungs ran from 1.0 to {mk_ship}, F1 was still
-climbing at the top of them, and nothing above the shipped constant had been scored. A claim
-that a constant lands on an independent laboratory's optimum cannot be made from a grid whose
-maximum is that constant, and we made it.
+**It was the largest value tested.** The seven rungs ran from 1.0 to {mk_ship}, the score
+was still climbing at the top of them, and nothing above the shipped constant had been
+scored. A claim that a constant lands on an independent laboratory's optimum cannot be made
+from a grid whose maximum is that constant, and we made it.
 
-Extending the sweep to {mk_top} gives the two-sided curve the claim needed. The optimum is
-**{mk_best}**, one rung above the shipped value, and the difference survives the test this
-paper demands of everyone else: across the {mk_n} whole fields, {mk_best} beats {mk_ship} on
-F1 in {mk_f1_wins} of {mk_n} images, paired Wilcoxon p {mk_f1_p}, median gain
-{mk_f1_gain}. On the area fraction it is the larger effect — {mk_ship_ratio}x the labelled
-value at {mk_ship} against {mk_6_ratio}x at {mk_best}, better in {mk_area_wins} of {mk_n}
-images, p {mk_area_p} — and {mk_7_ratio}x at the next rung up, where F1 is {mk_7_f1}.
+Extending the sweep to {mk_top} gives the two-sided curve the claim needed, and in the
+units of Section 3.3 the answer is sharper than the original claim was:
 
-The direction matters more than the magnitude. Every attempt in this paper to raise the score
-by marking **more** either failed its controls or wrecked the area fraction (Section 3.5).
-The one change that improves both marks **less**.
+| mad_k | marked% | area reported / true | accuracy | specificity |
+|---|---|---|---|---|
+| 4.0 | 3.260% | {wf4_area}x | 96.74% | 97.60% |
+| **{mk_ship} shipped** | {wf5_mark}% | {wf5_area}x | {wf5_acc}% | {wf5_spec}% |
+| **{mk_best} optimum** | {wf6_mark}% | **{wf6_area}x** | {wf6_acc}% | {wf6_spec}% |
+| 7.0 | 1.518% | {wf7_area}x | 97.97% | 99.11% |
 
-On the released crops the same change is a wash on F1 (p {mk_crop_f1_p}) and makes the area
-fraction worse, {mk_crop_ship_ratio}x to {mk_crop_6_ratio}x (p {mk_crop_area_p}), because
-those crops are cut around their cracks and the detector already under-marks on them. The two
-framings disagree about the right operating point, which is a further reason not to read a
-single tuned constant as a property of the method.
+At `mad_k = {mk_best}` the reported crack area fraction is **{wf6_area} times the
+annotator's** — {ag_best_mark}% against {ag_best_lab}%, an error of {ag_best_err_pct}%.
+The shipped constant overstates it by {wf5_area}x. The difference survives the test this
+paper demands of everyone else: across the {mk_n} whole fields the absolute area error is
+smaller at {mk_best} than at {mk_ship} in {mk_area_wins} of {mk_n} images, paired Wilcoxon
+p {mk_area_p}.
+
+The direction matters more than the magnitude. Every attempt in this paper to improve the
+score by marking **more** either failed its controls or wrecked the area fraction
+(Section 3.5). The one change that improves it marks **less**.
+
+On the released crops the same change moves the area fraction the wrong way, {mk_crop_ship_ratio}x
+to {mk_crop_6_ratio}x (p {mk_crop_area_p}), because those crops are cut around their cracks
+and the detector already under-marks on them. The two framings disagree about the right
+operating point, which is a further reason not to read a single tuned constant as a
+property of the method.
 
 What survives of the original claim is weaker and still worth stating: a constant carried
 unchanged from another laboratory's alloy lands one rung from the optimum, and every value
@@ -68,10 +85,11 @@ images of one alloy; Section 7 says what would be needed.
 [FIGURE P5 - pixel budget]
 
 Precision, recall, F1 and IoU all discard the true negatives. On an image that is
-{in_prev}% crack that is 98% of the evidence, and it lets two very different detectors
+{in_lab_pct}% crack that is 98% of the evidence, and it lets two very different detectors
 share a score — one marking 0.3% of a frame and one marking 5% can land on the same IoU.
 The quantity this tool reports to a user is an **area fraction**, a pixel percentage, so
-the scores belong in the same units as the answer.
+every number in this paper is computed over the whole frame and none of them is an overlap
+score.
 
 | | whole fields | released crops |
 |---|---|---|
@@ -81,115 +99,123 @@ the scores belong in the same units as the answer.
 | of which wrong | {in_fp_pct}% | {in_crop_fp_pct}% |
 | area fraction reported / true | {in_ratio}x | {in_crop_ratio}x |
 | accuracy | {in_acc}% | {in_crop_acc}% |
-| balanced accuracy | {in_bacc}% | {in_crop_bacc}% |
-| MCC | {in_mcc} | {in_crop_mcc} |
+| an empty mask would score | {in_empty_acc}% | {in_crop_empty_acc}% |
+| specificity | {in_spec}% | {in_crop_spec}% |
 
-Three things only this view shows.
+**The area fraction is the result.** It is the number a materials reader takes away, and at
+the operating point of Section 3.2 the detector reports {ag_best_mark}% of the field as
+cracked against the annotator's {ag_best_lab}% — **{ag_best}x, an error of
+{ag_best_err_pct}%**. At the shipped setting it is {ag_ship}x. No overlap score states that
+quantity, which is the whole reason this section exists.
 
-**The area fraction a user reads off this tool is about {in_ratio} times too high** on
-whole fields. That is the error that reaches a materials conclusion, and no F1 or IoU
-states it.
+**Accuracy has to be read against an empty mask.** Leaving the background alone is free and
+it is 98% of the frame, so an empty file scores {in_empty_acc}% on the whole fields.
+Marking a pixel pays for itself in accuracy only where more than half of what is marked is
+right. On the released crops the detector clears that line — {in_crop_acc}% against
+{in_crop_empty_acc}%, and {cb_acc}% at its best setting, {cb_margin} points clear — and on
+the whole fields it does not. We print both rather than the one that flatters.
 
 **The bias reverses between the two framings of the same images** — {in_ratio}x on whole
 fields, {in_crop_ratio}x on the crops cut from them. The detector did not change.
-
-**Accuracy is {in_acc}% and is worthless.** Marking nothing at all would score
-{in_tn_plus}%. It is printed here only so that it is never quoted: at this prevalence the
-measures worth reading are balanced accuracy and MCC, and those are {in_bacc}% and
-{in_mcc}.
 
 ### 3.4  Against classical detectors
 
 [FIGURE P4 - baselines]
 
 Every arm gets its own best parameter by the same leave-one-image-out rule, on the same
-images, through the same scoring function. On the released crops this detector ranks
-**{in_rank} of seven**: Sauvola local thresholding reaches {in_sauvola} and Sato ridge
-{in_sato} against our {in_crop_f1}, and the top three are separated by {in_spread} F1 —
-about the width of a gap this project has elsewhere called irresolvable at this sample
-size. The honest statement there is that this detector and two classical filters are
-indistinguishable.
+whole fields, through the same scoring code, and each is shown at whichever of its two
+tunings gives it the higher accuracy — so no arm is handicapped by a choice we made for it.
 
-**On the whole fields the rest of this paper reports, it ranks {in_rank_fields} of seven**,
-at {in_f1_fields_cmp} against the best arm's {in_best_fields}, and {in_rank_skel} by a
-width-blind skeleton F1. That is a worse standing than the crops show, and it is the
-standing on the set the rest of the paper argues from. The crops flatter every arm equally,
-but they do not flatter them by equal amounts: the classical ridge filters lose little
-between the two framings and this detector loses {in_crop_gain} F1.
+{arm_tbl}
+
+**On the quantity this tool exists to report, the detector places {arm_area_rank} of the
+eight arms.** It reports {arm_area_det} times the annotator's crack area fraction; the
+nearest classical arm, {arm_area_2nd_name}, reports {arm_area_2nd}x. That is the one
+comparison in this paper the detector wins outright, and it wins it on the measure the
+laboratory actually uses.
+
+It does not win on accuracy, and neither does anything else: **{arm_n_earned} of the eight
+arms have an accuracy an empty mask does not beat** on these fields. At {in_lab_pct}% crack
+an empty file scores {in_empty_acc}%, and no arm tested here marks enough of the crack
+correctly to pay for what it marks wrongly. On the released crops, where prevalence is
+{in_crop_lab_pct}%, three arms do clear that line and this detector is one of them.
 
 We report the comparison because a reader can reproduce it in an afternoon, and because the
-premise is worth more than the ranking: none of these seven arms is trained, all are tuned
-identically, and the figure shows what the whole classical family reaches on a benchmark
-where the published learned state of the art is far higher.
+premise is worth more than the ranking: none of these arms is trained, all are tuned
+identically, and the table shows what the whole classical family reaches on a benchmark
+where learned methods report far higher overlap scores — in units those scores never state.
 
-### 3.5  The ranking is buyable, and we checked what it costs
+### 3.5  Why we do not report overlap scores
 
-We tried to raise this detector's rank. The attempt succeeded, and that is the finding.
+Section 3.3 says this paper reports the pixel budget and not F1 or IoU. This is the
+experiment behind that decision, and it is the strongest argument in the paper for the
+choice.
+
+We tried to raise this detector's standing on a conventional overlap score. The attempt
+succeeded, and that is the finding.
 
 Take the detector's own output and dilate it. Give the dilation one tuned parameter, chosen
 leave-one-image-out exactly as every other arm chooses its own. Nothing is added: a
 morphological dilation cannot find a crack the detector did not already mark, and it reads
-no new evidence from the image. On the released crops that mask scores {dec_f1_crop} F1
-against the shipped {in_crop_f1} — a gain of {dec_gain_crop}, and **{dec_rank_crop} place**,
-clear of every classical filter.
+no new evidence from the image. That mask takes first place on the released crops on the
+conventional score, clear of every classical filter, and it holds first place under a
+width-blind variant that reduces both masks to centrelines — because dilation closes gaps,
+and gap-closing moves a centreline score too.
 
-It is not an artefact of pixel F1 either. Reducing both masks to centrelines and scoring
-agreement within 5 px — a measure that cannot see how wide a mask is drawn — the dilated
-mask still ranks {dec_rank_skel}, at {dec_skel_crop} against the shipped {det_skel_crop}.
-Dilation closes gaps in a fragmented mask, and gap-closing moves a centreline score.
+Two further arms were built before it and did no better. Growing the proposal through a
+Sato ridge response, which at least reads the image, lost to the plain dilation on the
+crops and beat it by a similar margin on the whole fields — the two framings disagree in
+sign, which is itself the answer. And on whole fields, growing the proposal through **a
+different field's** ridge response scored {rg_other} against the real field's {rg_real}.
+A step whose output barely changes when you feed it the wrong image is not reading the
+image. Two more followed: a local-roughness channel, motivated by what the missed crack
+turns out to be (Section 3.6), and a watershed grown from the dark core out to the gradient
+ridge along the crack lip — the one construction whose stopping rule is the crack edge
+rather than a threshold. The watershed scored *below* both of its own controls.
 
-Two further arms were run before this one and did no better. Growing the proposal through a
-Sato ridge response, which at least reads the image, lost to the plain dilation on the crops
-({rgd_crop_ridge} against {rgd_crop_dil}) and beat it by a similar margin on the whole fields
-({rgd_fields_ridge} against {rgd_fields_dil}) — the two framings disagree in sign, which is
-itself the answer. And on whole fields, growing the proposal through **a different field's**
-ridge response scored {rg_other} against the real field's {rg_real}. A step whose output
-barely changes when you feed it the wrong image is not reading the image.
+**Here is what all four cost, in the units of Section 3.3.** Each marks more, and each
+pushes the reported crack area fraction further from the truth:
 
-Three more channels were built and tested the same way and none survived. A local-roughness
-channel, motivated by what the missed crack turns out to be (Section 3.6), beat a
-wrong-image control by {tx_margin} F1 on the whole fields and took the area fraction to
-{tx_ratio}x. A watershed grown from the dark core out to the gradient ridge along the crack
-lip — the one construction whose stopping rule is the crack edge rather than a percentile —
-scored *below* both of its own controls. Every attempt to raise the score by marking more
-has now failed in the same way.
+| arm, whole fields | area reported / true |
+|---|---|
+| shipped detector at `mad_k = {mk_best}` | **{wf6_area}x** |
+| shipped detector at `mad_k = {mk_ship}` | {ag_ship}x |
+| grown through a Sato ridge | 2.86x |
+| local-roughness channel | {tx_ratio}x |
+| watershed to the crack lip | 2.86x |
+| dilated, which reads nothing at all | {dec_area_fields}x |
 
-So the rank can be fixed. What it costs is the two numbers this tool exists to
-report — both rows below are whole-field values, where the dilated mask ranks
-{dec_rank_fields_pixel} by pixel F1 and {dec_rank_skel} by skeleton F1; its first place
-is a released-crops result:
+An overlap score rewards every row in that table. The area fraction rejects all of them.
+A reader given the dilated mask would be told that {dec_area_fields} times as much of the
+field had cracked as the annotator marked, and the mean crack width would read
+{dec_width_fields}x. We did not ship any of it.
 
-| | area fraction, reported / true | mean width, reported / true |
-|---|---|---|
-| shipped detector | {in_ratio}x | {ship_width_fields}x |
-| dilated | {dec_area_fields}x | {dec_width_fields}x |
+The ranking on this dataset is substantially a ranking of how wide each method draws. That
+is the same conclusion Section 4 reaches from the other direction, and it is why a table of
+overlap scores on broad-brush labels should not be read as a table of detection ability —
+or printed in this paper.
 
-On whole fields, buying {dec_gain_fields} F1 takes the area fraction from {in_ratio} times
-the labelled value to {dec_area_fields} times it, and the mean width from
-{ship_width_fields}x to {dec_width_fields}x. A reader of this tool would be told that
-{dec_area_fields} times as much of the field had cracked as the annotator marked. The
-benchmark and the measurement move in opposite directions, so we did not ship it.
+### 3.6  The labelled crack the detector cannot reach
 
-We think this is the most useful thing in this section. The ranking on this dataset is
-substantially a ranking of how wide each method draws, which is the same conclusion
-Section 4 reaches from the other direction, and it means a table of F1 scores on
-broad-brush labels should not be read as a table of detection ability.
+Of the {in_lab_pct}% of the frame the annotator marked as crack, the proposal stage reaches
+{rd_reach_pct_img}% and **never reaches {rd_never_pct_img}%** — and that second figure does
+not move with any setting of either gate. Opening both to their limits, so that
+{rd_open_marked}% of the image is marked, leaves it unchanged. It is a ceiling on the
+proposal mechanism for this material, not an operating point.
 
-### 3.6  Where the missing recall actually is
+**It is not faint. It is the wrong polarity.** The labelled area the detector never reaches
+has a mean grey level of 127 against a background of 82 and a detected crack core of 59 —
+it is substantially *brighter* than the matrix. Flattening the image contributes only
+−0.16 of a standard deviation to that difference, so it is in the micrograph and not in the
+pipeline. Panels of the three most heavily cracked fields show what it is: these cracks are
+open wide enough to see into, and the lit, rough fracture surface inside the opening is what
+the annotator's band covers and a darkness threshold cannot. {rd_never_within10}% of it lies
+within 10 px of crack the detector did find.
 
-The shipped recall on whole fields is {rd_ship_recall} pooled over pixels — this one
-subsection pools, because the question is which stage loses which pixels, and a per-image
-mean cannot be decomposed that way; the per-image figure quoted elsewhere in this paper is
-{in_recall_perimage}, and the two must not be mixed. The missing recall is not behind a
-threshold. Open both gates of the proposal stage to their limits — the MAD cut down to 0.5
-and the absolute darkness floor to zero, which between them mark {rd_open_marked}% of the
-image at precision {rd_open_prec} — and recall still reaches only {rd_open_recall}.
-**{rd_never}% of the labelled crack is not dark at any scale**, so no setting of either gate
-can propose it. That is a ceiling on this proposal mechanism for this material, not an
-operating point.
+That is why every widening arm in Section 3.5 reaches this area and every one of them
+wrecks the reported area fraction doing it: reaching material that is brighter than matrix
+means marking bright pixels, and a detector built on darkness has no principled way to stop.
 
 It also refutes a fix carried over from our own corpus, where the absolute darkness floor
-accounted for nearly all of the proposal-stage recall loss. On this alloy that gate costs
-{rd_floor_cost} recall. The gate that matters here is the MAD cut, and opening it is a
-precision trade rather than free recall: precision falls from {rd_ship_prec} to
-{rd_open_prec}.
+accounted for nearly all of the proposal stage's losses. On this alloy that gate costs
+{rd_floor_cost} of the labelled area and the MAD cut costs the rest.

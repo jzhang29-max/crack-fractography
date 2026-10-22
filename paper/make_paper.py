@@ -79,6 +79,68 @@ DC = _f(os.path.join(REPO, "docs/figures/dilation_costs_measurements.json"),
 # with F1 still rising, so the claimed optimum was the edge of the grid; this carries the
 # two-sided curve and the paired test against the neighbouring rungs.
 MK = _f(os.path.join(REPO, "docs/figures/madk_above_five.json"), "mad_k above five")["sets"]
+# Everything the paper reports is now computed over EVERY pixel in the frame. BC carries
+# the sweep in those units with the empty-mask baseline beside each row; AB carries the
+# classical-arm comparison re-ranked the same way.
+BC = _f(os.path.join(REPO, "docs/figures/background_counting_table.json"),
+        "background-counting table")
+AB = _f(os.path.join(REPO, "docs/figures/arms_background_units.json"),
+        "arms in background units")["sets"]
+# The constant-width construction, re-scored over every pixel: Section 4 used to argue it
+# in IoU, which discards the background the rest of the paper counts.
+WBG = _f(os.path.join(REPO, "docs/figures/width_ceiling_background_units.json"),
+         "width ceiling, background units")["sets"]
+LSC = _f(os.path.join(REPO, "docs/figures/lab_scoring_positive_control.json"),
+         "lab-corpus scoring control")
+UCA = _f(os.path.join(REPO, "docs/figures/unproposed_crack_anatomy.json"),
+         "unproposed crack anatomy")
+_WF = BC["sweeps"]["whole_fields"]
+_CR = BC["sweeps"]["crops"]
+# the operating point whose reported area fraction is closest to the annotator's, and the
+# one the app currently ships, so the two can be quoted against each other
+_AG_BEST = min(_WF, key=lambda r: abs(r["area_agreement_corpus"] - 1.0))
+_AG_SHIP = next(r for r in _WF if r["mad_k"] == 5.0)
+_CROP_BEST = max(_CR, key=lambda r: r["accuracy_pct"])
+_ARM_W = AB["whole_fields"]["arms"]
+_ARM_AREA = sorted(_ARM_W.items(), key=lambda kv: abs(kv[1]["area_agreement"] - 1.0))
+_ARM_AREA_RANK = {1: "first", 2: "second", 3: "third", 4: "fourth",
+                  5: "fifth", 6: "sixth", 7: "seventh", 8: "eighth"}[
+    [k for k, _ in _ARM_AREA].index("DETECTOR (shipped)") + 1]
+# The nearest CLASSICAL arm, which is what the sentence claims. The union of darkness and
+# Sato is our own two-parameter combination, not a classical detector, so naming it here
+# would be comparing the method against a variant of itself.
+_ARM_AREA_2ND = next(kv for kv in _ARM_AREA
+                     if kv[0] not in ("DETECTOR (shipped)", "UNION darkness OR Sato"))
+_ARM_UNION = _ARM_W["UNION darkness OR Sato"]
+
+
+def _WFK(k):
+    return next(r for r in _WF if r["mad_k"] == k)
+
+
+def _ARM_TABLE():
+    """The classical comparison as a markdown table, in background-counting units only.
+
+    Kept to five columns: the renderer shrinks a table to fit the page and raises rather
+    than let one run off the edge, and the full eight-column form does not fit at the 7 pt
+    floor. The dropped columns (free parameters, and the marked area split into right and
+    wrong) are in Appendix A for every arm.
+    """
+    short = {"DETECTOR (shipped)": "**this detector**",
+             "UNION darkness OR Sato": "darkness OR Sato",
+             "global threshold (Otsu on flat)": "Otsu on flattened"}
+    out = ["| arm | marked% | area rep./true | accuracy | specificity |",
+           "|---|---|---|---|---|"]
+    for nm, v in _ARM_AREA:
+        if nm.startswith("global threshold"):
+            continue          # marks 99.5% of the frame; it is in Appendix A, not here
+        out.append(f"| {short.get(nm, nm)} | {v['marked_pct']:.2f}% | "
+                   f"**{v['area_agreement']:.3f}x** | {v['accuracy_pct']:.2f}% | "
+                   f"{v['specificity_pct']:.2f}% |")
+    return "\n".join(out)
+
+
+_ARM_TABLE = _ARM_TABLE()
 MKT = _f(os.path.join(REPO, "docs/figures/madk_paired_test.json"),
          "mad_k paired test")["tests"]
 RVD = _f(os.path.join(REPO, "docs/figures/ridge_vs_dilation_loo.json"),
@@ -179,6 +241,87 @@ VALUES = {
     "in_crop_f1": _n(IN_CROP["loo"]["f1"]),
     "in_crop_prev": _n(100 * IN_CROP["prevalence"], 2),
     "in_crop_src": "18",
+    # --- accuracy and specificity, with the empty-mask baseline that makes them legible ---
+    "in_empty_acc": _n(100 - PA_W["labelled_pct"], 2),
+    "in_spec": _n(100 * PA_W["specificity"], 2),
+    "in_crop_acc": _n(100 * PA_C["accuracy"], 2),
+    "in_crop_spec": _n(100 * PA_C["specificity"], 2),
+    "in_crop_empty_acc": _n(100 - PA_C["labelled_pct"], 2),
+    "in_crop_margin": _n(100 * PA_C["accuracy"] - (100 - PA_C["labelled_pct"]), 2),
+    "md_acc": _n(100 * PA_M["accuracy"], 2),
+    "md_spec": _n(100 * PA_M["specificity"], 2),
+    "md_empty_acc": _n(100 - PA_M["labelled_pct"], 2),
+    "md_margin": _n(100 * PA_M["accuracy"] - (100 - PA_M["labelled_pct"]), 2),
+    # --- the headline: the crack area fraction the tool reports against the human's ---
+    "ag_best": _n(_AG_BEST["area_agreement_corpus"], 4),
+    "ag_best_k": f"{_AG_BEST['mad_k']:g}",
+    "ag_best_mark": _n(_AG_BEST["marked_pct"], 3),
+    "ag_best_lab": _n(_AG_BEST["labelled_pct"], 3),
+    "ag_best_err_pct": _n(abs(_AG_BEST["area_agreement_corpus"] - 1) * 100, 1),
+    "ag_ship": _n(_AG_SHIP["area_agreement_corpus"], 3),
+    "ag_best_acc": _n(_AG_BEST["accuracy_pct"], 2),
+    "ag_best_spec": _n(_AG_BEST["specificity_pct"], 2),
+    # --- the crops at their best accuracy ---
+    "cb_acc": _n(_CROP_BEST["accuracy_pct"], 2),
+    "cb_k": f"{_CROP_BEST['mad_k']:g}",
+    "cb_margin": _n(_CROP_BEST["accuracy_pct"] - _CROP_BEST["empty_mask_accuracy_pct"], 2),
+    "cb_spec": _n(_CROP_BEST["specificity_pct"], 2),
+    # --- where the detector places among the classical arms, in these units ---
+    "arm_area_rank": _ARM_AREA_RANK,
+    "arm_area_det": _n(_ARM_W["DETECTOR (shipped)"]["area_agreement"], 3),
+    "arm_area_2nd": _n(_ARM_AREA_2ND[1]["area_agreement"], 3),
+    "arm_area_2nd_name": _ARM_AREA_2ND[0],
+    "arm_n_earned": str(sum(1 for v in _ARM_W.values() if v["beats_empty_mask"])),
+    "arm_union_area": _n(_ARM_UNION["area_agreement"], 3),
+    # the sweep in background-counting units, at the three rungs the text names
+    "wf5_area": _n(_WFK(5.0)["area_agreement_corpus"], 3),
+    "wf6_area": _n(_WFK(6.0)["area_agreement_corpus"], 4),
+    "wf7_area": _n(_WFK(7.0)["area_agreement_corpus"], 3),
+    "wf4_area": _n(_WFK(4.0)["area_agreement_corpus"], 3),
+    "wf5_acc": _n(_WFK(5.0)["accuracy_pct"], 2),
+    "wf6_acc": _n(_WFK(6.0)["accuracy_pct"], 2),
+    "wf6_spec": _n(_WFK(6.0)["specificity_pct"], 2),
+    "wf5_spec": _n(_WFK(5.0)["specificity_pct"], 2),
+    "wf6_mark": _n(_WFK(6.0)["marked_pct"], 3),
+    "wf5_mark": _n(_WFK(5.0)["marked_pct"], 3),
+    # the classical arms, ranked by how close their reported area fraction is
+    "arm_tbl": _ARM_TABLE,
+    # our own corpus: the refereed pixels are overwhelmingly crack, so a full mask nearly
+    # wins there. Rule 4 needs both numbers to make that concrete.
+    # Section 3.6 in percentage-of-image units: the labelled crack the proposal stage
+    # never reaches, expressed as a share of the frame rather than as a recall
+    "rd_never_pct_img": _n(PA_W["labelled_pct"] * (1 - _RD_OPEN["recall"]), 3),
+    "rd_reach_pct_img": _n(PA_W["labelled_pct"] * _RD_OPEN["recall"], 3),
+    "rd_never_within10": _n(100 * UCA["missed_within_px_of_found"]["10"], 1),
+    "lab_pos_pct": _n(100 * LSC["refereed_crack_px"]
+                      / (LSC["refereed_crack_px"] + LSC["refereed_notcrack_px"]), 1),
+    "lab_all_f1": _n(2 * (LSC["refereed_crack_px"]
+                          / (LSC["refereed_crack_px"] + LSC["refereed_notcrack_px"]))
+                     / (1 + LSC["refereed_crack_px"]
+                        / (LSC["refereed_crack_px"] + LSC["refereed_notcrack_px"])), 3),
+    # --- Section 4: the ceiling a perfectly-localised mask reaches, in these units ---
+    "wc_f_peak": _n(WBG["whole_fields"]["best_accuracy_pct"], 3),
+    "wc_f_at": str(WBG["whole_fields"]["best_accuracy_width"]),
+    "wc_f_empty": _n(WBG["whole_fields"]["empty_mask_accuracy_pct"], 3),
+    "wc_f_head": _n(WBG["whole_fields"]["best_accuracy_pct"]
+                    - WBG["whole_fields"]["empty_mask_accuracy_pct"], 3),
+    "wc_c_peak": _n(WBG["crops"]["best_accuracy_pct"], 3),
+    "wc_c_at": str(WBG["crops"]["best_accuracy_width"]),
+    "wc_c_empty": _n(WBG["crops"]["empty_mask_accuracy_pct"], 3),
+    "wc_c_head": _n(WBG["crops"]["best_accuracy_pct"]
+                    - WBG["crops"]["empty_mask_accuracy_pct"], 3),
+    "wc_c_captured": _n(100 * (_CROP_BEST["accuracy_pct"] - WBG["crops"]
+                               ["empty_mask_accuracy_pct"])
+                        / (WBG["crops"]["best_accuracy_pct"]
+                           - WBG["crops"]["empty_mask_accuracy_pct"]), 1),
+    "wc_f_areaw": str(WBG["whole_fields"]["area_match_width"]),
+    "wc_c_areaw": str(WBG["crops"]["area_match_width"]),
+    # Appendix A, in background-counting units for all five sets
+    "ebc_acc": _n(100 * PA_E["accuracy"], 2), "ebc_spec": _n(100 * PA_E["specificity"], 2),
+    "ebc_empty_acc": _n(100 - PA_E["labelled_pct"], 2),
+    "ebcc_acc": _n(100 * PA_EC["accuracy"], 2),
+    "ebcc_spec": _n(100 * PA_EC["specificity"], 2),
+    "ebcc_empty_acc": _n(100 - PA_EC["labelled_pct"], 2),
     "in_crop_n": str(RFA["n"]),
     "in_crop_gain": _n(IN_CROP["loo"]["f1"] - IN["loo"]["f1"]),
     "in_rank": _ORD[_rank_i],
@@ -260,30 +403,23 @@ VALUES = {
     "in_tn_plus": _n(100 * (1 - PA_W["labelled_pct"] / 100), 2),
     "in_ratio": _n(PA_W["marked_pct"] / PA_W["labelled_pct"], 2),
     "in_acc": _n(100 * PA_W["accuracy"], 2),
-    "in_bacc": _n(100 * PA_W["balanced_accuracy"], 2),
-    "in_mcc": _n(PA_W["mcc"]),
     "in_crop_lab_pct": _n(PA_C["labelled_pct"], 2),
     "in_crop_mark_pct": _n(PA_C["marked_pct"], 2),
     "in_crop_tp_pct": _n(PA_C["tp_pct"], 2),
     "in_crop_fp_pct": _n(PA_C["fp_pct"], 2),
     "in_crop_ratio": _n(PA_C["marked_pct"] / PA_C["labelled_pct"], 2),
     "in_crop_acc": _n(100 * PA_C["accuracy"], 2),
-    "in_crop_bacc": _n(100 * PA_C["balanced_accuracy"], 2),
-    "in_crop_mcc": _n(PA_C["mcc"]),
     # --- appendix A: every set measured ---
     "ebc_lab_pct": _pct(PA_E, "labelled_pct"), "ebc_mark_pct": _pct(PA_E, "marked_pct"),
     "ebc_tp_pct": _pct(PA_E, "tp_pct"), "ebc_fp_pct": _pct(PA_E, "fp_pct"),
-    "ebc_ratio": _ratio(PA_E), "ebc_bacc": _n(100 * PA_E["balanced_accuracy"], 2),
-    "ebc_mcc": _n(PA_E["mcc"]),
+    "ebc_ratio": _ratio(PA_E),
     "ebcc_lab_pct": _pct(PA_EC, "labelled_pct"), "ebcc_mark_pct": _pct(PA_EC, "marked_pct"),
     "ebcc_tp_pct": _pct(PA_EC, "tp_pct"), "ebcc_fp_pct": _pct(PA_EC, "fp_pct"),
-    "ebcc_ratio": _ratio(PA_EC), "ebcc_bacc": _n(100 * PA_EC["balanced_accuracy"], 2),
-    "ebcc_mcc": _n(PA_EC["mcc"]),
+    "ebcc_ratio": _ratio(PA_EC),
     "md_n": str(PA["MetalDAM voids (not cracks)"]["n"]),
     "md_lab_pct": _pct(PA_M, "labelled_pct"), "md_mark_pct": _pct(PA_M, "marked_pct"),
     "md_tp_pct": _pct(PA_M, "tp_pct"), "md_fp_pct": _pct(PA_M, "fp_pct"),
-    "md_ratio": _ratio(PA_M), "md_bacc": _n(100 * PA_M["balanced_accuracy"], 2),
-    "md_mcc": _n(PA_M["mcc"]),
+    "md_ratio": _ratio(PA_M),
     # --- SEM coating, the failure case ---
     "ebc_stroke": _n(SW["EBC_crack"]["label_stroke_px_median"], 1),
     "wc_ebc_iou": _n(SW["EBC_crack"]["ceiling_iou"]),
@@ -440,8 +576,14 @@ def main():
         # the pipeline plate leads, before any section
         pending_table = []
         for src in files:
-            for raw in open(os.path.join(SECT, src), encoding="utf-8").read().split("\n"):
-                line = resolve(raw.rstrip())
+            # RESOLVE THE WHOLE FILE, THEN SPLIT. Resolving line by line meant a value
+            # holding several lines -- the classical-arm table is generated as one --
+            # expanded into a single 422-character line, which the table renderer then
+            # refused as too wide to fit. Substituting first lets a placeholder carry
+            # structure.
+            whole = resolve(open(os.path.join(SECT, src), encoding="utf-8").read())
+            for raw in whole.split("\n"):
+                line = raw.rstrip()
                 m = re.match(r"^\[FIGURE (.+)\]$", line.strip())
                 if m:
                     fign += 1

@@ -13,12 +13,14 @@ against the intuition that produced the code in the first place.
 **The region classifier is switched off.** An eight-feature classifier scored each
 candidate region, and deleting it improved every metric at no cost in free parameters.
 Against the same candidate stage with the classifier bypassed and nothing else changed —
-one variable, so the difference is the classifier's own — paired median IoU **+0.1753**
-over thirteen specimens, 11 of 13, Wilcoxon p = 0.0061. The shipped path also widened the
+one variable, so the difference is the classifier's own — a paired median gain of
+**+0.1753** over thirteen specimens, 11 of 13, Wilcoxon p = 0.0061. That ablation was
+scored in overlap units on our own corpus before this paper settled on the units of §3.3,
+and it is the one measurement here still quoted in them; it has not been re-run. The shipped path also widened the
 flattening ladder from one radius to seven; the two changes together are +0.2296,
 p = 0.0024, and that larger figure is not the classifier's effect and must not be quoted as
-it. Three specimens that had scored recall 0.0000 at every candidate setting ever tried were
-never invisible to the proposal stage; the classifier was rejecting them. One caveat the
+it. Three specimens on which the pipeline had found no crack at all, at every candidate
+setting ever tried, were never invisible to the proposal stage; the classifier was rejecting them. One caveat the
 ablation did not cover: with the classifier off the application still keeps Pass-2 rows the
 model itself scored not-crack, so "switched off" is a broader change in the app than in the
 experiment.

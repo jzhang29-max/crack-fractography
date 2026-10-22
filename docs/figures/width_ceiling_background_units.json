@@ -1,0 +1,184 @@
+{
+ "widths": [
+  1,
+  3,
+  5,
+  7,
+  9,
+  13,
+  17,
+  21,
+  25,
+  31,
+  41,
+  51
+ ],
+ "sets": {
+  "whole_fields": {
+   "labelled_pct": 1.8030474262852823,
+   "empty_mask_accuracy_pct": 98.19695257371471,
+   "n": 31,
+   "by_width": {
+    "1": {
+     "marked_pct": 0.12562351842080394,
+     "area_agreement": 0.06967288635308892,
+     "accuracy_pct": 98.32257609213552,
+     "specificity_pct": 100.0
+    },
+    "3": {
+     "marked_pct": 0.37490167925434725,
+     "area_agreement": 0.20792668777811144,
+     "accuracy_pct": 98.51801164688602,
+     "specificity_pct": 99.97259794072122
+    },
+    "5": {
+     "marked_pct": 0.6222847969301285,
+     "area_agreement": 0.34512946684502194,
+     "accuracy_pct": 98.6664895088442,
+     "specificity_pct": 99.92225715861088
+    },
+    "7": {
+     "marked_pct": 0.9157365368258569,
+     "area_agreement": 0.5078826676858399,
+     "accuracy_pct": 98.79812425182712,
+     "specificity_pct": 99.83989358455764
+    },
+    "9": {
+     "marked_pct": 1.1615845464891004,
+     "area_agreement": 0.6442340503944747,
+     "accuracy_pct": 98.86723487607894,
+     "specificity_pct": 99.7499483070542
+    },
+    "13": {
+     "marked_pct": 1.7065386618337324,
+     "area_agreement": 0.9464746389669951,
+     "accuracy_pct": 98.90479118593278,
+     "specificity_pct": 99.49168091095908
+    },
+    "17": {
+     "marked_pct": 2.2020401493195565,
+     "area_agreement": 1.2212879801261227,
+     "accuracy_pct": 98.80854083645728,
+     "specificity_pct": 99.19043148648603
+    },
+    "21": {
+     "marked_pct": 2.721835720923639,
+     "area_agreement": 1.5095752231716306,
+     "accuracy_pct": 98.58369519633632,
+     "specificity_pct": 98.81123911536815
+    },
+    "25": {
+     "marked_pct": 3.1518443938224547,
+     "area_agreement": 1.748065163386203,
+     "accuracy_pct": 98.32275144515499,
+     "specificity_pct": 98.45929869849958
+    },
+    "31": {
+     "marked_pct": 3.8885916433026715,
+     "area_agreement": 2.156677404384265,
+     "accuracy_pct": 97.75305101948399,
+     "specificity_pct": 97.79351397442021
+    },
+    "41": {
+     "marked_pct": 4.997508756576046,
+     "area_agreement": 2.771701223007835,
+     "accuracy_pct": 96.74540796587544,
+     "specificity_pct": 96.71420073100808
+    },
+    "51": {
+     "marked_pct": 6.06153549686555,
+     "area_agreement": 3.3618280964210645,
+     "accuracy_pct": 95.71751625307145,
+     "specificity_pct": 95.64698320550632
+    }
+   },
+   "best_accuracy_width": 13,
+   "best_accuracy_pct": 98.90479118593278,
+   "area_match_width": 13
+  },
+  "crops": {
+   "labelled_pct": 4.527018620417668,
+   "empty_mask_accuracy_pct": 95.47298137958234,
+   "n": 26,
+   "by_width": {
+    "1": {
+     "marked_pct": 0.21083538348858172,
+     "area_agreement": 0.04657267865824015,
+     "accuracy_pct": 95.68381676307091,
+     "specificity_pct": 100.0
+    },
+    "3": {
+     "marked_pct": 0.6270518669715295,
+     "area_agreement": 0.13851320693566682,
+     "accuracy_pct": 96.06425578777606,
+     "specificity_pct": 99.98129327065239
+    },
+    "5": {
+     "marked_pct": 1.0377737192007213,
+     "area_agreement": 0.2292399935180684,
+     "accuracy_pct": 96.39093692486102,
+     "specificity_pct": 99.93727815638634
+    },
+    "7": {
+     "marked_pct": 1.5441564413217397,
+     "area_agreement": 0.34109787716739587,
+     "accuracy_pct": 96.74717462979831,
+     "specificity_pct": 99.85858116443767
+    },
+    "9": {
+     "marked_pct": 1.9462108612060547,
+     "area_agreement": 0.42991006319883324,
+     "accuracy_pct": 96.9738923586332,
+     "specificity_pct": 99.76668616972022
+    },
+    "13": {
+     "marked_pct": 2.8347015380859375,
+     "area_agreement": 0.6261740398638794,
+     "accuracy_pct": 97.35542444082407,
+     "specificity_pct": 99.50100456297947
+    },
+    "17": {
+     "marked_pct": 3.640427956214318,
+     "area_agreement": 0.8041557284070653,
+     "accuracy_pct": 97.55810590890738,
+     "specificity_pct": 99.18507071167316
+    },
+    "21": {
+     "marked_pct": 4.457231668325571,
+     "area_agreement": 0.9845843461351483,
+     "accuracy_pct": 97.60143573467548,
+     "specificity_pct": 98.77986898854397
+    },
+    "25": {
+     "marked_pct": 5.113752071674053,
+     "area_agreement": 1.1296070328958028,
+     "accuracy_pct": 97.51841838543231,
+     "specificity_pct": 98.39242462039388
+    },
+    "31": {
+     "marked_pct": 6.2075174771822414,
+     "area_agreement": 1.371215362177929,
+     "accuracy_pct": 97.16289226825421,
+     "specificity_pct": 97.63291620662403
+    },
+    "41": {
+     "marked_pct": 7.783104823185847,
+     "area_agreement": 1.7192561983471073,
+     "accuracy_pct": 96.2256358220027,
+     "specificity_pct": 96.31518679806078
+    },
+    "51": {
+     "marked_pct": 9.233522415161133,
+     "area_agreement": 2.0396475449684006,
+     "accuracy_pct": 95.05435870243953,
+     "specificity_pct": 94.93929303682974
+    }
+   },
+   "best_accuracy_width": 21,
+   "best_accuracy_pct": 97.60143573467548,
+   "area_match_width": 21
+  }
+ },
+ "construction": "the annotator's own mask reduced to its centreline and redrawn at a fixed width: exactly right about location, wrong only about width",
+ "measures": "accuracy, specificity and area agreement, all over every pixel"
+}

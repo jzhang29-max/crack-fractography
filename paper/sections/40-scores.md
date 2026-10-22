@@ -1,34 +1,39 @@
 ## 4  What the scores measure
 
-This is the part we would most want another group to check. **Every number in this section
-is measured on the {in_crop_n} released crops, not the whole fields the rest of the paper
-reports**, because the constant-width construction was built against that split; Figure 6
-draws its reference line from the same set. The whole-field version has not been run.
+This is the part we would most want another group to check.
 
 [FIGURE P3 - width sensitivity]
 
-Take the ground truth, reduce it to its centreline, and redraw it at a fixed width. The
-result is exactly right about where every crack is and wrong only about how wide. Scored
-against the label it should be nearly perfect, and it is not: the best such reconstruction
-reaches IoU {wc_in_iou}. Most of the available IoU is being spent on agreeing about width,
-and the two curves in Figure 6 peak at different widths — {wc_in_at} px for this dataset's
-labels against {wc_corpus_at} px for our own corpus tiles — so the same detector's IoU can
-differ between corpora without its localisation differing at all.
+Take the annotator's own ground truth, reduce it to its centreline, and redraw it at a
+fixed width. The result is exactly right about **where** every crack is and wrong only
+about **how wide**. It is the best any detector could do on localisation, so whatever it
+scores is a ceiling, and the gap between that ceiling and an empty mask is the entire range
+in which a detector can compete.
 
-**This is not an upper bound, and we presented it as one.** A real label varies in width
-along its length, so a detector that tracks that variation can score above a constant-width
-redraw of the same centreline. We had to be told that by the measurement.
+**On the whole fields that range is 0.7 percentage points.** The redraw peaks at accuracy
+{wc_f_peak}% at a drawn width of {wc_f_at} px; an empty mask scores {wc_f_empty}%. A mask
+with perfect localisation and the best possible width is worth {wc_f_head} points of
+accuracy over marking nothing at all, and every classical arm in Section 3.4 — and this
+detector — sits inside or below that band. That is not a statement about any detector. It
+is a statement about what accuracy can express on an image that is {in_lab_pct}% crack.
 
-**We also claimed width does not explain the detector's difficulty. That claim is now
-withdrawn as well.** This dataset's labels are drawn at a median {in_stroke} px and its best
-constant-width reconstruction reaches {wc_in_iou}; our own corpus tiles, scored by the same
-construction, peak at {wc_corpus_iou}. The two ceilings are comparable. What we cannot say
-is that the two brush widths differ substantially, because the corpus stroke width is not
-measured here — Section 7 records it as unmeasured — so the inference that drew the two
-facts together had nothing holding it up.
+**On the released crops the range is {wc_c_head} points** — ceiling {wc_c_peak}% at
+{wc_c_at} px against an empty mask's {wc_c_empty}% — and there the comparison becomes
+informative. This detector reaches {cb_acc}%, which is **{wc_c_captured}% of the whole
+available headroom**. That is the most favourable honest statement in this paper, and it is
+available only where prevalence is high enough for accuracy to have room to move.
 
-That argument was stronger one draft ago. It rested on two SEM sets annotated four times
-apart in stroke width — 25.8 px and 6.4 px — reaching the same ceiling to within 0.007. The
-second of those was the EBC coating, withdrawn from this paper as a ceramic rather than a
-metal, and the argument is weaker without it. The measurement remains in
-`docs/figures/sem_width_ceiling.json`.
+The same construction says where the width goes. The redraw reproduces the annotator's own
+crack area fraction at {wc_f_areaw} px on the whole fields and {wc_c_areaw} px on the crops
+— so a mask drawn at the annotator's median stroke of {in_stroke} px is already close to
+the right **amount** of paint, and the remaining disagreement is about placement, not
+quantity.
+
+**Two claims from an earlier draft are withdrawn here.** We reported this construction as an
+upper bound on IoU; it is not, because a real label varies in width along its length and a
+detector that tracks that variation can score above a constant-width redraw of the same
+centreline. And we reported that label width does not explain the detector's difficulty, on
+the strength of two corpora whose brush widths we said differed substantially. We cannot say
+that: the corpus stroke width is not measured here, Section 7 records it as unmeasured, and
+the second of those corpora was the EBC coating, withdrawn from this paper as a ceramic. The
+inference had nothing holding it up.

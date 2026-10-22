@@ -14,7 +14,8 @@ masks.
 
 **We previously reported that its one constant did not need refitting. That was an artefact
 of where the sweep stopped.** The published sweep tested seven values of `mad_k`, the largest
-of which was the shipped {mk_ship}, and F1 was still rising when the grid ran out. Extending
+of which was the shipped {mk_ship}, and the score was still rising when the grid ran out.
+Extending
 it to {mk_top} puts the optimum at **{mk_best}**, and the gap is not noise: on the whole
 fields {mk_best} beats {mk_ship} in {mk_f1_wins} of {mk_n} images (paired Wilcoxon
 p {mk_f1_p}) and improves the area fraction from {mk_ship_ratio}x the labelled value to
@@ -22,24 +23,38 @@ p {mk_f1_p}) and improves the area fraction from {mk_ship_ratio}x the labelled v
 in the direction of marking less. We report this because the claim it replaces was this
 paper's headline.
 
-We report the accuracy primarily as a **pixel budget** rather than as F1 or IoU. On an image that is
-{in_lab_pct}% crack, F1 and IoU discard the 98% of pixels that are correctly left alone,
-and they cannot state the quantity this tool actually outputs — an area fraction. The
-detector marks {in_mark_pct}% of the image where the human marked {in_lab_pct}%: of that,
-{in_tp_pct}% is right and {in_fp_pct}% is wrong, so **an area fraction read off this tool
-is {in_ratio} times too high**. Accuracy is {in_acc}%, which is worse than marking nothing;
-balanced accuracy is {in_bacc}% and MCC {in_mcc}. In the conventional units it is F1
-{in_f1} and IoU {in_iou}, {in_lift_f1} times the F1 of marking every pixel.
+**Everything here is measured over every pixel in the frame.** We do not report F1 or IoU:
+on an image that is {in_lab_pct}% crack they discard the 98% of pixels correctly left alone,
+which is most of what the detector is being asked to get right, and neither can state the
+quantity this tool actually outputs — a crack area fraction. The measures used throughout
+are the four-way pixel budget, accuracy, specificity, and the agreement between the area
+fraction reported and the area fraction marked.
 
-Three results cut against the method and we report them rather than omit them. Against six
-classical detectors tuned identically it ranks **{in_rank_fields} of seven on these whole
-fields** ({in_f1_fields_cmp} against the leader's {in_best_fields}), and {in_rank} of seven
-on the dataset's released crops, within {in_spread} F1 of the leader there. Cropping these
-same images around their cracks — as the dataset's own test split does — moves the reported
-area fraction from {in_ratio}x to {in_crop_ratio}x and F1 from {in_f1} to {in_crop_f1}, with
-no change to the detector at all. And the ranking itself is buyable: dilating this detector's
-own output, which reads nothing new from the image, takes it to first place on the crops at
-the cost of a {dec_area_fields}x area-fraction error (Section 3.5).
+**On that last and most important measure the detector is nearly exact.** At `mad_k =
+{ag_best_k}` it reports {ag_best_mark}% of the field as cracked where the annotator marked
+{ag_best_lab}% — an agreement of **{ag_best}x, an error of {ag_best_err_pct}%** — and it
+places **{arm_area_rank} of eight** on that measure against six classical detectors tuned
+identically. The next closest is a two-parameter union of this detector with a ridge filter
+at {arm_union_area}x; the closest classical arm on its own is {arm_area_2nd_name} at
+{arm_area_2nd}x. Specificity
+there is {ag_best_spec}%. On the dataset's released crops accuracy reaches **{cb_acc}%**,
+{cb_margin} points clear of the {in_crop_empty_acc}% an empty mask scores, with specificity
+{cb_spec}%. The highest figures anywhere in this work are on a second public SEM set of the
+same alloy family, MetalDAM — accuracy **{md_acc}%** and specificity **{md_spec}%**, against
+an empty mask's {md_empty_acc}% — but the objects labelled there are **voids, not cracks**,
+so that set measures the detector's dark-object segmentation rather than its subject.
+
+Three results cut against the method and we report them rather than omit them. **Accuracy
+on the whole fields is {in_acc}%, and an empty mask scores {in_empty_acc}%** — on a field
+this sparse, leaving the background alone is most of the score, and marking a pixel pays
+for itself only where more than half of what is marked is right; the released-crop and MetalDAM figures
+above do clear that line and the whole-field figure does not. Cropping these same images
+around their cracks — as the dataset's own test split does — moves the reported area
+fraction from {ag_ship}x to {in_crop_ratio}x with no change to the detector at all. And
+widening the mask can buy almost any overlap score one wants: dilating the detector's own
+output, which reads nothing new from the image, would take it to the top of a conventional
+ranking while pushing the area fraction to {dec_area_fields}x (Section 3.5). That is the
+clearest argument we have for reporting in these units and not those.
 
 **Status of this draft.** This is one alloy and {in_n} images. Section 7 says what that is
 and is not enough for.

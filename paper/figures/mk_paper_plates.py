@@ -92,6 +92,16 @@ SEM_OR = load(os.path.join(REPO, "docs/figures/sem_originals_metrics.json"),
 # which is the shipped value, so a plate drawn from one of them cannot show a peak.
 MK = load(os.path.join(REPO, "docs/figures/madk_above_five.json"),
           "mad_k above five")["sets"]
+# Everything this paper plots is now computed over every pixel of the frame. These three
+# carry the sweep, the classical arms and the constant-width construction in those units.
+BC = load(os.path.join(REPO, "docs/figures/background_counting_table.json"),
+          "background-counting table")
+AB = load(os.path.join(REPO, "docs/figures/arms_background_units.json"),
+          "arms in background units")["sets"]
+WBG = load(os.path.join(REPO, "docs/figures/width_ceiling_background_units.json"),
+           "width ceiling, background units")["sets"]
+PAX = load(os.path.join(REPO, "docs/figures/pixel_accounting.json"),
+           "pixel accounting")["sets"]
 # SEM ONLY. Pavement is out of the paper: the application is micrographs, and a road-surface
 # benchmark says nothing about one. The primary numbers are the ORIGINAL 1024x1024 fields
 # rather than the released crops -- every source image behind the crops also appears among
@@ -107,215 +117,256 @@ MF = load(os.path.join(REPO, "docs/figures/metric_figures.json"), "corpus metric
 
 # ---------------------------------------------------------------- plate: public scores
 def plate_scores():
-    mets = ["precision", "recall", "f1", "iou"]
-    fig, axes = plt.subplots(1, 1, figsize=(4.6, 3.3), squeeze=False)
-    axes = axes[0]
-    for ax, (name, r) in zip(axes, ALL.items()):
-        det = [r["loo"][m] for m in mets]
-        floor = [r["controls"]["mark_everything"][m] for m in mets]
-        rnd = [r["controls"]["equal_area_random"][m] for m in mets]
-        x = range(len(mets))
-        ax.bar([i - 0.26 for i in x], det, 0.26, color="0.25", label="detector")
-        ax.bar(list(x), floor, 0.26, color="0.62", label="mark everything")
-        ax.bar([i + 0.26 for i in x], rnd, 0.26, color="0.85", edgecolor="0.4",
-               linewidth=.6, label="equal-area random")
-        for i, v in enumerate(det):
-            ax.text(i - 0.26, v + .02, f"{v:.2f}", ha="center", fontsize=SMALL)
-        ax.set_xticks(list(x)); ax.set_xticklabels(["P", "R", "F1", "IoU"], fontsize=BODY)
-        ax.set_ylim(0, 1.0)
-        ax.set_title(f"n={r['n']} whole fields, prevalence "
-                     f"{100 * r['prevalence']:.2f}%", fontsize=SMALL)
-        ax.tick_params(labelsize=SMALL)
-        ax.spines[["top", "right"]].set_visible(False)
-    axes[0].set_ylabel("score", fontsize=BODY)
-    axes[0].legend(fontsize=SMALL, frameon=False, loc="upper left")
-    fig.suptitle("Inconel 718 against its own no-information floors",
-                 fontsize=TITLE, y=1.02)
+    """The headline, in the only units this paper reports.
+
+    This plate used to show precision, recall, F1 and IoU against no-information floors.
+    All four discard the pixels correctly left alone, which on these fields is 98% of the
+    frame, so none of them could state the quantity the tool outputs. It now shows that
+    quantity directly -- the crack area fraction reported against the one the annotator
+    marked, on every set this project has scored -- with accuracy beside it and the
+    empty-mask line that makes an accuracy legible.
+    """
+    order = [("Inconel 718\nwhole fields", "Inconel 718, whole fields"),
+             ("Inconel 718\nreleased crops", "Inconel 718, released crops"),
+             ("MetalDAM\nvoids, not cracks", "MetalDAM voids (not cracks)"),
+             ("EBC coating\nwithdrawn: ceramic", "EBC coating, whole fields")]
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(7.4, 3.4),
+                                   gridspec_kw={"width_ratios": [1.05, 1.0]})
+
+    # left: how close the reported area fraction is to the annotator's. 1.0 is exact.
+    lab = [o[0] for o in order]
+    rat = [PAX[k]["detector"]["marked_pct"] / PAX[k]["detector"]["labelled_pct"]
+           for _, k in order]
+    # the shipped Inconel field value is replaced by the operating point Section 3.2 argues
+    # for; both are drawn so the improvement is visible rather than asserted
+    best = min(BC["sweeps"]["whole_fields"],
+               key=lambda r: abs(r["area_agreement_corpus"] - 1.0))
+    y = range(len(order))
+    ax1.axvline(1.0, color="0.0", lw=1.2, zorder=1)
+    ax1.barh(list(y), rat, 0.5, color=["0.25"] + ["0.62"] * 3, zorder=2)
+    ax1.plot([best["area_agreement_corpus"]], [0], marker="D", color="#b3401a",
+             markersize=6, zorder=5)
+    ax1.annotate(f"mad_k {best['mad_k']:g}: {best['area_agreement_corpus']:.3f}x",
+                 xy=(best["area_agreement_corpus"], 0), xytext=(2.4, 0.62),
+                 fontsize=SMALL, color="#b3401a",
+                 arrowprops=dict(arrowstyle="-", color="#b3401a", lw=0.8))
+    ax1.text(1.02, len(order) - 0.52, "exact", fontsize=SMALL, va="center", ha="left",
+             rotation=90)
+    for i, v in zip(y, rat):
+        ax1.text(v * 1.22, i, f"{v:.2f}x", va="center", fontsize=SMALL)
+    ax1.set_xscale("log")
+    ax1.set_xticks([0.5, 1, 2, 5, 20, 80])
+    ax1.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+    ax1.set_yticks(list(y), lab, fontsize=SMALL)
+    ax1.set_xlabel("crack area fraction reported / marked", fontsize=BODY)
+    ax1.set_title("What the tool reports", fontsize=TITLE)
+    ax1.spines[["top", "right"]].set_visible(False)
+
+    # right: accuracy against the accuracy of an empty mask on the same set
+    acc = [100 * PAX[k]["detector"]["accuracy"] for _, k in order]
+    emp = [100 - PAX[k]["detector"]["labelled_pct"] for _, k in order]
+    # THE AXIS STARTS NEAR THE DATA. Drawn from zero, 96% and 99% are the same bar and the
+    # empty-mask line sits on top of every one of them, which is the whole comparison.
+    lo = min(min(acc), min(emp)) - 1.5
+    for i, (a, e) in enumerate(zip(acc, emp)):
+        ax2.barh(i, a - lo, 0.5, left=lo, color="0.25" if a > e else "#b3401a", zorder=2)
+        ax2.plot([e, e], [i - 0.33, i + 0.33], color="0.0", lw=2.4, zorder=5)
+        ax2.text(a + 0.5, i, f"{a:.2f}", va="center", fontsize=SMALL,
+                 color="0.25" if a > e else "#b3401a", fontweight="bold")
+        ax2.text(e, i + 0.36, f"{e:.2f}", va="bottom", ha="center", fontsize=SMALL - 1.0,
+                 color="0.0")
+    ax2.set_yticks(list(y), ["" for _ in order])
+    ax2.set_xlim(lo, max(acc) + 3.2)
+    ax2.set_xlabel("accuracy, all pixels (%)", fontsize=BODY)
+    ax2.set_title("Accuracy vs an empty mask", fontsize=TITLE)
+    # the note goes under the whole figure: inside ax2 it printed across the bottom bar
+    fig.text(0.5, 0.005, "black tick = the accuracy of an empty mask on that set; "
+             "red = the detector does not beat it", ha="center", fontsize=SMALL - 1.0,
+             color="0.3")
+    ax2.spines[["top", "right"]].set_visible(False)
+    ax1.tick_params(labelsize=SMALL)
+    ax2.tick_params(labelsize=SMALL)
+
     save(fig, "P1 - public scores", {
-        "what": "P/R/F1/IoU at 0 px tolerance, mad_k leave-one-image-out, three controls",
-        "values": {k: {"detector": v["loo"], "mark_everything":
-                       v["controls"]["mark_everything"], "n": v["n"],
-                       "prevalence": v["prevalence"]} for k, v in ALL.items()},
-        "source": "sem_public_metrics.json + public_metrics.json"})
+        "what": "crack area fraction reported against marked, and accuracy against the "
+                "accuracy of an empty mask, on every set scored",
+        "values": {k: {"area_agreement": PAX[k]["detector"]["marked_pct"]
+                       / PAX[k]["detector"]["labelled_pct"],
+                       "accuracy_pct": 100 * PAX[k]["detector"]["accuracy"],
+                       "empty_mask_accuracy_pct": 100 - PAX[k]["detector"]["labelled_pct"]}
+                   for _, k in order},
+        "source": "pixel_accounting.json + background_counting_table.json"})
 
 
 # ------------------------------------------------------- plate: one constant transfers
 def plate_transfer():
-    fig, ax = plt.subplots(figsize=(5.4, 3.4))
-    # ONE SERIES NOW. This plate used to carry two datasets and the sentence "one refitted
-    # constant transfers". With CrackForest out of the paper there is one dataset left and
-    # no transfer can be shown, so the plate is an operating curve and the claim is gone.
-    # WHOLE FIELDS. This read SEM_PM -- the crops -- for one build, so both series on this
-    # plate were the same data drawn twice and the curves lay exactly on top of each other
-    # while the legend claimed they were different sets.
-    #
-    # EXTENDED ABOVE THE SHIPPED VALUE. The source was sem_originals_metrics.json, whose
-    # sweep stops at mad_k = 5.0 -- the shipped constant -- with F1 still rising. Drawing
-    # that grid under a caption calling 5.0 the optimum was the figure asserting a peak it
-    # had not reached; the curve is now read from the extended sweep so the peak is visible
-    # and so is the fall on the far side of it.
-    sem = MK["whole_fields"]["per_k"]
-    crop = MK["crops"]["per_k"]
-    ks = sorted(float(k) for k in sem)
+    """The operating curve, in the units the paper reports.
 
-    def pick(d, k):
-        for cand in (str(k), f"{k:g}", f"{k:.1f}"):
-            if cand in d:
-                return d[cand]
-        raise KeyError(f"{k} not in {sorted(d)}")
+    Two things this plate must show and its earlier versions did not. The sweep used to
+    stop at mad_k = 5.0, the shipped constant, with the score still rising -- so the plate
+    asserted a peak it had never reached, and the grid it swept is shaded here so a reader
+    can see where it stopped. And it plotted mean F1, which discards the background; the
+    curve drawn now is the crack area fraction the tool would report divided by the one the
+    annotator marked, where 1.0 is exact and the optimum is visible as a crossing rather
+    than as a maximum.
+    """
+    fig, ax = plt.subplots(figsize=(5.8, 3.6))
+    wf = BC["sweeps"]["whole_fields"]
+    cr = BC["sweeps"]["crops"]
+    ks = [r["mad_k"] for r in wf]
 
-    ax.plot(ks, [pick(sem, k)["f1"] for k in ks], marker="^", linestyle="-",
-            color="0.0", label="Inconel 718, whole fields", markersize=4.5, linewidth=1.6)
-    # THE SAME IMAGES, CROPPED. Not a second dataset: the released crops come from these
-    # very fields, cut around the cracks, and that alone lifts F1 by about 0.15 at every
-    # setting. It is the clearest statement in the paper of how much a benchmark's framing
-    # is worth, and it costs one extra line to show.
-    ax.plot(ks, [pick(crop, k)["f1"] for k in ks], marker="s", linestyle="--",
-            color="0.55", label="the same images, cropped around cracks", markersize=4,
-            linewidth=1.3)
-
-    best = float(MK["whole_fields"]["best_in_sample"])
-    ax.axvline(5.0, color="0.7", linewidth=1, linestyle=":")
-    ax.axvline(best, color="#b3401a", linewidth=1.1, linestyle="-", alpha=0.8)
-    # labels at the TOP: the lower half of this axes carries the legend, and a
-    # rotated label behind legend text is unreadable at page scale
-    ax.text(5.0, 0.545, "shipped 5.0 ", fontsize=SMALL, color="0.4", rotation=90,
-            va="top", ha="right")
-    ax.text(best, 0.545, f" optimum {best:g}", fontsize=SMALL, color="#b3401a",
-            rotation=90, va="top", ha="left")
-    # the grid the earlier draft used, so a reader can see where it stopped and why the
-    # old claim looked true
-    ax.axvspan(1.0, 5.0, color="0.92", zorder=0)
-    ax.text(1.9, 0.455, "the grid the\nfirst draft swept", fontsize=SMALL,
-            color="0.45", ha="center", va="center", linespacing=1.25)
-    ax.set_xscale("log")
-    ax.set_xticks([1, 2, 3, 5, 8, 12, 20, 40])
-    ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
-    ax.set_xlabel("mad_k  (robust outlier threshold)", fontsize=BODY)
-    ax.set_ylabel("mean F1 per image", fontsize=BODY)
-    ax.tick_params(labelsize=SMALL)
-    ax.spines[["top", "right"]].set_visible(False)
-    ax.legend(fontsize=SMALL, frameon=False, loc="lower left",
-              bbox_to_anchor=(0.02, 0.02))
-    ax.set_ylim(0, 0.56)
-    ax.set_title("The shipped constant is one rung below the optimum",
-                 fontsize=TITLE)
-    save(fig, "P2 - operating curve", {
-        "what": "mean F1 against the detector's single free constant, on whole SEM "
-                "fields and on the released crops of those same fields",
-        "per_k": {d: {k: v["f1"] for k, v in MK[d]["per_k"].items()} for d in MK},
-        "source": "docs/figures/madk_above_five.json"})
-
-
-# ------------------------------------------------- plate: what width alone does to IoU
-def plate_width():
-    fig, ax = plt.subplots(figsize=(6.0, 3.8))
-    series = []
-    sw = SEM_WC["Inconel718_crack"]
-    ws = sorted(int(k) for k in sw["iou_by_trace_width"])
-    ax.plot(ws, [sw["iou_by_trace_width"][str(w)] for w in ws], marker="^", linestyle="-",
+    ax.plot(ks, [r["area_agreement_corpus"] for r in wf], marker="^", linestyle="-",
             color="0.0", markersize=4.5, linewidth=1.6,
-            label=f"Inconel 718, SEM  (label {sw['label_stroke_px_median']:.0f} px)")
+            label="Inconel 718, whole fields")
+    ax.plot([r["mad_k"] for r in cr], [r["area_agreement_corpus"] for r in cr],
+            marker="s", linestyle="--", color="0.55", markersize=4, linewidth=1.3,
+            label="the same images, cropped around cracks")
+    ax.axhline(1.0, color="0.0", lw=1.2)
+    ax.text(ks[0], 1.08, "exact", fontsize=SMALL, va="bottom", ha="left")
 
-    ce, cw = MF["ceiling"], MF["ceiling_widths"]
-    corpus = [sum(ce[str(w)]["iou"]) / len(ce[str(w)]["iou"]) for w in cw]
-    # NO STROKE WIDTH ON THIS SERIES. An earlier draft annotated it "label 35 px" from a
-    # number measured by a different instrument on a different set of frames; the curve's
-    # own peak at 9 px contradicts it, and a 35 px label is best reconstructed by a 35 px
-    # redraw. The tile cache that would let it be re-measured with half_width() is not on
-    # this machine, so the annotation is dropped rather than guessed.
-    ax.plot(cw, corpus, marker="o", linestyle="-.", color="0.3", markersize=3.6,
-            linewidth=1.3, markerfacecolor="white", label="this corpus, 26 tiles")
-    ax.axhline(SEM_OR["Inconel718_crack"]["loo"]["iou"], color="0.0", linewidth=.9,
-               linestyle=":")
-    ax.text(1.5, SEM_OR["Inconel718_crack"]["loo"]["iou"] - .030,
-            "detector on Inconel 718, whole fields", fontsize=SMALL, ha="left",
-            color="0.0")
+    best = min(wf, key=lambda r: abs(r["area_agreement_corpus"] - 1.0))
+    ax.axvspan(1.0, 5.0, color="0.92", zorder=0)
+    ax.text(2.1, 17.0, "the grid the\nfirst draft swept", fontsize=SMALL,
+            color="0.45", ha="center", va="center", linespacing=1.25)
+    ax.axvline(5.0, color="0.7", lw=1.0, linestyle=":")
+    ax.axvline(best["mad_k"], color="#b3401a", lw=1.1)
+    ax.text(5.0, 22, "shipped 5.0 ", fontsize=SMALL, color="0.4", rotation=90,
+            va="top", ha="right")
+    ax.text(best["mad_k"], 22,
+            f" exact at {best['mad_k']:g}: {best['area_agreement_corpus']:.3f}x",
+            fontsize=SMALL, color="#b3401a", rotation=90, va="top", ha="left")
 
-    ax.set_xlabel("width the centreline is redrawn at (px)", fontsize=BODY)
-    ax.set_ylabel("IoU against the label", fontsize=BODY)
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.set_xticks([1, 2, 3, 5, 8, 12, 20, 40])
+    ax.set_yticks([0.1, 0.25, 0.5, 1, 2, 5, 10, 25])
+    for a in (ax.get_xaxis(), ax.get_yaxis()):
+        a.set_major_formatter(matplotlib.ticker.ScalarFormatter())
+    ax.set_xlabel("mad_k  (robust outlier threshold)", fontsize=BODY)
+    ax.set_ylabel("area fraction reported / marked", fontsize=BODY)
     ax.tick_params(labelsize=SMALL)
     ax.spines[["top", "right"]].set_visible(False)
-    ax.legend(fontsize=SMALL, frameon=False, loc="upper right")
-    ax.set_title("Right place, wrong width: what IoU costs for width alone",
+    ax.legend(fontsize=SMALL, frameon=False, loc="lower left")
+    ax.set_title("The shipped constant over-reports; one rung up is exact", fontsize=TITLE)
+    save(fig, "P2 - operating curve", {
+        "what": "reported crack area fraction divided by the annotator's, against the "
+                "detector's single free constant, on whole fields and on the released "
+                "crops of those same fields",
+        "whole_fields": {str(r["mad_k"]): r["area_agreement_corpus"] for r in wf},
+        "crops": {str(r["mad_k"]): r["area_agreement_corpus"] for r in cr},
+        "source": "docs/figures/background_counting_table.json"})
+
+
+def plate_width():
+    """The constant-width construction, scored over every pixel.
+
+    This plate used to draw IoU against drawn width. IoU discards the background, so it
+    could not say what the construction costs a reader -- and the section's conclusion is
+    about exactly that. Redrawn with accuracy on the left axis and the reported area
+    fraction on the right, both against the empty-mask line, so the ceiling is expressed
+    in the same units as every other result in the paper.
+    """
+    fig, ax = plt.subplots(figsize=(6.0, 3.8))
+    wf, cr = WBG["whole_fields"], WBG["crops"]
+    ws = sorted(int(k) for k in wf["by_width"])
+
+    ax.plot(ws, [wf["by_width"][str(w)]["accuracy_pct"] for w in ws], marker="^",
+            color="0.0", markersize=4.5, linewidth=1.6,
+            label=f"whole fields, n={wf['n']}")
+    ax.plot(ws, [cr["by_width"][str(w)]["accuracy_pct"] for w in ws], marker="s",
+            linestyle="--", color="0.55", markersize=4, linewidth=1.3,
+            label=f"released crops, n={cr['n']}")
+    ax.axhline(wf["empty_mask_accuracy_pct"], color="0.0", lw=1.0, linestyle=":")
+    ax.text(ws[-1], wf["empty_mask_accuracy_pct"] + 0.06,
+            f"an empty mask, whole fields  {wf['empty_mask_accuracy_pct']:.2f}%",
+            fontsize=SMALL, ha="right", va="bottom", color="0.0")
+    ax.axhline(cr["empty_mask_accuracy_pct"], color="0.55", lw=1.0, linestyle=":")
+    ax.text(ws[-1], cr["empty_mask_accuracy_pct"] + 0.06,
+            f"an empty mask, crops  {cr['empty_mask_accuracy_pct']:.2f}%",
+            fontsize=SMALL, ha="right", va="bottom", color="0.4")
+
+    for d, col, mk in ((wf, "0.0", "^"), (cr, "0.55", "s")):
+        bw = d["best_accuracy_width"]
+        ax.plot([bw], [d["by_width"][str(bw)]["accuracy_pct"]], marker="o",
+                markersize=11, markerfacecolor="none", markeredgecolor="#b3401a",
+                markeredgewidth=1.4, zorder=6)
+    ax.set_xscale("log")
+    ax.set_xticks(ws)
+    ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+    ax.set_xlabel("width the centreline is redrawn at (px)", fontsize=BODY)
+    ax.set_ylabel("accuracy, all pixels", fontsize=BODY)
+    ax.tick_params(labelsize=SMALL)
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.legend(fontsize=SMALL, frameon=False, loc="lower center")
+    ax.set_title("A mask that is exactly right about WHERE, and wrong only about WIDTH",
                  fontsize=TITLE)
     save(fig, "P3 - width sensitivity", {
-        "what": "the label's own centreline redrawn at a fixed width and scored against "
-                "the label. Zero localisation error by construction.",
-        "NOT A CEILING": "this is a constant-width reconstruction, not an oracle. A real "
-                         "label varies in width along its length, so a detector that "
-                         "tracks that variation can score ABOVE this curve.",
-        "peaks": {d: {"iou": WC[d]["ceiling_iou"], "at_width_px": WC[d]["ceiling_at_width"],
-                      "label_stroke_px": WC[d]["label_stroke_px_median"]} for d in WC},
-        "corpus_peak": {"iou": max(corpus), "at_width_px": cw[corpus.index(max(corpus))]},
-        "corpus_stroke_width": "NOT MEASURED HERE. The tile cache tilebench.load() needs "
-                               "is absent on this machine, so no stroke width is claimed "
-                               "for the corpus series.",
-        "the finding": "the two curves peak at different widths -- 21 px for Inconel 718's "
-                       "labels and 9 px for this project's corpus tiles -- so an IoU is not "
-                       "comparable across corpora whose annotation differs. The stronger "
-                       "version of this argument, two SEM sets four times apart in brush "
-                       "width reaching the same ceiling to within 0.007, used the EBC "
-                       "coating and was withdrawn with it.",
-        "source": "width_ceiling.json + docs/figures/metric_figures.json"})
+        "what": "accuracy of the annotator's own centreline redrawn at a fixed width, "
+                "against the accuracy of an empty mask",
+        "whole_fields": wf, "crops": cr,
+        "source": "docs/figures/width_ceiling_background_units.json"})
 
 
-# ----------------------------------------------------- plate: against classical methods
 def plate_baselines():
-    sb = load(os.path.join(REPO, "docs/figures/sem_baselines.json"), "SEM baselines")["results"]
-    # The baseline sweep was run on the released CROPS, which is the only set every arm has
-    # been scored on. It is labelled as such: the detector's own whole-field score is lower
-    # (F1 0.3444 against 0.4958), so this panel flatters every arm equally and must not be
-    # read as a whole-field result.
-    sets = [("Inconel 718 (SEM alloy)", sb["Inconel718_crack"],
-             SEM_PM["Inconel718_crack"]["n"])]
-    nice = {"YOUR DETECTOR": "this detector",
-            "global threshold (Otsu on flat)": "Otsu on flattened"}
-    # WIDE GUTTERS. At the default spacing each panel's value labels ran into the next
-    # panel's arm names and the plate was unreadable at the right-hand edge.
-    fig, axes = plt.subplots(1, 1, figsize=(5.6, 3.5), squeeze=False)
-    axes = axes[0]
-    for ax, (name, r, n) in zip(axes, sets):
-        # SORTED BY SCORE, not by a fixed arm order. The detector is
-        # third and fifth on the two SEM sets; a fixed order would bury that.
-        rank = sorted(r.items(), key=lambda kv: kv[1])
-        vals = [v for _, v in rank]
-        names = [nice.get(k, k) for k, _ in rank]
-        cols = ["0.15" if k == "YOUR DETECTOR" else "0.72" for k, _ in rank]
-        ypos = list(range(len(rank)))
-        ax.barh(ypos, vals, 0.62, color=cols)
-        for y, v in zip(ypos, vals):
-            ax.text(v + .012, y, f"{v:.3f}", va="center", fontsize=SMALL)
-        pos = len(rank) - [k for k, _ in rank].index("YOUR DETECTOR")
-        ax.set_yticks(ypos); ax.set_yticklabels(names, fontsize=SMALL)
-        ax.set_xlim(0, max(vals) * 1.34)
-        ax.set_axisbelow(True)
-        ax.xaxis.grid(True, color="0.88", linewidth=0.7)
-        ax.set_xlabel("mean F1 per image", fontsize=BODY)
-        ax.set_title(f"{name}, released crops\nn={n} \u2014 this detector ranks "
-                     f"{pos} of {len(rank)}",
-                     fontsize=SMALL)
-        ax.tick_params(labelsize=SMALL)
-        ax.spines[["top", "right"]].set_visible(False)
-    fig.suptitle("Against classical detectors on Inconel 718: this detector does not lead",
-                 fontsize=TITLE, y=1.05)
+    """The classical comparison, ranked by what the tool reports rather than by overlap.
+
+    This plate used to rank eight arms by F1 on the released crops. It now ranks them on
+    the whole fields by how close each one's reported crack area fraction is to the
+    annotator's, which is the quantity the laboratory uses, with accuracy beside it and
+    the empty-mask line drawn in. Otsu on the flattened image marks 99.5% of the frame and
+    is left to Appendix A; including it would compress every other bar to nothing.
+    """
+    arms = AB["whole_fields"]["arms"]
+    empty = AB["whole_fields"]["empty_mask_accuracy_pct"]
+    short = {"DETECTOR (shipped)": "this detector",
+             "UNION darkness OR Sato": "darkness OR Sato",
+             "global threshold (Otsu on flat)": None}
+    rank = sorted(((short.get(k, k), v) for k, v in arms.items()
+                   if short.get(k, k) is not None),
+                  key=lambda kv: -abs(kv[1]["area_agreement"] - 1.0))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(7.6, 3.5),
+                                   gridspec_kw={"width_ratios": [1.0, 0.85]})
+    y = list(range(len(rank)))
+    cols = ["0.15" if k == "this detector" else "0.72" for k, _ in rank]
+
+    ax1.axvline(1.0, color="0.0", lw=1.2, zorder=1)
+    ax1.barh(y, [v["area_agreement"] for _, v in rank], 0.5, color=cols, zorder=2)
+    for i, (_, v) in zip(y, rank):
+        ax1.text(v["area_agreement"] + 0.02, i, f"{v['area_agreement']:.3f}x",
+                 va="center", fontsize=SMALL)
+    ax1.text(1.01, 3.0, "exact", fontsize=SMALL, va="center", ha="left",
+             rotation=90, color="0.0")
+    ax1.set_yticks(y, [k for k, _ in rank], fontsize=SMALL)
+    ax1.set_xlim(0, 1.35)
+    ax1.set_xlabel("crack area fraction reported / marked", fontsize=BODY)
+    ax1.set_title("What each arm would report", fontsize=TITLE)
+    ax1.spines[["top", "right"]].set_visible(False)
+
+    ax2.barh(y, [v["accuracy_pct"] for _, v in rank], 0.5,
+             color=["#b3401a" if not v["beats_empty_mask"] else c
+                    for c, (_, v) in zip(cols, rank)], zorder=2)
+    ax2.axvline(empty, color="0.0", lw=1.6, zorder=5)
+    ax2.text(empty - 0.012, 3.0, f"an empty mask {empty:.2f}%", fontsize=SMALL,
+             va="center", ha="right", rotation=90, color="0.0")
+    for i, (_, v) in zip(y, rank):
+        ax2.text(v["accuracy_pct"] - 0.03, i, f"{v['accuracy_pct']:.2f}", va="center",
+                 ha="right", fontsize=SMALL, color="white")
+    ax2.set_yticks(y, ["" for _ in rank])
+    ax2.set_xlim(97.4, 98.5)
+    ax2.set_xlabel("accuracy, all pixels", fontsize=BODY)
+    ax2.set_title("Accuracy: none of them beats an empty mask", fontsize=TITLE)
+    ax2.spines[["top", "right"]].set_visible(False)
+    ax1.tick_params(labelsize=SMALL)
+    ax2.tick_params(labelsize=SMALL)
+    fig.suptitle(f"Inconel 718, {AB['whole_fields']['labelled_pct']:.2f}% crack, "
+                 f"every arm tuned leave-one-image-out", fontsize=SMALL, y=1.0)
     save(fig, "P4 - baselines", {
-        "what": "every arm's own best parameter chosen leave-one-image-out, same images, "
-                "same scoring function",
-        "ranks": {name: {"detector": r["YOUR DETECTOR"],
-                         "rank": len(r) - sorted(r.items(), key=lambda kv: kv[1]).index(
-                             ("YOUR DETECTOR", r["YOUR DETECTOR"])),
-                         "all": r} for name, r, _ in sets},
-        "THE RESULT": "the detector ranks 3 of 7 on Inconel 718, beaten by Sauvola local "
-                      "thresholding and a Sato ridge filter. It was built for micrographs "
-                      "and does not lead on them.",
-        "SCOPE": "run on the released crops, the only set all seven arms share. The "
-                 "detector's whole-field score is lower (0.3444 against 0.4958), so every "
-                 "arm here is flattered by the same cropping.",
-        "source": "sem_baselines.json"})
+        "what": "eight arms ranked by reported-against-marked crack area fraction, with "
+                "accuracy and the empty-mask baseline",
+        "arms": arms, "empty_mask_accuracy_pct": empty,
+        "source": "docs/figures/arms_background_units.json"})
 
 
-# --------------------------------------------------- plate: the pixel budget
 def plate_budget():
     """What the detector marks, as a share of the image, beside what the human marked.
 

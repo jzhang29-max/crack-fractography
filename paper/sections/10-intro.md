@@ -15,7 +15,7 @@ darkness floor, and cleans the result. There is no training step and no model fi
 which the title means it, and it is the only one given a grid in any comparison here. It is
 not the only constant. `absolute_dark_thresh = 10` is a second gate, held fixed rather than
 fitted in this paper but chosen by leave-one-specimen-out on our own corpus, where it
-supplies roughly half the proposal-stage recall — on the alloy measured here it supplies
+supplies roughly half of the labelled crack the proposal stage reaches — on the alloy measured here it supplies
 almost none (Section 3.6), and three instruments in our own records disagree about its
 value. Behind those sit a seven-rung scale ladder and two size floors, frozen. A reader
 comparing this against a single-parameter classical filter should know that the filter
