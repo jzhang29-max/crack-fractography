@@ -15,6 +15,7 @@ the generator is named.
 | [`REPORTING_GUIDE.md`](REPORTING_GUIDE.md) | how a number must be reported here, and the error each rule came from |
 | [`PRACTICE_AND_PRIOR_ART.md`](PRACTICE_AND_PRIOR_ART.md) | prior-art checks; every novelty framing tested so far and its outcome |
 | [`MAR_H_AS_vs_MAR_H_HIP.md`](MAR_H_AS_vs_MAR_H_HIP.md) | initial conclusions on that specimen comparison, with the confounds that limit it |
+| [`RANKING_IS_BUYABLE.md`](RANKING_IS_BUYABLE.md) | the attempt to raise the detector's rank on the public set. It succeeded, by dilation, which detects nothing and costs a 2.54x area-fraction error; also records that the detector ranks fifth of seven on whole fields, not third |
 
 ## The paper
 
@@ -47,6 +48,12 @@ The paper now has an **Appendix A** giving the pixel budget for all five SEM set
 | `figures/sem_baselines.json` | seven classical arms on the SEM sets | `analysis/research/improve/sem_extras.py` |
 | `figures/sem_width_ceiling.json` | constant-width reconstruction curves, SEM | `analysis/research/improve/sem_extras.py` |
 | `figures/metaldam_specificity.json` | what the detector marks on SEM steel with no cracks labelled | `analysis/research/improve/metaldam_specificity.py` |
+| `figures/recall_decomposition_inconel.json` | which stage loses which recall, both gates opened to their limits | `analysis/research/improve/recall_decomposition_inconel.py` |
+| `figures/recall_fix_attempts.json` | five ways of raising recall, priced in free parameters as well as F1 | `analysis/research/improve/recall_fix_attempts.py` |
+| `figures/ridge_grow_controls.json` | the decoys that killed ridge-growing: flipped ridge, another field's ridge, equal-area dilation | `analysis/research/improve/ridge_grow_controls.py` |
+| `figures/ridge_vs_dilation_loo.json` | ridge-growing against a plain dilation at matched parameter count | `analysis/research/improve/ridge_vs_dilation_loo.py` |
+| `figures/skelf1_ranking.json` | every arm on both sets by pixel F1 and width-blind skeleton F1, carrying the dilation decoy as a control on the metric | `analysis/research/improve/skelf1_ranking.py` |
+| `figures/dilation_costs_measurements.json` | what ranking first costs the area fraction and the width | `analysis/research/improve/dilation_costs_measurements.py` |
 | `figures/metric_figures.json` | the corpus-side measurements, including the width curve on 26 tiles | `figures/measure_metrics.py` |
 | `figures/public_metrics.json` | pavement sets. **Measured, then removed from the paper** as the wrong modality | **generator not retained** — written in scratch and pruned. The numbers reproduce `public_benchmarks.json`'s F1 to four decimals, which is the only check on them now |
 | `figures/public_benchmarks.json`, `figures/public_baselines.json`, `figures/baselines_full.json`, `figures/width_ceiling.json` | earlier pavement runs, kept as a record | see `PUBLIC_CRACK_DATA_SEARCH.md` |

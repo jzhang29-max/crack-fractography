@@ -1,0 +1,89 @@
+{
+ "fixed": {
+  "mad_k": 5.0,
+  "ridge_percentile": 2.0
+ },
+ "sets": {
+  "crops": {
+   "A shipped darkness only": {
+    "f1": 0.4958370495713153,
+    "precision": 0.5648008832326052,
+    "recall": 0.456695215908875,
+    "marked_pct": 3.5256312443659854
+   },
+   "B grown through REAL ridge": {
+    "f1": 0.5204362485031115,
+    "precision": 0.556392469130458,
+    "recall": 0.5185005401893151,
+    "marked_pct": 3.917371309720553
+   },
+   "C grown through FLIPPED ridge": {
+    "f1": 0.47835098800598713,
+    "precision": 0.5124660036287809,
+    "recall": 0.48333879049008854,
+    "marked_pct": 4.09545531639686
+   },
+   "D grown through ANOTHER FIELD ridge": {
+    "f1": 0.4758451862965358,
+    "precision": 0.5083900019961116,
+    "recall": 0.4727179762316055,
+    "marked_pct": 4.085485751812275
+   },
+   "E seed DILATED to B area": {
+    "f1": 0.5320301347643804,
+    "precision": 0.5615919294448027,
+    "recall": 0.5439368844176781,
+    "marked_pct": 4.0725304530217095
+   },
+   "F ridge alone (no seed)": {
+    "f1": 0.35902989965882043,
+    "precision": 0.590066314009812,
+    "recall": 0.29124301920650164,
+    "marked_pct": 1.7772711240328276
+   },
+   "_labelled_pct": 4.527018620417668,
+   "_n": 26
+  },
+  "whole_fields": {
+   "A shipped darkness only": {
+    "f1": 0.34440459937388523,
+    "precision": 0.31180654859388196,
+    "recall": 0.41227809837869817,
+    "marked_pct": 2.3399045390467488
+   },
+   "B grown through REAL ridge": {
+    "f1": 0.4065312596321053,
+    "precision": 0.33050948076849535,
+    "recall": 0.579526711862168,
+    "marked_pct": 2.905719510970577
+   },
+   "C grown through FLIPPED ridge": {
+    "f1": 0.3118098155242822,
+    "precision": 0.24118499212016614,
+    "recall": 0.47844667837408467,
+    "marked_pct": 3.3331655686901462
+   },
+   "D grown through ANOTHER FIELD ridge": {
+    "f1": 0.4043441720289841,
+    "precision": 0.326621712771456,
+    "recall": 0.5784353567932987,
+    "marked_pct": 2.9753900343371975
+   },
+   "E seed DILATED to B area": {
+    "f1": 0.4176247254137606,
+    "precision": 0.3284255892260523,
+    "recall": 0.6254921132560037,
+    "marked_pct": 3.2062284408077115
+   },
+   "F ridge alone (no seed)": {
+    "f1": 0.4099610323382625,
+    "precision": 0.4179716767257883,
+    "recall": 0.4531611945362235,
+    "marked_pct": 1.5959955030871975
+   },
+   "_labelled_pct": 1.8030474262852823,
+   "_n": 31
+  }
+ },
+ "question": "does growing the darkness proposal through the ridge response carry information, or is the gain width inflation that any equal-area dilation would reproduce"
+}

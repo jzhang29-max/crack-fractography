@@ -80,17 +80,80 @@ measures worth reading are balanced accuracy and MCC, and those are {in_bacc}% a
 [FIGURE P4 - baselines]
 
 Every arm gets its own best parameter by the same leave-one-image-out rule, on the same
-images, through the same scoring function. This detector ranks **{in_rank} of seven**:
-Sauvola local thresholding reaches {in_sauvola} and Sato ridge {in_sato} against our
-{in_crop_f1}.
+images, through the same scoring function. On the released crops this detector ranks
+**{in_rank} of seven**: Sauvola local thresholding reaches {in_sauvola} and Sato ridge
+{in_sato} against our {in_crop_f1}, and the top three are separated by {in_spread} F1 —
+about the width of a gap this project has elsewhere called irresolvable at this sample
+size. The honest statement there is that this detector and two classical filters are
+indistinguishable.
 
-The top three are separated by {in_spread} F1, about the width of a gap this project has
-elsewhere called irresolvable at this sample size, so the honest statement is that this
-detector and two classical filters are indistinguishable on this data. We report the
-comparison because a reader can reproduce it in an afternoon, and because the premise is
-worth more than the ranking: none of these seven arms is trained, all are tuned
+**On the whole fields the rest of this paper reports, it ranks {in_rank_fields} of seven**,
+at {in_f1_fields_cmp} against the best arm's {in_best_fields}, and {in_rank_skel} by a
+width-blind skeleton F1. That is a worse standing than the crops show, and it is the
+standing on the set the rest of the paper argues from. The crops flatter every arm equally,
+but they do not flatter them by equal amounts: the classical ridge filters lose little
+between the two framings and this detector loses {in_crop_gain} F1.
+
+We report the comparison because a reader can reproduce it in an afternoon, and because the
+premise is worth more than the ranking: none of these seven arms is trained, all are tuned
 identically, and the figure shows what the whole classical family reaches on a benchmark
 where the published learned state of the art is far higher.
 
-This comparison was run on the released crops, the only set all seven arms have been scored
-on, so every arm in it is flattered by the same cropping described above.
+### 3.5  The ranking is buyable, and we checked what it costs
+
+We tried to raise this detector's rank. The attempt succeeded, and that is the finding.
+
+Take the detector's own output and dilate it. Give the dilation one tuned parameter, chosen
+leave-one-image-out exactly as every other arm chooses its own. Nothing is added: a
+morphological dilation cannot find a crack the detector did not already mark, and it reads
+no new evidence from the image. On the released crops that mask scores {dec_f1_crop} F1
+against the shipped {in_crop_f1} — a gain of {dec_gain_crop}, and **{dec_rank_crop} place**,
+clear of every classical filter.
+
+It is not an artefact of pixel F1 either. Reducing both masks to centrelines and scoring
+agreement within 5 px — a measure that cannot see how wide a mask is drawn — the dilated
+mask still ranks {dec_rank_skel}, at {dec_skel_crop} against the shipped {det_skel_crop}.
+Dilation closes gaps in a fragmented mask, and gap-closing moves a centreline score.
+
+Two further arms were run before this one and did worse. Growing the proposal through a
+Sato ridge response, which at least reads the image, was beaten by the plain dilation at
+matched parameter count; and on whole fields, growing it through **a different field's**
+ridge response scored {rg_other} against the real field's {rg_real}. A step whose output
+barely changes when you feed it the wrong image is not reading the image.
+
+So the rank can be fixed. What it costs is the two numbers this tool exists to report:
+
+| | area fraction, reported / true | mean width, reported / true |
+|---|---|---|
+| shipped detector | {in_ratio}x | {ship_width_fields}x |
+| dilated, ranks first | {dec_area_fields}x | {dec_width_fields}x |
+
+On whole fields, buying {dec_gain_crop} F1 takes the area fraction from {in_ratio} times
+the labelled value to {dec_area_fields} times it, and the mean width from
+{ship_width_fields}x to {dec_width_fields}x. A reader of this tool would be told that
+{dec_area_fields} times as much of the field had cracked as the annotator marked. The
+benchmark and the measurement move in opposite directions, so we did not ship it.
+
+We think this is the most useful thing in this section. The ranking on this dataset is
+substantially a ranking of how wide each method draws, which is the same conclusion
+Section 4 reaches from the other direction, and it means a table of F1 scores on
+broad-brush labels should not be read as a table of detection ability.
+
+### 3.6  Where the missing recall actually is
+
+The shipped recall on whole fields is {rd_ship_recall} pooled over pixels — this one
+subsection pools, because the question is which stage loses which pixels, and a per-image
+mean cannot be decomposed that way; the per-image figure quoted elsewhere in this paper is
+{in_recall_perimage}, and the two must not be mixed. The missing recall is not behind a
+threshold. Open both gates of the proposal stage to their limits — the MAD cut down to 0.5
+and the absolute darkness floor to zero, which between them mark {rd_open_marked}% of the
+image at precision {rd_open_prec} — and recall still reaches only {rd_open_recall}.
+**{rd_never}% of the labelled crack is not dark at any scale**, so no setting of either gate
+can propose it. That is a ceiling on this proposal mechanism for this material, not an
+operating point.
+
+It also refutes a fix carried over from our own corpus, where the absolute darkness floor
+accounted for nearly all of the proposal-stage recall loss. On this alloy that gate costs
+{rd_floor_cost} recall. The gate that matters here is the MAD cut, and opening it is a
+precision trade rather than free recall: precision falls from {rd_ship_prec} to
+{rd_open_prec}.

@@ -67,6 +67,36 @@ SP = _f(os.path.join(REPO, "docs/figures/sem_public_metrics.json"), "SEM metrics
 SB = _f(os.path.join(REPO, "docs/figures/sem_baselines.json"), "SEM baselines")["results"]
 PB = _f(os.path.join(SCRATCH, "baselines_full.json"), "pavement baselines")["results"]
 SW = _f(os.path.join(REPO, "docs/figures/sem_width_ceiling.json"), "SEM width ceiling")
+# The ranking measured on WHOLE FIELDS, every arm scored by pixel F1 and by a width-blind
+# skeleton F1, and carrying a decoy arm -- the detector's own mask dilated -- whose only
+# job is to say whether the metric can be bought instead of earned.
+SK = _f(os.path.join(REPO, "docs/figures/skelf1_ranking.json"), "skeleton-F1 ranking")["sets"]
+DC = _f(os.path.join(REPO, "docs/figures/dilation_costs_measurements.json"),
+        "what dilation costs the measurements")["sets"]
+# Where the recall goes, stage by stage, with both gates opened to their limit so the
+# ceiling below is the proposal mechanism's own and not a threshold choice.
+RD = _f(os.path.join(REPO, "docs/figures/recall_decomposition_inconel.json"),
+        "recall decomposition")
+RG = _f(os.path.join(REPO, "docs/figures/ridge_grow_controls.json"),
+        "ridge-growing controls")["sets"]
+_RD_OPEN = RD["arms"]["no gates (mad_k=0.5, no floor)"]
+_RD_MAD = RD["arms"]["MAD cut only (no darkness floor)"]
+_RD_SHIP = RD["arms"]["shipped proposal (both gates)"]
+_DECOY = "DECOY: detector DILATED"
+_DET = "DETECTOR (shipped, 1 param)"
+
+
+def _rank_real(set_key, metric):
+    """Where the detector sits among the seven real arms, the decoy excluded: the decoy is
+    not a competing method, it is a control on the metric."""
+    r = sorted(((k, v[metric]) for k, v in SK[set_key].items() if k != _DECOY),
+               key=lambda kv: -kv[1])
+    return [k for k, _ in r].index(_DET) + 1
+
+
+def _decoy_rank(set_key, metric):
+    r = sorted(SK[set_key].items(), key=lambda kv: -kv[1][metric])
+    return [k for k, _ in r].index(_DECOY) + 1
 PA = _f(os.path.join(REPO, "docs/figures/pixel_accounting.json"), "pixel accounting")["sets"]
 PA_W = PA["Inconel 718, whole fields"]["detector"]
 PA_C = PA["Inconel 718, released crops"]["detector"]
@@ -107,12 +137,15 @@ _rank_i = len(SB["Inconel718_crack"]) - sorted(
         ("YOUR DETECTOR", SB["Inconel718_crack"]["YOUR DETECTOR"]))
 _dc_rank = sorted(PB["DeepCrack"].items(), key=lambda kv: -kv[1])
 _in_rank = sorted(SB["Inconel718_crack"].items(), key=lambda kv: -kv[1])
+_ORD = {1: "first", 2: "second", 3: "third", 4: "fourth", 5: "fifth",
+        6: "sixth", 7: "seventh", 8: "eighth"}
 
 VALUES = {
     # --- SEM alloy, the paper's primary set ---
     "in_n": str(IN["n"]),
     "in_prev": _n(100 * IN["prevalence"], 2),
     "in_f1": _n(IN["loo"]["f1"]),
+    "in_recall_perimage": _n(IN["loo"]["recall"]),
     "in_iou": _n(IN["loo"]["iou"]),
     "in_me_f1": _n(IN["controls"]["mark_everything"]["f1"]),
     "in_lift_f1": _n(IN["loo"]["f1"] / IN["controls"]["mark_everything"]["f1"], 1),
@@ -128,8 +161,43 @@ VALUES = {
     "in_crop_prev": _n(100 * IN_CROP["prevalence"], 2),
     "in_crop_src": "18",
     "in_crop_gain": _n(IN_CROP["loo"]["f1"] - IN["loo"]["f1"]),
-    "in_rank": {1: "first", 2: "second", 3: "third", 4: "fourth", 5: "fifth",
-                6: "sixth", 7: "seventh"}[_rank_i],
+    "in_rank": _ORD[_rank_i],
+    # the same comparison on the whole fields the rest of the paper reports
+    "in_rank_fields": _ORD[_rank_real("whole_fields", "pixel_f1")],
+    "in_rank_skel": _ORD[_rank_real("whole_fields", "skel_f1_tau5")],
+    "in_best_fields": _n(max(v["pixel_f1"] for k, v in SK["whole_fields"].items()
+                             if k != _DECOY)),
+    "in_f1_fields_cmp": _n(SK["whole_fields"][_DET]["pixel_f1"]),
+    # the decoy: the detector's own mask, dilated, nothing else
+    "dec_rank_crop": _ORD[_decoy_rank("crops", "pixel_f1")],
+    # NOTE: the 3.5 paragraph argues from the crops throughout, so its skeleton rank
+    # must come from the crops too -- a whole-field rank quoted beside crop values
+    # would be two different sets in one sentence.
+    "dec_rank_skel": _ORD[_decoy_rank("crops", "skel_f1_tau5")],
+    "dec_f1_crop": _n(SK["crops"][_DECOY]["pixel_f1"]),
+    "dec_f1_fields": _n(SK["whole_fields"][_DECOY]["pixel_f1"]),
+    "dec_skel_crop": _n(SK["crops"][_DECOY]["skel_f1_tau5"]),
+    "det_skel_crop": _n(SK["crops"][_DET]["skel_f1_tau5"]),
+    "dec_gain_crop": _n(SK["crops"][_DECOY]["pixel_f1"]
+                        - SK["crops"][_DET]["pixel_f1"]),
+    "dec_area_crop": _n(DC["crops"]["detector DILATED (ranks 1st)"]
+                        ["area_fraction_ratio"], 2),
+    "dec_area_fields": _n(DC["whole_fields"]["detector DILATED (ranks 1st)"]
+                          ["area_fraction_ratio"], 2),
+    "dec_width_fields": _n(DC["whole_fields"]["detector DILATED (ranks 1st)"]
+                           ["width_ratio"], 2),
+    "ship_width_fields": _n(DC["whole_fields"]["shipped detector"]["width_ratio"], 2),
+    # --- where the recall goes ---
+    "rd_open_recall": _n(_RD_OPEN["recall"], 3),
+    "rd_open_marked": _n(_RD_OPEN["marked_pct"], 1),
+    "rd_open_prec": _n(_RD_OPEN["precision"], 4),
+    "rd_never": _n(100 * (1 - _RD_OPEN["recall"]), 1),
+    "rd_ship_prec": _n(_RD_SHIP["precision"], 4),
+    "rd_floor_cost": _n(_RD_SHIP["recall"] - _RD_MAD["recall"], 4),
+    "rd_ship_recall": _n(RD["shipped_recall"], 4),
+    # the ridge-growing arm against the same arm fed another field entirely
+    "rg_real": _n(RG["whole_fields"]["B grown through REAL ridge"]["f1"]),
+    "rg_other": _n(RG["whole_fields"]["D grown through ANOTHER FIELD ridge"]["f1"]),
     "wc_in_at": str(SW["Inconel718_crack"]["ceiling_at_width"]),
     "wc_corpus_at": str(MF["ceiling_widths"][_corpus.index(max(_corpus))]),
     # --- the pixel budget: the same result in the units the tool actually reports ---

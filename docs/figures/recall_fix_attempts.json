@@ -1,0 +1,47 @@
+{
+ "set": "Inconel 718 released crops",
+ "n": 26,
+ "selection": "each arm's own parameters, leave-one-image-out",
+ "target_to_beat": {
+  "Sauvola local": 0.5145,
+  "Sato ridge": 0.4985
+ },
+ "arms": {
+  "SHIPPED: darkness only": {
+   "f1": 0.4958370495713153,
+   "precision": 0.5648008832326052,
+   "recall": 0.456695215908875,
+   "free_params": 1,
+   "grid_size": 7
+  },
+  "Sato ridge only": {
+   "f1": 0.4985218044909488,
+   "precision": 0.37084368733010814,
+   "recall": 0.8454414633454584,
+   "free_params": 1,
+   "grid_size": 5
+  },
+  "UNION: darkness OR ridge": {
+   "f1": 0.5332540007824726,
+   "precision": 0.4805822750418797,
+   "recall": 0.6504080706122246,
+   "free_params": 2,
+   "grid_size": 12
+  },
+  "INTERSECT: darkness AND ridge": {
+   "f1": 0.5249261294102038,
+   "precision": 0.422092146844071,
+   "recall": 0.7520189119889451,
+   "free_params": 2,
+   "grid_size": 12
+  },
+  "darkness, then ridge-grown": {
+   "f1": 0.6168553999378873,
+   "precision": 0.48158409962213816,
+   "recall": 0.9127909609047453,
+   "free_params": 2,
+   "grid_size": 8
+  }
+ },
+ "why": "42.1% of labelled crack is not dark at any scale, so the missing recall is outside what a darkness threshold can reach; these arms price the alternatives in free parameters as well as in F1"
+}

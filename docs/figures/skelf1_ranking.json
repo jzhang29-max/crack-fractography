@@ -1,0 +1,94 @@
+{
+ "taus": [
+  2,
+  5
+ ],
+ "sets": {
+  "crops": {
+   "DETECTOR (shipped, 1 param)": {
+    "pixel_f1": 0.4958370495713153,
+    "skel_f1_tau2": 0.1546103534565872,
+    "skel_f1_tau5": 0.3279296684815467
+   },
+   "DECOY: detector DILATED": {
+    "pixel_f1": 0.6307181925539397,
+    "skel_f1_tau2": 0.1919925310952001,
+    "skel_f1_tau5": 0.4001522844802277
+   },
+   "global threshold (Otsu on flat)": {
+    "pixel_f1": 0.08162692472152858,
+    "skel_f1_tau2": 0.022491865642789273,
+    "skel_f1_tau5": 0.054527072926830115
+   },
+   "percentile threshold": {
+    "pixel_f1": 0.44133204701225515,
+    "skel_f1_tau2": 0.13050994092185858,
+    "skel_f1_tau5": 0.27003957858850164
+   },
+   "Sauvola local": {
+    "pixel_f1": 0.5144809732944982,
+    "skel_f1_tau2": 0.15596141215875983,
+    "skel_f1_tau5": 0.33626776365037553
+   },
+   "Frangi ridge": {
+    "pixel_f1": 0.4710232292545813,
+    "skel_f1_tau2": 0.13876353017834922,
+    "skel_f1_tau5": 0.3107829736589857
+   },
+   "Sato ridge": {
+    "pixel_f1": 0.4985218044909488,
+    "skel_f1_tau2": 0.14297080242015797,
+    "skel_f1_tau5": 0.32913614151452586
+   },
+   "Meijering ridge": {
+    "pixel_f1": 0.49236669161765145,
+    "skel_f1_tau2": 0.13750831197024366,
+    "skel_f1_tau5": 0.32567659474892824
+   }
+  },
+  "whole_fields": {
+   "DETECTOR (shipped, 1 param)": {
+    "pixel_f1": 0.34440459937388523,
+    "skel_f1_tau2": 0.1932534288308057,
+    "skel_f1_tau5": 0.3726792645995261
+   },
+   "DECOY: detector DILATED": {
+    "pixel_f1": 0.4607509299489998,
+    "skel_f1_tau2": 0.23578018862036612,
+    "skel_f1_tau5": 0.46838811474125464
+   },
+   "global threshold (Otsu on flat)": {
+    "pixel_f1": 0.033536356386801774,
+    "skel_f1_tau2": 0.010209594448966422,
+    "skel_f1_tau5": 0.024465952927608874
+   },
+   "percentile threshold": {
+    "pixel_f1": 0.32325131199268814,
+    "skel_f1_tau2": 0.16582856673322138,
+    "skel_f1_tau5": 0.3243731349729127
+   },
+   "Sauvola local": {
+    "pixel_f1": 0.4040122292429601,
+    "skel_f1_tau2": 0.22767915593867177,
+    "skel_f1_tau5": 0.43352920792016447
+   },
+   "Frangi ridge": {
+    "pixel_f1": 0.44798543708983085,
+    "skel_f1_tau2": 0.19996927414037802,
+    "skel_f1_tau5": 0.4206341112026907
+   },
+   "Sato ridge": {
+    "pixel_f1": 0.4659136853811219,
+    "skel_f1_tau2": 0.2352629588039235,
+    "skel_f1_tau5": 0.45885242899780615
+   },
+   "Meijering ridge": {
+    "pixel_f1": 0.4696631095587672,
+    "skel_f1_tau2": 0.229909515239103,
+    "skel_f1_tau5": 0.4449804818603272
+   }
+  }
+ },
+ "selection": "every arm and every metric picks its own parameter leave-one-image-out",
+ "why": "pixel F1 against a broad-brush label can be lifted by dilation alone, so the decoy arm is carried through every ranking as a check on the metric rather than on the method"
+}

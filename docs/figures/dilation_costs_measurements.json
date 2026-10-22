@@ -1,0 +1,49 @@
+{
+ "sets": {
+  "crops": {
+   "shipped detector": {
+    "setting": "(5.0,)",
+    "pixel_f1": 0.4958370495713153,
+    "area_fraction_pred_pct": 3.5256312443659854,
+    "area_fraction_label_pct": 4.527018620417668,
+    "area_fraction_ratio": 0.7787976016853022,
+    "mean_width_pred_px": 10.315411471610558,
+    "mean_width_label_px": 20.194646649150453,
+    "width_ratio": 0.5107993049259174
+   },
+   "detector DILATED (ranks 1st)": {
+    "setting": "(5.0, 4)",
+    "pixel_f1": 0.6307181925539397,
+    "area_fraction_pred_pct": 7.050741635836088,
+    "area_fraction_label_pct": 4.527018620417668,
+    "area_fraction_ratio": 1.5574801490844272,
+    "mean_width_pred_px": 30.130092160209532,
+    "mean_width_label_px": 20.194646649150453,
+    "width_ratio": 1.491984122508875
+   }
+  },
+  "whole_fields": {
+   "shipped detector": {
+    "setting": "(5.0,)",
+    "pixel_f1": 0.34440459937388523,
+    "area_fraction_pred_pct": 2.3399045390467488,
+    "area_fraction_label_pct": 1.8030474262852823,
+    "area_fraction_ratio": 1.2977498566787693,
+    "mean_width_pred_px": 9.708383203467418,
+    "mean_width_label_px": 13.001689350090384,
+    "width_ratio": 0.7467016740712951
+   },
+   "detector DILATED (ranks 1st)": {
+    "setting": "(5.0, 4)",
+    "pixel_f1": 0.4607509299489998,
+    "area_fraction_pred_pct": 4.587917943154612,
+    "area_fraction_label_pct": 1.8030474262852823,
+    "area_fraction_ratio": 2.5445353662198684,
+    "mean_width_pred_px": 28.359327450396993,
+    "mean_width_label_px": 13.001689350090384,
+    "width_ratio": 2.1812032795722693
+   }
+  }
+ },
+ "note": "each arm given its best single setting IN SAMPLE, which favours it; area fraction and mean width are the two quantities the lab reports"
+}

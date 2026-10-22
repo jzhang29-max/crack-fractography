@@ -1,0 +1,39 @@
+{
+ "n": 31,
+ "pooled_over_pixels": true,
+ "arms": {
+  "no gates (mad_k=0.5, no floor)": {
+   "recall": 0.5791627992683792,
+   "precision": 0.01957223104348599,
+   "f1": 0.03786485689059633,
+   "marked_pct": 53.35406026532573
+  },
+  "MAD cut only (no darkness floor)": {
+   "recall": 0.42578348939422894,
+   "precision": 0.32116951778884023,
+   "f1": 0.3661506859364683,
+   "marked_pct": 2.390350834015877
+  },
+  "shipped proposal (both gates)": {
+   "recall": 0.4264301411372881,
+   "precision": 0.3214148844506745,
+   "f1": 0.36654919094278304,
+   "marked_pct": 2.3921535861107612
+  },
+  "+ clean, blobs under 13 px": {
+   "recall": 0.44015656138243564,
+   "precision": 0.32758935963793917,
+   "f1": 0.3756206373381247,
+   "marked_pct": 2.4226157895980345
+  },
+  "+ 40 px region floor (SHIPPED)": {
+   "recall": 0.434724004258688,
+   "precision": 0.3349828952177606,
+   "f1": 0.37839106201668965,
+   "marked_pct": 2.3399045390467488
+  }
+ },
+ "proposal_ceiling_recall": 0.5791627992683792,
+ "shipped_recall": 0.434724004258688,
+ "note": "nested arms; the gap between consecutive rows is what that gate costs"
+}
