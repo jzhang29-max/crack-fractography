@@ -40,11 +40,17 @@ import detector_overrides as DO
 from scalebar import scalebar
 
 NM_PER_PX = 29.24          # derived from mosaic geometry; see the docstring
+# The width this plate is printed at on the page (PAGE[0] - ML - MR in make_paper.py).
+# Drawn at 12.4 in it reached the page at 0.51x and its 8 pt labels printed at 4.1 pt.
+# Five columns do not fit in 6.37 in, so the panels and the bars are stacked instead.
+PAGEW = 6.37
+FLOOR = 7.0
 MADK = 6.0                 # the operating point Section 3.2 argues for on SEM
 OUT = os.path.join(REPO, "paper/figures/out/txm_transfer.png")
 BG = json.load(open(os.path.join(REPO, "docs/figures/txm_background_units.json")))
 
-plt.rcParams.update({"font.size": 8, "font.family": "DejaVu Sans", "axes.linewidth": 0.7})
+plt.rcParams.update({"font.size": 7.6, "font.family": "DejaVu Sans",
+                     "axes.linewidth": 0.6})
 
 
 class U:
@@ -97,9 +103,10 @@ for g in ("B3", "AM/HC"):
         pick[g] = max(rows, key=lambda r: r[1])
 print({g: v[2][:48] for g, v in pick.items()})
 
-fig = plt.figure(figsize=(12.4, 7.2))
-gs = fig.add_gridspec(2, 5, width_ratios=[1, 1, 1, 0.42, 1.5],
-                      hspace=0.30, wspace=0.07)
+fig = plt.figure(figsize=(PAGEW - 0.25, 7.4))
+# panels on top (2 rows x 3), bars underneath (1 row x 2). Side by side they needed
+# 12.4 in and the page gives 6.37.
+gs = fig.add_gridspec(3, 3, height_ratios=[1, 1, 1.15], hspace=0.26, wspace=0.06)
 
 for r, g in enumerate(("B3", "AM/HC")):
     if g not in pick:
@@ -131,8 +138,8 @@ for r, g in enumerate(("B3", "AM/HC")):
     ax.imshow(I, cmap="gray")
     scalebar(ax, NM_PER_PX, H)
     ax.set_ylabel(f"{g}\n{len([c for c in cands if c[0] == g])} frames",
-                  fontsize=9, labelpad=6)
-    ax.set_title("TXM frame" if r == 0 else "", fontsize=8.5)
+                  fontsize=8, labelpad=4)
+    ax.set_title("TXM frame" if r == 0 else "", fontsize=7.8)
 
     ax2 = fig.add_subplot(gs[r, 1])
     ov = np.dstack([I] * 3).astype(float) / 255.0
@@ -140,7 +147,7 @@ for r, g in enumerate(("B3", "AM/HC")):
     ov[C] = [0.10, 0.55, 0.95]
     ax2.imshow(ov)
     scalebar(ax2, NM_PER_PX, H)
-    ax2.set_title("painted crack\n(dim = unrefereed)" if r == 0 else "", fontsize=8.5)
+    ax2.set_title("annotated crack\n(dim = not reviewed)" if r == 0 else "", fontsize=7.8)
 
     ax3 = fig.add_subplot(gs[r, 2])
     ov = np.dstack([I] * 3).astype(float) / 255.0
@@ -151,7 +158,7 @@ for r, g in enumerate(("B3", "AM/HC")):
     ax3.imshow(ov)
     scalebar(ax3, NM_PER_PX, H)
     ax3.set_title("green found \u00b7 orange wrong\n\u00b7 blue missed" if r == 0 else "",
-                  fontsize=8.5)
+                  fontsize=7.8)
     for a in (ax, ax2, ax3):
         a.set_xticks([]); a.set_yticks([])
 
@@ -163,46 +170,63 @@ emp = [BG["by_group"][g]["arms"][key]["empty_mask_accuracy_pct"] for g in groups
 area = [BG["by_group"][g]["arms"][key]["area_agreement"] for g in groups]
 pool = BG["pooled"][key]
 
-axA = fig.add_subplot(gs[0, 4])
+axA = fig.add_subplot(gs[2, 0:2])
 y = np.arange(len(groups))[::-1]
 for i, (a, e) in zip(y, zip(acc, emp)):
     axA.barh(i, a, 0.52, color="0.25" if a > e else "#b3401a", zorder=2)
     axA.plot([e, e], [i - 0.32, i + 0.32], color="0.0", lw=2.4, zorder=5)
-    axA.text(a + 1.0, i, f"{a:.1f}", va="center", fontsize=7.5,
+    axA.text(a + 1.0, i, f"{a:.1f}", va="center", fontsize=7.2,
              color="0.25" if a > e else "#b3401a", fontweight="bold")
 axA.barh(-1, pool["accuracy_pct"], 0.52, color="#b3401a", zorder=2)
 axA.plot([pool["empty_mask_accuracy_pct"]] * 2, [-1.32, -0.68], color="0.0", lw=2.4,
          zorder=5)
 axA.text(pool["accuracy_pct"] + 1.0, -1, f"{pool['accuracy_pct']:.1f}", va="center",
          fontsize=7.5, color="#b3401a", fontweight="bold")
-axA.set_yticks(list(y) + [-1], groups + ["pooled"], fontsize=8)
+axA.set_yticks(list(y) + [-1], groups + ["pooled"], fontsize=7.6)
 axA.set_xlim(55, 108)
-axA.set_title("Accuracy over refereed pixels (bar)\nvs an empty mask (tick)",
-              fontsize=9, pad=6)
+axA.set_title("Accuracy over reviewed pixels (bar)\nvs an all-background mask (tick)",
+              fontsize=8.4, pad=5)
 axA.spines[["top", "right"]].set_visible(False)
 
-axB = fig.add_subplot(gs[1, 4])
+axB = fig.add_subplot(gs[2, 2])
 axB.axvline(1.0, color="0.0", lw=1.3, zorder=1)
 for i, v in zip(y, area):
     axB.barh(i, v, 0.52, color="0.25" if abs(v - 1) < 0.25 else "#b3401a", zorder=2)
-    axB.text(v + 0.09, i, f"{v:.2f}x", va="center", fontsize=7.5)
+    axB.text(v + 0.09, i, f"{v:.2f}x", va="center", fontsize=7.2)
 axB.barh(-1, pool["area_agreement"], 0.52, color="#b3401a", zorder=2)
 axB.text(pool["area_agreement"] + 0.09, -1, f"{pool['area_agreement']:.2f}x",
-         va="center", fontsize=7.5)
-axB.set_yticks(list(y) + [-1], groups + ["pooled"], fontsize=8)
+         va="center", fontsize=7.2)
+axB.set_yticks(list(y) + [-1], groups + ["pooled"], fontsize=7.6)
 axB.set_xlim(0, 5.8)
 axB.set_xlabel("1.0 is exact", fontsize=8, labelpad=2)
-axB.set_title("Crack area reported / painted", fontsize=9, pad=8)
+axB.set_title("Crack area reported / painted", fontsize=8.4, pad=5)
 axB.spines[["top", "right"]].set_visible(False)
 
-fig.suptitle("The SEM detector carried unchanged to TXM: one specimen group transfers, "
-             "three do not", fontsize=11)
-fig.text(0.5, 0.012,
-         f"mad_k = {MADK:g}. Refereed pixels only; dimmed area in the panels was never "
-         f"ruled on. Scale bars use 29.24 nm/px, DERIVED from mosaic geometry "
-         f"(30 µm window, 0.35 overlap) and not yet confirmed against instrument "
-         f"metadata.", ha="center", fontsize=7, color="0.3")
-fig.tight_layout(rect=(0, 0.075, 1, 0.945))
+fig.suptitle("The SEM detector carried unchanged to TXM:\n"
+             "one specimen group transfers, three do not", fontsize=9.4)
+# wrapped by hand: a single line of this length runs off a 6.1 in figure
+fig.text(0.5, 0.013,
+         f"mad_k = {MADK:g}, carried unchanged from SEM. Reviewed pixels only; dimmed "
+         f"area was never ruled on.\nPanels are contrast-stretched per crop for display; "
+         f"the detector ran on the unstretched image.\nScale bars use 29.24 nm/px, "
+         f"derived from mosaic geometry and not confirmed against instrument metadata.",
+         ha="center", va="bottom", fontsize=7.1, color="0.3", linespacing=1.45)
+fig.tight_layout(rect=(0, 0.105, 1, 0.955))
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
-fig.savefig(OUT, dpi=175)
-print("wrote", OUT)
+DPI = 200
+# NOT bbox_inches="tight": it expands the saved image to contain any text that
+# overflows the axes, so the saved width stops being the width I chose and the
+# page scale becomes unpredictable. With an explicit figsize and tight_layout the
+# file is exactly as wide as intended and the printed type size is what is set.
+fig.savefig(OUT, dpi=DPI, facecolor="white")
+# check the type at the size it will PRINT, not in the plate's own coordinates
+_sizes = [t.get_fontsize() for t in fig.findobj(plt.Text) if t.get_text().strip()]
+import matplotlib.image as _mpimg
+_saved_in = _mpimg.imread(OUT).shape[1] / float(DPI)
+_scale = PAGEW / _saved_in
+if _sizes and min(_sizes) * _scale < FLOOR - 1e-9:
+    raise SystemExit(
+        f"smallest type prints at {min(_sizes) * _scale:.1f} pt (floor {FLOOR}); the "
+        f"plate saves {_saved_in:.2f} in and the page gives it {PAGEW} in. Relay it out.")
+print(f"wrote {OUT}  ({_saved_in:.2f} in saved, prints at {_scale:.2f}x, "
+      f"smallest type {min(_sizes) * _scale:.1f} pt)")

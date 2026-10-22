@@ -236,6 +236,12 @@ USE_REGION_CLASSIFIER = False
 #
 # To try it: install(up, absolute_dark_thresh=20). Expect area fraction to rise by roughly
 # a seventh and crack counts with it; re-measure anything already reported.
+# The MAD multiplier the paper selects. It lives here rather than as a literal in the
+# figure generator because a plate that fell back to its own default printed 5.0 while the
+# manuscript had moved to 6.0, and the figure silently contradicted the text beside it.
+# Anything that needs this value reads it from here and fails if it is absent.
+MAD_K = 6.0
+
 ABSOLUTE_DARK_THRESH = 10
 
 SCALE_LADDER = (5, 10, 20, 40, 80, 160, 320)

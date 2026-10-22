@@ -39,7 +39,10 @@ SCR = ("/private/tmp/claude-501/-Users-jiamingzhang-Desktop-APP/"
 SRC = os.path.join(SCR, "pub_ebc_download/train_subset/Inconel718_crack")
 OUT = os.path.join(HERE, "out")
 FLOOR = 7.0
-TITLE, LAB, CAP = 10.5, 8.6, 7.6
+# the width this plate is printed at on the page: PAGE[0] - ML - MR in make_paper.py.
+# Drawn wider, it is scaled down and every type size shrinks with it.
+PAGEW = 6.37
+TITLE, LAB, CAP = 9.6, 8.2, 7.4
 
 
 class U:
@@ -95,10 +98,25 @@ def overlay(img8, mask, gt=None):
     return np.clip(rgb, 0, 1)
 
 
-def check(fig):
+def save_checked(fig, path, dpi=200):
+    """Write, then check the type size at the size it will PRINT.
+
+    Checking the figure's own coordinates passes plates that reach the page at half
+    scale. bbox_inches trims the width, and the page then rescales whatever comes out to
+    PAGEW, so the only honest moment to apply the floor is after the file exists.
+    """
+    fig.savefig(path, dpi=dpi, bbox_inches="tight", facecolor="white")
     sizes = [t.get_fontsize() for t in fig.findobj(plt.Text) if t.get_text().strip()]
-    if sizes and min(sizes) < FLOOR:
-        raise SystemExit(f"type too small: {min(sizes):.1f} pt")
+    import matplotlib.image as _mpimg
+    saved_in = _mpimg.imread(path).shape[1] / float(dpi)
+    scale = PAGEW / saved_in
+    if sizes and min(sizes) * scale < FLOOR - 1e-9:
+        raise SystemExit(
+            f"smallest type prints at {min(sizes) * scale:.1f} pt (floor {FLOOR}); the "
+            f"plate saves {saved_in:.2f} in and the page gives it {PAGEW} in. Relay it "
+            f"out at about {PAGEW} in wide.")
+    print(f"wrote {path}  ({saved_in:.2f} in saved, prints at {scale:.2f}x, "
+          f"smallest type {min(sizes) * scale:.1f} pt)")
 
 
 def main():
@@ -127,9 +145,12 @@ def main():
          "white = what the detector marked,\\nblack outline = what the human marked"),
     ]
 
-    ncol = 3
-    nrow = 2
-    fig, axes = plt.subplots(nrow, ncol, figsize=(10.2, 7.6))
+    ncol = 2
+    nrow = 3
+    # 3 x 2 at the printed width: six panels across 10.2 in reached the page at
+    # 0.62x and took the captions to 4.7 pt. Two columns of three keeps each panel
+    # about 2.6 in wide at scale 1.
+    fig, axes = plt.subplots(nrow, ncol, figsize=(PAGEW - 0.25, 8.6))
     for ax, (title, arr, kind, cap) in zip(axes.ravel(), panels):
         if kind == "grey":
             ax.imshow(arr, cmap="gray", interpolation="nearest")
@@ -160,15 +181,17 @@ def main():
     # which is worse than leaving the reading order to the numbers on the titles.
     fig.suptitle("Every step, on one public Inconel 718 field", fontsize=TITLE,
                  fontweight="bold", y=0.975)
-    fig.text(0.5, 0.015,
-             f"{H} x {H} px detail of {stem}.tif (Zenodo 23045328, CC BY 4.0). Each panel "
-             f"is the array that stage actually produces, captured by running the shipped "
-             f"detector.", ha="center", fontsize=CAP, color="0.35")
-    fig.subplots_adjust(left=0.02, right=0.98, top=0.90, bottom=0.085, wspace=0.09,
-                        hspace=0.30)
-    check(fig)
+    fig.text(0.5, 0.022,
+             f"{H} x {H} px detail of {stem}.tif (Zenodo 23045328, CC BY 4.0).\n"
+             f"Each panel is the array that stage actually produces, captured by\n"
+             f"running the shipped detector. No scale bar: the collection\n"
+             f"publishes no pixel size.",
+             ha="center", va="bottom", fontsize=CAP, color="0.35",
+             linespacing=1.45)
+    fig.subplots_adjust(left=0.02, right=0.98, top=0.90, bottom=0.165, wspace=0.09,
+                        hspace=0.62)
     p = os.path.join(OUT, "P6 - pipeline in pictures.png")
-    fig.savefig(p, dpi=200, facecolor="white")
+    save_checked(fig, p)
     plt.close(fig)
     json.dump({"figure": "P6 - pipeline in pictures.png",
                "field": stem, "detail_px": H, "crop_origin": [int(y0), int(x0)],

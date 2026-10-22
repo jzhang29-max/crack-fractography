@@ -35,7 +35,13 @@ for required in ("SCALE_LADDER", "ABSOLUTE_DARK_THRESH", "USE_REGION_CLASSIFIER"
         raise SystemExit(f"detector_overrides has no {required!r} -- this figure is stale")
 
 LADDER = ", ".join(str(s) for s in DO.SCALE_LADDER)
-MAD_K = getattr(DO, "MAD_K", 5.0)
+# READ IT, DO NOT FALL BACK. A getattr default meant this plate printed 5.0 while the
+# manuscript selected 6.0, so the figure silently contradicted the text it illustrates.
+# A missing name is now a hard error, like every other constant on this plate.
+if not hasattr(DO, "MAD_K"):
+    raise SystemExit("detector_overrides.py defines no MAD_K; this plate must not guess "
+                     "one -- add it there so the figure and the paper cannot disagree")
+MAD_K = DO.MAD_K
 
 BODY, SMALL, TITLE = 8.6, 7.6, 11.0
 FLOOR = 7.0
@@ -61,7 +67,11 @@ STAGES = [
      "An 8-feature classifier scores every candidate region.\n"
      f"SHIPPED SETTING: USE_REGION_CLASSIFIER = {DO.USE_REGION_CLASSIFIER} -- every region is kept.\n"
      "Deleting the classifier beat keeping it on every metric, with no free parameters:\n"
-     "paired median IoU +0.2296 over 13 specimens, p = 0.0024. Three ETD specimens that\n"
+     "against the same candidate stage with the classifier bypassed and nothing else\n"
+     "changed -- one variable -- paired median IoU +0.1753 over 13 specimens, 11 of\n"
+     "13, p = 0.0061. The shipped path also widened the scale ladder, and those two\n"
+     "changes together are +0.2296: that larger figure is not the classifier's.\n"
+     "Three ETD specimens that\n"
      "scored recall 0.0000 at every setting ever tried were never invisible to the\n"
      "proposal stage -- the classifier was rejecting them.",
      "off" if not DO.USE_REGION_CLASSIFIER else "stage"),

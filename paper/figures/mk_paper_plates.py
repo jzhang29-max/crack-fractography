@@ -22,6 +22,7 @@ import sys
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
@@ -30,6 +31,11 @@ OUT = os.path.join(HERE, "out")
 os.makedirs(OUT, exist_ok=True)
 
 FLOOR = 7.0
+# The width every plate is printed at: the A4 text block, PAGE[0] - ML - MR in
+# make_paper.py. A plate drawn wider than this is SCALED DOWN on the page and every type
+# size in it shrinks by the same factor -- a 12.4 in plate prints at 0.51x, turning an 8 pt
+# label into 4.1 pt. Draw at PAGEW and the size specified is the size printed.
+PAGEW = 6.37
 BODY, SMALL, TITLE = 9.0, 8.0, 10.5
 
 # ONE HOUSE STYLE, SET ONCE. Each plate was being tuned on its own, so the five of them
@@ -62,19 +68,34 @@ plt.rcParams.update({
 })
 
 
-def check(fig):
-    sizes = [t.get_fontsize() for t in fig.findobj(plt.Text) if t.get_text().strip()]
-    if sizes and min(sizes) < FLOOR:
-        raise SystemExit(f"type too small: {min(sizes):.1f} pt (floor {FLOOR})")
+def save(fig, name, caption, dpi=200):
+    """Write the plate, then check the type size AT THE SIZE IT WILL PRINT.
 
-
-def save(fig, name, caption):
-    check(fig)
+    The previous check ran against the figure's own coordinates and passed plates that
+    reached the page at half scale. It has to run after the write, because bbox_inches
+    trims whitespace and changes the width, and the page then rescales whatever width
+    comes out to PAGEW. So: save, measure the file, compute the page scale, and apply the
+    floor to size * scale. A plate that cannot pass is a plate that must be relaid out,
+    not one whose fonts should be nudged.
+    """
     p = os.path.join(OUT, name + ".png")
-    fig.savefig(p, dpi=200, bbox_inches="tight", facecolor="white")
+    fig.savefig(p, dpi=dpi, bbox_inches="tight", facecolor="white")
+    sizes = [t.get_fontsize() for t in fig.findobj(plt.Text) if t.get_text().strip()]
     plt.close(fig)
+    px = mpimg.imread(p).shape[1]
+    saved_in = px / float(dpi)
+    scale = PAGEW / saved_in
+    if sizes:
+        smallest = min(sizes) * scale
+        if smallest < FLOOR - 1e-9:
+            raise SystemExit(
+                f"{name}: smallest type prints at {smallest:.1f} pt "
+                f"(floor {FLOOR}). The plate saves {saved_in:.2f} in wide and the page "
+                f"gives it {PAGEW} in, a scale of {scale:.2f}. Relay it out at about "
+                f"{PAGEW} in wide rather than enlarging the fonts.")
     json.dump(caption, open(os.path.join(OUT, name + ".caption.json"), "w"), indent=1)
-    print("wrote", p)
+    print(f"wrote {p}  ({saved_in:.2f} in saved, prints at {scale:.2f}x, "
+          f"smallest type {min(sizes) * scale:.1f} pt)" if sizes else f"wrote {p}")
 
 
 def load(path, what):
@@ -130,7 +151,7 @@ def plate_scores():
              ("Inconel 718\nreleased crops", "Inconel 718, released crops"),
              ("MetalDAM\nvoids, not cracks", "MetalDAM voids (not cracks)"),
              ("EBC coating\nwithdrawn: ceramic", "EBC coating, whole fields")]
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(7.4, 3.4),
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(PAGEW - 0.25, 3.1),
                                    gridspec_kw={"width_ratios": [1.05, 1.0]})
 
     # left: how close the reported area fraction is to the annotator's. 1.0 is exact.
@@ -173,7 +194,7 @@ def plate_scores():
         ax2.plot([e, e], [i - 0.33, i + 0.33], color="0.0", lw=2.4, zorder=5)
         ax2.text(a + 0.5, i, f"{a:.2f}", va="center", fontsize=SMALL,
                  color="0.25" if a > e else "#b3401a", fontweight="bold")
-        ax2.text(e, i + 0.36, f"{e:.2f}", va="bottom", ha="center", fontsize=SMALL - 1.0,
+        ax2.text(e, i + 0.36, f"{e:.2f}", va="bottom", ha="center", fontsize=SMALL,
                  color="0.0")
     ax2.set_yticks(list(y), ["" for _ in order])
     ax2.set_xlim(lo, max(acc) + 3.2)
@@ -181,7 +202,7 @@ def plate_scores():
     ax2.set_title("Accuracy vs an empty mask", fontsize=TITLE)
     # the note goes under the whole figure: inside ax2 it printed across the bottom bar
     fig.text(0.5, 0.005, "black tick = the accuracy of an empty mask on that set; "
-             "red = the detector does not beat it", ha="center", fontsize=SMALL - 1.0,
+             "red = the detector does not beat it", ha="center", fontsize=SMALL,
              color="0.3")
     ax2.spines[["top", "right"]].set_visible(False)
     ax1.tick_params(labelsize=SMALL)
@@ -210,7 +231,7 @@ def plate_transfer():
     annotator marked, where 1.0 is exact and the optimum is visible as a crossing rather
     than as a maximum.
     """
-    fig, ax = plt.subplots(figsize=(5.8, 3.6))
+    fig, ax = plt.subplots(figsize=(PAGEW - 0.25, 3.7))
     wf = BC["sweeps"]["whole_fields"]
     cr = BC["sweeps"]["crops"]
     ks = [r["mad_k"] for r in wf]
@@ -266,7 +287,7 @@ def plate_width():
     fraction on the right, both against the empty-mask line, so the ceiling is expressed
     in the same units as every other result in the paper.
     """
-    fig, ax = plt.subplots(figsize=(6.0, 3.8))
+    fig, ax = plt.subplots(figsize=(PAGEW - 0.25, 3.9))
     wf, cr = WBG["whole_fields"], WBG["crops"]
     ws = sorted(int(k) for k in wf["by_width"])
 
@@ -324,7 +345,7 @@ def plate_baselines():
     rank = sorted(((short.get(k, k), v) for k, v in arms.items()
                    if short.get(k, k) is not None),
                   key=lambda kv: -abs(kv[1]["area_agreement"] - 1.0))
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(7.6, 3.5),
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(PAGEW - 0.25, 3.2),
                                    gridspec_kw={"width_ratios": [1.0, 0.85]})
     y = list(range(len(rank)))
     cols = ["0.15" if k == "this detector" else "0.72" for k, _ in rank]
@@ -383,7 +404,7 @@ def plate_budget():
     # docs/figures/pixel_accounting.json and in Section 7 instead.
     sets = [k for k in ("Inconel 718, whole fields", "Inconel 718, released crops")
             if PA.get(k)]
-    fig, (ax, ax2) = plt.subplots(1, 2, figsize=(10.4, 3.6),
+    fig, (ax, ax2) = plt.subplots(1, 2, figsize=(PAGEW - 0.25, 4.4),
                                   gridspec_kw={"width_ratios": [1.35, 1]})
     y = range(len(sets))
     for i, k in enumerate(sets):
