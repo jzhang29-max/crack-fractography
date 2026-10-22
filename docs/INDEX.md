@@ -15,6 +15,7 @@ the generator is named.
 | [`REPORTING_GUIDE.md`](REPORTING_GUIDE.md) | how a number must be reported here, and the error each rule came from |
 | [`PRACTICE_AND_PRIOR_ART.md`](PRACTICE_AND_PRIOR_ART.md) | prior-art checks; every novelty framing tested so far and its outcome |
 | [`MAR_H_AS_vs_MAR_H_HIP.md`](MAR_H_AS_vs_MAR_H_HIP.md) | initial conclusions on that specimen comparison, with the confounds that limit it |
+| [`TXM_READINESS.md`](TXM_READINESS.md) | **is the TXM work ready for the paper? No, not as a capability.** The SEM detector on TXM in pixel-percentage units: below an empty mask pooled, but one specimen group of four transfers cleanly. Also what the TXM repo still needs from the author |
 | [`CAN_THE_MODEL_BE_IMPROVED.md`](CAN_THE_MODEL_BE_IMPROVED.md) | **yes, by marking less.** The shipped mad_k sits one rung below the optimum; four channels that tried to mark more all failed their decoys; and the missing 42% of labelled crack is the lit fracture surface inside open cracks, brighter than matrix |
 | [`RANKING_IS_BUYABLE.md`](RANKING_IS_BUYABLE.md) | the attempt to raise the detector's rank on the public set. It succeeded, by dilation, which detects nothing and costs a 2.54x area-fraction error; also records that the detector ranks fifth of seven on whole fields, not third |
 
@@ -68,6 +69,7 @@ The paper now has an **Appendix A** giving the pixel budget for all five SEM set
 | `figures/missed_shell_contrast_raw.json` | the same contrast on raw grey levels, to rule out a flattening artefact | `analysis/research/improve/missed_shell_contrast_raw.py` |
 | `figures/texture_channel_test.json`, `figures/texture_prototype.json` | a local-roughness channel for the lit crack interior, and its decoys | `analysis/research/improve/texture_channel_test.py`, `texture_prototype.py` |
 | `figures/watershed_to_the_lip.json` | growing the dark core to the crack lip by watershed, and its decoys | `analysis/research/improve/watershed_to_the_lip.py` |
+| `figures/txm_background_units.json` | the SEM detector on 31 TXM frames, refereed pixels only, swept over mad_k and split by specimen group | `analysis/research/improve/txm_background_units.py` |
 | `figures/lab_madk_sweep.json`, `figures/lab_corpus_channels.json` | the same two questions on this lab's own 48 hand-corrected frames | `analysis/research/improve/lab_madk_sweep.py`, `lab_corpus_channels.py` |
 | `figures/metric_figures.json` | the corpus-side measurements, including the width curve on 26 tiles | `figures/measure_metrics.py` |
 | `figures/public_metrics.json` | pavement sets. **Measured, then removed from the paper** as the wrong modality | **generator not retained** — written in scratch and pruned. The numbers reproduce `public_benchmarks.json`'s F1 to four decimals, which is the only check on them now |
