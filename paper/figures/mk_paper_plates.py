@@ -102,10 +102,10 @@ def plate_scores():
     best = min(BC["sweeps"]["whole_fields"],
                key=lambda r: abs(r["area_agreement_corpus"] - 1.0))
 
-    ax1.barh(y, rat, 0.55, color=[J.G_DARK] + [J.G_LIGHT] * 3, edgecolor=J.INK,
+    ax1.barh(y, rat, 0.55, color=[J.ACCENT] + [J.G_LIGHT] * 3, edgecolor=J.INK,
              linewidth=0.5, zorder=2)
     ax1.axvline(1.0, color=J.INK, lw=0.9, zorder=3)
-    ax1.plot([best["area_agreement_corpus"]], [y[0]], marker="D", color=J.ACCENT,
+    ax1.plot([best["area_agreement_corpus"]], [y[0]], marker="D", color=J.INK,
              markersize=4.5, zorder=5, clip_on=False)
     ax1.set_xscale("log")
     ax1.set_xticks([1, 10, 100])
@@ -154,15 +154,15 @@ def plate_transfer():
     fig, ax = plt.subplots(figsize=(J.W15, 2.9), layout="constrained")
     wf, cr = BC["sweeps"]["whole_fields"], BC["sweeps"]["crops"]
     ks = [r["mad_k"] for r in wf]
-    ax.plot(ks, [r["area_agreement_corpus"] for r in wf], marker="o", color=J.INK,
+    ax.plot(ks, [r["area_agreement_corpus"] for r in wf], marker="o", color=J.ACCENT,
             label="whole fields")
     ax.plot([r["mad_k"] for r in cr], [r["area_agreement_corpus"] for r in cr],
-            marker="s", linestyle="--", color=J.G_MID, markerfacecolor="white",
+            marker="s", linestyle="--", color=J.ACCENT2, markerfacecolor="white",
             label="released crops")
     ax.axhline(1.0, color=J.INK, lw=0.7)
     best = min(wf, key=lambda r: abs(r["area_agreement_corpus"] - 1.0))
     ax.plot([best["mad_k"]], [best["area_agreement_corpus"]], marker="D",
-            color=J.ACCENT, markersize=5.5, zorder=6)
+            color=J.INK, markersize=5.5, zorder=6)
     ax.set_xscale("log")
     ax.set_yscale("log")
     ax.set_xticks([1, 10])
@@ -190,14 +190,14 @@ def plate_width():
     wf, cr = WBG["whole_fields"], WBG["crops"]
     ws = sorted(int(k) for k in wf["by_width"])
     ax.plot(ws, [wf["by_width"][str(w)]["accuracy_pct"] for w in ws], marker="o",
-            color=J.INK, label=f"whole fields ($n$ = {wf['n']})")
+            color=J.ACCENT, label=f"whole fields ($n$ = {wf['n']})")
     ax.plot(ws, [cr["by_width"][str(w)]["accuracy_pct"] for w in ws], marker="s",
-            linestyle="--", color=J.G_MID, markerfacecolor="white",
+            linestyle="--", color=J.ACCENT2, markerfacecolor="white",
             label=f"released crops ($n$ = {cr['n']})")
-    ax.axhline(wf["empty_mask_accuracy_pct"], color=J.INK, lw=0.7, linestyle=":",
+    ax.axhline(wf["empty_mask_accuracy_pct"], color=J.ACCENT, lw=0.7, linestyle=":",
                label="all-background mask, same corpus")
-    ax.axhline(cr["empty_mask_accuracy_pct"], color=J.G_MID, lw=0.7, linestyle=":")
-    for d, col in ((wf, J.ACCENT), (cr, J.ACCENT)):
+    ax.axhline(cr["empty_mask_accuracy_pct"], color=J.ACCENT2, lw=0.7, linestyle=":")
+    for d, col in ((wf, J.INK), (cr, J.INK)):
         bw = d["best_accuracy_width"]
         ax.plot([bw], [d["by_width"][str(bw)]["accuracy_pct"]], marker="D", color=col,
                 markersize=5.5, zorder=6)
@@ -236,7 +236,7 @@ def plate_baselines():
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(J.PAGEW, 2.9), layout="constrained",
                                    gridspec_kw={"width_ratios": [1.0, 0.78]})
     y = list(range(len(rank)))
-    cols = [J.G_DARK if k == "this detector" else J.G_LIGHT for k, _ in rank]
+    cols = [J.ACCENT if k == "this detector" else J.G_LIGHT for k, _ in rank]
 
     ax1.barh(y, [v["area_agreement"] for _, v in rank], 0.6, color=cols,
              edgecolor=J.INK, linewidth=0.5, zorder=2)
@@ -290,9 +290,9 @@ def plate_budget():
         # the human's share, as an outline above the detector's stacked bar
         ax.barh(i + 0.15, r["labelled_pct"], 0.24, facecolor="none", edgecolor=J.INK,
                 linewidth=0.9, zorder=2)
-        ax.barh(i - 0.15, r["tp_pct"], 0.24, color=J.G_DARK, edgecolor=J.INK,
+        ax.barh(i - 0.15, r["tp_pct"], 0.24, color=J.ACCENT, edgecolor=J.INK,
                 linewidth=0.5, zorder=2)
-        ax.barh(i - 0.15, r["fp_pct"], 0.24, left=r["tp_pct"], color=J.G_LIGHT,
+        ax.barh(i - 0.15, r["fp_pct"], 0.24, left=r["tp_pct"], color=J.ACCENT2,
                 edgecolor=J.INK, linewidth=0.5, zorder=2)
     ax.set_yticks(list(y), [k.replace(", ", "\n") for k in sets])
     ax.set_xlabel("Percent of all image pixels")
@@ -302,9 +302,9 @@ def plate_budget():
     # table; a legend identifies the three quantities without putting numbers in the art.
     ax.legend(handles=[
         Patch(facecolor="none", edgecolor=J.INK, linewidth=1.0, label="Annotated"),
-        Patch(facecolor=J.G_DARK, edgecolor=J.INK, linewidth=0.5,
+        Patch(facecolor=J.ACCENT, edgecolor=J.INK, linewidth=0.5,
               label="Marked, annotated"),
-        Patch(facecolor=J.G_LIGHT, edgecolor=J.INK, linewidth=0.5,
+        Patch(facecolor=J.ACCENT2, edgecolor=J.INK, linewidth=0.5,
               label="Marked, not annotated")], loc="lower right", fontsize=J.TICK)
     ax.set_ylim(-0.62, len(sets) - 0.38)
     J.panel_label(ax, "a")
@@ -316,7 +316,7 @@ def plate_budget():
     # One fill for both bars -- they are the same detector, and the y axis says which
     # corpus each is; shading them by whether the ratio passes a threshold would make
     # colour mean verdict.
-    ax2.barh(list(y), ratios, 0.3, color=J.G_DARK, edgecolor=J.INK, linewidth=0.5,
+    ax2.barh(list(y), ratios, 0.3, color=J.ACCENT, edgecolor=J.INK, linewidth=0.5,
              zorder=2)
     ax2.axvline(1.0, color=J.INK, lw=0.9, zorder=3)
     ax2.set_yticks(list(y), ["" for _ in sets])

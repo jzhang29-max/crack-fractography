@@ -683,7 +683,14 @@ def test_a_flat_bright_region_is_not_saved_as_black(tmp_path):
         # the same size as the mask _seed makes (400x300), or the crop refuses to cut it
         a = np.full((300, 400), 30000, np.uint16)
         a[:, :100] = 65535
-        Image.fromarray(a, mode="I;16").save(os.path.join(up, f"{f}_original.png"))
+        # NO `mode=` ARGUMENT. `fromarray(a, mode="I;16")` raises "Invalid mode for data
+        # type" on Pillow >=13, which removed the mode parameter's data-type-changing
+        # form; on Pillow 12 it was only a DeprecationWarning, so this line passed here
+        # and failed CI. A uint16 array already maps to "I;16" on its own (measured on
+        # Pillow 11.3, 12.3 and 13.0), and that writes a 16-bit greyscale PNG -- IHDR
+        # depth=16 -- which is the whole point of the assertions below: the `> 1000`
+        # check is also what would catch a silent downgrade to 8-bit, whose max is 255.
+        Image.fromarray(a).save(os.path.join(up, f"{f}_original.png"))
         st, c = _crop(s, f, 0, 0, 64, 64)
         assert st == 200, c
         assert c["original_cropped"] is True, c.get("original_note")

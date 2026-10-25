@@ -328,8 +328,27 @@ def test_an_edited_research_frame_can_be_sent(sandbox, tmp_path):
         assert int((after == 3).sum()) == int((before == 3).sum())
 
 
-def test_an_unedited_research_frame_has_nothing_to_send(sandbox, tmp_path):
+# THIS ONE RUNS WITHOUT A SEM CHECKOUT, AND THE LITERAL NAME IS WHY. The refusal under
+# test is raised before the endpoint looks at the SEM repo at all: send_to_parent takes
+# the `elif send_arm.startswith("sem/")` branch whenever _edit_of() is falsy, and
+# _edit_of() only stats OUT/edits/sem__gated/<frame>_gated.png -- a path inside THIS
+# test's own throwaway data directory. A frame NAME is the whole input; nothing is read
+# from disk, and the `if not P.sem_repo()` 503 is further down a branch we never reach.
+#
+# It used to pass FRAME while carrying neither @needs_sem nor @needs_frame -- the only
+# test in this file with no marker. On a runner with no sibling checkout FRAME is None,
+# so the body sent {"frame": None}, the endpoint's (payload.get("frame") or "").strip()
+# made it "", and it raised 400 "which crop?" -- a different refusal, on a different
+# line, for a different reason. CI failed on a message this test never meant to assert.
+# Marking it to skip would have hidden the one branch here that a downloaded copy of the
+# app can actually exercise, so it takes a name that needs no corpus instead, and keeps
+# the real-corpus name as a second case wherever a corpus exists.
+@pytest.mark.parametrize("frame", [
+    pytest.param("a_name_that_needs_no_sem_checkout", id="name-only"),
+    pytest.param(FRAME, marks=[needs_sem, needs_frame], id="real-corpus-frame"),
+])
+def test_an_unedited_research_frame_has_nothing_to_send(sandbox, tmp_path, frame):
     with Server(tmp_path / "d") as s:
-        st, d = _post(s, "/api/send_to_parent", {"arm": "sem/gated", "frame": FRAME})
+        st, d = _post(s, "/api/send_to_parent", {"arm": "sem/gated", "frame": frame})
         assert st == 400, d
         assert "no correction on it yet" in json.dumps(d)

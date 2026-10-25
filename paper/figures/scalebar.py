@@ -21,7 +21,6 @@ scale situations, and a figure that treats them alike is lying about one of them
 omission a reader has to notice. The paper's primary quantity is an area FRACTION, which
 is dimensionless and unaffected by this -- that point belongs in the caption too.
 """
-import matplotlib.patheffects as pe
 
 # A bar should be a round number of physical units and roughly a fifth of the panel.
 _NICE_NM = [50, 100, 200, 500, 1_000, 2_000, 5_000, 10_000, 20_000, 50_000,
@@ -42,9 +41,16 @@ def fmt_nm(nm):
     return f"{nm:g} nm"
 
 
-def scalebar(ax, nm_per_px, width_px, *, loc="lower right", color="white",
-             pad_frac=0.045, height_frac=0.018, fontsize=8, length_nm=None):
+def scalebar(ax, nm_per_px, width_px, *, loc="lower right", pad_frac=0.035,
+             height_frac=0.022, fontsize=8, length_nm=None, color=None):
     """Draw a scale bar on an imshow axes whose x units are pixels.
+
+    BLACK BAR AND BLACK TEXT INSIDE AN OPAQUE WHITE BOX. This was a white bar with a
+    black outline stroke, which is a screenshot convention. Across 129 published figure
+    files opened from Elsevier's and IOP's own CDNs, the bar is in an opaque white patch
+    every time and is never coloured -- including on plates that are otherwise entirely
+    greyscale. The white patch is also the only form that survives a bar landing on a
+    saturated-white region of the micrograph, which the stroke version did not.
 
     Returns the bar length in nanometres, so a caller can state it in the caption
     instead of re-deriving it and risking the two disagreeing.
@@ -58,28 +64,34 @@ def scalebar(ax, nm_per_px, width_px, *, loc="lower right", color="white",
     W, H = abs(x1 - x0), abs(y1 - y0)
     pad = pad_frac * W
     bh = max(height_frac * H, 2.0)
+    # the white patch: the bar, the gap, and the label line above it
+    inner = 0.35 * bh
+    boxw = px + 2 * inner
+    boxh = bh + inner * 2 + fontsize / 72.0 * H / (ax.bbox.height / ax.figure.dpi)
     right = "right" in loc
     lower = "lower" in loc
-    bx = (max(x0, x1) - pad - px) if right else (min(x0, x1) + pad)
-    by = (max(y0, y1) - pad - bh) if not lower else (min(y0, y1) + pad)
-    # imshow's y axis runs top-down, so "lower" is the larger y
-    by = (max(y0, y1) - pad - bh) if lower else (min(y0, y1) + pad)
-    ax.add_patch(__import__("matplotlib").patches.Rectangle(
-        (bx, by), px, bh, facecolor=color, edgecolor="none", zorder=20))
-    t = ax.text(bx + px / 2, by - 0.012 * H, fmt_nm(nm), color=color, fontsize=fontsize,
-                ha="center", va="bottom", zorder=21)
-    t.set_path_effects([pe.withStroke(linewidth=1.6, foreground="black", alpha=0.65)])
+    bxx = (max(x0, x1) - pad - boxw) if right else (min(x0, x1) + pad)
+    bxy = (max(y0, y1) - pad - boxh) if lower else (min(y0, y1) + pad)
+    R = __import__("matplotlib").patches.Rectangle
+    ax.add_patch(R((bxx, bxy), boxw, boxh, facecolor="white", edgecolor="none",
+                   zorder=20, clip_on=False))
+    ax.add_patch(R((bxx + inner, bxy + boxh - inner - bh), px, bh,
+                   facecolor=color or "black", edgecolor="none", zorder=21,
+                   clip_on=False))
+    ax.text(bxx + boxw / 2, bxy + inner * 0.6, fmt_nm(nm), color=color or "black",
+            fontsize=fontsize, ha="center", va="top", zorder=22, clip_on=False)
     return nm
 
 
 def no_scale_note(ax, text="no pixel size published for this collection",
-                  color="white", fontsize=8, pad_frac=0.03):
+                  color="black", fontsize=8, pad_frac=0.03):
     """Say so on the panel. An absent scale bar is otherwise indistinguishable from a
     scale bar someone forgot to draw."""
     x0, x1 = ax.get_xlim()
     y0, y1 = ax.get_ylim()
     W, H = abs(x1 - x0), abs(y1 - y0)
-    t = ax.text(max(x0, x1) - pad_frac * W, max(y0, y1) - pad_frac * H, text,
-                color=color, fontsize=fontsize, ha="right", va="bottom", zorder=21,
-                style="italic")
-    t.set_path_effects([pe.withStroke(linewidth=1.6, foreground="black", alpha=0.65)])
+    # the same opaque white patch the bar sits in, for the same reason
+    ax.text(max(x0, x1) - pad_frac * W, max(y0, y1) - pad_frac * H, text,
+            color=color, fontsize=fontsize, ha="right", va="bottom", zorder=21,
+            style="italic", clip_on=False,
+            bbox=dict(facecolor="white", edgecolor="none", pad=1.5))

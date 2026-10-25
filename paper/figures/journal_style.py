@@ -63,12 +63,67 @@ COLUMN_CLASS = {
     "txm_transfer": ("double", W2),
 }
 
-#: Greyscale-first. The three greys separate in print without colour; the single accent is
-#: used only where one series must be picked out, never to mean pass or fail.
+#: COLOUR, AND WHAT IT IS FOR. This figure set was greyscale-first. That was defensible
+#: and it was not what these journals print: across 129 published figure files opened
+#: from Elsevier's and IOP's own CDNs (13 papers, 2025-2026, Materials Characterization,
+#: Engineering Failure Analysis, Measurement Science and Technology) the median figure
+#: uses 2 hue families and 76% use three or fewer, at a median saturation of 0.54.
+#: Online colour is free and automatic at all three -- Elsevier: "In the online version,
+#: the figures will appear in color regardless of whether the author pays for printed
+#: color."
+#:
+#: So: colour, but a journal's amount of it. Two hues carry everything quantitative and
+#: one neutral ramp carries the rest. The rules that were never about colour -- identity
+#: not verdict, and greyscale must survive -- are unchanged.
 INK = "#000000"
 G_DARK, G_MID, G_LIGHT = "#333333", "#808080", "#c8c8c8"
-ACCENT = "#1f4e9c"          # one blue, for the series under discussion
-SERIES = [G_DARK, G_MID, G_LIGHT, "#5a5a5a", "#9e9e9e", "#e0e0e0"]
+
+#: THE TWO HUES, measured rather than chosen. OKLab dE x100 between them after
+#: simulating deuteranopia, protanopia and tritanopia (Machado 2009 matrices, severity
+#: 1.0), and the luminance gap that decides whether they survive a greyscale print:
+#:   #1F4E9C vs #D95F02   worst-CVD 25.7   luminance gap 0.148   -- both bars cleared
+#: The obvious alternative, ColorBrewer Dark2 teal + orange, which is close to what
+#: Materials Characterization actually printed in 2025, scores worst-CVD 11.6 with a
+#: luminance gap of 0.031: it would survive colour and COLLAPSE in greyscale. Neither
+#: Set2 nor Dark2 survives past two hues at all -- Set2 blue vs pink is dE 1.5 under
+#: protanopia, Dark2 teal vs pink is 1.7 -- and nothing in this paper needs more than
+#: two, which is also what the published figures do.
+ACCENT = "#1F4E9C"          # the series under discussion, and the detector's own output
+ACCENT2 = "#D95F02"         # the one other series, where there is one
+SERIES = [ACCENT, ACCENT2, G_DARK, G_MID, G_LIGHT]
+
+#: OVERLAY COLOURS, measured against THIS corpus rather than against white. The field
+#: Figures 1 and 2 are drawn from has grey percentiles 1/5/25/50/75/95/99 =
+#: 85/144/154/159/164/177/247 -- a tight, light-grey distribution -- and worst-case CVD
+#: separation from those greys is what decides whether a mask can be seen on it:
+#:   #1F4E9C blue 21.7  <- best, and the largest luminance gap (0.265) for print
+#:   #D95F02 orange 13.4    #D7301F red 13.3    #00D52B green 13.3
+#:   #1B9E77 Dark2 teal 3.7 FAIL -- it disappears into the matrix
+#:   #9DB9DE pale blue  5.9 FAIL -- so a "soft" mask tint is not available here, and a
+#:                                  centreline must be drawn on the full-strength mask
+#: The mask therefore stays blue. That was already its colour; this is why it keeps it
+#: instead of becoming the teal the chart palette might have suggested.
+MASK = ACCENT               # a binary stage output drawn over a greyscale micrograph
+SKELETON = "#F0A202"        # a centreline drawn ON TOP of the mask: vs MASK 38.2
+PAINT_CRACK = "#00D52B"     # the human's "this is crack": vs MASK 32.5
+PAINT_NOTCRACK = "#D7301F"  # the human's "this is not crack": vs PAINT_CRACK 17.0
+
+#: Red is the annotation layer in all three journals -- ROI rectangles and arrows, never
+#: the mask itself. A red mask would collide with what a reader of these journals
+#: expects, and red is reserved here for the same job.
+ROI = "#D7301F"
+
+
+def rgb(hexstr):
+    """#rrggbb -> (r, g, b) in 0..1, for writing a colour straight into an image array.
+
+    An overlay is painted into the pixel array rather than drawn as an artist, so it
+    needs floats, and the floats must come from the same token as every vector element
+    of the same colour or the raster and the vector drift apart.
+    """
+    h = hexstr.lstrip("#")
+    return tuple(int(h[i:i + 2], 16) / 255.0 for i in (0, 2, 4))
+
 
 
 def use():

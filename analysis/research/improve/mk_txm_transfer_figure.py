@@ -174,7 +174,7 @@ pool = BG["pooled"][key]
 
 axA = fig.add_subplot(gs[2, 0:2])
 y = np.arange(len(groups))[::-1]
-cols = [J.G_DARK if g == "B3" else J.G_LIGHT for g in groups]
+cols = [J.ACCENT if g == "B3" else J.G_LIGHT for g in groups]
 # the SIGNED difference from an all-background mask, zero-based: the accuracies
 # themselves are 65-97% and a cropped axis to separate them would be the
 # misrepresentation the convention exists to prevent

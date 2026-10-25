@@ -51,8 +51,8 @@ Point `$PY` at an interpreter that has matplotlib, numpy, scipy and scikit-image
     $PY paper/manuscript/build.py          # -> paper/manuscript/Revised_Manuscript_v2.pdf
     $PY paper/make_paper.py                # -> paper/draft.pdf
     $PY paper/figures/mk_paper_plates.py   # plates P1-P5
-    $PY paper/figures/mk_pipeline_visual.py   # plate P6
-    $PY docs/figures/mk_pipeline.py        # the workflow schematic, manuscript Figure 2
+    $PY paper/figures/mk_pipeline_visual.py   # plate P6, manuscript Figure 1
+    $PY paper/figures/mk_workflow.py       # plate P7, manuscript Figure 2
 
 Every plate is drawn at the width it prints at, and the generator refuses to write one
 whose smallest type would print below 8 pt -- both target publishers ask for 8-12 pt at

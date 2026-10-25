@@ -115,7 +115,7 @@ def stages(img8):
     return flat, raw, cleaned, lab, final
 
 
-def mask_on_field(img8, mask, colour=(0.12, 0.31, 0.61)):
+def mask_on_field(img8, mask, colour=None):
     """A stage's binary output drawn over the field it came from.
 
     Drawn bare, a binary stage is black-on-WHITE, and on a white page it has no edge: the
@@ -126,7 +126,7 @@ def mask_on_field(img8, mask, colour=(0.12, 0.31, 0.61)):
     range, and shows the reader where on the field the stage is acting.
     """
     rgb = np.dstack([img8.astype(np.float32)] * 3) / 255.0
-    rgb[mask] = np.array(colour)
+    rgb[mask] = np.array(colour if colour is not None else J.rgb(J.MASK))
     return np.clip(rgb, 0, 1)
 
 
@@ -135,7 +135,7 @@ def overlay(img8, mask, gt=None):
     # the same accent as the stage panels, so the six panels read as one sequence
     # rather than as two different figures
     rgb = np.dstack([img8.astype(np.float32)] * 3) / 255.0
-    rgb[mask] = np.array([0.12, 0.31, 0.61])
+    rgb[mask] = np.array(J.rgb(J.MASK))
     if gt is not None:
         edge = gt & ~ndi.binary_erosion(gt, np.ones((3, 3)))
         rgb[edge] = np.array([0.0, 0.0, 0.0])
@@ -199,7 +199,7 @@ def main():
     axw = fig.add_subplot(gs[0, :])
     axw.imshow(img[::step, ::step], cmap="gray", interpolation="nearest", aspect="equal")
     axw.add_patch(Rectangle((x0 / step, y0 / step), H / step, H / step, fill=False,
-                            edgecolor=J.ACCENT, linewidth=1.0))
+                            edgecolor=J.ROI, linewidth=1.2))
     J.micrograph(axw)
     J.panel_label(axw, "a", inside=True)
     scalebar(axw, NM_PER_PX * step, img.shape[1] / step)
@@ -209,8 +209,7 @@ def main():
         ax.imshow(arr, cmap="gray" if arr.ndim == 2 else None, interpolation="nearest")
         J.micrograph(ax)
         J.panel_label(ax, "bcdef"[i], inside=True)
-        if i == 0:
-            scalebar(ax, NM_PER_PX, H)
+        scalebar(ax, NM_PER_PX, H)
     axr = fig.add_subplot(gs[2, 2])
     axr.imshow(whole_result, interpolation="nearest")
     J.micrograph(axr)

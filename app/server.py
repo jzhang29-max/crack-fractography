@@ -554,7 +554,12 @@ def original(arm: str, frame: str):
     if hi <= lo:
         lo, hi = float(a.min()), float(a.max() or 1)
     a = np.clip((a - lo) / (hi - lo), 0, 1) * 255
-    out = Image.fromarray(a.astype("uint8"), mode="L")
+    # NO `mode=`. It was mode="L", which is a no-op on a uint8 array and raises
+    # "Invalid mode for data type" on Pillow >=13 for a bool, int or float one. The
+    # array here is uint8 by construction, but nothing enforced that, and the
+    # 16-bit call a few hundred lines up was the same shape of latent bug until it
+    # fired. Letting Pillow infer the mode removes the trap rather than documenting it.
+    out = Image.fromarray(a.astype("uint8"))
     buf = io.BytesIO()
     # optimize=True buys ~2% here and costs a pass over every pixel; this endpoint is on
     # the path between clicking a frame and seeing it.
@@ -1168,7 +1173,19 @@ def crop(payload: dict = Body(...)):
                     # because a single value has no range to stretch against.
                     _a = (((_a - _lo) / (_hi - _lo) * 65535.0) if _hi > _lo
                           else _np.clip(_a, 0.0, 65535.0))
-                    cut = Image.fromarray(_a.astype("uint16"), mode="I;16")
+                    # NO `mode=` ARGUMENT. Passing mode="I;16" here raised "Invalid mode
+                    # for data type" on Pillow >=13, which removed the data-type-changing
+                    # form of the parameter (Pillow 12 only warned, which is why this
+                    # survived local runs and failed CI). It did not crash the crop --
+                    # the except below is deliberately broad -- it silently set
+                    # original_note and saved NO micrograph, so every crop of a 16-bit or
+                    # float original opened as a bare binary mask: the one thing cropping
+                    # exists to avoid. A uint16 array maps to "I;16" unaided -- measured
+                    # on Pillow 11.3, 12.3 and 13.0, i.e. the whole range requirements.txt
+                    # allows -- and still writes a 16-bit greyscale PNG (IHDR depth=16),
+                    # round-tripping 0 and 65535 bit-identically. Do not "simplify" this
+                    # to .convert() or an 8-bit cast: the viewer high-passes this image.
+                    cut = Image.fromarray(_a.astype("uint16"))
                 cut.save(os.path.join(UPLOAD_DIR, f"{stem}_original.png"))
                 original_cropped = True
             else:
@@ -1682,7 +1699,7 @@ def review_region(payload: dict = Body(...)):
 
     rid = _review_id(arm, frame, (x, y, w, h))
     with _DATASET_LOCK:
-        Image.fromarray(verdict, mode="L").save(
+        Image.fromarray(verdict.astype(np.uint8)).save(
             os.path.join(_review_dir(), rid + ".png"), optimize=True)
         rows = [r for r in _read_reviews() if r.get("id") != rid]
         rows.append({"id": rid, "arm": arm, "frame": frame, "box": [x, y, w, h],
@@ -3482,7 +3499,7 @@ def _paste_region(arm, frame, box, blob):
 
     base[y:y + h, x:x + w] = piece
     out = io.BytesIO()
-    Image.fromarray(base, mode="L").save(out, "PNG", optimize=True)
+    Image.fromarray(np.asarray(base, dtype=np.uint8)).save(out, "PNG", optimize=True)
     return out.getvalue()
 
 
