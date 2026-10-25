@@ -32,7 +32,7 @@ validated correction. A future detector could combine dark-core evidence with in
 validated contextual or polarity-aware features; such changes require new experiments and
 joint assessment of area bias and spatial overlap.
 
-### 6.2  Scale, units and the absence of a scale bar
+### 6.2  Scale and units
 
 No panel drawn from the Inconel 718 collection carries a scale bar, because the collection
 publishes no pixel size in any form: no resolution tag in the image files, no databar in the
@@ -40,6 +40,13 @@ fields, no magnification in the record, and subsets originating from different m
 This is stated rather than left as an omission. The reported quantity is a dimensionless
 ratio of pixel counts and does not depend on a pixel size, so the principal result survives
 the absence; no physical length is reported for this collection and none can be.
+
+The consequence for presentation is that the method figure and the evaluation cannot be the
+same images. Figure 1 is drawn from this laboratory's own corpus, where 80 of 142 frames
+carry a recoverable databar at 51.883 nm/px, so that the processing stages can be shown at a
+stated scale; every quantitative result in Sections 3 and 4 comes from the public collection
+and from the TXM frames respectively. A reader should not read Figure 1 as evidence for any
+number in this paper.
 
 The TXM panels in Section 4 do carry scale bars, from a pixel size of 29.24 nm/px that is
 derived from mosaic geometry rather than read from instrument metadata. Those bars, and any

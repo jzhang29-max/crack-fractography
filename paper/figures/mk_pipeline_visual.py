@@ -2,11 +2,22 @@
 """The pipeline with real pictures at every step, not boxes of text.
 
 Each panel is the ACTUAL array that stage produces, captured by running the shipped
-detector on one public micrograph. Nothing is drawn by hand and nothing is a mock-up; if a
-stage changes, the panel changes.
+detector. Nothing is drawn by hand and nothing is a mock-up; if a stage changes, the panel
+changes.
 
-The image is a CC BY 4.0 Inconel 718 field from Zenodo 23045328, chosen so the figure
-publishes no specimen imagery of its own.
+THE FIELD IS THIS LABORATORY'S OWN, AND THAT IS A DELIBERATE TRADE. The public Inconel 718
+collection this paper evaluates on publishes no pixel size -- no resolution tag, no
+databar, nothing in the record -- so a panel drawn from it cannot carry a scale bar, and
+Materials Characterization lists a missing scale bar on a micrograph as grounds for return
+without review. Our own frames carry a recoverable databar: 80 of 142, all at 51.883 nm/px
+at the modal magnification. So the method figure is drawn from one of ours and the caption
+says plainly that it is not from the evaluated collection.
+
+The field is chosen by rule, not by eye: of the 80 scaled frames with an original on disk,
+the one whose crack area fraction is closest to the median. Picking the most heavily
+cracked field, which an earlier version of this plate did without saying so, flatters every
+stage. MAR_AmbB_AS is excluded for the reason the tile benchmark excludes it -- 87% of what
+was painted there is round.
 
     <sem-crack-detector>/.venv/bin/python -B paper/figures/mk_pipeline_visual.py
 """
@@ -30,7 +41,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import journal_style as J          # noqa: E402
 
 J.use()
-from matplotlib.patches import FancyArrowPatch
+from matplotlib.patches import FancyArrowPatch, Rectangle
+from scalebar import scalebar
 from scipy import ndimage as ndi
 from skimage import measure as skm
 from PIL import Image
@@ -57,30 +69,41 @@ u = U()
 DO.install(u)
 
 
+#: The frame this plate is drawn from, and why. Selected by the rule in the docstring;
+#: recorded here so the choice is auditable rather than a literal someone has to trust.
+FIELD = "MAR_H_HIP_CBS_0007"
+NM_PER_PX = 51.883
+
+
 def pick_field():
-    """The field with the most labelled crack, so every stage has something to show."""
-    best, best_frac = None, -1.0
-    for f in sorted(os.listdir(os.path.join(SRC, "image"))):
-        stem = os.path.splitext(f)[0]
-        mp = os.path.join(SRC, "mask", stem + ".png")
-        if not os.path.exists(mp):
-            continue
-        gt = np.array(Image.open(mp).convert("L")) > 127
-        if gt.mean() > best_frac:
-            a = np.array(Image.open(os.path.join(SRC, "image", f)))
-            img = (a >> 8).astype(np.uint8) if a.dtype == np.uint16 else \
-                np.array(Image.open(os.path.join(SRC, "image", f)).convert("L"))
-            if img.shape == gt.shape:
-                best, best_frac = (stem, img, gt), gt.mean()
-    if best is None:
-        raise SystemExit(f"no usable field under {SRC}")
-    return best
+    """Load this laboratory's own field through the project's own loader.
+
+    The same stretch, field-of-view crop and 8-bit conversion the application uses, so the
+    panels are what the detector actually sees rather than a separate rendering of the
+    same file.
+    """
+    import tifffile
+    from skimage import exposure
+    sys.path.insert(0, os.path.join(SEM, "interior_active_learning", "code"))
+    from common import contrast_kwargs_for
+
+    raw = tifffile.imread(os.path.join(SEM, "original", FIELD + ".tif"))
+    if raw.ndim == 3:
+        raw = raw[..., 0]
+    ck = contrast_kwargs_for(FIELD)
+    lo, hi = np.percentile(raw, [ck["low_pct"], ck["high_pct"]])
+    img8 = exposure.rescale_intensity(raw.astype(np.float32), in_range=(lo, hi),
+                                      out_range=(0, 255)).astype(np.uint8)
+    x0, y0, x1, y1 = D.find_field_of_view(img8)
+    return FIELD, img8[y0:y1, x0:x1], None
 
 
 def stages(img8):
     """Run the shipped path, keeping every intermediate."""
     flat = D.flatten_background(img8)
-    raw = u.segment_dark_regions(flat, img8=img8, mad_k=5.0)
+    # read, never hardcoded: a literal here printed 5.0 while the paper had
+    # moved to 6.0 and the figure contradicted the text beside it
+    raw = u.segment_dark_regions(flat, img8=img8, mad_k=DO.SHIPPED_MAD_K)
     cleaned = D.clean_mask(raw, min_area_px=13)
     lab = skm.label(cleaned, connectivity=2)
     if lab.max():
@@ -141,65 +164,84 @@ def save_checked(fig, path, dpi=200):
 
 
 def main():
-    stem, img, gt = pick_field()
+    stem, img, _ = pick_field()
     flat, raw, cleaned, lab, final = stages(img)
-    # a crop that actually contains crack, so the panels are legible at print size
-    ys, xs = np.where(gt)
+
+    # the detail is centred on the detected crack, since this frame carries no hand
+    # annotation to centre on; chosen from the final mask so it shows what the figure is
+    # about rather than a corner of matrix
+    ys, xs = np.where(final)
     cy, cx = int(np.median(ys)), int(np.median(xs))
-    H = 360
+    H = 520
     y0 = max(min(cy - H // 2, img.shape[0] - H), 0)
     x0 = max(min(cx - H // 2, img.shape[1] - H), 0)
     sl = (slice(y0, y0 + H), slice(x0, x0 + H))
 
-    # SHORT LABELS ONLY. What each stage does belongs in the figure caption: IOP forbids
-    # a figure title outright and Elsevier's caption rule puts the description there, and
-    # the two-line explanations under every panel were the same convention error as the
-    # in-figure title.
+    step = max(1, img.shape[1] // 1600)
     panels = [
-        ("Micrograph", img[sl], "grey"),
-        ("Background flattened", flat[sl], "grey"),
-        ("Dark candidates", mask_on_field(img[sl], raw[sl]), "rgb"),
-        ("Cleaned and labelled", mask_on_field(img[sl], cleaned[sl]), "rgb"),
-        ("Small regions dropped", mask_on_field(img[sl], final[sl]), "rgb"),
-        ("Prediction and annotation", overlay(img[sl], final[sl], gt[sl]), "rgb"),
+        img[sl],
+        flat[sl],
+        mask_on_field(img[sl], raw[sl]),
+        mask_on_field(img[sl], cleaned[sl]),
+        mask_on_field(img[sl], final[sl]),
     ]
+    # the sixth panel closes the loop: the scored mask over the WHOLE field, at frame
+    # scale. Five stage panels leave a ragged third cell in a 3 x 2 grid, and the result
+    # in context is worth more than the gap -- it is also the only panel that shows what
+    # an area fraction is computed over.
+    whole_result = mask_on_field(img[::step, ::step], final[::step, ::step])
 
-    ncol = 2
-    nrow = 3
-    # 3 x 2 at the printed width: six panels across 10.2 in reached the page at
-    # 0.62x and took the captions to 4.7 pt. Two columns of three keeps each panel
-    # about 2.6 in wide at scale 1.
-    fig, axes = plt.subplots(nrow, ncol, figsize=(J.PAGEW, 6.0),
-                             gridspec_kw=dict(wspace=0.015, hspace=0.015))
-    for i, (ax, (title, arr, kind)) in enumerate(zip(axes.ravel(), panels)):
-        if kind == "grey":
-            ax.imshow(arr, cmap="gray", interpolation="nearest")
-        elif kind == "binary":
-            ax.imshow(arr, cmap="gray_r", interpolation="nearest")
-        else:
-            ax.imshow(arr, interpolation="nearest")
-        # no spines, no ticks, no title above the panel: the stage name goes in the
-        # caption, and the letter identifies the panel
+    # (a) is the whole field with the detail boxed; (b)-(f) are the stages on that detail.
+    # Showing the field as well as the crop is how these journals indicate what a detail
+    # is a detail OF, and it is the panel that carries the frame-scale bar.
+    fig = plt.figure(figsize=(J.PAGEW, 5.35))
+    gs = fig.add_gridspec(3, 3, height_ratios=[1.32, 1, 1], hspace=0.016, wspace=0.016)
+    axw = fig.add_subplot(gs[0, :])
+    axw.imshow(img[::step, ::step], cmap="gray", interpolation="nearest", aspect="equal")
+    axw.add_patch(Rectangle((x0 / step, y0 / step), H / step, H / step, fill=False,
+                            edgecolor=J.ACCENT, linewidth=1.0))
+    J.micrograph(axw)
+    J.panel_label(axw, "a", inside=True)
+    scalebar(axw, NM_PER_PX * step, img.shape[1] / step)
+
+    for i, arr in enumerate(panels):
+        ax = fig.add_subplot(gs[1 + i // 3, i % 3])
+        ax.imshow(arr, cmap="gray" if arr.ndim == 2 else None, interpolation="nearest")
         J.micrograph(ax)
-        J.panel_label(ax, "abcdef"[i], inside=True)
+        J.panel_label(ax, "bcdef"[i], inside=True)
+        if i == 0:
+            scalebar(ax, NM_PER_PX, H)
+    axr = fig.add_subplot(gs[2, 2])
+    axr.imshow(whole_result, interpolation="nearest")
+    J.micrograph(axr)
+    J.panel_label(axr, "g", inside=True)
+    scalebar(axr, NM_PER_PX * step, img.shape[1] / step)
 
     p = os.path.join(OUT, "P6 - pipeline in pictures.png")
     fig.subplots_adjust(left=0.004, right=0.996, top=0.996, bottom=0.004)
     J.save(fig, p)
-    plt.close(fig)
     json.dump({"figure": "P6 - pipeline in pictures.png",
-               "field": stem, "detail_px": H, "crop_origin": [int(y0), int(x0)],
-               "source": "Zenodo 23045328 (CC BY 4.0), Inconel718_crack/image",
-               "panels": [t for t, *_ in panels],
+               "field": stem, "nm_per_px": NM_PER_PX,
+               "field_px": [int(img.shape[0]), int(img.shape[1])],
+               "field_um": [round(img.shape[0] * NM_PER_PX / 1000, 1),
+                            round(img.shape[1] * NM_PER_PX / 1000, 1)],
+               "detail_px": H, "crop_origin": [int(y0), int(x0)],
+               "source": "this laboratory's own SEM corpus; NOT the evaluated public "
+                         "collection, which publishes no pixel size and so cannot carry "
+                         "a scale bar",
+               "selection_rule": "of the 80 scaled frames with an original on disk, the "
+                                 "one whose crack area fraction is closest to the median; "
+                                 "MAR_AmbB_AS excluded as in the tile benchmark",
                "settings": {"scale_ladder": list(DO.SCALE_LADDER),
                             "absolute_dark_thresh": DO.ABSOLUTE_DARK_THRESH,
-                            "mad_k": 5.0,
+                            "mad_k": DO.SHIPPED_MAD_K,
                             "use_region_classifier": DO.USE_REGION_CLASSIFIER},
                "note": "panels are the real intermediate arrays, not illustrations"},
               open(os.path.join(OUT, "P6 - pipeline in pictures.caption.json"), "w"),
               indent=1)
-    print("wrote", p)
-    print(f"  field {stem}, crack {100*gt.mean():.2f}% of frame, detail at ({y0},{x0})")
+    print(f"  field {stem}, {img.shape[1]}x{img.shape[0]} px at {NM_PER_PX} nm/px "
+          f"= {img.shape[1]*NM_PER_PX/1000:.0f}x{img.shape[0]*NM_PER_PX/1000:.0f} um, "
+          f"detail {H} px at ({y0},{x0})")
 
 
 if __name__ == "__main__":

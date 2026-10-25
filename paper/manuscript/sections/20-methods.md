@@ -21,10 +21,15 @@ Inconel 718 folders are the same set. The masks exist, are pixel-level, and are 
 under CC BY, but no annotation protocol, annotator count or class definition accompanies
 them. The collection also publishes no pixel size: there is no resolution tag in the image
 files, no databar in the fields, and no magnification in the record, and the collection's
-subsets originate from different microscopes. **No scale bar can therefore be drawn on any
-panel from this collection, and none is shown.** The crack area fraction reported throughout
+subsets originate from different microscopes. **No scale bar can be drawn on any panel
+taken from this collection, and none is shown.** The crack area fraction reported throughout
 is a dimensionless ratio of pixel counts and does not depend on a pixel size; physical
 lengths cannot be derived from these images and none are reported.
+
+For that reason Figure 1, which illustrates the processing stages rather than the
+evaluation, is drawn from a field of this laboratory's own corpus at a known 51.883 nm/px
+and carries scale bars. The caption states that the field is not part of the evaluated
+collection. No quantitative result in this paper is taken from it.
 
 ### 2.2  Detector configuration
 
@@ -61,7 +66,7 @@ budget.
 Figure 1 shows the microscopy example and the intermediate image outputs. Figure 2
 summarises the scored branch from grayscale input to area measurement.
 
-[FIGURE pipeline | The detector applied to one Inconel 718 field, 360 x 360 px detail. (a) the field as acquired, 8-bit. (b) after background flattening, a multi-scale estimate at sigma 5 to 320 px subtracted. (c) dark candidates, pixels dark at any of the seven scales after the MAD criterion and the absolute intensity gate. (d) after hole filling, removal of components under 13 px and 8-connected labelling. (e) after removal of regions under 40 px; this is the scored mask. In (c-e) the stage output is shown in blue over the field it was computed from. (f) the scored mask in blue with the reference annotation outlined in black. No scale bar is shown: the source collection publishes no pixel size (Section 2.1).]
+[FIGURE pipeline | The detector applied to a single scanning electron field of this laboratory's own corpus, 6144 x 4096 px at 51.883 nm/px (319 x 213 micrometres). (a) the field as acquired, with the box marking the detail shown in (b-f). (b) the detail, 520 px square. (c) after background flattening, a multi-scale estimate at sigma 5 to 320 px subtracted. (d) dark candidates, pixels dark at any of the seven scales after the MAD criterion and the absolute intensity gate. (e) after hole filling, removal of components under 13 px and 8-connected labelling. (f) after removal of regions under 40 px; this is the scored mask. (g) the scored mask over the whole field. In (d-g) the stage output is shown in blue over the field it was computed from. Scale bars 50 micrometres in (a) and (g), 5 micrometres in (b). This field is NOT from the collection evaluated in Section 3: it is shown because that collection publishes no pixel size and so cannot carry a scale bar, and the field was selected by rule as the one whose crack area fraction is closest to the median of the 80 scaled frames available.]
 
 [FIGURE workflow | The scored detector workflow. Candidate detection and mask processing produce the predicted crack area fraction. The learned region classifier is disabled. Subsequent region growth and manual correction are outside the evaluated branch.]
 
