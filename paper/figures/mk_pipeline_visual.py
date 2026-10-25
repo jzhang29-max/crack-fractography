@@ -92,10 +92,27 @@ def stages(img8):
     return flat, raw, cleaned, lab, final
 
 
-def overlay(img8, mask, gt=None):
-    """Grey image with the mask hatched in white, and the label outlined if given."""
+def mask_on_field(img8, mask, colour=(0.12, 0.31, 0.61)):
+    """A stage's binary output drawn over the field it came from.
+
+    Drawn bare, a binary stage is black-on-WHITE, and on a white page it has no edge: the
+    panel bleeds into the paper and the six-panel grid stops reading as a grid. Removing
+    the axes spines, which micrograph panels must not have, makes that worse rather than
+    better. Both target-venue papers checked for this figure set show segmentation over
+    the micrograph instead, which fixes the bleed, keeps every panel in the same tonal
+    range, and shows the reader where on the field the stage is acting.
+    """
     rgb = np.dstack([img8.astype(np.float32)] * 3) / 255.0
-    rgb[mask] = rgb[mask] * 0.25 + np.array([1.0, 1.0, 1.0]) * 0.75
+    rgb[mask] = np.array(colour)
+    return np.clip(rgb, 0, 1)
+
+
+def overlay(img8, mask, gt=None):
+    """Grey image with the mask in the house accent, and the label outlined if given."""
+    # the same accent as the stage panels, so the six panels read as one sequence
+    # rather than as two different figures
+    rgb = np.dstack([img8.astype(np.float32)] * 3) / 255.0
+    rgb[mask] = np.array([0.12, 0.31, 0.61])
     if gt is not None:
         edge = gt & ~ndi.binary_erosion(gt, np.ones((3, 3)))
         rgb[edge] = np.array([0.0, 0.0, 0.0])
@@ -141,9 +158,9 @@ def main():
     panels = [
         ("Micrograph", img[sl], "grey"),
         ("Background flattened", flat[sl], "grey"),
-        ("Dark candidates", raw[sl], "binary"),
-        ("Cleaned and labelled", cleaned[sl], "binary"),
-        ("Small regions dropped", final[sl], "binary"),
+        ("Dark candidates", mask_on_field(img[sl], raw[sl]), "rgb"),
+        ("Cleaned and labelled", mask_on_field(img[sl], cleaned[sl]), "rgb"),
+        ("Small regions dropped", mask_on_field(img[sl], final[sl]), "rgb"),
         ("Prediction and annotation", overlay(img[sl], final[sl], gt[sl]), "rgb"),
     ]
 
@@ -152,7 +169,8 @@ def main():
     # 3 x 2 at the printed width: six panels across 10.2 in reached the page at
     # 0.62x and took the captions to 4.7 pt. Two columns of three keeps each panel
     # about 2.6 in wide at scale 1.
-    fig, axes = plt.subplots(nrow, ncol, figsize=(J.PAGEW, 6.2), layout="constrained")
+    fig, axes = plt.subplots(nrow, ncol, figsize=(J.PAGEW, 6.0),
+                             gridspec_kw=dict(wspace=0.015, hspace=0.015))
     for i, (ax, (title, arr, kind)) in enumerate(zip(axes.ravel(), panels)):
         if kind == "grey":
             ax.imshow(arr, cmap="gray", interpolation="nearest")
@@ -160,14 +178,13 @@ def main():
             ax.imshow(arr, cmap="gray_r", interpolation="nearest")
         else:
             ax.imshow(arr, interpolation="nearest")
-        ax.set_xticks([]); ax.set_yticks([])
-        for sp in ax.spines.values():
-            sp.set_linewidth(0.5)
-        ax.set_title(title, fontsize=J.BODY, pad=3)
-        # (a) inside the panel, white on a dark stroke: the convention for micrographs
+        # no spines, no ticks, no title above the panel: the stage name goes in the
+        # caption, and the letter identifies the panel
+        J.micrograph(ax)
         J.panel_label(ax, "abcdef"[i], inside=True)
 
     p = os.path.join(OUT, "P6 - pipeline in pictures.png")
+    fig.subplots_adjust(left=0.004, right=0.996, top=0.996, bottom=0.004)
     J.save(fig, p)
     plt.close(fig)
     json.dump({"figure": "P6 - pipeline in pictures.png",

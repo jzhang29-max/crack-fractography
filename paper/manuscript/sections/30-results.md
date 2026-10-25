@@ -37,7 +37,7 @@ area discrepancy of approximately 1.3%. The darkness-or-Sato union had a ratio o
 
 {arm_tbl}
 
-[FIGURE arms | Seven arms on the 31 whole fields, each given its own best parameter by the same leave-one-image-out rule and ordered by agreement in total marked area. (a) reported crack area divided by annotated crack area; the vertical line at 1.0 is exact agreement. (b) pixel accuracy expressed as the difference from an all-background prediction on the same images, in percentage points; every arm lies to the left of zero, that is, below what marking nothing would score. The accuracies themselves span 97.7 to 98.2% and are plotted as a difference because a value axis cropped to separate them would misrepresent their similarity. Otsu thresholding on the flattened image is omitted here, marking 99.5% of the frame, and appears in Appendix A. This detector is the dark bar.]
+[FIGURE arms | Seven arms on the 31 whole fields, each given its own best parameter by the same leave-one-image-out rule and ordered by agreement in total marked area. (a) reported crack area divided by annotated crack area; the vertical line at 1.0 is exact agreement. (b) pixel accuracy expressed as the difference from an all-background prediction on the same images, in percentage points. The accuracies themselves span 97.7 to 98.2% and are plotted as a difference because a value axis cropped to separate them would misrepresent their similarity. Otsu thresholding on the flattened image is omitted here, marking 99.5% of the frame, and appears in Appendix A. This detector is the dark bar.]
 
 The area comparison identifies a specific strength of the selected configuration: its total
 foreground area closely matches the reported reference total. The numerical ordering applies
@@ -53,7 +53,7 @@ difference.
 
 ### 3.4  The operating-setting sweep, in full
 
-[FIGURE sweep | Reported crack area divided by annotated crack area against the MAD multiplier k, on the 31 whole fields and on the 26 released crops cut from them. Both axes are logarithmic and the horizontal line at 1.0 is exact agreement. The diamond marks k = 6.0, where the whole-field curve crosses unity. The earlier analysis swept only k = 1.0 to 5.0, the leftmost seven points of each series, and selected the largest value it had tested.]
+[FIGURE sweep | Reported crack area divided by annotated crack area against the MAD multiplier k, on the 31 whole fields and on the 26 released crops cut from them. Both axes are logarithmic and the horizontal line at 1.0 is exact agreement. The diamond marks k = 6.0. The leftmost seven points of each series are the range swept in the earlier analysis.]
 
 The earlier analysis selected its operating setting from a grid of seven values running from
 1.0 to the default of 5.0. **The default was the largest value tested, and the area ratio was
@@ -77,7 +77,7 @@ is a reason not to read a single tuned constant as a property of the method.
 
 ### 3.5  What the area endpoint can resolve
 
-[FIGURE ceiling | Pixel accuracy of the reference annotation reduced to its centreline and redrawn at a fixed width, against that width: a prediction exactly correct about where every crack lies and wrong only about how wide it is drawn. The horizontal axis is logarithmic. Dotted lines give the accuracy of an all-background prediction on each collection, and the diamonds mark each curve's maximum. The vertical distance between a dotted line and its diamond is the entire range in which any prediction can move on that collection: 0.708 points on the whole fields and 2.128 on the crops.]
+[FIGURE ceiling | Pixel accuracy of the reference annotation reduced to its centreline and redrawn at a fixed width, against that width: a prediction exactly correct about where every crack lies and wrong only about how wide it is drawn. The horizontal axis is logarithmic. Dotted lines give the accuracy of an all-background prediction on each collection, and the diamonds mark each curve's maximum.]
 
 A comparison is only readable against the range in which it can move. Taking the reference
 annotation itself, reducing it to its centreline and redrawing it at a fixed width gives a

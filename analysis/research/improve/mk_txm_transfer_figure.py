@@ -105,10 +105,12 @@ for g in ("B3", "AM/HC"):
         pick[g] = max(rows, key=lambda r: r[1])
 print({g: v[2][:48] for g, v in pick.items()})
 
-fig = plt.figure(figsize=(J.PAGEW, 6.8), layout="constrained")
+fig = plt.figure(figsize=(J.PAGEW, 6.9))
 # panels on top (2 rows x 3), bars underneath (1 row x 2). Side by side they needed
 # 12.4 in and the page gives 6.37.
-gs = fig.add_gridspec(3, 3, height_ratios=[1, 1, 1.15], hspace=0.26, wspace=0.06)
+# nested spacing: the micrograph rows abut, the bar row keeps a normal gap
+gs = fig.add_gridspec(3, 3, height_ratios=[1, 1, 1.25], hspace=0.055,
+                      wspace=0.015)
 
 for r, g in enumerate(("B3", "AM/HC")):
     if g not in pick:
@@ -139,8 +141,7 @@ for r, g in enumerate(("B3", "AM/HC")):
     ax = fig.add_subplot(gs[r, 0])
     ax.imshow(I, cmap="gray")
     scalebar(ax, NM_PER_PX, H)
-    ax.set_ylabel(g, fontsize=J.BODY, labelpad=3)
-    ax.set_title("TXM frame" if r == 0 else "", fontsize=J.BODY, pad=3)
+    J.micrograph(ax)
     J.panel_label(ax, "ad"[r], inside=True)
 
     ax2 = fig.add_subplot(gs[r, 1])
@@ -149,7 +150,7 @@ for r, g in enumerate(("B3", "AM/HC")):
     ov[C] = [0.10, 0.55, 0.95]
     ax2.imshow(ov)
     scalebar(ax2, NM_PER_PX, H)
-    ax2.set_title("Annotated crack" if r == 0 else "", fontsize=J.BODY, pad=3)
+    J.micrograph(ax2)
     J.panel_label(ax2, "be"[r], inside=True)
 
     ax3 = fig.add_subplot(gs[r, 2])
@@ -160,10 +161,8 @@ for r, g in enumerate(("B3", "AM/HC")):
     ov[~M & C] = [0.20, 0.35, 0.95]      # missed
     ax3.imshow(ov)
     scalebar(ax3, NM_PER_PX, H)
-    ax3.set_title("Prediction" if r == 0 else "", fontsize=J.BODY, pad=3)
+    J.micrograph(ax3)
     J.panel_label(ax3, "cf"[r], inside=True)
-    for a in (ax, ax2, ax3):
-        a.set_xticks([]); a.set_yticks([])
 
 # ---- the bars: every group, in the units the paper reports ---------------------------
 groups = ["B3", "B2", "Wrought", "AM/HC"]
@@ -198,4 +197,5 @@ axB.set_xlabel("Reported / annotated\ncrack area")
 J.panel_label(axB, "h")
 
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
+fig.subplots_adjust(left=0.085, right=0.995, top=0.995, bottom=0.085)
 J.save(fig, OUT)

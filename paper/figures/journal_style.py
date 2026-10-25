@@ -87,16 +87,39 @@ def use():
 
 
 def panel_label(ax, letter, *, inside=False, color=None):
-    """(a) at the panel corner. Outside above-left for charts, inside for micrographs."""
+    """(a) at the panel corner.
+
+    PLACEMENT IS A HOUSE CHOICE, NOT A VENUE RULE, and the two target venues disagree.
+    Checked on the publishers' own image CDN: Jiao (Mater. Charact. 2026,
+    10.1016/j.matchar.2026.116319) puts the letters outside, below, centred, for both its
+    micrograph plate and its chart plate; Zheng (Eng. Fail. Anal. 2026,
+    10.1016/j.engfailanal.2026.111235) puts a black letter on an opaque white patch inside
+    the top-left of each micrograph. What both do, and what matters, is use ONE placement
+    consistently through the paper.
+
+    So: charts get the letter outside above-left, micrographs get Zheng's black-on-white
+    patch inside, and nothing in the submission deviates from that pairing. The earlier
+    white-letter-with-a-black-stroke form is dropped -- it is a screenshot-overlay look and
+    neither venue uses it.
+    """
     if inside:
-        t = ax.text(0.025, 0.975, f"({letter})", transform=ax.transAxes,
-                    fontsize=PANEL, fontweight="bold", va="top", ha="left",
-                    color=color or "white")
-        import matplotlib.patheffects as pe
-        t.set_path_effects([pe.withStroke(linewidth=1.8, foreground="black", alpha=0.7)])
-        return t
+        return ax.text(0.02, 0.98, f"({letter})", transform=ax.transAxes,
+                       fontsize=PANEL, fontweight="bold", va="top", ha="left",
+                       color=color or INK,
+                       bbox=dict(facecolor="white", edgecolor="none",
+                                 boxstyle="square,pad=0.22"))
     return ax.text(-0.02, 1.04, f"({letter})", transform=ax.transAxes, fontsize=PANEL,
                    fontweight="bold", va="bottom", ha="left", color=color or INK)
+
+
+def micrograph(ax):
+    """Strip a micrograph panel of every axes decoration.
+
+    No spines, no ticks, no tick labels, no axis title. A micrograph is an image, and the
+    pixel grid is not a measurement axis; the stage or specimen name belongs in the
+    caption or beside the panel letter. Chart panels keep their full box.
+    """
+    ax.set_axis_off()
 
 
 def save(fig, path, *, dpi=600, printed_width=PAGEW):
