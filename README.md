@@ -30,6 +30,78 @@ Archived means public and cloneable but no longer accepting changes — every pa
 cites into them still resolves. It does not mean everything the paper cites is in them:
 new artifacts can only land here.
 
+## The paper, and the documents behind it
+
+Two papers are built from this repository, and both regenerate from the measurement files
+rather than from typed numbers — an unresolved name fails the build instead of rendering.
+
+| | |
+|---|---|
+| `paper/manuscript/Revised_Manuscript_v2.pdf` | **the submission draft.** 15 pages, 7 figures, 22 references |
+| `paper/draft.pdf` | the longer working draft the manuscript is cut from, carrying the negative results in full |
+| `docs/INDEX.md` | **start here for anything else.** Every document and every measurement file, with the script that produced it |
+
+**These builds need a scientific stack the app does not carry.** `./run` creates a `.venv`
+holding only what the application needs, deliberately — it has no matplotlib, no scipy and
+no scikit-image, so `.venv/bin/python paper/make_paper.py` fails with `ModuleNotFoundError`.
+Point `$PY` at an interpreter that has matplotlib, numpy, scipy and scikit-image:
+
+    PY=../sem-crack-detector/.venv/bin/python3     # the one this project develops against
+
+    $PY paper/manuscript/build.py          # -> paper/manuscript/Revised_Manuscript_v2.pdf
+    $PY paper/make_paper.py                # -> paper/draft.pdf
+    $PY paper/figures/mk_paper_plates.py   # plates P1-P5
+    $PY paper/figures/mk_pipeline_visual.py   # plate P6
+
+Every plate is drawn at the width it prints at, and the generator refuses to write one
+whose smallest type would print below 7 pt. That check runs **after** the file is written,
+reading the saved width back, because the page rescales whatever it is given and a check in
+the figure's own coordinates passes plates that reach the page at half scale.
+
+References are checked against the registries, not by eye:
+
+    $PY analysis/research/improve/verify_references.py
+
+It resolves all 22 identifiers against Crossref, DataCite and arXiv and fails if an author
+or title does not match what the manuscript claims. It exists because three DOIs in an
+earlier draft were constructed rather than looked up, and two of them resolved to real but
+unrelated papers.
+
+### What the paper found that a user of this app should know
+
+**The shipped `mad_k` is one rung below the measured optimum, and has not been changed.**
+The published sweep ran 1.0 to 5.0 — 5.0 being the shipped value — with the score still
+rising where the grid stopped, so the selection could not have failed. Extending it puts
+the optimum at 6.0: on 31 public Inconel 718 whole fields the reported crack area fraction
+goes from 1.30x the annotated value to 1.013x, better in 23 of 31 images (paired Wilcoxon
+p = 0.0124). Both constants are named in `analysis/detector_overrides.py` as
+`SHIPPED_MAD_K` and `PAPER_MAD_K`, because 31 images of one alloy is not enough to move a
+default and a reader of that file should not have to guess which value the app runs.
+
+**The ranking on that benchmark can be bought.** Dilating the detector's own output — which
+reads no new evidence from the image — takes it to the top of a conventional overlap
+ranking while pushing the reported area fraction to 2.54x. That is why the paper reports a
+pixel budget and an area ratio rather than F1 or IoU. `docs/RANKING_IS_BUYABLE.md`.
+
+**Accuracy on a 1.8%-crack field is not a usable score.** An empty mask scores 98.20% and
+a mask with perfect localisation and the best possible width reaches only 98.905%, so the
+entire competitive range is 0.71 percentage points.
+
+| document | what it settles |
+|---|---|
+| [`docs/INDEX.md`](docs/INDEX.md) | the map: every document, every measurement file, every generator |
+| [`docs/CLAIMS.md`](docs/CLAIMS.md) | every claim this project has made, its status, and what withdrew it |
+| [`docs/REPORTING_GUIDE.md`](docs/REPORTING_GUIDE.md) | how a number must be reported here, and the error each rule came from |
+| [`docs/PRACTICE_AND_PRIOR_ART.md`](docs/PRACTICE_AND_PRIOR_ART.md) | prior-art checks; every novelty framing tested and its outcome |
+| [`docs/CAN_THE_MODEL_BE_IMPROVED.md`](docs/CAN_THE_MODEL_BE_IMPROVED.md) | yes, by marking less. Four channels that tried to mark more all failed their decoys |
+| [`docs/RANKING_IS_BUYABLE.md`](docs/RANKING_IS_BUYABLE.md) | the dilation result, and what first place costs the area fraction |
+| [`docs/TXM_READINESS.md`](docs/TXM_READINESS.md) | the SEM detector carried to TXM: one specimen group of four transfers |
+| [`docs/PUBLIC_CRACK_DATA_SEARCH.md`](docs/PUBLIC_CRACK_DATA_SEARCH.md) | every public crack dataset checked, used or rejected with a reason |
+| [`docs/DATASET_AND_JOURNAL_TARGETS.md`](docs/DATASET_AND_JOURNAL_TARGETS.md) | there is no public SEM metal-crack benchmark but one; and where to submit |
+| [`docs/SIMILAR_RECENT_PAPERS.md`](docs/SIMILAR_RECENT_PAPERS.md) | recent comparable work, with every identifier verified |
+| [`docs/DATASET_RELEASE_SCOPE.md`](docs/DATASET_RELEASE_SCOPE.md) | what releasing this lab's own micrographs would cost |
+| [`docs/MAR_H_AS_vs_MAR_H_HIP.md`](docs/MAR_H_AS_vs_MAR_H_HIP.md) | that specimen comparison, with the confounds that limit it |
+
 ## What this measures, and what it cannot
 
 A BW mask records crack **geometry**. Everything here is derived from that: length, width,
