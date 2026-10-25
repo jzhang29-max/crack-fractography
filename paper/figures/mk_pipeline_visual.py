@@ -26,6 +26,10 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import journal_style as J          # noqa: E402
+
+J.use()
 from matplotlib.patches import FancyArrowPatch
 from scipy import ndimage as ndi
 from skimage import measure as skm
@@ -130,19 +134,17 @@ def main():
     x0 = max(min(cx - H // 2, img.shape[1] - H), 0)
     sl = (slice(y0, y0 + H), slice(x0, x0 + H))
 
+    # SHORT LABELS ONLY. What each stage does belongs in the figure caption: IOP forbids
+    # a figure title outright and Elsevier's caption rule puts the description there, and
+    # the two-line explanations under every panel were the same convention error as the
+    # in-figure title.
     panels = [
-        ("1  Micrograph", img[sl], "grey",
-         "the field as acquired, 8-bit"),
-        ("2  Flatten the background", flat[sl], "grey",
-         f"multi-scale estimate at sigma {DO.SCALE_LADDER[0]}-{DO.SCALE_LADDER[-1]} px,\\nsubtracted"),
-        ("3  Propose dark candidates", raw[sl], "binary",
-         f"dark at ANY of {len(DO.SCALE_LADDER)} scales: robust MAD cut\\nplus an absolute floor at {DO.ABSOLUTE_DARK_THRESH}"),
-        ("4  Clean and label", cleaned[sl], "binary",
-         "holes filled, blobs under 13 px dropped,\\n8-connected labelling"),
-        ("5  Drop small regions", final[sl], "binary",
-         "regions under 40 px removed.\\nPass 1's classifier is OFF, so nothing else is"),
-        ("6  The answer, against the label", overlay(img[sl], final[sl], gt[sl]), "rgb",
-         "white = what the detector marked,\\nblack outline = what the human marked"),
+        ("Micrograph", img[sl], "grey"),
+        ("Background flattened", flat[sl], "grey"),
+        ("Dark candidates", raw[sl], "binary"),
+        ("Cleaned and labelled", cleaned[sl], "binary"),
+        ("Small regions dropped", final[sl], "binary"),
+        ("Prediction and annotation", overlay(img[sl], final[sl], gt[sl]), "rgb"),
     ]
 
     ncol = 2
@@ -150,48 +152,23 @@ def main():
     # 3 x 2 at the printed width: six panels across 10.2 in reached the page at
     # 0.62x and took the captions to 4.7 pt. Two columns of three keeps each panel
     # about 2.6 in wide at scale 1.
-    fig, axes = plt.subplots(nrow, ncol, figsize=(PAGEW - 0.25, 8.6))
-    for ax, (title, arr, kind, cap) in zip(axes.ravel(), panels):
+    fig, axes = plt.subplots(nrow, ncol, figsize=(J.PAGEW, 6.2), layout="constrained")
+    for i, (ax, (title, arr, kind)) in enumerate(zip(axes.ravel(), panels)):
         if kind == "grey":
             ax.imshow(arr, cmap="gray", interpolation="nearest")
         elif kind == "binary":
-            ax.imshow(~np.asarray(arr, bool), cmap="gray", vmin=0, vmax=1,
-                      interpolation="nearest")
+            ax.imshow(arr, cmap="gray_r", interpolation="nearest")
         else:
             ax.imshow(arr, interpolation="nearest")
         ax.set_xticks([]); ax.set_yticks([])
         for sp in ax.spines.values():
-            sp.set_edgecolor("0.6"); sp.set_linewidth(0.8)
-        ax.set_title(title, fontsize=LAB, fontweight="bold", pad=5, loc="left")
-        ax.set_xlabel(cap.replace("\\n", "\n"), fontsize=CAP, color="0.25", labelpad=4,
-                      linespacing=1.45)
-    # arrows between the panels, so it reads as a flow and not a contact sheet
-    for r in range(nrow):
-        for c in range(ncol - 1):
-            a, b = axes[r][c], axes[r][c + 1]
-            # the VERTICAL CENTRE of the image axes. y0 + 0.30 in figure coordinates put
-            # the arrows above the panels, floating, where they read as decoration.
-            pa, pb = a.get_position(), b.get_position()
-            ymid = (pa.y0 + pa.y1) / 2
-            fig.add_artist(FancyArrowPatch(
-                (pa.x1 + 0.005, ymid), (pb.x0 - 0.005, ymid),
-                arrowstyle="-|>", mutation_scale=13, color="0.35", linewidth=1.2,
-                transform=fig.transFigure))
-    # NO WRAP ARROW. A curved 3 -> 4 connector was tried and it swept across three panels,
-    # which is worse than leaving the reading order to the numbers on the titles.
-    fig.suptitle("Every step, on one public Inconel 718 field", fontsize=TITLE,
-                 fontweight="bold", y=0.975)
-    fig.text(0.5, 0.022,
-             f"{H} x {H} px detail of {stem}.tif (Zenodo 23045328, CC BY 4.0).\n"
-             f"Each panel is the array that stage actually produces, captured by\n"
-             f"running the shipped detector. No scale bar: the collection\n"
-             f"publishes no pixel size.",
-             ha="center", va="bottom", fontsize=CAP, color="0.35",
-             linespacing=1.45)
-    fig.subplots_adjust(left=0.02, right=0.98, top=0.90, bottom=0.165, wspace=0.09,
-                        hspace=0.62)
+            sp.set_linewidth(0.5)
+        ax.set_title(title, fontsize=J.BODY, pad=3)
+        # (a) inside the panel, white on a dark stroke: the convention for micrographs
+        J.panel_label(ax, "abcdef"[i], inside=True)
+
     p = os.path.join(OUT, "P6 - pipeline in pictures.png")
-    save_checked(fig, p)
+    J.save(fig, p)
     plt.close(fig)
     json.dump({"figure": "P6 - pipeline in pictures.png",
                "field": stem, "detail_px": H, "crop_origin": [int(y0), int(x0)],

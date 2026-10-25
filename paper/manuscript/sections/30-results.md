@@ -25,7 +25,7 @@ collection scored in this work, and Table 2 collects the principal numerical res
 | Pixel accuracy of an all-background prediction | {in_empty_acc}% |
 | Fields with lower absolute area error than the default | 23 of {in_n} |
 
-[FIGURE areabars | Reported crack area fraction against the annotated fraction, and pixel accuracy against the accuracy of an all-background prediction, for every collection scored in this work. A ratio of 1.0 is exact agreement; the diamond marks the selected setting on the whole fields. MetalDAM is included for reference and labels voids rather than cracks.]
+[FIGURE areabars | Performance on every collection scored in this work. (a) reported crack area divided by annotated crack area; the vertical line at 1.0 is exact agreement and the diamond marks the selected setting on the whole fields. The axis is logarithmic. (b) pixel accuracy, with the vertical bar giving the accuracy an all-background prediction would reach on the same collection. MetalDAM is included for reference and labels voids rather than cracks; the EBC coating was withdrawn from this study as a ceramic.]
 
 ### 3.2  Descriptive comparison of aggregate area estimates
 
@@ -37,7 +37,7 @@ area discrepancy of approximately 1.3%. The darkness-or-Sato union had a ratio o
 
 {arm_tbl}
 
-[FIGURE arms | The eight compared arms on the whole fields, ranked by how close the reported crack area fraction is to the annotated one, with pixel accuracy and the all-background reference point beside it. The detector places first on area agreement. No arm clears the all-background accuracy on this collection; three do on the released crops.]
+[FIGURE arms | Seven arms on the 31 whole fields, each given its own best parameter by the same leave-one-image-out rule and ordered by agreement in total marked area. (a) reported crack area divided by annotated crack area; the vertical line at 1.0 is exact agreement. (b) pixel accuracy expressed as the difference from an all-background prediction on the same images, in percentage points; every arm lies to the left of zero, that is, below what marking nothing would score. The accuracies themselves span 97.7 to 98.2% and are plotted as a difference because a value axis cropped to separate them would misrepresent their similarity. Otsu thresholding on the flattened image is omitted here, marking 99.5% of the frame, and appears in Appendix A. This detector is the dark bar.]
 
 The area comparison identifies a specific strength of the selected configuration: its total
 foreground area closely matches the reported reference total. The numerical ordering applies
@@ -53,7 +53,7 @@ difference.
 
 ### 3.4  The operating-setting sweep, in full
 
-[FIGURE sweep | Reported crack area fraction divided by the annotated fraction, against the detector's MAD multiplier, on the whole fields and on the released crops of those same fields. A value of 1.0 is exact agreement. The shaded band marks the grid swept in the earlier analysis, which stopped at the default setting. Both axes are logarithmic.]
+[FIGURE sweep | Reported crack area divided by annotated crack area against the MAD multiplier k, on the 31 whole fields and on the 26 released crops cut from them. Both axes are logarithmic and the horizontal line at 1.0 is exact agreement. The diamond marks k = 6.0, where the whole-field curve crosses unity. The earlier analysis swept only k = 1.0 to 5.0, the leftmost seven points of each series, and selected the largest value it had tested.]
 
 The earlier analysis selected its operating setting from a grid of seven values running from
 1.0 to the default of 5.0. **The default was the largest value tested, and the area ratio was
@@ -77,7 +77,7 @@ is a reason not to read a single tuned constant as a property of the method.
 
 ### 3.5  What the area endpoint can resolve
 
-[FIGURE ceiling | Pixel accuracy of the reference annotation reduced to its centreline and redrawn at a fixed width: a prediction that is exactly correct about where every crack is and wrong only about how wide. Dotted lines give the accuracy of an all-background prediction on each collection. Circles mark each curve's maximum.]
+[FIGURE ceiling | Pixel accuracy of the reference annotation reduced to its centreline and redrawn at a fixed width, against that width: a prediction exactly correct about where every crack lies and wrong only about how wide it is drawn. The horizontal axis is logarithmic. Dotted lines give the accuracy of an all-background prediction on each collection, and the diamonds mark each curve's maximum. The vertical distance between a dotted line and its diamond is the entire range in which any prediction can move on that collection: 0.708 points on the whole fields and 2.128 on the crops.]
 
 A comparison is only readable against the range in which it can move. Taking the reference
 annotation itself, reducing it to its centreline and redrawing it at a fixed width gives a

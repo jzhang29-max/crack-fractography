@@ -61,7 +61,7 @@ budget.
 Figure 1 shows the microscopy example and the intermediate image outputs. Figure 2
 summarises the scored branch from grayscale input to area measurement.
 
-[FIGURE pipeline | Representative detector outputs for one Inconel 718 SEM field. Panels show the input, background correction, candidate detection and mask processing, and the prediction against the reference annotation. No scale bar is shown because the source collection publishes no pixel size; see Section 2.1.]
+[FIGURE pipeline | The detector applied to one Inconel 718 field, 360 x 360 px detail. (a) the field as acquired, 8-bit. (b) after background flattening, a multi-scale estimate at sigma 5 to 320 px subtracted. (c) dark candidates: pixels dark at any of the seven scales, after the MAD criterion and the absolute intensity gate. (d) holes filled, components under 13 px dropped, 8-connected labelling. (e) regions under 40 px removed; this is the scored mask. (f) the prediction in white against the reference annotation outlined in black. Each panel is the array the stage produces, captured by running the detector. No scale bar is shown because the source collection publishes no pixel size; the reported quantity is a dimensionless area ratio and does not require one (Section 2.1).]
 
 [FIGURE workflow | The scored detector workflow. Candidate detection and mask processing produce the predicted crack area fraction. The learned region classifier is disabled. Subsequent region growth and manual correction are outside the evaluated branch.]
 

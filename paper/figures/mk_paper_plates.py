@@ -24,6 +24,11 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import journal_style as J          # noqa: E402  -- the target journals' own rules
+
+J.use()
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
 SCRATCH = os.path.join(REPO, "docs", "figures")   # the measurement files live here
@@ -138,204 +143,147 @@ MF = load(os.path.join(REPO, "docs/figures/metric_figures.json"), "corpus metric
 
 # ---------------------------------------------------------------- plate: public scores
 def plate_scores():
-    """The headline, in the only units this paper reports.
+    """Reported against annotated crack area, and accuracy against an all-background mask.
 
-    This plate used to show precision, recall, F1 and IoU against no-information floors.
-    All four discard the pixels correctly left alone, which on these fields is 98% of the
-    frame, so none of them could state the quantity the tool outputs. It now shows that
-    quantity directly -- the crack area fraction reported against the one the annotator
-    marked, on every set this project has scored -- with accuracy beside it and the
-    empty-mask line that makes an accuracy legible.
+    No title and no prose inside the axes: IOP forbids a figure title outright and
+    Elsevier's caption rule says the title is "not displayed on the figure itself". Both
+    panels start at zero, because a truncated value axis under bars is the one thing in
+    this set a reviewer will call a misrepresentation -- which is why panel (b) now shows
+    the all-background reference as a marker on a full-range axis rather than as a tick on
+    a 20-point crop. Colour carries identity only.
     """
     order = [("Inconel 718\nwhole fields", "Inconel 718, whole fields"),
              ("Inconel 718\nreleased crops", "Inconel 718, released crops"),
-             ("MetalDAM\nvoids, not cracks", "MetalDAM voids (not cracks)"),
-             ("EBC coating\nwithdrawn: ceramic", "EBC coating, whole fields")]
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(PAGEW - 0.25, 3.1),
-                                   gridspec_kw={"width_ratios": [1.05, 1.0]})
-
-    # left: how close the reported area fraction is to the annotator's. 1.0 is exact.
+             ("MetalDAM\nvoids", "MetalDAM voids (not cracks)"),
+             ("EBC coating\nwithdrawn", "EBC coating, whole fields")]
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(J.PAGEW, 2.6), layout="constrained",
+                                   gridspec_kw={"width_ratios": [1.0, 1.0]})
+    y = list(range(len(order)))[::-1]
     lab = [o[0] for o in order]
     rat = [PAX[k]["detector"]["marked_pct"] / PAX[k]["detector"]["labelled_pct"]
            for _, k in order]
-    # the shipped Inconel field value is replaced by the operating point Section 3.2 argues
-    # for; both are drawn so the improvement is visible rather than asserted
     best = min(BC["sweeps"]["whole_fields"],
                key=lambda r: abs(r["area_agreement_corpus"] - 1.0))
-    y = range(len(order))
-    ax1.axvline(1.0, color="0.0", lw=1.2, zorder=1)
-    ax1.barh(list(y), rat, 0.5, color=["0.25"] + ["0.62"] * 3, zorder=2)
-    ax1.plot([best["area_agreement_corpus"]], [0], marker="D", color="#b3401a",
-             markersize=6, zorder=5)
-    ax1.annotate(f"mad_k {best['mad_k']:g}: {best['area_agreement_corpus']:.3f}x",
-                 xy=(best["area_agreement_corpus"], 0), xytext=(2.4, 0.62),
-                 fontsize=SMALL, color="#b3401a",
-                 arrowprops=dict(arrowstyle="-", color="#b3401a", lw=0.8))
-    ax1.text(1.02, len(order) - 0.52, "exact", fontsize=SMALL, va="center", ha="left",
-             rotation=90)
-    for i, v in zip(y, rat):
-        ax1.text(v * 1.22, i, f"{v:.2f}x", va="center", fontsize=SMALL)
-    ax1.set_xscale("log")
-    ax1.set_xticks([0.5, 1, 2, 5, 20, 80])
-    ax1.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
-    ax1.set_yticks(list(y), lab, fontsize=SMALL)
-    ax1.set_xlabel("crack area fraction reported / marked", fontsize=BODY)
-    ax1.set_title("What the tool reports", fontsize=TITLE)
-    ax1.spines[["top", "right"]].set_visible(False)
 
-    # right: accuracy against the accuracy of an empty mask on the same set
+    ax1.barh(y, rat, 0.55, color=[J.G_DARK] + [J.G_LIGHT] * 3, edgecolor=J.INK,
+             linewidth=0.5, zorder=2)
+    ax1.axvline(1.0, color=J.INK, lw=0.9, zorder=3)
+    ax1.plot([best["area_agreement_corpus"]], [y[0]], marker="D", color=J.ACCENT,
+             markersize=4.5, zorder=5, clip_on=False)
+    ax1.set_xscale("log")
+    ax1.set_xticks([1, 10, 100])
+    ax1.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+    ax1.set_yticks(y, lab)
+    ax1.set_xlabel("Reported / annotated crack area")
+    J.panel_label(ax1, "a")
+
     acc = [100 * PAX[k]["detector"]["accuracy"] for _, k in order]
     emp = [100 - PAX[k]["detector"]["labelled_pct"] for _, k in order]
-    # THE AXIS STARTS NEAR THE DATA. Drawn from zero, 96% and 99% are the same bar and the
-    # empty-mask line sits on top of every one of them, which is the whole comparison.
-    lo = min(min(acc), min(emp)) - 1.5
-    for i, (a, e) in enumerate(zip(acc, emp)):
-        ax2.barh(i, a - lo, 0.5, left=lo, color="0.25" if a > e else "#b3401a", zorder=2)
-        ax2.plot([e, e], [i - 0.33, i + 0.33], color="0.0", lw=2.4, zorder=5)
-        ax2.text(a + 0.5, i, f"{a:.2f}", va="center", fontsize=SMALL,
-                 color="0.25" if a > e else "#b3401a", fontweight="bold")
-        ax2.text(e, i + 0.36, f"{e:.2f}", va="bottom", ha="center", fontsize=SMALL,
-                 color="0.0")
-    ax2.set_yticks(list(y), ["" for _ in order])
-    ax2.set_xlim(lo, max(acc) + 3.2)
-    ax2.set_xlabel("accuracy, all pixels (%)", fontsize=BODY)
-    ax2.set_title("Accuracy vs an empty mask", fontsize=TITLE)
-    # the note goes under the whole figure: inside ax2 it printed across the bottom bar
-    fig.text(0.5, 0.005, "black tick = the accuracy of an empty mask on that set; "
-             "red = the detector does not beat it", ha="center", fontsize=SMALL,
-             color="0.3")
-    ax2.spines[["top", "right"]].set_visible(False)
-    ax1.tick_params(labelsize=SMALL)
-    ax2.tick_params(labelsize=SMALL)
+    ax2.barh(y, acc, 0.55, color=J.G_LIGHT, edgecolor=J.INK, linewidth=0.5, zorder=2,
+             label="detector")
+    ax2.plot(emp, y, linestyle="none", marker="|", color=J.INK, markersize=11,
+             markeredgewidth=1.4, zorder=5, label="all-background mask")
+    ax2.set_xlim(0, 105)
+    ax2.set_xticks([0, 25, 50, 75, 100])
+    ax2.set_yticks(y, ["" for _ in order])
+    ax2.set_xlabel("Pixel accuracy (%)")
+    ax2.legend(loc="lower left", fontsize=J.TICK - 0.5, handlelength=1.4)
+    J.panel_label(ax2, "b")
 
-    save(fig, "P1 - public scores", {
-        "what": "crack area fraction reported against marked, and accuracy against the "
-                "accuracy of an empty mask, on every set scored",
-        "values": {k: {"area_agreement": PAX[k]["detector"]["marked_pct"]
-                       / PAX[k]["detector"]["labelled_pct"],
-                       "accuracy_pct": 100 * PAX[k]["detector"]["accuracy"],
-                       "empty_mask_accuracy_pct": 100 - PAX[k]["detector"]["labelled_pct"]}
-                   for _, k in order},
-        "source": "pixel_accounting.json + background_counting_table.json"})
+    J.save(fig, os.path.join(OUT, "P1 - public scores.png"))
+    json.dump({"what": "reported vs annotated crack area, and pixel accuracy vs an "
+                       "all-background mask, for every collection scored",
+               "values": {k: {"area_agreement": PAX[k]["detector"]["marked_pct"]
+                              / PAX[k]["detector"]["labelled_pct"],
+                              "accuracy_pct": 100 * PAX[k]["detector"]["accuracy"],
+                              "all_background_accuracy_pct":
+                                  100 - PAX[k]["detector"]["labelled_pct"]}
+                          for _, k in order},
+               "source": "pixel_accounting.json + background_counting_table.json"},
+              open(os.path.join(OUT, "P1 - public scores.caption.json"), "w"), indent=1)
 
 
 # ------------------------------------------------------- plate: one constant transfers
 def plate_transfer():
-    """The operating curve, in the units the paper reports.
+    """Reported/annotated crack area against the detector's one free constant.
 
-    Two things this plate must show and its earlier versions did not. The sweep used to
-    stop at mad_k = 5.0, the shipped constant, with the score still rising -- so the plate
-    asserted a peak it had never reached, and the grid it swept is shaded here so a reader
-    can see where it stopped. And it plotted mean F1, which discards the background; the
-    curve drawn now is the crack area fraction the tool would report divided by the one the
-    annotator marked, where 1.0 is exact and the optimum is visible as a crossing rather
-    than as a maximum.
+    The shaded band marking the earlier draft's grid and the sentence that labelled it
+    are gone from the artwork: the band is a claim about this paper's own history, which
+    is caption material, and prose inside the axes is the convention being corrected.
+    What survives inside the frame is data, a reference line at unity, and two markers.
     """
-    fig, ax = plt.subplots(figsize=(PAGEW - 0.25, 3.7))
-    wf = BC["sweeps"]["whole_fields"]
-    cr = BC["sweeps"]["crops"]
+    fig, ax = plt.subplots(figsize=(J.W15, 2.9), layout="constrained")
+    wf, cr = BC["sweeps"]["whole_fields"], BC["sweeps"]["crops"]
     ks = [r["mad_k"] for r in wf]
-
-    ax.plot(ks, [r["area_agreement_corpus"] for r in wf], marker="^", linestyle="-",
-            color="0.0", markersize=4.5, linewidth=1.6,
-            label="Inconel 718, whole fields")
+    ax.plot(ks, [r["area_agreement_corpus"] for r in wf], marker="o", color=J.INK,
+            label="whole fields")
     ax.plot([r["mad_k"] for r in cr], [r["area_agreement_corpus"] for r in cr],
-            marker="s", linestyle="--", color="0.55", markersize=4, linewidth=1.3,
-            label="the same images, cropped around cracks")
-    ax.axhline(1.0, color="0.0", lw=1.2)
-    ax.text(ks[0], 1.08, "exact", fontsize=SMALL, va="bottom", ha="left")
-
+            marker="s", linestyle="--", color=J.G_MID, markerfacecolor="white",
+            label="released crops")
+    ax.axhline(1.0, color=J.INK, lw=0.7)
     best = min(wf, key=lambda r: abs(r["area_agreement_corpus"] - 1.0))
-    ax.axvspan(1.0, 5.0, color="0.92", zorder=0)
-    ax.text(2.1, 17.0, "the grid the\nfirst draft swept", fontsize=SMALL,
-            color="0.45", ha="center", va="center", linespacing=1.25)
-    ax.axvline(5.0, color="0.7", lw=1.0, linestyle=":")
-    ax.axvline(best["mad_k"], color="#b3401a", lw=1.1)
-    ax.text(5.0, 22, "shipped 5.0 ", fontsize=SMALL, color="0.4", rotation=90,
-            va="top", ha="right")
-    ax.text(best["mad_k"], 22,
-            f" exact at {best['mad_k']:g}: {best['area_agreement_corpus']:.3f}x",
-            fontsize=SMALL, color="#b3401a", rotation=90, va="top", ha="left")
-
+    ax.plot([best["mad_k"]], [best["area_agreement_corpus"]], marker="D",
+            color=J.ACCENT, markersize=5.5, zorder=6)
     ax.set_xscale("log")
     ax.set_yscale("log")
-    ax.set_xticks([1, 2, 3, 5, 8, 12, 20, 40])
-    ax.set_yticks([0.1, 0.25, 0.5, 1, 2, 5, 10, 25])
+    ax.set_xticks([1, 10])
+    ax.set_yticks([0.1, 1, 10])
     for a in (ax.get_xaxis(), ax.get_yaxis()):
         a.set_major_formatter(matplotlib.ticker.ScalarFormatter())
-    ax.set_xlabel("mad_k  (robust outlier threshold)", fontsize=BODY)
-    ax.set_ylabel("area fraction reported / marked", fontsize=BODY)
-    ax.tick_params(labelsize=SMALL)
-    ax.spines[["top", "right"]].set_visible(False)
-    ax.legend(fontsize=SMALL, frameon=False, loc="lower left")
-    ax.set_title("The shipped constant over-reports; one rung up is exact", fontsize=TITLE)
-    save(fig, "P2 - operating curve", {
-        "what": "reported crack area fraction divided by the annotator's, against the "
-                "detector's single free constant, on whole fields and on the released "
-                "crops of those same fields",
-        "whole_fields": {str(r["mad_k"]): r["area_agreement_corpus"] for r in wf},
-        "crops": {str(r["mad_k"]): r["area_agreement_corpus"] for r in cr},
-        "source": "docs/figures/background_counting_table.json"})
+    ax.set_xlabel("MAD multiplier, $k$")
+    ax.set_ylabel("Reported / annotated crack area")
+    ax.legend(loc="upper right")
+    J.save(fig, os.path.join(OUT, "P2 - operating curve.png"),
+           printed_width=J.W15)
+    json.dump({"what": "reported crack area divided by annotated, against the detector's "
+                       "single free constant, on whole fields and on crops of them",
+               "whole_fields": {str(r["mad_k"]): r["area_agreement_corpus"] for r in wf},
+               "crops": {str(r["mad_k"]): r["area_agreement_corpus"] for r in cr},
+               "marker": {"mad_k": best["mad_k"],
+                          "ratio": best["area_agreement_corpus"]},
+               "source": "docs/figures/background_counting_table.json"},
+              open(os.path.join(OUT, "P2 - operating curve.caption.json"), "w"), indent=1)
 
 
 def plate_width():
-    """The constant-width construction, scored over every pixel.
-
-    This plate used to draw IoU against drawn width. IoU discards the background, so it
-    could not say what the construction costs a reader -- and the section's conclusion is
-    about exactly that. Redrawn with accuracy on the left axis and the reported area
-    fraction on the right, both against the empty-mask line, so the ceiling is expressed
-    in the same units as every other result in the paper.
-    """
-    fig, ax = plt.subplots(figsize=(PAGEW - 0.25, 3.9))
+    """Accuracy of the annotation redrawn at a fixed width, against drawn width."""
+    fig, ax = plt.subplots(figsize=(J.W15, 2.9), layout="constrained")
     wf, cr = WBG["whole_fields"], WBG["crops"]
     ws = sorted(int(k) for k in wf["by_width"])
-
-    ax.plot(ws, [wf["by_width"][str(w)]["accuracy_pct"] for w in ws], marker="^",
-            color="0.0", markersize=4.5, linewidth=1.6,
-            label=f"whole fields, n={wf['n']}")
+    ax.plot(ws, [wf["by_width"][str(w)]["accuracy_pct"] for w in ws], marker="o",
+            color=J.INK, label=f"whole fields ($n$ = {wf['n']})")
     ax.plot(ws, [cr["by_width"][str(w)]["accuracy_pct"] for w in ws], marker="s",
-            linestyle="--", color="0.55", markersize=4, linewidth=1.3,
-            label=f"released crops, n={cr['n']}")
-    ax.axhline(wf["empty_mask_accuracy_pct"], color="0.0", lw=1.0, linestyle=":")
-    ax.text(ws[-1], wf["empty_mask_accuracy_pct"] + 0.06,
-            f"an empty mask, whole fields  {wf['empty_mask_accuracy_pct']:.2f}%",
-            fontsize=SMALL, ha="right", va="bottom", color="0.0")
-    ax.axhline(cr["empty_mask_accuracy_pct"], color="0.55", lw=1.0, linestyle=":")
-    ax.text(ws[-1], cr["empty_mask_accuracy_pct"] + 0.06,
-            f"an empty mask, crops  {cr['empty_mask_accuracy_pct']:.2f}%",
-            fontsize=SMALL, ha="right", va="bottom", color="0.4")
-
-    for d, col, mk in ((wf, "0.0", "^"), (cr, "0.55", "s")):
+            linestyle="--", color=J.G_MID, markerfacecolor="white",
+            label=f"released crops ($n$ = {cr['n']})")
+    ax.axhline(wf["empty_mask_accuracy_pct"], color=J.INK, lw=0.7, linestyle=":")
+    ax.axhline(cr["empty_mask_accuracy_pct"], color=J.G_MID, lw=0.7, linestyle=":")
+    for d, col in ((wf, J.ACCENT), (cr, J.ACCENT)):
         bw = d["best_accuracy_width"]
-        ax.plot([bw], [d["by_width"][str(bw)]["accuracy_pct"]], marker="o",
-                markersize=11, markerfacecolor="none", markeredgecolor="#b3401a",
-                markeredgewidth=1.4, zorder=6)
+        ax.plot([bw], [d["by_width"][str(bw)]["accuracy_pct"]], marker="D", color=col,
+                markersize=5.5, zorder=6)
     ax.set_xscale("log")
-    ax.set_xticks(ws)
+    ax.set_xticks([1, 10])
     ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
-    ax.set_xlabel("width the centreline is redrawn at (px)", fontsize=BODY)
-    ax.set_ylabel("accuracy, all pixels", fontsize=BODY)
-    ax.tick_params(labelsize=SMALL)
-    ax.spines[["top", "right"]].set_visible(False)
-    ax.legend(fontsize=SMALL, frameon=False, loc="lower center")
-    ax.set_title("A mask that is exactly right about WHERE, and wrong only about WIDTH",
-                 fontsize=TITLE)
-    save(fig, "P3 - width sensitivity", {
-        "what": "accuracy of the annotator's own centreline redrawn at a fixed width, "
-                "against the accuracy of an empty mask",
-        "whole_fields": wf, "crops": cr,
-        "source": "docs/figures/width_ceiling_background_units.json"})
+    ax.set_xlabel("Width the centreline is redrawn at (px)")
+    ax.set_ylabel("Pixel accuracy (%)")
+    ax.legend(loc="lower center")
+    J.save(fig, os.path.join(OUT, "P3 - width sensitivity.png"), printed_width=J.W15)
+    json.dump({"what": "accuracy of the annotation reduced to its centreline and redrawn "
+                       "at a fixed width; dotted lines are all-background accuracy",
+               "whole_fields": wf, "crops": cr,
+               "source": "docs/figures/width_ceiling_background_units.json"},
+              open(os.path.join(OUT, "P3 - width sensitivity.caption.json"), "w"),
+              indent=1)
 
 
 def plate_baselines():
-    """The classical comparison, ranked by what the tool reports rather than by overlap.
+    """Eight arms, ranked by reported/annotated crack area, with accuracy beside them.
 
-    This plate used to rank eight arms by F1 on the released crops. It now ranks them on
-    the whole fields by how close each one's reported crack area fraction is to the
-    annotator's, which is the quantity the laboratory uses, with accuracy beside it and
-    the empty-mask line drawn in. Otsu on the flattened image marks 99.5% of the frame and
-    is left to Appendix A; including it would compress every other bar to nothing.
+    Panel (b) previously ran from 97.4 to 98.5 so the differences between arms would show.
+    That is a truncated axis under bars and it is the clearest misrepresentation available
+    in this figure set, so it now runs from zero and the arms are, correctly, almost
+    indistinguishable on accuracy -- which is the paper's point about accuracy at this
+    prevalence, not a defect of the chart.
     """
     arms = AB["whole_fields"]["arms"]
     empty = AB["whole_fields"]["empty_mask_accuracy_pct"]
@@ -345,47 +293,37 @@ def plate_baselines():
     rank = sorted(((short.get(k, k), v) for k, v in arms.items()
                    if short.get(k, k) is not None),
                   key=lambda kv: -abs(kv[1]["area_agreement"] - 1.0))
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(PAGEW - 0.25, 3.2),
-                                   gridspec_kw={"width_ratios": [1.0, 0.85]})
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(J.PAGEW, 2.9), layout="constrained",
+                                   gridspec_kw={"width_ratios": [1.0, 0.78]})
     y = list(range(len(rank)))
-    cols = ["0.15" if k == "this detector" else "0.72" for k, _ in rank]
+    cols = [J.G_DARK if k == "this detector" else J.G_LIGHT for k, _ in rank]
 
-    ax1.axvline(1.0, color="0.0", lw=1.2, zorder=1)
-    ax1.barh(y, [v["area_agreement"] for _, v in rank], 0.5, color=cols, zorder=2)
-    for i, (_, v) in zip(y, rank):
-        ax1.text(v["area_agreement"] + 0.02, i, f"{v['area_agreement']:.3f}x",
-                 va="center", fontsize=SMALL)
-    ax1.text(1.01, 3.0, "exact", fontsize=SMALL, va="center", ha="left",
-             rotation=90, color="0.0")
-    ax1.set_yticks(y, [k for k, _ in rank], fontsize=SMALL)
+    ax1.barh(y, [v["area_agreement"] for _, v in rank], 0.6, color=cols,
+             edgecolor=J.INK, linewidth=0.5, zorder=2)
+    ax1.axvline(1.0, color=J.INK, lw=0.9, zorder=3)
+    ax1.set_yticks(y, [k for k, _ in rank])
     ax1.set_xlim(0, 1.35)
-    ax1.set_xlabel("crack area fraction reported / marked", fontsize=BODY)
-    ax1.set_title("What each arm would report", fontsize=TITLE)
-    ax1.spines[["top", "right"]].set_visible(False)
+    ax1.set_xlabel("Reported / annotated crack area")
+    J.panel_label(ax1, "a")
 
-    ax2.barh(y, [v["accuracy_pct"] for _, v in rank], 0.5,
-             color=["#b3401a" if not v["beats_empty_mask"] else c
-                    for c, (_, v) in zip(cols, rank)], zorder=2)
-    ax2.axvline(empty, color="0.0", lw=1.6, zorder=5)
-    ax2.text(empty - 0.012, 3.0, f"an empty mask {empty:.2f}%", fontsize=SMALL,
-             va="center", ha="right", rotation=90, color="0.0")
-    for i, (_, v) in zip(y, rank):
-        ax2.text(v["accuracy_pct"] - 0.03, i, f"{v['accuracy_pct']:.2f}", va="center",
-                 ha="right", fontsize=SMALL, color="white")
+    # THE SIGNED DIFFERENCE, not the accuracy itself. Drawn from zero, every arm's
+    # accuracy is 97-98% and the bars are indistinguishable -- true, and the paper's point,
+    # but unreadable. Cropping the axis to show it would be the misrepresentation the
+    # convention exists to prevent. The difference from an all-background mask is the
+    # quantity actually at issue, it is signed, and zero is its natural origin.
+    d = [v["accuracy_pct"] - empty for _, v in rank]
+    ax2.barh(y, d, 0.6, color=cols, edgecolor=J.INK, linewidth=0.5, zorder=2)
+    ax2.axvline(0.0, color=J.INK, lw=0.9, zorder=3)
     ax2.set_yticks(y, ["" for _ in rank])
-    ax2.set_xlim(97.4, 98.5)
-    ax2.set_xlabel("accuracy, all pixels", fontsize=BODY)
-    ax2.set_title("Accuracy: none of them beats an empty mask", fontsize=TITLE)
-    ax2.spines[["top", "right"]].set_visible(False)
-    ax1.tick_params(labelsize=SMALL)
-    ax2.tick_params(labelsize=SMALL)
-    fig.suptitle(f"Inconel 718, {AB['whole_fields']['labelled_pct']:.2f}% crack, "
-                 f"every arm tuned leave-one-image-out", fontsize=SMALL, y=1.0)
-    save(fig, "P4 - baselines", {
-        "what": "eight arms ranked by reported-against-marked crack area fraction, with "
-                "accuracy and the empty-mask baseline",
-        "arms": arms, "empty_mask_accuracy_pct": empty,
-        "source": "docs/figures/arms_background_units.json"})
+    ax2.set_xlabel("Pixel accuracy relative to an\nall-background mask (points)")
+    J.panel_label(ax2, "b")
+
+    J.save(fig, os.path.join(OUT, "P4 - baselines.png"))
+    json.dump({"what": "eight arms ranked by reported/annotated crack area, with pixel "
+                       "accuracy and the all-background reference",
+               "arms": arms, "all_background_accuracy_pct": empty,
+               "source": "docs/figures/arms_background_units.json"},
+              open(os.path.join(OUT, "P4 - baselines.caption.json"), "w"), indent=1)
 
 
 def plate_budget():
