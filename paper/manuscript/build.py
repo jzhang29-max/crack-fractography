@@ -37,7 +37,11 @@ FIGS = {
     "pipeline": os.path.join(PAPER, "figures/out/P6 - pipeline in pictures.png"),
     # the stage diagram: the supplied manuscript had it as Figure 2 and the text
     # still refers to it, so it has to be embedded or the reference dangles
-    "workflow": os.path.join(REPO, "docs/figures/fig_pipeline.png"),
+    # The journal variant, not the documentation diagram. The latter carries a title,
+    # paragraphs of prose, p-values and source identifiers; all four are things a
+    # journal figure does not do, and the detail belongs to Methods. Same generator,
+    # same constants: docs/figures/mk_pipeline.py writes both.
+    "workflow": os.path.join(REPO, "docs/figures/fig_pipeline_journal.png"),
     "areabars": os.path.join(PAPER, "figures/out/P1 - public scores.png"),
     "sweep": os.path.join(PAPER, "figures/out/P2 - operating curve.png"),
     "ceiling": os.path.join(PAPER, "figures/out/P3 - width sensitivity.png"),

@@ -25,6 +25,7 @@ the generator is named.
 
     <sem-crack-detector>/.venv/bin/python -B paper/figures/mk_paper_plates.py     # P1-P5
     <sem-crack-detector>/.venv/bin/python -B paper/figures/mk_pipeline_visual.py  # P6
+    <sem-crack-detector>/.venv/bin/python -B docs/figures/mk_pipeline.py          # workflow
     <sem-crack-detector>/.venv/bin/python -B paper/make_paper.py                  # -> draft.pdf
 
 Prose lives in `paper/sections/*.md`. Numbers are `{placeholders}` resolved from the JSON
@@ -33,9 +34,9 @@ stale. `[FIGURE name]` on its own line embeds a plate, and a missing plate is an
 
 | plate | shows |
 |---|---|
-| `P1 - public scores` | P/R/F1/IoU against the no-information floors |
+| `P1 - public scores` | reported/annotated crack area, and pixel accuracy beside an all-background mask |
 | `P2 - operating curve` | the one free constant, whole fields against the crops of them |
-| `P3 - width sensitivity` | what IoU costs for getting width wrong with location right |
+| `P3 - width sensitivity` | what pixel accuracy costs for getting width wrong with location right |
 | `P4 - baselines` | seven classical detectors, tuned identically |
 | `P5 - pixel budget` | the confusion matrix as a share of the image, and how wrong the area fraction is |
 | `P6 - pipeline in pictures` | **every step as a real image panel**, captured by running the shipped detector on one public field — `paper/figures/mk_pipeline_visual.py` |
@@ -91,7 +92,8 @@ quoted; it must not be quoted again.
 
 | | |
 |---|---|
-| `figures/fig_pipeline.png` | the detector end to end; every constant read from `analysis/detector_overrides.py` at draw time — `figures/mk_pipeline.py` |
+| `figures/fig_pipeline.png` | the detector end to end, for this repository: full prose per stage. Every constant read from `analysis/detector_overrides.py` at draw time — `figures/mk_pipeline.py` |
+| `figures/fig_pipeline_journal.png` | the same path as a **journal schematic** — one short descriptor per stage, no title, no prose, vector PDF beside it. This is manuscript Figure 2, and the same generator writes it from the same constants |
 | `figures/fig_aggregation / ceiling / gameability / operating_curve` | how this project's own numbers are read — `figures/mk_metric_figures.py` |
 | `slides/all_figures.pdf` | the slide deck. Content is editable in `slides/slides.json`, then `slides/make_slides.py` |
 | `flowchart/pipeline_flow.pdf` | the 13-page pipeline flow — `flowchart/make_flowchart_pdf.py` |

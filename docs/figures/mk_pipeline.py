@@ -27,6 +27,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, os.path.join(REPO, "analysis"))
 import detector_overrides as DO  # noqa: E402
+sys.path.insert(0, os.path.join(REPO, "paper", "figures"))
 
 # Read the shipped settings rather than restating them. A missing name is a hard error.
 for required in ("SCALE_LADDER", "ABSOLUTE_DARK_THRESH", "USE_REGION_CLASSIFIER",
@@ -61,11 +62,12 @@ STAGES = [
     ("Propose dark candidates",
      f"{'Union over all ' + str(len(DO.SCALE_LADDER)) + ' scales' if DO.USE_MULTISCALE_UNION else 'Single scale'}: a pixel is a candidate if it is dark at ANY scale.\n"
      f"Two gates, and they are the whole detector: a robust MAD cut at mad_k = {MAD_K}\n"
-     f"as shipped. The paper evaluates at {PAPER_MAD_K}, where the reported area\n"
-     f"fraction agrees with the annotation to 1.3%; the shipped default is\n"
-     f"unchanged on 31 images of one alloy.\n"
-     f"sigma, and an absolute floor at intensity {DO.ABSOLUTE_DARK_THRESH}. Measured on this corpus the\n"
-     "absolute floor alone accounts for about half of all recall that is lost.", "stage"),
+     f"below the local median at each sigma, and an absolute floor at intensity\n"
+     f"{DO.ABSOLUTE_DARK_THRESH}. Measured on this corpus the absolute floor alone accounts for\n"
+     f"about half of all recall that is lost.\n"
+     f"As shipped mad_k = {MAD_K}; the paper evaluates at {PAPER_MAD_K}, where the reported\n"
+     f"area fraction agrees with the annotation to 1.3%. The shipped default is\n"
+     f"unchanged -- 31 images of one alloy is not enough to move it.", "stage"),
     ("Clean and label",
      "Fill holes, drop blobs under 13 px, label 8-connected, then drop regions\n"
      "under 40 px. These floors are tuned for SEM crack widths.", "stage"),
@@ -177,8 +179,82 @@ def main():
     }
     json.dump(cap, open(os.path.join(HERE, "fig_pipeline.caption.json"), "w"), indent=1)
     print("wrote", out)
+    journal_plate()
     print("stages:", len(STAGES), "| classifier on:", DO.USE_REGION_CLASSIFIER,
           "| ladder:", LADDER)
+
+
+def journal_plate():
+    """The same path, drawn for the manuscript instead of for the repository.
+
+    The plate above is a documentation diagram: it carries a title, paragraphs of prose,
+    p-values and the names of variables in the source. Every one of those is something a
+    journal figure does not do -- IOP asks that the description live in the caption, and
+    the detail in those boxes belongs to Methods, which states it once in sentences. So
+    the manuscript gets a schematic: one short descriptor per stage, nothing a reader has
+    to have the repository open to parse.
+
+    It is drawn by THIS script from THE SAME constants, so the two cannot drift apart.
+    """
+    import journal_style as J
+    J.use()
+
+    lad = sorted(DO.SCALE_LADDER)
+    rows = [
+        ("Micrograph",
+         "8-bit greyscale, whole frame at full resolution"),
+        ("Flatten the background",
+         f"background subtracted at {len(lad)} scales, sigma = {lad[0]}-{lad[-1]} px"),
+        ("Propose dark candidates",
+         f"union over scales; MAD cut at k = {PAPER_MAD_K} as evaluated "
+         f"({MAD_K} as shipped); floor at intensity {DO.ABSOLUTE_DARK_THRESH}"),
+        ("Clean and label",
+         "holes filled, 8-connected labelling, regions below 40 px dropped"),
+        ("Score each region",
+         "an 8-feature region classifier, switched off in the shipped path"),
+        ("Grow into the mask",
+         "concavity, bridge and interior-fill candidates, scored as above"),
+        ("Measure",
+         "per region: area, length, width, orientation; per frame: area fraction"),
+        ("Human correction",
+         "painted corrections override every stage above"),
+    ]
+    off = 4 if not DO.USE_REGION_CLASSIFIER else -1   # the one disabled stage
+    human = len(rows) - 1
+
+    W = J.W15
+    BOXH, GAP, LEG = 0.40, 0.125, 0.30
+    H = len(rows) * BOXH + (len(rows) - 1) * GAP + LEG + 0.10
+    fig = plt.figure(figsize=(W, H))
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.set_xlim(0, W); ax.set_ylim(0, H); ax.axis("off")
+
+    x0, x1 = 0.04, W - 0.04
+    y = H - 0.05
+    for i, (name, line) in enumerate(rows):
+        lw = 1.3 if i == human else 0.6
+        ls = (0, (3.5, 2)) if i == off else "-"
+        ax.add_patch(FancyBboxPatch((x0, y - BOXH), x1 - x0, BOXH,
+                                    boxstyle="square,pad=0", facecolor="white",
+                                    edgecolor=J.INK, linewidth=lw, linestyle=ls))
+        ax.text(x0 + 0.10, y - 0.145, f"{i + 1}  {name}", fontsize=J.BODY,
+                fontweight="bold", va="center", ha="left", color=J.INK)
+        ax.text(x0 + 0.10, y - 0.295, line, fontsize=J.TICK, va="center", ha="left",
+                color=J.G_DARK)
+        if i < len(rows) - 1:
+            ax.add_patch(FancyArrowPatch((W / 2, y - BOXH), (W / 2, y - BOXH - GAP + 0.01),
+                                         arrowstyle="-|>", mutation_scale=8,
+                                         color=J.INK, linewidth=0.6))
+        y -= BOXH + GAP
+
+    # A key, not a caption: it says what the two border forms mean and nothing else.
+    ax.text(x0 + 0.02, 0.13,
+            "Dashed: present in the code and switched off.    "
+            "Heavy: the human layer, which overrides the machine.",
+            fontsize=J.TICK, va="center", ha="left", color=J.G_DARK)
+
+    out = os.path.join(HERE, "fig_pipeline_journal.png")
+    J.save(fig, out, printed_width=J.W15)
 
 
 if __name__ == "__main__":

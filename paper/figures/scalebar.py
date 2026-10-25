@@ -43,7 +43,7 @@ def fmt_nm(nm):
 
 
 def scalebar(ax, nm_per_px, width_px, *, loc="lower right", color="white",
-             pad_frac=0.045, height_frac=0.016, fontsize=7, length_nm=None):
+             pad_frac=0.045, height_frac=0.018, fontsize=8, length_nm=None):
     """Draw a scale bar on an imshow axes whose x units are pixels.
 
     Returns the bar length in nanometres, so a caller can state it in the caption
@@ -73,7 +73,7 @@ def scalebar(ax, nm_per_px, width_px, *, loc="lower right", color="white",
 
 
 def no_scale_note(ax, text="no pixel size published for this collection",
-                  color="white", fontsize=6.4, pad_frac=0.03):
+                  color="white", fontsize=8, pad_frac=0.03):
     """Say so on the panel. An absent scale bar is otherwise indistinguishable from a
     scale bar someone forgot to draw."""
     x0, x1 = ax.get_xlim()

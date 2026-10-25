@@ -58,7 +58,7 @@ FLOOR = 7.0
 # the width this plate is printed at on the page: PAGE[0] - ML - MR in make_paper.py.
 # Drawn wider, it is scaled down and every type size shrinks with it.
 PAGEW = 6.37
-TITLE, LAB, CAP = 9.6, 8.2, 7.4
+TITLE, LAB, CAP = 9.6, 8.5, 8.0
 
 
 class U:

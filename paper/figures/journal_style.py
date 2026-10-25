@@ -33,6 +33,8 @@ Technology), not to taste. The rules that changed these figures most:
   COLUMN WIDTHS.  Elsevier: 90 mm single, 140 mm 1.5-column, 190 mm double. Design at one
   of them so no rescaling happens and the type size specified is the type size printed.
 """
+import os
+
 import matplotlib
 import matplotlib.pyplot as plt
 
@@ -43,7 +45,23 @@ PAGEW = 6.37                                    # our own page text block, inche
 #: Lettering must finish at >= 7 pt printed; both publishers ask for 8-12 pt at final
 #: size. These are the sizes AT PRINT SIZE, so a plate must be drawn at its printed width.
 BODY, LABEL, TICK, PANEL = 8.5, 8.5, 8.0, 9.0
-FLOOR = 7.0
+#: Lettering must FINISH at 8 pt or larger at the width the journal prints the figure.
+#: 6 pt is the separate, lower floor for sub- and superscripts only. The floor was 7 pt
+#: until the convention audit; both publishers ask for 8-12 pt at final size.
+FLOOR = 8.0
+SCRIPT_FLOOR = 6.0
+
+#: Elsevier's Guide for Authors asks the author to state each figure's column class, so
+#: it is recorded per figure rather than left for a production editor to guess.
+COLUMN_CLASS = {
+    "P1 - public scores": ("1.5-column", W15),
+    "P2 - operating curve": ("1.5-column", W15),
+    "P3 - width sensitivity": ("1.5-column", W15),
+    "P4 - baselines": ("1.5-column", W15),
+    "P5 - pixel budget": ("1.5-column", W15),
+    "P6 - pipeline in pictures": ("double", W2),
+    "txm_transfer": ("double", W2),
+}
 
 #: Greyscale-first. The three greys separate in print without colour; the single accent is
 #: used only where one series must be picked out, never to mean pass or fail.
@@ -69,8 +87,17 @@ def use():
         # all four spines, which is the majority convention in these journals
         "axes.spines.top": True,
         "axes.spines.right": True,
-        "xtick.direction": "out",
-        "ytick.direction": "out",
+        # ticks on all four sides, one direction chosen once for the whole paper
+        "xtick.direction": "in",
+        "ytick.direction": "in",
+        "xtick.top": True,
+        "ytick.right": True,
+        "xtick.minor.visible": True,
+        "ytick.minor.visible": True,
+        "xtick.minor.size": 1.7,
+        "ytick.minor.size": 1.7,
+        "xtick.minor.width": 0.5,
+        "ytick.minor.width": 0.5,
         "xtick.major.width": 0.6,
         "ytick.major.width": 0.6,
         "xtick.major.size": 3.0,
@@ -122,16 +149,24 @@ def micrograph(ax):
     ax.set_axis_off()
 
 
-def save(fig, path, *, dpi=600, printed_width=PAGEW):
-    """Write, then check the type at the size it will PRINT, and report the real numbers.
+def save(fig, path, *, dpi=600, printed_width=PAGEW, vector=True):
+    """Write the raster and the VECTOR, then check the type at the size it will print.
 
-    The check has to run after the write: bbox trimming and page rescaling both happen
-    outside the figure's own coordinates, and a floor applied there passes plates that
-    reach the page at half scale. 600 dpi clears Elsevier's 500 dpi combination-art
-    minimum with margin.
+    Two outputs, because they serve different readers. The PNG at 600 dpi clears
+    Elsevier's 500 dpi combination-art minimum and is what the draft embeds. The PDF is
+    the one a production editor or a co-author actually wants: IOP states that vector EPS
+    or PDF is preferred for anything that is not a photograph, and a vector file is the
+    only form in which a figure stays EDITABLE -- every label, rule and bar can be
+    adjusted in Illustrator or Inkscape without redrawing it.
+
+    The type check has to run after the write: bbox trimming and page rescaling both
+    happen outside the figure's own coordinates, and a floor applied there passes plates
+    that reach the page at half scale.
     """
     import matplotlib.image as mpimg
     fig.savefig(path, dpi=dpi, facecolor="white")
+    if vector:
+        fig.savefig(os.path.splitext(path)[0] + ".pdf", facecolor="white")
     sizes = [t.get_fontsize() for t in fig.findobj(plt.Text) if t.get_text().strip()]
     plt.close(fig)
     saved_in = mpimg.imread(path).shape[1] / float(dpi)
@@ -141,5 +176,5 @@ def save(fig, path, *, dpi=600, printed_width=PAGEW):
             f"{path}: smallest type prints at {min(sizes) * scale:.1f} pt (floor "
             f"{FLOOR}). Saved {saved_in:.2f} in, printed {printed_width:.2f} in, scale "
             f"{scale:.2f}. Relay the plate out at the printed width.")
-    print(f"wrote {path}  ({saved_in:.2f} in, {dpi} dpi, prints at {scale:.2f}x, "
+    print(f"wrote {path} (+.pdf)  ({saved_in:.2f} in, {dpi} dpi, prints at {scale:.2f}x, "
           f"smallest type {min(sizes) * scale:.1f} pt)")

@@ -52,11 +52,18 @@ Point `$PY` at an interpreter that has matplotlib, numpy, scipy and scikit-image
     $PY paper/make_paper.py                # -> paper/draft.pdf
     $PY paper/figures/mk_paper_plates.py   # plates P1-P5
     $PY paper/figures/mk_pipeline_visual.py   # plate P6
+    $PY docs/figures/mk_pipeline.py        # the workflow schematic, manuscript Figure 2
 
 Every plate is drawn at the width it prints at, and the generator refuses to write one
-whose smallest type would print below 7 pt. That check runs **after** the file is written,
-reading the saved width back, because the page rescales whatever it is given and a check in
-the figure's own coordinates passes plates that reach the page at half scale.
+whose smallest type would print below 8 pt -- both target publishers ask for 8-12 pt at
+final size. That check runs **after** the file is written, reading the saved width back,
+because the page rescales whatever it is given and a check in the figure's own coordinates
+passes plates that reach the page at half scale.
+
+Every plate is written twice, as a 600 dpi PNG and as a **vector PDF** beside it. The PDF
+is the form a production editor or a co-author can edit: IOP states it prefers vector for
+anything that is not a photograph, and Elsevier rejects Type 3 fonts, so the house style
+embeds TrueType.
 
 References are checked against the registries, not by eye:
 
