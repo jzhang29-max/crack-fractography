@@ -37,7 +37,7 @@ rather than from typed numbers — an unresolved name fails the build instead of
 
 | | |
 |---|---|
-| `paper/manuscript/Revised_Manuscript_v2.pdf` | **the submission draft.** 15 pages, 7 figures, 22 references |
+| `paper/manuscript/Revised_Manuscript_v2.pdf` | **the submission draft.** 17 pages, 8 figures, 22 references |
 | `paper/draft.pdf` | the longer working draft the manuscript is cut from, carrying the negative results in full |
 | `docs/INDEX.md` | **start here for anything else.** Every document and every measurement file, with the script that produced it |
 

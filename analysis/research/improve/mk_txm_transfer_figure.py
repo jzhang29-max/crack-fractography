@@ -147,7 +147,7 @@ for r, g in enumerate(("B3", "AM/HC")):
     ax2 = fig.add_subplot(gs[r, 1])
     ov = np.dstack([I] * 3).astype(float) / 255.0
     ov[~R] *= 0.45                       # unrefereed area dimmed: nobody ruled on it
-    ov[C] = [0.10, 0.55, 0.95]
+    ov[C] = list(J.rgb(J.MASK))
     ax2.imshow(ov)
     scalebar(ax2, NM_PER_PX, H)
     J.micrograph(ax2)
@@ -156,9 +156,13 @@ for r, g in enumerate(("B3", "AM/HC")):
     ax3 = fig.add_subplot(gs[r, 2])
     ov = np.dstack([I] * 3).astype(float) / 255.0
     ov[~R] *= 0.45
-    ov[M & C] = [0.10, 0.70, 0.25]       # found
-    ov[M & ~C & R] = [0.95, 0.35, 0.05]  # marked, refereed not-crack
-    ov[~M & C] = [0.20, 0.35, 0.95]      # missed
+    # HOUSE TOKENS, NOT LITERALS. These were four hardcoded RGB floats, and two pairs
+    # of them were invisible to a colour-blind reader: found vs marked-not-crack
+    # measured 4.19 under worst-case CVD and annotated vs found 5.38, against the 5.9
+    # that journal_style.py's own comment calls a FAIL. The tokens clear it at 17.05.
+    ov[M & C] = list(J.rgb(J.PAINT_CRACK))          # found
+    ov[M & ~C & R] = list(J.rgb(J.PAINT_NOTCRACK))  # marked, refereed not-crack
+    ov[~M & C] = list(J.rgb(J.MASK))                # missed
     ax3.imshow(ov)
     scalebar(ax3, NM_PER_PX, H)
     J.micrograph(ax3)

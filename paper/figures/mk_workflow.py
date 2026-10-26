@@ -245,6 +245,12 @@ def main():
     yband = ybar + ARROW
     hdr = ax_at(M, yband, W - 2 * M, BAND)
     hdr.set_axis_off()
+    # THE RULE THE CAPTION REFERS TO. The caption said "below the rule" and there was
+    # none -- the bands were separated by a dashed arrow and a run of spaced capitals,
+    # which reads as a heading rather than as a division. A hairline makes the sentence
+    # true and the split visible at a glance.
+    hdr.plot([0, 1], [0.97, 0.97], transform=hdr.transAxes, color=J.G_MID,
+             lw=0.7, clip_on=False, zorder=1)
     hdr.text(0.5, 0.35, "O U T S I D E   T H E   E V A L U A T E D   B R A N C H",
              fontsize=J.TICK, fontweight="bold", ha="center", va="center",
              color=J.G_MID, transform=hdr.transAxes)
@@ -296,10 +302,15 @@ def main():
         "correction_field": PAINT_FIELD,
         "correction_has_scale": False,
         "correction_px_in_panel": {"crack": npos, "not_crack": nneg},
-        "selection_rule": "the evaluated field is Figure 1's, by the same rule; the "
-                          "correction field is, of the 18 painted frames carrying both "
-                          "verdicts, the one closest to their median crack area "
-                          "fraction, tie broken towards the visible not-crack verdict",
+        "selection_rule": "the evaluated field is Figure 1's, by the same rule. The "
+                          "correction field and its window are chosen together: over the "
+                          "painted frames with an original on disk and at least 2,000 px "
+                          "of each verdict, the (frame, 520 px window) pair maximising "
+                          "the SMALLER of the two verdicts' pixel counts, subject to the "
+                          "window's crack area fraction lying within half to twice that "
+                          "frame's own so the panel is not an atypical patch. An earlier "
+                          "draft of this field recorded a median-crack-fraction rule "
+                          "here; that was never what the code ran.",
         "settings": {"scale_ladder": list(DO.SCALE_LADDER),
                      "absolute_dark_thresh": DO.ABSOLUTE_DARK_THRESH,
                      "paper_mad_k": DO.PAPER_MAD_K,

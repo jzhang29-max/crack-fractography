@@ -102,11 +102,15 @@ def plate_scores():
     best = min(BC["sweeps"]["whole_fields"],
                key=lambda r: abs(r["area_agreement_corpus"] - 1.0))
 
-    ax1.barh(y, rat, 0.55, color=[J.ACCENT] + [J.G_LIGHT] * 3, edgecolor=J.INK,
-             linewidth=0.5, zorder=2)
+    for yi, r in zip(y, rat):
+        ax1.plot([min(r, 1.0), max(r, 1.0)], [yi, yi], color=J.G_MID, lw=0.9,
+                 zorder=2, solid_capstyle="butt")
+    ax1.plot(rat, y, linestyle="none", marker="o", markersize=7,
+             markerfacecolor=J.ACCENT, markeredgecolor=J.INK, markeredgewidth=0.6,
+             zorder=4, clip_on=False)
     ax1.axvline(1.0, color=J.INK, lw=0.9, zorder=3)
     ax1.plot([best["area_agreement_corpus"]], [y[0]], marker="D", color=J.INK,
-             markersize=4.5, zorder=5, clip_on=False)
+             markersize=4.5, zorder=6, clip_on=False)
     ax1.set_xscale("log")
     ax1.set_xticks([1, 10, 100])
     ax1.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
@@ -334,7 +338,11 @@ def plate_budget():
         "why": "P/R/F1/IoU discard the true negatives, which are 98% of a 1.8%-crack "
                "image; and area fraction is what this tool actually reports to a user, so "
                "the over-marking ratio is the error they feel",
-        "values": {k: PA[k]["detector"] for k in sets},
+        # WITHOUT balanced accuracy and MCC. The source record carries both and this
+        # dumped it wholesale, so the two measures the author asked be dropped shipped
+        # in the caption JSON of the one plate nobody re-read.
+        "values": {k: {m: v for m, v in PA[k]["detector"].items()
+                       if m not in ("balanced_accuracy", "mcc")} for k in sets},
         "read this first": "on whole fields the detector marks 2.34% where the human "
                            "marked 1.80%, so an area fraction read off this tool is about "
                            "1.30x too high. On the released crops it marks 3.53% against "
