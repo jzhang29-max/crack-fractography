@@ -55,7 +55,6 @@ FIGS = {
 }
 
 # --- values this manuscript needs that the longer draft does not define ----------------
-import json                                                            # noqa: E402
 TX = MP._f(os.path.join(REPO, "docs/figures/txm_background_units.json"), "TXM")
 _k6 = "SEM detector, mad_k=6"
 _pool = TX["pooled"][_k6]

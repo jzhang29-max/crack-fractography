@@ -53,6 +53,7 @@ Point `$PY` at an interpreter that has matplotlib, numpy, scipy and scikit-image
     $PY paper/figures/mk_paper_plates.py   # plates P1-P5
     $PY paper/figures/mk_pipeline_visual.py   # plate P6, manuscript Figure 1
     $PY paper/figures/mk_workflow.py       # plate P7, manuscript Figure 2
+    $PY paper/figures/mk_crack_overlap.py  # plate P8, manuscript Figure 7
 
 Every plate is drawn at the width it prints at, and the generator refuses to write one
 whose smallest type would print below 8 pt -- both target publishers ask for 8-12 pt at
@@ -364,10 +365,15 @@ That is deliberate. It used to cut the region out, measure it and file it in `up
 its own frame — which put a second entry in the sidebar for what you think of as the same
 picture, and made "crop" mean "make a copy".
 
-`POST /api/crop` still exists and still does the cutting, for a caller who genuinely wants
-a sub-frame. A frame made that way records its parent, its box and its parent's size, and
-carries the micrograph cut to the same box. Two things it reports, because neither is
-visible in the numbers:
+**Keep crop as a new image**, beside Crop and shown only while a crop view is open, is
+how you turn that view into a frame of its own. It posts `POST /api/crop`, which cuts the
+mask, a pristine copy of it and the MICROGRAPH to the same box; every picture the app
+renders for the result — the editor's background included — resolves to those cut files
+rather than to the parent's. A click is asking, which the 8-second autosave that used to
+do this was not.
+
+A frame made that way records its parent, its box and its parent's size. Two things it
+reports, because neither is visible in the numbers:
 
 * **How many cracks it newly censored.** A crack comfortably inside the parent can touch
   the edge of the crop, which turns its length into a lower bound that it was not before.

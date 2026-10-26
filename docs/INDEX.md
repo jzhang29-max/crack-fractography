@@ -26,6 +26,7 @@ the generator is named.
     <sem-crack-detector>/.venv/bin/python -B paper/figures/mk_paper_plates.py     # P1-P5
     <sem-crack-detector>/.venv/bin/python -B paper/figures/mk_pipeline_visual.py  # P6
     <sem-crack-detector>/.venv/bin/python -B paper/figures/mk_workflow.py         # P7
+    <sem-crack-detector>/.venv/bin/python -B paper/figures/mk_crack_overlap.py    # P8
     <sem-crack-detector>/.venv/bin/python -B paper/make_paper.py                  # -> draft.pdf
 
 Prose lives in `paper/sections/*.md`. Numbers are `{placeholders}` resolved from the JSON
@@ -39,6 +40,7 @@ stale. `[FIGURE name]` on its own line embeds a plate, and a missing plate is an
 | `P3 - width sensitivity` | what pixel accuracy costs for getting width wrong with location right |
 | `P4 - baselines` | seven classical detectors, tuned identically |
 | `P5 - pixel budget` | the confusion matrix as a share of the image, and how wrong the area fraction is |
+| `P8 - crack overlap` | **precision, recall and F1 for the crack class**, whole fields beside the released crops, each bar carrying what a mark-everything mask would score, plus a precision-recall curve over the parameter grid — `paper/figures/mk_crack_overlap.py`. No precision bracket is drawn here: [0.29, 0.99] belongs to this laboratory's partially refereed frames, not to the public collection these bars are computed on |
 | `P7 - workflow` | the evaluated branch with the real array each stage produces, and the three stages of the application that sit **outside** it — `paper/figures/mk_workflow.py` |
 | `P6 - pipeline in pictures` | **every step as a real image panel**, captured by running the shipped detector on one public field — `paper/figures/mk_pipeline_visual.py` |
 
