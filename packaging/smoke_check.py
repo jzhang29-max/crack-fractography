@@ -73,9 +73,16 @@ def _measure_check(port):
             os.remove(src)
 
     bad = []
+    # "smokeprobe", not "_smokeprobe". The probe filename keeps its leading underscore
+    # on purpose, because canonical_stem has to do TWO things to it and this asserts
+    # both: strip the _gated suffix, and strip the leading "._-" so the frame is a name
+    # SAFE_FRAME will accept back. That second rule arrived in fecdfcf -- a frame the app
+    # creates must also be deletable -- and this assertion still expected the old answer.
+    # Nobody saw it, because the `test` job was red and `build` needs it.
     frame = up.get("frame")
-    if frame != "_smokeprobe":
-        bad.append(f"the _gated suffix was not stripped: frame is {frame!r}")
+    if frame != "smokeprobe":
+        bad.append(f"the frame name is {frame!r}, not 'smokeprobe': canonical_stem must "
+                   f"strip both the _gated suffix and the leading underscore")
     if up.get("n_cracks") != TEST_BARS:
         bad.append(f"measured {up.get('n_cracks')} cracks in a mask drawn with {TEST_BARS}")
 
@@ -150,10 +157,6 @@ def main():
         problems = []
         if not health.get("frozen"):
             problems.append("frozen is false -- this is not the packaged build")
-        if health["measurement_impl"]["source"] != "bundled copy":
-            problems.append(f"measurement code came from "
-                            f"{health['measurement_impl']['source']!r}; a packaged build "
-                            f"with no SEM checkout must use its own bundled copy")
 
         # ACTUALLY MEASURE SOMETHING. This block used to read
         # health["capabilities"]["measure_uploaded_mask"], which is the literal True in
@@ -165,6 +168,30 @@ def main():
         # project's own export produces, and stripping it is where the frame record and its
         # crack rows drifted apart.
         problems += _measure_check(port)
+
+        # WHERE THE MEASUREMENT CODE CAME FROM, ASKED AFTER SOMETHING WAS MEASURED.
+        # This was asserted against the FIRST /api/health, before the probe ran, and it
+        # could not pass: shared_impl._resolve() is lazy and server.py only reports
+        # provenance once _STATE is populated, so the field is {"source": null,
+        # "pending": true, "note": "not yet determined -- it is resolved by the first
+        # measurement"} until a measurement happens. The check is worth keeping -- a
+        # packaged build falling back to somebody's SEM checkout is exactly the thing it
+        # exists to catch -- so it moved rather than went.
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/health",
+                                        timeout=30) as r:
+                impl = json.loads(r.read())["measurement_impl"]
+        except Exception as e:                           # noqa: BLE001
+            problems.append(f"re-reading /api/health after measuring failed: "
+                            f"{type(e).__name__}: {e}")
+        else:
+            if impl.get("source") != "bundled copy":
+                problems.append(
+                    f"after measuring, measurement code came from {impl.get('source')!r} "
+                    f"(pending={impl.get('pending')}); a packaged build with no SEM "
+                    f"checkout must use its own bundled copy")
+            if impl.get("drift"):
+                problems.append(f"the bundled copy has drifted: {impl.get('note')}")
 
         if problems:
             for p_ in problems:

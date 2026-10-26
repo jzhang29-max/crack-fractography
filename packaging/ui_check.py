@@ -207,10 +207,32 @@ def run(base):
                 pass
             raise
 
-        # 1. The shell.
-        tabs = pg.eval_on_selector_all("#tabs button", "els => els.map(e => e.textContent.trim())")
-        if tabs != ["Mark", "Results"]:
-            bad.append(f"tabs are {tabs}, expected ['Mark', 'Results']")
+        # 1. The shell. EVERY tab is driven, rather than one hardcoded list compared for
+        # equality. The old assertion was tabs == ["Mark", "Results"], and it failed on
+        # all three platforms the first time CI could reach this job, because a "Groups"
+        # tab had been added months earlier: an exact list turns every new tab into a red
+        # build while catching nothing that a missing-tab check would not. So the two
+        # this script goes on to drive must be PRESENT, and every tab that exists must
+        # reveal its own pane when clicked -- which makes a new tab coverage instead of a
+        # failure.
+        tabs = pg.eval_on_selector_all(
+            "#tabs button",
+            "els => els.map(e => ({key: e.dataset.tab, label: e.textContent.trim()}))")
+        labels = [t["label"] for t in tabs]
+        print("tabs:", labels)
+        for need in ("Mark", "Results"):
+            if need not in labels:
+                bad.append(f"the {need!r} tab is missing; tabs are {labels}")
+        for t in tabs:
+            try:
+                pg.click(f"#tabs button[data-tab='{t['key']}']")
+                pg.wait_for_selector(f"#pane-{t['key']}:not([hidden])", timeout=30_000)
+            except Exception as e:                       # noqa: BLE001
+                bad.append(f"the {t['label']!r} tab did not reveal #pane-{t['key']}: "
+                           f"{type(e).__name__}")
+        # back to where the rest of this script expects to be
+        pg.click("#tabs button[data-tab='mark']")
+        pg.wait_for_selector("#pane-mark:not([hidden])", timeout=30_000)
 
         # 2. The frame list is populated with the seeded upload.
         pg.wait_for_selector("#frames tr", timeout=60_000)
