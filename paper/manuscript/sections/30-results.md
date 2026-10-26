@@ -42,7 +42,8 @@ area discrepancy of approximately 1.3%. The darkness-or-Sato union had a ratio o
 The area comparison identifies a specific strength of the selected configuration: its total
 foreground area closely matches the reported reference total. The numerical ordering applies
 to that endpoint and to these displayed summaries. It does not establish superiority in
-foreground overlap, and Section 5.1 states what it does not establish.
+foreground overlap; Section 3.6 reports the overlap measures for the crack class, and
+Section 5.1 states what the area ordering does not establish.
 
 ### 3.3  Field-level area error comparison
 
@@ -101,3 +102,47 @@ The same construction locates the width. The reconstruction reproduces the annot
 area fraction at {wc_f_areaw} px on the whole fields and {wc_c_areaw} px on the crops, so a
 mask drawn near the annotation's own stroke width already carries approximately the correct
 amount of foreground, and the residual disagreement concerns placement rather than quantity.
+
+### 3.6  Foreground overlap for the crack class
+
+Every endpoint reported so far is computed over all the pixels of the frame. Precision,
+recall and F1 are computed over the crack class alone and discard the pixels that are
+background in both the prediction and the annotation, which at an annotated crack fraction
+of {in_prev}% is most of the image. This section reports those three measures for the same
+two collections, from the same predictions.
+
+On the {in_n} whole fields the recorded values were a precision of {ov_prec}, a recall of
+{in_recall_perimage} and an F1 of {in_f1}. On the {ov_crop_n} released crops cut from
+those same fields they were {ov_crop_prec}, {ov_crop_recall} and {in_crop_f1}. The MAD
+multiplier was selected leave-one-image-out in both cases, and on both collections the
+rule returned the same value for every held-out image, so these are also the values at a
+fixed multiplier of {mk_ship}. A prediction that marks every pixel records a recall of
+{ov_me_recall} on either collection, a precision equal to the annotated crack fraction,
+and an F1 of {in_me_f1} on the whole fields.
+
+[FIGURE overlap | Precision, recall and F1 for the crack class on the Inconel 718 collection, scored against an annotation that covers every pixel, at zero pixels of tolerance, on the detector's own mask with no annotation unioned into it. (a) the three measures on the whole fields and on the released crops cut from them; the short horizontal rule drawn on each bar is the value a prediction that marks every pixel records, which is 1.000 for recall and the annotated crack fraction for precision. (b) the same two collections as precision against recall across the seven values of the MAD multiplier, with the diamond marking the selected setting and the horizontal rule at recall 1.000 marking the mark-everything prediction. The multiplier increases from right to left along each curve. The legend in panel (b) identifies the collections in both panels.]
+
+Precision differs between the two framings by a factor of {ov_prec_ratio} and recall by a
+factor of {ov_recall_ratio}. The annotated crack fraction also differs between them, by a
+factor of {ov_prev_ratio}, {in_prev}% against {in_crop_prev}%, and the precision a
+no-information prediction records moves with it, from {ov_prec_floor} on the whole fields
+to {ov_crop_prec_floor} on the crops. Read as a multiple of that reference, precision is
+{ov_lift} times it on the whole fields and {ov_crop_lift} times it on the crops. The two readings — the crops
+record the higher precision, the whole fields the higher multiple of their own reference —
+are two descriptions of the same measurements, and the collection a method is scored on is
+reported with them for that reason.
+
+Panel (b) places the reported pair on the sweep it is one point of. Across the grid, which
+runs from {ov_k_lo} to {ov_k_hi}, precision rises and recall falls monotonically; at the
+low end of the grid the whole fields record a precision of {ov_prec_lo} at a recall of
+{ov_recall_lo}, which is a prediction close to the mark-everything one. The selected value
+is the largest in the grid, the same grid-edge condition described in Section 3.4, so the
+curve is not shown to turn.
+
+These are reported as values rather than as intervals because every pixel of this
+collection's annotation carries a verdict, so a predicted pixel outside the annotated crack
+is counted against a decision that was actually made. Where an annotation adjudicates only
+part of each frame, as this laboratory's own hand-marked frames do, a precision computed
+against it is a bracket whose ends are the assumption that every unadjudicated predicted
+pixel is wrong and the assumption that every one is right. No value in this section is a
+measurement of such a collection.

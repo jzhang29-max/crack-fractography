@@ -698,3 +698,279 @@ def test_a_flat_bright_region_is_not_saved_as_black(tmp_path):
         assert got.min() == got.max(), "the test region was not constant after all"
         assert got.max() > 1000, (
             f"a saturated-white region was saved at level {got.max()}, i.e. as black")
+
+
+# --- EVERY PICTURE THE APP CAN RENDER FOR A CROP IS THE CROP ----------------------------
+#
+# The user asked for a guarantee: "if I used the cropping feature, the original is saved
+# as the cropping, and when I use the pictures in the comparison it will use the cropped
+# picture rather than original". Nothing was broken when that was asked -- these tests are
+# what makes the answer stay true.
+#
+# THE WHOLE CENSUS IS TWO ENDPOINTS. `grep -n 'api/original|api/mask/' app/` over
+# app.js, index.html, server.py, figures.py, mark_proxy.py, groupstats.py and paths.py
+# returns five lines: the two route decorators, and three call sites in the browser --
+# the Results-tab mask preview, the Mark editor's mask layer and the Mark editor's
+# micrograph layer. There is no fourth picture to get wrong: the figures are vector SVG
+# with no raster in them, both CSV exports are text, and the /mark/ iframe is the SEM
+# repo's own tool, which TOOL_ARMS restricts to sem/* and so never opens on a crop.
+#
+# A SIZE ASSERTION ALONE WOULD NOT CATCH THE INTERESTING FAILURE. Serving the WHOLE
+# parent rescaled into the box's dimensions passes every "is it 220x160" check and is
+# exactly the wrong picture -- a correct mask over a squashed micrograph, which is the
+# failure _match_original_to_mask exists to refuse. So the parent carries a bright band
+# at a known row and these assert WHERE it lands.
+
+_PARENT_W, _PARENT_H = 400, 300
+_BAND = (150, 170)                 # bright rows in the parent micrograph
+_BOX = (50, 40, 220, 160)          # x, y, w, h -- the crop
+
+
+def _parent_with_a_banded_micrograph(s, data_dir, name="pic"):
+    """A parent frame whose micrograph has a bright band at known rows. Returns (frame,
+    uploads_dir, the micrograph array)."""
+    up = _seed(s, name, _PARENT_W, _PARENT_H, [(100, 100, 300, 200)])
+    f = up["frames"][0]["frame"] if "frames" in up else up["frame"]
+    updir = os.path.join(str(data_dir), "uploads")
+    a = np.full((_PARENT_H, _PARENT_W), 60, np.uint8)
+    a[_BAND[0]:_BAND[1], :] = 230
+    Image.fromarray(a, "L").save(os.path.join(updir, f"{f}_original.png"))
+    return f, updir, a
+
+
+def _brightest_row(s, path):
+    """(height, width), and the row whose mean is highest, of what the server serves."""
+    st, raw = s.get(path)
+    assert st == 200, f"{path} -> {st} {raw[:200]}"
+    a = np.asarray(Image.open(io.BytesIO(raw)).convert("L"), dtype=float)
+    return a.shape, int(a.mean(axis=1).argmax())
+
+
+def test_every_picture_the_app_renders_for_a_crop_is_the_crop_and_not_the_parent(tmp_path):
+    """Both picture endpoints, for the crop and for the parent, by size AND by content.
+
+    THE BAND IS THE INSTRUMENT. It sits at parent rows 150-170. Cut at y=40 it must land
+    at crop rows 110-130. If the server ever answered with the whole parent squashed into
+    the box's shape instead, the same band would land at rows 80-91 -- same picture size,
+    wrong region, and nothing about the dimensions would say so.
+    """
+    with Server(tmp_path / "d") as s:
+        f, updir, parent_px = _parent_with_a_banded_micrograph(s, tmp_path / "d")
+        x, y, w, h = _BOX
+        st, c = _crop(s, f, x, y, w, h)
+        assert st == 200, c
+        stem = c["frame"]
+        assert c["original_cropped"] is True, c.get("original_note")
+
+        # 1. THE FILE. <stem>_original.png is the box, and it is the parent's own pixels.
+        on_disk = Image.open(os.path.join(updir, f"{stem}_original.png"))
+        assert on_disk.size == (w, h), (
+            f"the crop's micrograph is {on_disk.size}, not the {w}x{h} box")
+        assert np.array_equal(np.asarray(on_disk.convert("L")),
+                              parent_px[y:y + h, x:x + w]), (
+            "the crop's micrograph is not the parent's pixels inside the box")
+
+        # 2. THE MICROGRAPH ENDPOINT. Size, and the band in the right place.
+        shape, row = _brightest_row(s, f"/api/original/uploads/{stem}")
+        assert shape == (h, w), f"/api/original served {shape[::-1]}, not the {w}x{h} box"
+        assert _BAND[0] - y <= row <= _BAND[1] - y, (
+            f"the band is at crop row {row}; cut from the box it belongs at "
+            f"{_BAND[0] - y}-{_BAND[1] - y}. Around row "
+            f"{round(_BAND[0] * h / _PARENT_H)} means the WHOLE parent was served, "
+            f"rescaled into the box's shape.")
+
+        # 3. THE MASK ENDPOINT, which is also the Results-tab preview's src.
+        st, raw = s.get(f"/api/mask/uploads/{stem}")
+        assert st == 200, st
+        assert Image.open(io.BytesIO(raw)).size == (w, h)
+
+        # 4. THE PARENT IS UNTOUCHED. The crop must not have replaced what it was cut from.
+        pshape, prow = _brightest_row(s, f"/api/original/uploads/{f}")
+        assert pshape == (_PARENT_H, _PARENT_W), pshape
+        assert _BAND[0] <= prow <= _BAND[1], prow
+        st, raw = s.get(f"/api/mask/uploads/{f}")
+        assert Image.open(io.BytesIO(raw)).size == (_PARENT_W, _PARENT_H)
+
+
+def test_painting_a_crop_does_not_send_the_editor_back_to_the_parent(tmp_path):
+    """Re-measuring rebuilds the frame record from scratch, and has_original lives on it.
+
+    Lose that flag and the Mark tab stops asking for a background at all -- the crop opens
+    as a bare binary mask the moment you draw on it, which is indistinguishable from "the
+    micrograph was never there". Lose cropped_from and the overlap guard goes quiet too.
+    """
+    with Server(tmp_path / "d") as s:
+        f, updir, _ = _parent_with_a_banded_micrograph(s, tmp_path / "d", "pic2")
+        x, y, w, h = _BOX
+        st, c = _crop(s, f, x, y, w, h)
+        assert st == 200, c
+        stem = c["frame"]
+
+        st, raw = s.upload(f"{stem}.png", _mask(w, h, [(0, 0, w, h // 2)]),
+                           path=f"/api/mask_edit?arm=uploads&frame={stem}")
+        assert st == 200, raw[:300]
+
+        rec = next(r for r in s.dataset("frames") if r["frame"] == stem)
+        assert rec.get("has_original") is True, (
+            "painting the crop dropped has_original, so the editor will no longer load "
+            "the micrograph behind it")
+        assert rec.get("cropped_from"), "painting the crop detached it from its parent"
+        shape, row = _brightest_row(s, f"/api/original/uploads/{stem}")
+        assert shape == (h, w), shape
+        assert _BAND[0] - y <= row <= _BAND[1] - y, row
+
+
+def test_a_crop_with_no_micrograph_of_its_own_does_not_borrow_the_parents(tmp_path):
+    """404 beats the parent. A full-frame micrograph behind a box-sized mask is the wrong
+    picture, and the editor's fallback -- the bare mask -- is the honest one."""
+    with Server(tmp_path / "d") as s:
+        f, updir, _ = _parent_with_a_banded_micrograph(s, tmp_path / "d", "pic3")
+        x, y, w, h = _BOX
+        st, c = _crop(s, f, x, y, w, h)
+        assert st == 200, c
+        stem = c["frame"]
+        os.remove(os.path.join(updir, f"{stem}_original.png"))
+        st, raw = s.get(f"/api/original/uploads/{stem}")
+        assert st == 404, (
+            f"with its own cut micrograph gone the crop was served something else "
+            f"({st}); the only candidate is the parent at {_PARENT_W}x{_PARENT_H}")
+
+
+# --- AND THE SAME THING THROUGH THE REAL BROWSER ----------------------------------------
+#
+# A green endpoint test is not the user's question. This project has been burned by
+# "300 green checks while every edit went to the wrong image": what matters is the picture
+# that ends up UNDER the mask in the editor, and which <img> the comparison puts on screen.
+
+def _browser():
+    pytest.importorskip("playwright.sync_api",
+                        reason="playwright is not installed in this interpreter")
+    from playwright.sync_api import sync_playwright
+    pw = sync_playwright().start()
+    if not os.path.exists(pw.chromium.executable_path):
+        pw.stop()
+        pytest.skip("playwright's chromium is not downloaded on this machine")
+    return pw
+
+
+def test_the_editor_draws_the_crops_own_micrograph_under_the_mask(tmp_path):
+    """Driven in chromium: open the crop in Mark and read the pixels the canvas composites.
+
+    ED.bg is the image the editor paints behind the red overlay. Reading its src says
+    which file was asked for; reading it back through a canvas says what is actually in
+    it, which is the part a URL cannot promise.
+    """
+    pw = _browser()
+    try:
+        with Server(tmp_path / "d") as s:
+            f, updir, _ = _parent_with_a_banded_micrograph(s, tmp_path / "d", "pic4")
+            x, y, w, h = _BOX
+            st, c = _crop(s, f, x, y, w, h)
+            assert st == 200, c
+            stem = c["frame"]
+
+            errors = []
+            br = pw.chromium.launch(args=["--no-proxy-server", "--proxy-bypass-list=*",
+                                          "--no-sandbox", "--disable-dev-shm-usage"])
+            try:
+                pg = br.new_page(viewport={"width": 1400, "height": 1000})
+                pg.on("pageerror", lambda e: errors.append(f"pageerror: {e}"))
+                pg.goto(s.base + "/", wait_until="domcontentloaded", timeout=120_000)
+                pg.wait_for_selector("#frames tr", timeout=60_000)
+                pg.click("#tabs button[data-tab='mark']")
+                pg.wait_for_selector("#pane-mark:not([hidden])", timeout=30_000)
+                pg.click(f"#frames tr[data-f='{stem}']")
+                pg.wait_for_selector("#edcanvas", timeout=30_000)
+                pg.wait_for_function("() => ED.bg && ED.bg.naturalWidth > 0", timeout=30_000)
+                got = pg.evaluate("""() => {
+                    const c = document.createElement('canvas');
+                    c.width = ED.bg.naturalWidth; c.height = ED.bg.naturalHeight;
+                    const g = c.getContext('2d'); g.drawImage(ED.bg, 0, 0);
+                    const d = g.getImageData(0, 0, c.width, c.height).data;
+                    let best = -1, bestRow = -1;
+                    for (let yy = 0; yy < c.height; yy++) {
+                      let sum = 0;
+                      for (let xx = 0; xx < c.width; xx++) sum += d[(yy * c.width + xx) * 4];
+                      if (sum > best) { best = sum; bestRow = yy; }
+                    }
+                    return { src: ED.bg.src, bgW: ED.bg.naturalWidth,
+                             bgH: ED.bg.naturalHeight, maskW: ED.off.width,
+                             maskH: ED.off.height, brightestRow: bestRow };
+                }""")
+            finally:
+                br.close()
+
+            assert not errors, errors
+            assert got["src"].endswith(f"/api/original/uploads/{stem}"), got["src"]
+            assert (got["bgW"], got["bgH"]) == (w, h), (
+                f"the picture under the mask is {got['bgW']}x{got['bgH']}, not the "
+                f"{w}x{h} crop")
+            assert (got["maskW"], got["maskH"]) == (w, h), (
+                f"the editable mask is {got['maskW']}x{got['maskH']}, not the crop")
+            assert _BAND[0] - y <= got["brightestRow"] <= _BAND[1] - y, (
+                f"the band is at canvas row {got['brightestRow']}, not the "
+                f"{_BAND[0] - y}-{_BAND[1] - y} the box cuts to -- the editor is "
+                f"showing a different region of the parent")
+    finally:
+        pw.stop()
+
+
+def test_the_comparison_puts_no_micrograph_on_screen_at_all(tmp_path):
+    """"The pictures in the comparison" -- there are none, and that is the guarantee.
+
+    Compare A against B renders a table, caveats and bar-row histograms built from divs.
+    If a picture is ever added to that pane this fails, which is the point: whoever adds
+    it has to decide on purpose whether a crop shows its own cut micrograph or its
+    parent's, rather than inheriting whichever one a URL happened to resolve to.
+    """
+    pw = _browser()
+    try:
+        with Server(tmp_path / "d") as s:
+            f, updir, _ = _parent_with_a_banded_micrograph(s, tmp_path / "d", "pic5")
+            x, y, w, h = _BOX
+            st, c = _crop(s, f, x, y, w, h)
+            assert st == 200, c
+            stem = c["frame"]
+
+            errors, picture_requests = [], []
+            br = pw.chromium.launch(args=["--no-proxy-server", "--proxy-bypass-list=*",
+                                          "--no-sandbox", "--disable-dev-shm-usage"])
+            try:
+                pg = br.new_page(viewport={"width": 1500, "height": 1000})
+                pg.on("pageerror", lambda e: errors.append(f"pageerror: {e}"))
+                pg.goto(s.base + "/", wait_until="domcontentloaded", timeout=120_000)
+                pg.wait_for_selector("#frames tr", timeout=60_000)
+                pg.click("#tabs button[data-tab='groups']")
+                pg.wait_for_selector("#pane-groups:not([hidden])", timeout=30_000)
+                pg.on("request", lambda r: picture_requests.append(r.url)
+                      if ("/api/original/" in r.url or "/api/mask/" in r.url) else None)
+                pg.click("#arm-a")
+                pg.click(f"#frames tr[data-f='{stem}']")
+                pg.click("#arm-b")
+                pg.click(f"#frames tr[data-f='{f}']")
+                pg.click("#g-compare")
+                pg.wait_for_function(
+                    "() => document.querySelector('#g-out').textContent.length > 200",
+                    timeout=60_000)
+                # the histograms are a second request; give them room to land
+                pg.wait_for_timeout(3000)
+                out = pg.evaluate("""() => {
+                    const o = document.querySelector('#g-out');
+                    return { imgs: [...o.querySelectorAll('img')].map(i => i.src),
+                             canvases: o.querySelectorAll('canvas').length,
+                             text: o.innerText.length }; }""")
+            finally:
+                br.close()
+
+            assert not errors, errors
+            assert out["text"] > 200, "the comparison did not render"
+            assert out["imgs"] == [], (
+                f"the comparison now shows pictures: {out['imgs']}. Each one has to be "
+                f"the crop's own file, not its parent's -- see the crop tests above.")
+            assert out["canvases"] == 0, (
+                f"{out['canvases']} canvas(es) appeared in the comparison")
+            assert picture_requests == [], (
+                f"comparing fetched {picture_requests}, so a picture is being chosen "
+                f"somewhere and this test no longer covers which file it is")
+    finally:
+        pw.stop()

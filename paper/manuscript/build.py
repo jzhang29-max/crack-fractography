@@ -47,6 +47,10 @@ FIGS = {
     "ceiling": os.path.join(PAPER, "figures/out/P3 - width sensitivity.png"),
     "arms": os.path.join(PAPER, "figures/out/P4 - baselines.png"),
     "budget": os.path.join(PAPER, "figures/out/P5 - pixel budget.png"),
+    # the overlap measures for the crack class, shown rather than only mentioned. It is
+    # LAST in the results because the paper's primary endpoints are the ones computed
+    # over every pixel of the frame, and this one is explicitly secondary to them.
+    "overlap": os.path.join(PAPER, "figures/out/P8 - crack overlap.png"),
     "txm": os.path.join(PAPER, "figures/out/txm_transfer.png"),
 }
 
@@ -78,6 +82,34 @@ MP.VALUES.update({
     "tx_recall": MP._n(_rec(_pool), 3),
     "tx_otsu_acc": MP._n(TX["pooled"]["control: Otsu, no model"]["accuracy_pct"], 1),
     "tx_all_acc": MP._n(TX["pooled"]["control: mark everything"]["accuracy_pct"], 1),
+})
+
+# --- the overlap measures for the crack class, Section 3.6 and its figure --------------
+# The longer draft reports F1, recall and IoU and never defines a precision placeholder,
+# so the three bars in the plate could not all be named in prose. These come from the same
+# two files the plate reads, through make_paper's own loaders, so the figure and the
+# sentence beside it cannot drift apart. Floors are the mark-everything control, whose
+# precision is the annotated crack fraction by construction.
+_OV_W, _OV_C = MP.IN, MP.IN_CROP
+_OV_WME = _OV_W["controls"]["mark_everything"]
+_OV_CME = _OV_C["controls"]["mark_everything"]
+MP.VALUES.update({
+    "ov_prec": MP._n(_OV_W["loo"]["precision"]),
+    "ov_crop_prec": MP._n(_OV_C["loo"]["precision"]),
+    "ov_crop_recall": MP._n(_OV_C["loo"]["recall"]),
+    "ov_crop_n": str(_OV_C["n"]),
+    "ov_prec_floor": MP._n(_OV_WME["precision"]),
+    "ov_crop_prec_floor": MP._n(_OV_CME["precision"]),
+    "ov_lift": MP._n(_OV_W["loo"]["precision"] / _OV_WME["precision"], 1),
+    "ov_crop_lift": MP._n(_OV_C["loo"]["precision"] / _OV_CME["precision"], 1),
+    "ov_prec_ratio": MP._n(_OV_C["loo"]["precision"] / _OV_W["loo"]["precision"], 2),
+    "ov_recall_ratio": MP._n(_OV_C["loo"]["recall"] / _OV_W["loo"]["recall"], 2),
+    "ov_prev_ratio": MP._n(_OV_C["prevalence"] / _OV_W["prevalence"], 2),
+    "ov_me_recall": MP._n(_OV_WME["recall"], 3),
+    "ov_k_lo": MP._n(min(float(k) for k in _OV_W["per_k"]), 1),
+    "ov_k_hi": MP._n(max(float(k) for k in _OV_W["per_k"]), 1),
+    "ov_prec_lo": MP._n(_OV_W["per_k"][min(_OV_W["per_k"], key=float)]["precision"]),
+    "ov_recall_lo": MP._n(_OV_W["per_k"][min(_OV_W["per_k"], key=float)]["recall"]),
 })
 for g in ("B3", "B2", "Wrought", "AM/HC"):
     d = TX["by_group"][g]["arms"][_k6]

@@ -1846,6 +1846,7 @@ function editorHTML(frame) {
       <button id="edfit">Fit</button>
       <button id="cropmode" title="Drag a box to work on part of this image">Crop</button>
       <button id="cropreset" hidden title="Show the whole image again">Whole image</button>
+      <button id="cropsave" hidden title="Cut this region out and keep it as its own image, with the micrograph cut to the same box">Keep crop as a new image</button>
       <span class="u" id="cropinfo"></span>
       <button id="sendparent" hidden>Send strokes to corrections</button>
       <span class="u" id="sendinfo"></span>
@@ -2119,6 +2120,7 @@ async function openEditor(frame) {
     rememberView(v);
     const whole = ED.view.w === ED.off.width && ED.view.h === ED.off.height;
     const rb = $("#cropreset"); if (rb) rb.hidden = whole;
+    const sb = $("#cropsave"); if (sb) sb.hidden = whole;
     syncReviewButton();
     const ci = $("#cropinfo");
     if (ci) ci.textContent = whole ? "" :
@@ -2437,8 +2439,10 @@ async function openEditor(frame) {
       // answer to WHICH PIXELS get saved, and it still is: only the box is sent. It was
       // never an answer to "and make a new frame out of them".
       //
-      // The old behaviour is still reachable deliberately: /api/crop is unchanged and
-      // Crop to a new frame is an explicit button, not a timer.
+      // The old behaviour is still reachable deliberately: /api/crop is unchanged, and
+      // "Keep crop as a new image" beside the Crop button calls it. That button did not
+      // exist when this comment was first written, which made the sentence false and the
+      // endpoint unreachable; it exists now.
       const key = cropKey();
       saveArm = state.arm; saveFrame = frame;
       // The bytes are the region on screen, at the mask's own resolution.
@@ -3491,6 +3495,50 @@ function wireCrop() {
   };
   const rb = $("#cropreset");
   if (rb) rb.onclick = () => { cropReset(); ED.setView(null); };
+
+  // KEEP CROP AS A NEW IMAGE. The comment below this block has said for some time that
+  // "Crop to a new frame is an explicit button, not a timer" -- and there was no such
+  // button, so /api/crop was unreachable from the interface and a crop could not be
+  // kept at all. The endpoint was never the problem: it cuts the mask, the pristine
+  // copy and the MICROGRAPH to the same box, and every picture the app renders for the
+  // result resolves to those cut files rather than to the parent's.
+  //
+  // It is a button and not an autosave on purpose. What the user objected to, three
+  // times, was a frame appearing in Your images that they had not asked to create. A
+  // click is asking.
+  const sv = $("#cropsave");
+  if (sv) sv.onclick = async () => {
+    const v = ED.view;
+    if (!v || !state.frame) return;
+    const was = sv.textContent;
+    sv.disabled = true; sv.textContent = "cutting…";
+    try {
+      const r = await fetch("/api/crop", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ arm: state.arm, frame: state.frame,
+                               x: v.x, y: v.y, w: v.w, h: v.h }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d && d.detail ? d.detail : `server error ${r.status}`);
+      cropReset();
+      state.arm = "uploads"; state.spec = "";
+      await refreshArmOptions();
+      await loadArm();
+      await selectFrame(d.frame);
+      // SAY WHEN THE MICROGRAPH DID NOT COME WITH IT. A crop with no picture under the
+      // mask is still usable and is not what the user expects, and original_note is the
+      // server's own explanation of why.
+      const say = $("#listcount");
+      if (say) say.textContent = d.original_cropped
+        ? `kept ${d.frame} — mask and micrograph both cut to ${v.w} × ${v.h} px`
+        : `kept ${d.frame} — ${d.original_note || "no micrograph came with it"}`;
+    } catch (err) {
+      const say = $("#listcount");
+      if (say) say.innerHTML = `<span class="flag bad">${esc(err.message)}</span>`;
+    } finally {
+      sv.disabled = false; sv.textContent = was;
+    }
+  };
 
   if (CROP_WIRED) return;
   CROP_WIRED = true;

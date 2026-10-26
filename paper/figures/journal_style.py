@@ -60,6 +60,8 @@ COLUMN_CLASS = {
     "P4 - baselines": ("1.5-column", W15),
     "P5 - pixel budget": ("1.5-column", W15),
     "P6 - pipeline in pictures": ("double", W2),
+    "P7 - workflow": ("double", W2),
+    "P8 - crack overlap": ("double", W2),
     "txm_transfer": ("double", W2),
 }
 
