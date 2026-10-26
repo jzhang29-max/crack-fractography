@@ -679,3 +679,66 @@ def test_health_does_not_resolve_the_measurement_implementation():
         "health no longer reads the already-resolved answer")
     assert "Thread(" not in fn and "threading" not in fn, (
         "health resolves on a background thread again, which races the import")
+
+
+# ---------------------------------------------------------------------------------------
+# THE PORT IS PART OF THE PAGE'S ORIGIN, so a fresh port each launch silently wipes
+# everything the interface remembers. The launcher bound port 0 and the crop a user had
+# left an image on came back as the whole frame on the next start -- along with the
+# remembered tab and every remembered filter, which nobody reported because nobody could
+# see them go. Proof it was the origin and not the crop code: with one persistent browser
+# profile, a crop set on port 8921 is restored on port 8921 and absent on port 8922, where
+# localStorage holds no cf.view key at all.
+#
+# These run against packaging/launcher.py directly rather than a built bundle, so they
+# cover the logic on every platform; the bundle itself is covered by the smoke check.
+
+def _launcher(tmp_data, monkeypatch):
+    import importlib
+    monkeypatch.setenv("FRACTOGRAPHY_DATA", str(tmp_data))
+    sys.path.insert(0, os.path.join(REPO, "packaging"))
+    import launcher
+    importlib.reload(launcher)
+    importlib.reload(launcher.P)
+    launcher.P.ensure_dirs()
+    return launcher
+
+
+def test_the_port_is_the_same_on_every_launch(tmp_path, monkeypatch):
+    """Three launches, one port. This is what makes a remembered crop come back."""
+    L = _launcher(tmp_path / "d", monkeypatch)
+    first = L.stable_port()
+    assert 1024 < first < 65536
+    assert L.stable_port() == first
+    assert L.stable_port() == first
+    assert open(os.path.join(L.P.DATA, "port"), encoding="utf-8").read().strip() == str(first)
+
+
+def test_a_taken_port_falls_back_and_is_re_recorded(tmp_path, monkeypatch):
+    """Refusing to start would be worse. A second copy, or anything else holding the
+    port, costs that one start its memory and nothing more."""
+    import socket
+    L = _launcher(tmp_path / "d", monkeypatch)
+    first = L.stable_port()
+    hold = socket.socket()
+    hold.bind(("127.0.0.1", first))
+    hold.listen(1)
+    try:
+        second = L.stable_port()
+        assert second != first
+        assert open(os.path.join(L.P.DATA, "port"), encoding="utf-8").read().strip() == str(second)
+    finally:
+        hold.close()
+    # and the new one is now the stable one
+    assert L.stable_port() == second
+
+
+def test_a_junk_port_file_does_not_stop_the_app(tmp_path, monkeypatch):
+    """A truncated or hand-edited file is a reason to pick a new port, not to crash."""
+    L = _launcher(tmp_path / "d", monkeypatch)
+    f = os.path.join(L.P.DATA, "port")
+    for junk in ("", "   ", "not-a-port", "0", "70000", "-1"):
+        open(f, "w", encoding="utf-8").write(junk)
+        p = L.stable_port()
+        assert 1024 < p < 65536, f"{junk!r} gave {p}"
+        assert open(f, encoding="utf-8").read().strip() == str(p)

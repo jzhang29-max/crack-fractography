@@ -365,6 +365,18 @@ That is deliberate. It used to cut the region out, measure it and file it in `up
 its own frame — which put a second entry in the sidebar for what you think of as the same
 picture, and made "crop" mean "make a copy".
 
+The crop is **remembered per image**, in the browser's own storage: close the app, reopen
+it, open the same image and the view comes back, with "· where you left it" beside the
+pixel counts. Clearing the crop clears the memory of it. Nothing is written to your data
+and nothing appears in Your images.
+
+That only works because the app now binds the **same port every launch**. The port is part
+of the page's origin, browser storage is keyed by origin, and the launcher used to take a
+fresh ephemeral port each start — so `127.0.0.1:54097` and `127.0.0.1:61931` were different
+origins and every start handed the interface a blank memory. The port is recorded beside
+your data and reused while it is free; if something else has taken it a fresh one is used
+and recorded, and that one start begins with an empty memory.
+
 **Keep crop as a new image**, beside Crop and shown only while a crop view is open, is
 how you turn that view into a frame of its own. It posts `POST /api/crop`, which cuts the
 mask, a pristine copy of it and the MICROGRAPH to the same box; every picture the app

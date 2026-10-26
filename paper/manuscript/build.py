@@ -105,6 +105,7 @@ MP.VALUES.update({
     "ov_recall_ratio": MP._n(_OV_C["loo"]["recall"] / _OV_W["loo"]["recall"], 2),
     "ov_prev_ratio": MP._n(_OV_C["prevalence"] / _OV_W["prevalence"], 2),
     "ov_me_recall": MP._n(_OV_WME["recall"], 3),
+    "ov_crop_me_f1": MP._n(_OV_CME["f1"]),
     "ov_k_lo": MP._n(min(float(k) for k in _OV_W["per_k"]), 1),
     "ov_k_hi": MP._n(max(float(k) for k in _OV_W["per_k"]), 1),
     "ov_prec_lo": MP._n(_OV_W["per_k"][min(_OV_W["per_k"], key=float)]["precision"]),

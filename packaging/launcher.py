@@ -60,6 +60,51 @@ def free_port():
     return port
 
 
+def _port_is_free(port):
+    s = socket.socket()
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    try:
+        s.bind(("127.0.0.1", port))
+        return True
+    except OSError:
+        return False
+    finally:
+        s.close()
+
+
+def stable_port():
+    """THE SAME PORT ACROSS LAUNCHES, BECAUSE THE PORT IS PART OF THE PAGE'S ORIGIN.
+
+    This asked the OS for an ephemeral port every start, which is correct for avoiding a
+    clash and wrong for everything the page remembers. localStorage is keyed by ORIGIN,
+    and http://127.0.0.1:54097 is a different origin from http://127.0.0.1:61931 -- so
+    every start handed the interface a blank memory. The crop you had left an image on
+    came back as the whole frame, which is the symptom that found this; the remembered
+    tab and every remembered filter went the same way, silently.
+
+    What it looks like from outside: ~/Library/WebKit/<bundle id>/WebsiteData/Default
+    holds one localstorage.sqlite3 per port this app has ever used. Three of them here.
+
+    So the port is recorded beside the data and reused while it is still free. When it is
+    not -- a second copy is already running, or something else has taken it -- a fresh one
+    is taken and recorded, and that start has an empty memory. That is the old behaviour,
+    and it is the best available: the alternative is refusing to start.
+    """
+    f = os.path.join(P.DATA, "port")
+    try:
+        want = int(open(f).read().strip())
+    except Exception:                                   # noqa: BLE001 - no file, or junk
+        want = 0
+    port = want if (1024 < want < 65536 and _port_is_free(want)) else free_port()
+    try:
+        os.makedirs(P.DATA, exist_ok=True)
+        with open(f, "w") as fh:
+            fh.write(str(port))
+    except OSError:
+        pass                                            # a read-only data dir still runs
+    return port
+
+
 def serve(port, ready):
     import uvicorn
     from app.server import app as fastapi_app
@@ -119,7 +164,7 @@ class Api:
 
 def main():
     P.ensure_dirs()
-    port = int(os.environ.get("PORT") or 0) or free_port()
+    port = int(os.environ.get("PORT") or 0) or stable_port()
     url = f"http://127.0.0.1:{port}"
     ready = threading.Event()
 
