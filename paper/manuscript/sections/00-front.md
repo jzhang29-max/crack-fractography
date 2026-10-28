@@ -29,14 +29,20 @@ setting with the area ratio still falling, and extending it identifies {mk_best}
 point at which the reported and reference areas agree. Second, the area endpoint is placed
 against the range it can resolve, using a reconstruction of the reference annotation that
 is exactly correct about position and wrong only about width. The revision also adds a
-cross-modality evaluation: the same detector, unchanged, applied to {tx_n} transmission
-X-ray microscopy frames of austenitic steel, where it reports {tx_area} times the annotated
-crack area pooled across four specimen groups and clears an all-background prediction on one
-of them.
+cross-modality evaluation in three parts. The transmission X-ray microscopy collection's
+own detector is reported here for the first time, and the same model returns an IoU of
+{tm_cv_ens}, {tm_ld_iou} or {tm_wf_iou} according only to which pixels are scored. Against
+that collection's labels, a reconstruction of the reference annotation that is exactly
+correct about position scores {tm_ld_ceil} where the deployed model scores {tm_ld_iou}, and
+the two move in opposite directions with the width of the annotator's stroke — so a higher
+overlap score there is evidence of resemblance to the brush rather than of crack found. The
+SEM detector itself, carried across unchanged to {tx_n} of those frames, reports {tx_area}
+times the annotated crack area pooled across four specimen groups and clears an
+all-background prediction on one of them.
 
 These findings support the detector as an interpretable approach to aggregate crack area
 measurement within the evaluated collection. The principal result concerns agreement in
 total image area, with pixel-level segmentation considered as a separate endpoint.
 
 Keywords: scanning electron microscopy; Inconel 718; crack area fraction; multiscale image
-analysis; deterministic segmentation; cross-modality transfer
+analysis; deterministic segmentation; cross-modality transfer; transmission X-ray microscopy

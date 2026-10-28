@@ -1,0 +1,86 @@
+{
+ "what": "The TXM collection's own detector, scored three ways, plus the overlap ceiling its reference labels impose.",
+ "generator": "analysis/research/improve/txm_model_scores.py",
+ "cross_validated": {
+  "convention": "5-fold grouped by IMAGE; 250,000 sampled rows per fold drawn from hand-painted pixels, not whole frames; owner corrections only",
+  "labelled_images_used": 71,
+  "grouped_by": "image",
+  "label_source": "owner corrections only (no external)",
+  "model_version": "v4 members (member_split_v4.json); the deployed joblibs are v5 and no v5 grouped-CV artefact exists in either repository",
+  "ens_mean_iou": 0.7921,
+  "ens_std_iou": 0.0322,
+  "ens_min_iou": 0.7383,
+  "f17_mean_iou": 0.6513,
+  "hybrid_mean_iou": 0.7777,
+  "mean_precision": 0.9313,
+  "mean_recall": 0.8416,
+  "not_specimen_independent": "grouping is by image; the labelled frames span four specimen groups, so a whole specimen is never held out"
+ },
+ "labelled_domain": {
+  "convention": "intersection over union restricted to the labelled domain (painted crack OR painted not-crack)",
+  "mask": "effective_mask(corrections=\"none\", tight=True) -- human paint excluded",
+  "n_frames": 61,
+  "median_iou": 0.6748,
+  "median_3px_ceiling": 0.0498,
+  "ratio_of_medians": 13.56,
+  "median_label_width_px": 53.85,
+  "label_width_min_px": 10.2,
+  "label_width_max_px": 329.3,
+  "frames_where_correct_3px_trace_wins": 0,
+  "spearman_model_iou_vs_label_width": 0.603,
+  "spearman_3px_ceiling_vs_label_width": -0.813,
+  "per_group": {
+   "AM": {
+    "n": 25,
+    "ceiling_3px": 0.07317087386562997,
+    "shipped": 0.5468238375900458,
+    "label_width_px": 32.2490309931942
+   },
+   "B2": {
+    "n": 14,
+    "ceiling_3px": 0.033886407419907796,
+    "shipped": 0.7835746429377625,
+    "label_width_px": 52.20462469713945
+   },
+   "B3": {
+    "n": 10,
+    "ceiling_3px": 0.02906810419792434,
+    "shipped": 0.9063204059397241,
+    "label_width_px": 118.85699070343416
+   },
+   "WR": {
+    "n": 12,
+    "ceiling_3px": 0.03428007127661009,
+    "shipped": 0.7720496653852111,
+    "label_width_px": 65.36568055487916
+   }
+  }
+ },
+ "whole_frame": {
+  "convention": "full-resolution IoU against the operator's painted crack, whole frame",
+  "n_frames": 58,
+  "median_iou": 0.507,
+  "q1": 0.36,
+  "q3": 0.712,
+  "example_frame_iou": 0.5032,
+  "example_frame_recall": 0.6167,
+  "example_frame_fp_on_painted_notcrack": 0.0054
+ },
+ "window_stages": {
+  "note": "one 1100 px window of the example frame; these are not corpus figures",
+  "threshold": 0.6,
+  "operator_paint_pct": 9.35,
+  "f17_iou": 0.1043,
+  "hybrid_iou": 0.5215,
+  "ensemble_iou": 0.516,
+  "deployed_mask_pct": 8.27,
+  "f17_pct": 59.23,
+  "agreement_f17_vs_hybrid": 0.1324,
+  "agreement_hybrid_vs_ensemble": 0.9377,
+  "_agreement_source": "measured from the cached arrays by paper/figures/mk_txm_stages.py; see its caption JSON"
+ },
+ "scale": {
+  "nm_per_px": 29.24,
+  "provenance": "DERIVED from operator-supplied mosaic geometry, not read from instrument metadata; marked [TODO-AUTHOR] in the TXM repository"
+ }
+}

@@ -63,6 +63,8 @@ COLUMN_CLASS = {
     "P7 - workflow": ("double", W2),
     "P8 - crack overlap": ("double", W2),
     "txm_transfer": ("double", W2),
+    "T1 - TXM stages": ("double", W2),
+    "T2 - TXM ceiling": ("double", W2),
 }
 
 #: COLOUR, AND WHAT IT IS FOR. This figure set was greyscale-first. That was defensible

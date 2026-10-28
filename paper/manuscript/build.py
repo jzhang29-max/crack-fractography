@@ -52,10 +52,16 @@ FIGS = {
     # over every pixel of the frame, and this one is explicitly secondary to them.
     "overlap": os.path.join(PAPER, "figures/out/P8 - crack overlap.png"),
     "txm": os.path.join(PAPER, "figures/out/txm_transfer.png"),
+    # the TXM collection has its OWN detector, which the supplied manuscript never
+    # showed. T1 is its three rungs on one window; T2 is what its score measures.
+    "txmstages": os.path.join(PAPER, "figures/out/T1 - TXM stages.png"),
+    "txmceiling": os.path.join(PAPER, "figures/out/T2 - TXM ceiling.png"),
 }
 
 # --- values this manuscript needs that the longer draft does not define ----------------
 TX = MP._f(os.path.join(REPO, "docs/figures/txm_background_units.json"), "TXM")
+TM = MP._f(os.path.join(REPO, "docs/figures/txm_model_scores.json"), "TXM model scores")
+_cv, _ld, _wf, _ws = TM["cross_validated"], TM["labelled_domain"], TM["whole_frame"], TM["window_stages"]
 _k6 = "SEM detector, mad_k=6"
 _pool = TX["pooled"][_k6]
 
@@ -81,6 +87,40 @@ MP.VALUES.update({
     "tx_recall": MP._n(_rec(_pool), 3),
     "tx_otsu_acc": MP._n(TX["pooled"]["control: Otsu, no model"]["accuracy_pct"], 1),
     "tx_all_acc": MP._n(TX["pooled"]["control: mark everything"]["accuracy_pct"], 1),
+    # --- the TXM collection's own detector -------------------------------------
+    "tm_cv_n": str(_cv["labelled_images_used"]),
+    "tm_cv_ens": MP._n(_cv["ens_mean_iou"], 4),
+    "tm_cv_sd": MP._n(_cv["ens_std_iou"], 4),
+    "tm_cv_min": MP._n(_cv["ens_min_iou"], 4),
+    "tm_cv_f17": MP._n(_cv["f17_mean_iou"], 4),
+    "tm_cv_hyb": MP._n(_cv["hybrid_mean_iou"], 4),
+    "tm_cv_prec": MP._n(_cv["mean_precision"], 4),
+    "tm_cv_rec": MP._n(_cv["mean_recall"], 4),
+    "tm_ld_n": str(_ld["n_frames"]),
+    "tm_ld_iou": MP._n(_ld["median_iou"], 4),
+    "tm_ld_ceil": MP._n(_ld["median_3px_ceiling"], 4),
+    "tm_ld_ratio": MP._n(_ld["ratio_of_medians"], 2),
+    "tm_ld_width": MP._n(_ld["median_label_width_px"], 1),
+    "tm_ld_wmin": MP._n(_ld["label_width_min_px"], 1),
+    "tm_ld_wmax": MP._n(_ld["label_width_max_px"], 1),
+    "tm_ld_wins": str(_ld["frames_where_correct_3px_trace_wins"]),
+    "tm_rho_sh": MP._n(_ld["spearman_model_iou_vs_label_width"], 2),
+    "tm_rho_c3": MP._n(_ld["spearman_3px_ceiling_vs_label_width"], 2),
+    "tm_wf_n": str(_wf["n_frames"]),
+    "tm_wf_iou": MP._n(_wf["median_iou"], 3),
+    "tm_wf_q1": MP._n(_wf["q1"], 2),
+    "tm_wf_q3": MP._n(_wf["q3"], 3),
+    "tm_wf_rec": MP._n(_wf["example_frame_recall"], 3),
+    "tm_wf_fp": MP._n(100 * _wf["example_frame_fp_on_painted_notcrack"], 2),
+    "tm_ws_paint": MP._n(_ws["operator_paint_pct"], 1),
+    "tm_ws_f17": MP._n(_ws["f17_iou"], 3),
+    "tm_ws_hyb": MP._n(_ws["hybrid_iou"], 3),
+    "tm_ws_ens": MP._n(_ws["ensemble_iou"], 3),
+    "tm_ws_pct": MP._n(_ws["deployed_mask_pct"], 1),
+    "tm_ws_f17pct": MP._n(_ws["f17_pct"], 1),
+    "tm_ws_ab": MP._n(_ws["agreement_f17_vs_hybrid"], 3),
+    "tm_ws_bc": MP._n(_ws["agreement_hybrid_vs_ensemble"], 3),
+    "tm_nm": MP._n(TM["scale"]["nm_per_px"], 2),
 })
 
 # --- the overlap measures for the crack class, Section 3.6 and its figure --------------
