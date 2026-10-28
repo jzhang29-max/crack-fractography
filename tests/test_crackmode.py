@@ -619,7 +619,8 @@ def test_a_smooth_wall_gives_the_true_junction_count_at_every_width():
     """The ground truth of the synthetic, established before any cure is applied to it."""
     for hw in (0, 2, 5, 15, 40):
         m, truth = _rough_tree(half_width=hw, roughness=0.0)
-        assert CM.junctions(m, regularise_px=0)[0].size == truth, f"half-width {hw}"
+        got = CM.junctions(m, regularise_px=0, min_branch_widths=0)[0].size
+        assert got == truth, f"half-width {hw}: {got}"
 
 
 def test_closing_the_wall_recovers_the_count_a_rough_wall_destroys():
@@ -628,11 +629,14 @@ def test_closing_the_wall_recovers_the_count_a_rough_wall_destroys():
     touch it. Measured on the synthetic at 1 px of wall roughness, the raw skeleton gives
     4, 7, 7, 10 nodes for half-widths 2, 5, 15, 40 against a truth of 4; a closing of radius 2
     gives 4, 4, 4, 6."""
+    # BOTH cures are off in the "raw" arm. They are module defaults now, so a call that does
+    # not switch them off inherits the treatment it is meant to be compared against -- which is
+    # exactly how the first draft of this comparison came to report no effect at all.
     raw, cured = [], []
     for hw in (2, 5, 15, 40):
         m, truth = _rough_tree(half_width=hw, roughness=1.0)
-        raw.append(CM.junctions(m, regularise_px=0)[0].size)
-        cured.append(CM.junctions(m)[0].size)
+        raw.append(CM.junctions(m, regularise_px=0, min_branch_widths=0)[0].size)
+        cured.append(CM.junctions(m, min_branch_widths=0)[0].size)
     assert max(raw) > truth, raw
     assert sum(abs(c - 4) for c in cured) < sum(abs(r - 4) for r in raw), (raw, cured)
     assert max(cured) <= max(raw)
@@ -705,3 +709,68 @@ def test_the_flank_controls_get_the_same_wall_treatment_as_the_crack():
     for r in (a, b):                       # both must still separate on a clean tessellation
         assert r["positive_control"] > 95.0
         assert r["negative_control"] < 5.0
+
+
+# ------------------------------------------- a node must be resolvable at the local width
+def test_both_cures_together_hold_the_true_count_over_the_whole_width_range():
+    """A junction is where three DISTINGUISHABLE paths meet, and two paths are not
+    distinguishable over a run shorter than the channel is wide. After the wall closing, 96.7%
+    of the 332 surviving nodes on 260622_316_H_b2_front_CBS_02 still had a third incident
+    branch shorter than the local width (median 9 px against a 28.3 px channel)."""
+    for rough in (0.0, 1.0):
+        for hw in (2, 5, 15, 40):
+            m, truth = _rough_tree(half_width=hw, roughness=rough)
+            got = CM.junctions(m)[0].size
+            assert got == truth, f"roughness {rough}, half-width {hw}: {got}"
+
+
+def test_the_resolvability_factor_is_set_below_where_it_starts_losing_junctions():
+    """0.5 is not a taste. Every value up to 0.8 holds the true count at all four widths with a
+    smooth wall; 0.9 loses a real junction at half-width 40. The breaking point is pinned here
+    so that raising the constant cannot pass silently."""
+    assert CM.MIN_BRANCH_WIDTHS == 0.5
+    m, truth = _rough_tree(half_width=40, roughness=0.0)
+    assert CM.junctions(m, min_branch_widths=0.8)[0].size == truth
+    assert CM.junctions(m, min_branch_widths=0.9)[0].size < truth
+
+
+def test_demoting_a_node_deletes_nothing():
+    """A demoted cluster's pixels go back to the skeleton and the branches either side rejoin.
+    The mask, the skeleton and the total branch length are all untouched -- only the node list
+    shrinks. This project's two earlier artefact fixes were both deleters, so the property is
+    asserted rather than assumed."""
+    m, _truth = _rough_tree(half_width=15, roughness=1.0)
+    loose = CM._skeleton_graph(m, min_branch_widths=0)
+    tight = CM._skeleton_graph(m, min_branch_widths=0.5)
+    assert (loose["mask"] == tight["mask"]).all()
+    assert (loose["skel"] == tight["skel"]).all()
+    assert tight["nodes"][0].size <= loose["nodes"][0].size
+    assert int((tight["branch_labels"] > 0).sum()) >= int((loose["branch_labels"] > 0).sum())
+    assert tight["n_branches"] <= loose["n_branches"]
+
+
+def test_the_demotion_converges_and_says_how_many_passes_it_took():
+    """Rejoining branches lengthens them, which can rescue a neighbouring node, so one pass is
+    not enough. On the real frames it settles in 3-5."""
+    m, _truth = _rough_tree(half_width=15, roughness=1.0)
+    g = CM._skeleton_graph(m)
+    assert g["resolve_converged"] is True
+    assert 1 <= g["resolve_passes"] < CM.MAX_RESOLVE_PASSES
+    assert CM.junction_census(m)["resolve_converged"] is True
+
+
+def test_the_node_rules_cannot_move_the_decidable_fraction():
+    """Decidability is a per-centreline-pixel property of the crack's own geometry: can both
+    flank samples clear the wall. The node rules change how the skeleton is CUT, never where
+    it runs, so they must not touch it. Asserted rather than reasoned, because the two live in
+    the same function and a future change could couple them without anything else noticing."""
+    g = grains()
+    m = intergranular_crack()
+    base = CM.flank_mode(m, g, standoff_px=2, regularise_px=0)
+    for mbw in (0, 0.5, 2.0):
+        graph = CM._skeleton_graph(m, regularise_px=0, min_branch_widths=mbw)
+        geo = CM.flank_geometry(m, regularise_px=0)
+        out = CM.flank_mode(m, g, standoff_px=2, geometry=geo, graph=graph)
+        assert out["decidable_frac"] == base["decidable_frac"]
+        assert out["n_centreline_px"] == base["n_centreline_px"]
+        assert out["intergranular_pct_by_centreline"] == base["intergranular_pct_by_centreline"]

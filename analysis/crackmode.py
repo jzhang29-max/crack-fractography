@@ -60,15 +60,22 @@ whether it was chosen or counted:
                          over-marks by about 5x -- an axis-aligned crossing lights its centre
                          and all four arms -- so nodes are clusters, and a cluster's degree is
                          the number of distinct branches incident on it.
-    REGULARISE_PX        the only tunable number in the junction machinery. Clustering the
-                         pixels exposed a second fault underneath it: inside a wide crack with
-                         a pixel-rough wall the medial axis is a WEB of members running wall to
+    REGULARISE_PX        the first of the two tunable numbers here. Clustering the pixels
+                         exposed a second fault underneath it: inside a wide crack with a
+                         pixel-rough wall the medial axis is a WEB of members running wall to
                          wall, and every intersection is a real node of that skeleton, so
                          clustering cannot help. A closing of the wall at this radius removes
                          the cause. It is additive -- no crack pixel is ever lost -- and both
                          the area it adds and any fragments it bridges are reported on every
-                         run. See the constant for the six families this was chosen over and
+                         run. See the constant for the five families this was chosen over and
                          the synthetic they were measured against.
+    MIN_BRANCH_WIDTHS    the second, and the width-scaled answer to "how far apart must two
+                         junctions be". A node needs MIN_JUNCTION_DEGREE branches at least this
+                         multiple of the LOCAL CRACK WIDTH long, because two paths are not
+                         distinguishable over a run shorter than the channel is wide. After the
+                         closing, 96.7% of the surviving nodes on one frame still failed this.
+                         It deletes nothing: a demoted cluster's pixels go back to the skeleton
+                         and the branches rejoin.
 
   HOW FAR APART TWO JUNCTIONS MUST BE
     MIN_SEGMENT_PX       absolute floor on branch length. Removes many branches and little
@@ -240,6 +247,35 @@ def saturation(boundary, tau_px, *, within=None):
 #: 8-connectivity for ndi.label. Note the CENTRE IS 1 here and must be 0 in _NEIGHBOURS: a
 #: neighbour count convolved with a centre-1 kernel counts the pixel itself, which makes every
 #: pixel on a plain line read as a 3-neighbour junction candidate.
+#: A cluster is a node only if MIN_JUNCTION_DEGREE of its branches are at least this multiple
+#: of the LOCAL CRACK WIDTH long. This is the width-scaled form of "how far apart must two
+#: junctions be", and it is the second half of the over-marking cure.
+#:
+#: WHY IT IS NEEDED ON TOP OF THE WALL CLOSING. A junction is a place where three or more
+#: DISTINGUISHABLE paths meet, and two paths are not distinguishable over a run shorter than
+#: the channel is wide -- the medial axis of a channel cannot separate features finer than the
+#: disc inscribed in it. Measured after the closing on 260622_316_H_b2_front_CBS_02, 96.7% of
+#: the 332 surviving nodes still had a third incident branch shorter than the local width
+#: (median 9 px against a 28.3 px channel), so almost all of them were places the image cannot
+#: resolve as a three-way division at all.
+#:
+#: WHY 0.5. Chosen as the largest safe value with margin, on the same synthetic. Every k up to
+#: and including 0.8 returns the true count of 4 at half-widths 2, 5, 15 and 40 with a smooth
+#: or 1 px-rough wall; at k = 0.9 a real junction is lost on a SMOOTH wall at half-width 40.
+#: 0.5 therefore sits a factor 1.6 inside the breaking point. It also fixes the one case the
+#: closing alone misses, half-width 40 at 1 px roughness, where the closing leaves 6.
+#:
+#: WHAT IT COSTS. Nothing is deleted: no mask pixel, no skeleton pixel, no branch. A demoted
+#: cluster's pixels go back to the skeleton and the branches either side rejoin, exactly as
+#: for a two-branch cluster. On the real frames it takes 332 -> 68 and 575 -> 143 nodes, which
+#: is one node per 15.3 and 14.5 um of centreline -- about one branch point per grain. 0
+#: disables it. The demotion iterates, because rejoining branches lengthens them and can
+#: rescue a neighbouring node; it converges in 3-5 passes on these frames.
+MIN_BRANCH_WIDTHS = 0.5
+
+#: Passes of the resolvability demotion before it is reported as not having converged.
+MAX_RESOLVE_PASSES = 12
+
 #: Radius of the morphological CLOSING applied to the crack wall before the skeleton is taken.
 #:
 #: WHY THE SKELETON NEEDS THIS. Clustering junction pixels into nodes fixed one fault and
@@ -331,7 +367,8 @@ def _incident_branches(jlab, blab, index):
     return out
 
 
-def _skeleton_graph(mask, *, min_degree=MIN_JUNCTION_DEGREE, regularise_px=REGULARISE_PX):
+def _skeleton_graph(mask, *, min_degree=MIN_JUNCTION_DEGREE, regularise_px=REGULARISE_PX,
+                    min_branch_widths=MIN_BRANCH_WIDTHS):
     """Skeleton, its topological junctions, and the branches between them.
 
     WHY A JUNCTION PIXEL IS NOT A JUNCTION. The >=3-neighbour test is correct per pixel and
@@ -377,11 +414,43 @@ def _skeleton_graph(mask, *, min_degree=MIN_JUNCTION_DEGREE, regularise_px=REGUL
     degree = np.zeros(nj + 1, int)
     for i, s in inc0.items():
         degree[i] = len(s)
-    kept = np.zeros(nj + 1, bool)
-    kept[1:] = degree[1:] >= min_degree
 
-    cut = kept[jlab]                                   # only real nodes are removed
-    lab, n = ndi.label(skel & ~cut, structure=_EIGHT)
+    # A representative pixel OF each cluster, so the local width is read on the skeleton.
+    objs = ndi.find_objects(jlab)
+    cy, cx = np.zeros(nj + 1, int), np.zeros(nj + 1, int)
+    for i in range(1, nj + 1):
+        sl = objs[i - 1]
+        if sl is None:
+            continue
+        sy, sx = np.nonzero(jlab[sl] == i)
+        j = int(np.argmin((sy - sy.mean()) ** 2 + (sx - sx.mean()) ** 2))
+        cy[i], cx[i] = sy[j] + sl[0].start, sx[j] + sl[1].start
+    hw = ndi.distance_transform_edt(mask)
+
+    # Demote until stable. Rejoining the branches at a demoted cluster lengthens them, which
+    # can rescue a neighbour, so one pass is not enough and the pass count is reported.
+    kept = np.zeros(nj + 1, bool)
+    kept[1:] = True
+    passes = 0
+    lab, n, inc = None, 0, {}
+    for passes in range(1, MAX_RESOLVE_PASSES + 1):
+        lab, n = ndi.label(skel & ~kept[jlab], structure=_EIGHT)
+        ids = [i for i in range(1, nj + 1) if kept[i]]
+        inc = _incident_branches(jlab, lab, ids)
+        blen = np.bincount(lab.ravel(), minlength=n + 1)
+        changed = False
+        for i in ids:
+            lens = sorted((int(blen[b]) for b in inc[i]), reverse=True)
+            if len(lens) < min_degree:
+                kept[i] = False
+                changed = True
+                continue
+            if min_branch_widths and lens[min_degree - 1] < \
+                    min_branch_widths * 2.0 * float(hw[cy[i], cx[i]]):
+                kept[i] = False
+                changed = True
+        if not changed:
+            break
     keep_ids = [i for i in range(1, nj + 1) if kept[i]]
     inc = _incident_branches(jlab, lab, keep_ids)
     per_branch = {i: set() for i in range(1, int(n) + 1)}
@@ -389,18 +458,13 @@ def _skeleton_graph(mask, *, min_degree=MIN_JUNCTION_DEGREE, regularise_px=REGUL
         for b in branches:
             per_branch.setdefault(b, set()).add(cid)
 
-    ys, xs = [], []
-    objs = ndi.find_objects(jlab)
-    for i in keep_ids:
-        sl = objs[i - 1]
-        sy, sx = np.nonzero(jlab[sl] == i)
-        # a pixel OF the cluster nearest its centroid, so the marker always sits on skeleton
-        c = np.array([sy.mean(), sx.mean()])
-        j = int(np.argmin((sy - c[0]) ** 2 + (sx - c[1]) ** 2))
-        ys.append(int(sy[j]) + sl[0].start)
-        xs.append(int(sx[j]) + sl[1].start)
+    ys = [int(cy[i]) for i in keep_ids]
+    xs = [int(cx[i]) for i in keep_ids]
 
-    base.update(junction_labels=jlab, n_clusters=int(nj), degree=degree, kept=kept,
+    base.update(resolve_passes=int(passes),
+                resolve_converged=bool(passes < MAX_RESOLVE_PASSES),
+                min_branch_widths=float(min_branch_widths or 0.0),
+                junction_labels=jlab, n_clusters=int(nj), degree=degree, kept=kept,
                 branch_labels=lab, n_branches=int(n), incidence=per_branch,
                 nodes=(np.array(ys, int), np.array(xs, int),
                        np.array([degree[i] for i in keep_ids], int)),
@@ -414,7 +478,7 @@ def _segment_pixels(mask, *, regularise_px=REGULARISE_PX):
     return g["skel"], g["branch_labels"], g["n_branches"]
 
 
-def junctions(mask, *, regularise_px=REGULARISE_PX):
+def junctions(mask, *, regularise_px=REGULARISE_PX, min_branch_widths=MIN_BRANCH_WIDTHS):
     """Topological junctions and their degree: ONE ROW PER NODE, not per pixel.
 
     Junctions are used by this module ONLY to cut the skeleton into branches. They are not
@@ -422,16 +486,25 @@ def junctions(mask, *, regularise_px=REGULARISE_PX):
     whether the division happened at a grain corner. Whether degree carries any mode signal
     is a question with an answer, and `degree_separates` measures it rather than assuming.
 
-    The two thresholds behind this list are in `_skeleton_graph`: a candidate pixel has >=3
-    skeleton neighbours, and a cluster of candidates is a node when >= MIN_JUNCTION_DEGREE
-    branches leave it. Nothing here is tuned; both are counts.
+    Four thresholds stand behind this list, all of them in `_skeleton_graph` and all with
+    their measured justification on the constants: a candidate pixel has >= 3 skeleton
+    neighbours; a cluster of candidates is a node when >= MIN_JUNCTION_DEGREE branches leave
+    it; the wall is closed at REGULARISE_PX first so the medial axis of a wide crack is a
+    centreline rather than a web; and MIN_BRANCH_WIDTHS of the local crack width is how long
+    those branches have to be for the node to be resolvable at all. The first two are counts.
+    The last two are the only tunable numbers here, and neither can delete crack.
     """
-    return _skeleton_graph(mask, regularise_px=regularise_px)["nodes"]
+    return _skeleton_graph(mask, regularise_px=regularise_px,
+                           min_branch_widths=min_branch_widths)["nodes"]
 
 
-def junction_census(mask, *, regularise_px=REGULARISE_PX):
-    """How much the per-pixel test over-marks on THIS image, so a reader can check it."""
-    g = _skeleton_graph(mask, regularise_px=regularise_px)
+def _census_from_graph(g):
+    """The over-marking census of a graph that has already been built.
+
+    Taken from the graph rather than recomputed, so the census cannot describe a different
+    rule from the one the caller actually ran -- and so a 4096 x 6144 frame is not
+    skeletonized twice to report on itself.
+    """
     nj, kept = g["n_clusters"], g["kept"]
     deg = g["degree"][1:]
     u, c = (np.unique(deg, return_counts=True) if deg.size else (np.array([]), np.array([])))
@@ -439,9 +512,20 @@ def junction_census(mask, *, regularise_px=REGULARISE_PX):
             "clusters": nj,
             "overmark_factor": round(g["n_candidate_px"] / nj, 2) if nj else None,
             "nodes": int(kept.sum()),
-            "dropped_degree_lt_%d" % MIN_JUNCTION_DEGREE: int(nj - kept.sum()),
+            "demoted": int(nj - kept.sum()),
+            "resolve_passes": g.get("resolve_passes"),
+            "resolve_converged": g.get("resolve_converged"),
+            "min_branch_widths": g.get("min_branch_widths"),
+            "regularise": g.get("regularise"),
             "degree_histogram": {int(a): int(b) for a, b in zip(u, c)},
             "branches": g["n_branches"]}
+
+
+def junction_census(mask, *, regularise_px=REGULARISE_PX,
+                    min_branch_widths=MIN_BRANCH_WIDTHS):
+    """How much the per-pixel test over-marks on THIS image, so a reader can check it."""
+    return _census_from_graph(_skeleton_graph(mask, regularise_px=regularise_px,
+                                              min_branch_widths=min_branch_widths))
 
 
 def _auc(score, positive):
@@ -594,9 +678,7 @@ def classify(mask, boundary, *, tau_px, theta_hi=THETA_HI, theta_lo=THETA_LO,
         out["total_skeleton_um"] = round(float(L.sum()) * nm_per_px / 1000.0, 3)
     out["bimodality"] = _bimodality(F, L)
     out["regularise"] = g["regularise"]
-    # the census of the mask the graph actually used, NOT re-regularised: g["mask"] is the
-    # closed mask, and is the input itself when the closing was disabled
-    out["junctions"] = junction_census(g["mask"], regularise_px=0)
+    out["junctions"] = _census_from_graph(g)
     out["dropped"] = {"below_absolute_floor": drop_short,
                       "shorter_than_own_width": drop_narrow,
                       "skeleton_px_dropped": drop_px,
