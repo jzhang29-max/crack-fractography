@@ -61,4 +61,8 @@ setting, the corresponding background specificity, and a descriptive comparison 
 classical image-processing methods. Representative microscopy panels and a processing
 diagram connect the numerical results to the evaluated workflow. Two sections added in this
 revision place the selected setting against the full sweep and against the range the area
-endpoint can resolve, and a third carries the detector to a second imaging modality.
+endpoint can resolve, and a third carries the detector to a second imaging modality. That
+third section reports the transfer under two aggregations rather than one, because a figure
+pooled over pixels and the mean over frames disagree about it, and it closes by giving
+precision, recall and F1 for both of this laboratory's own collections beside the score a
+geometrically correct crack trace earns against their annotations.

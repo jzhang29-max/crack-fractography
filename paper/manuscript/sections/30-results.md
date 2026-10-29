@@ -10,8 +10,9 @@ aggregate relative excess of approximately {ag_best_err_pct}%.
 The selected setting also recorded a reported background specificity of {ag_best_spec}%.
 This value characterises rejection of non-crack background pixels. Together, the area ratio
 and specificity quantify two aspects of the output: the total marked area and the
-classification of the background population. Figure 3 places the result against every
-collection scored in this work, and Table 2 collects the principal numerical results.
+classification of the background population. Figure 3 places the pixel accuracy against
+every collection scored in this work, beside the accuracy an all-background prediction
+reaches on each, and Table 2 collects the principal numerical results.
 
 | Endpoint | Reported or derived value |
 |---|---|
@@ -25,7 +26,7 @@ collection scored in this work, and Table 2 collects the principal numerical res
 | Pixel accuracy of an all-background prediction | {in_empty_acc}% |
 | Fields with lower absolute area error than the default | 23 of {in_n} |
 
-[FIGURE areabars | Performance on every collection scored in this work. (a) reported crack area divided by annotated crack area; the vertical line at 1.0 is exact agreement and the diamond marks the selected setting on the whole fields. The axis is logarithmic. (b) pixel accuracy, with the vertical bar giving the accuracy an all-background prediction would reach on the same collection. MetalDAM is included for reference and labels voids rather than cracks; the EBC coating was withdrawn from this study as a ceramic.]
+[FIGURE areabars | Pixel accuracy on every collection scored in this work, with the vertical bar giving the accuracy an all-background prediction reaches on the same collection. MetalDAM is included for reference and labels voids rather than cracks; the EBC coating was withdrawn from this study as a ceramic. An area-ratio panel stood beside this one in an earlier version and was withdrawn: its logarithmic axis had to reach 100 to hold the withdrawn EBC coating, which left the three reported collections unreadable against the unity line, and the area ratio is the subject of Figure 5, where it is drawn against the constant that moves it.]
 
 ### 3.2  Descriptive comparison of aggregate area estimates
 
@@ -118,15 +119,9 @@ multiplier was selected leave-one-image-out in both cases, and on both collectio
 rule returned the same value for every held-out image, so these are also the values at a
 fixed multiplier of {mk_ship}. A prediction that marks every pixel records a recall of
 {ov_me_recall} on either collection, a precision equal to the annotated crack fraction,
-and an F1 of {in_me_f1} on the whole fields. Table 4 collects the six values and the
-control each is read against.
-
-| Collection | Images | Precision | Recall | F1 |
-|---|---|---|---|---|
-| Inconel 718, whole fields | {in_n} | {ov_prec} | {in_recall_perimage} | {in_f1} |
-| Mark-everything control | {in_n} | {ov_prec_floor} | {ov_me_recall} | {in_me_f1} |
-| Inconel 718, released crops | {ov_crop_n} | {ov_crop_prec} | {ov_crop_recall} | {in_crop_f1} |
-| Mark-everything control | {ov_crop_n} | {ov_crop_prec_floor} | {ov_me_recall} | {ov_crop_me_f1} |
+and an F1 of {in_me_f1} on the whole fields. The same three measures on this laboratory's
+own two collections are given in Section 4.4, averaged over frames and each read against
+the score a geometrically correct trace of its own annotation would reach.
 
 [FIGURE overlap | Precision, recall and F1 for the crack class on the Inconel 718 collection, scored against an annotation that covers every pixel, at zero pixels of tolerance, on the detector's own mask with no annotation unioned into it. (a) the three measures on the whole fields and on the released crops cut from them; the short horizontal rule drawn on each bar is the value a prediction that marks every pixel records, which is 1.000 for recall and the annotated crack fraction for precision. (b) the same two collections as precision against recall across the seven values of the MAD multiplier, with the diamond marking the selected setting and the horizontal rule at recall 1.000 marking the mark-everything prediction. The multiplier increases from right to left along each curve. The legend in panel (b) identifies the collections in both panels.]
 
@@ -153,4 +148,5 @@ is counted against a decision that was actually made. Where an annotation adjudi
 part of each frame, as this laboratory's own hand-marked frames do, a precision computed
 against it is a bracket whose ends are the assumption that every unadjudicated predicted
 pixel is wrong and the assumption that every one is right. No value in this section is a
-measurement of such a collection.
+measurement of such a collection; Section 4.4 measures those two collections and gives
+both ends of that bracket for each.

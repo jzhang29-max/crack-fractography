@@ -56,6 +56,15 @@ FIGS = {
     # showed. T1 is its three rungs on one window; T2 is what its score measures.
     "txmstages": os.path.join(PAPER, "figures/out/T1 - TXM stages.png"),
     "txmceiling": os.path.join(PAPER, "figures/out/T2 - TXM ceiling.png"),
+    # the SEM arm carried across got one plate where the SEM arm itself gets five. T3-T5
+    # are the three it was missing: its operating curve, its pixel budget beside the two
+    # no-information arms, and the overlap measures on both of this laboratory's own
+    # collections with the ceiling each is read against.
+    "txmcurve": os.path.join(PAPER, "figures/out/T3 - TXM operating curve.png"),
+    "txmbudget": os.path.join(PAPER, "figures/out/T4 - TXM pixel budget.png"),
+    "txmoverlap": os.path.join(PAPER, "figures/out/T5 - overlap with its ceiling.png"),
+    "txmpipe": os.path.join(
+        PAPER, "figures/out/T6 - the SEM detector's stages on TXM.png"),
 }
 
 # --- values this manuscript needs that the longer draft does not define ----------------
@@ -155,12 +164,128 @@ for g in ("B3", "B2", "Wrought", "AM/HC"):
     d = TX["by_group"][g]["arms"][_k6]
     tag = g.replace("/", "").lower()
     MP.VALUES.update({
+        # how much reviewed not-crack is marked for every pixel of crack found: the
+        # single number that separates "finds it and over-marks" from "does not find it"
+        f"tx_{tag}_fpratio": MP._n(d["fp_pct"] / max(d["tp_pct"], 1e-9), 1),
+        # the group's crack share of its reviewed area, and what the detector marks of
+        # it; both were typed into the Section 4.3 table by hand
+        f"tx_{tag}_prev": MP._n(d["tp_pct"] + d["fn_pct"], 1),
+        f"tx_{tag}_marked": MP._n(d["marked_pct"], 1),
         f"tx_{tag}_n": str(TX["by_group"][g]["frames"]),
         f"tx_{tag}_acc": MP._n(d["accuracy_pct"], 1),
         f"tx_{tag}_empty": MP._n(d["empty_mask_accuracy_pct"], 1),
         f"tx_{tag}_margin": MP._n(d["margin_pp"], 1),
         f"tx_{tag}_recall": MP._n(_rec(d), 3),
         f"tx_{tag}_area": MP._n(d["area_agreement"], 2),
+    })
+
+# --- the sweep and the arms, for the two plates added to Section 4.3 ------------------
+_gk = lambda g, k: TX["by_group"][g]["arms"][f"SEM detector, mad_k={k:g}"]
+_pk = lambda k: TX["pooled"][f"SEM detector, mad_k={k:g}"]
+_grid = TX["grid"]
+_pool_margins = [_pk(k)["margin_pp"] for k in _grid]
+_b2_areas = [(abs(_gk("B2", k)["area_agreement"] - 1.0), k) for k in _grid]
+_b2_best_k = min(_b2_areas)[1]
+MP.VALUES.update({
+    "tx_k3_b3": MP._n(_gk("B3", _grid[0])["margin_pp"], 1),
+    "tx_k10_b3": MP._n(_gk("B3", _grid[-1])["margin_pp"], 1),
+    "tx_pool_best": MP._n(max(_pool_margins), 1),
+    "tx_pool_bestk": f"{_grid[_pool_margins.index(max(_pool_margins))]:g}",
+    "tx_b2_bestarea": MP._n(_gk("B2", _b2_best_k)["area_agreement"], 2),
+    "tx_b2_bestareak": f"{_b2_best_k:g}",
+    "tx_b2_bestareamargin": MP._n(abs(_gk("B2", _b2_best_k)["margin_pp"]), 1),
+    "tx_vs_otsu": MP._n(_pool["margin_pp"] - TX["pooled"]["control: Otsu, no model"]
+                        ["margin_pp"], 1),
+    "tx_vs_all": MP._n(_pool["margin_pp"] - TX["pooled"]["control: mark everything"]
+                       ["margin_pp"], 1),
+})
+
+# --- the overlap measures on THIS LABORATORY's own two collections, Section 4.4 -------
+# Averaged over frames, one vote per frame. The pooled alternative lets a single frame
+# carry a collection: in the TXM set one B3 frame holds 61% of its group's refereed crack
+# pixels. Each collection is reported beside the score a geometrically correct 3 px trace
+# of its OWN paint earns against that same paint, because both collections are painted
+# with a stroke far wider than the feature and an overlap score against such a stroke
+# pays for covering the stroke.
+OVM = MP._f(os.path.join(REPO, "docs/figures/overlap_means_sem_txm.json"),
+            "per-frame overlap means")
+for _tag in ("SEM", "TXM"):
+    _d = OVM[_tag]
+    _p = _tag.lower()
+    MP.VALUES.update({
+        f"om_{_p}_n": str(_d["n_frames"]),
+        f"om_{_p}_prec": MP._n(_d["mean_precision"], 3),
+        f"om_{_p}_rec": MP._n(_d["mean_recall"], 3),
+        f"om_{_p}_f1": MP._n(_d["mean_f1"], 3),
+        f"om_{_p}_f1sd": MP._n(_d["sd_f1"], 3),
+        f"om_{_p}_precsd": MP._n(_d["sd_precision"], 3),
+        f"om_{_p}_recsd": MP._n(_d["sd_recall"], 3),
+        f"om_{_p}_f1med": MP._n(_d["median_f1"], 3),
+        f"om_{_p}_cprec": MP._n(_d["ceiling_mean_precision"], 3),
+        f"om_{_p}_crec": MP._n(_d["ceiling_mean_recall"], 3),
+        f"om_{_p}_cf1": MP._n(_d["ceiling_mean_f1"], 3),
+        f"om_{_p}_width": MP._n(_d["mean_paint_width_p90_px"], 0),
+        f"om_{_p}_above": str(sum(1 for r in _d["per_frame"]
+                                  if r["f1"] > r["ceiling_f1"])),
+        # the other end of the bracket: every marked pixel nobody refereed counted wrong
+        f"om_{_p}_lo": MP._n(_d["mean_precision_if_unrefereed_wrong"], 3),
+        f"om_{_p}_f1lo": MP._n(_d["mean_f1_if_unrefereed_wrong"], 3),
+    })
+MP.VALUES["om_k"] = MP._n(OVM["mad_k"], 1)
+
+# --- trace or region: what the annotation IS, Sections 4.3 and 4.4 --------------------
+PRT = MP._f(os.path.join(REPO, "docs/figures/paint_region_vs_trace.json"),
+            "paint region vs trace")
+_pct = lambda v: MP._n(100 * v, 1)
+MP.VALUES.update({
+    "pr_px": str(PRT["deep_px"]),
+    "pr_txm_n": str(PRT["TXM"]["n_frames"]),
+    "pr_txm_med": _pct(PRT["TXM"]["median_deep_share"]),
+    "pr_txm_max": _pct(PRT["TXM"]["max_deep_share"]),
+    "pr_txm_zero": str(PRT["TXM"]["frames_at_zero"]),
+    "pr_txm_above": str(PRT["TXM"]["frames_above_25pct"]),
+    "pr_sem_n": str(PRT["SEM"]["n_frames"]),
+    "pr_sem_med": _pct(PRT["SEM"]["median_deep_share"]),
+    "pr_sem_max": _pct(PRT["SEM"]["max_deep_share"]),
+    "pr_sem_above": str(PRT["SEM"]["frames_above_25pct"]),
+})
+for _g, _t in (("B3", "b3"), ("B2", "b2"), ("Wrought", "wrought"), ("AM/HC", "amhc")):
+    _r = PRT["TXM_by_group"][_g]
+    MP.VALUES.update({
+        f"pr_{_t}_med": _pct(_r["median_deep_share"]),
+        f"pr_{_t}_max": _pct(_r["max_deep_share"]),
+        f"pr_{_t}_above": str(_r["frames_above_25pct"]),
+        f"pr_{_t}_zero": str(_r["frames_at_zero"]),
+    })
+
+# --- the per-frame TXM rows, so Section 4.3 can say what one frame is worth ------------
+# The pooled numbers weight each frame by its refereed area, so a frame with a large
+# painted region counts for many frames with small ones. Giving every frame one vote is a
+# different estimand, not a correction of the pooled one, and the two disagree here by
+# enough that reporting either alone would be a choice the reader cannot see.
+TPF = MP._f(os.path.join(REPO, "docs/figures/txm_per_frame.json"), "TXM per frame")
+_K6 = "SEM detector, mad_k=6"
+_allm = [f["arms"][_K6]["margin_pp"] for f in TPF["frames"]]
+_allm_sorted = sorted(_allm)
+_med = (_allm_sorted[len(_allm_sorted) // 2] if len(_allm_sorted) % 2
+        else 0.5 * (_allm_sorted[len(_allm_sorted) // 2 - 1]
+                    + _allm_sorted[len(_allm_sorted) // 2]))
+_cpx = [f["crack_px"] for f in TPF["frames"]]
+MP.VALUES.update({
+    "tpf_n": str(TPF["n_frames"]),
+    "tpf_area_spread": MP._n(max(_cpx) / min(_cpx), 0),
+    "tpf_mean_all": MP._n(sum(_allm) / len(_allm), 2),
+    "tpf_med_all": MP._n(_med, 2),
+    "tpf_pos_all": str(sum(1 for x in _allm if x > 0)),
+})
+for _g, _t in (("B3", "b3"), ("B2", "b2"), ("Wrought", "wrought"), ("AM/HC", "amhc")):
+    _r = TPF["per_group"][_g]
+    MP.VALUES.update({
+        f"tpf_{_t}_n": str(_r["n"]),
+        f"tpf_{_t}_pool": MP._n(_r["pooled_margin_pp"], 1),
+        f"tpf_{_t}_cut": MP._n(_r["margin_without_largest_frame_pp"], 1),
+        f"tpf_{_t}_share": MP._n(100 * _r["largest_frame_share_of_group_crack_px"], 0),
+        f"tpf_{_t}_mean": MP._n(_r["mean_of_per_frame_margins_pp"], 1),
     })
 
 FIG_RE = re.compile(r"^\[FIGURE ([a-z]+)\s*\|\s*(.+)\]$")

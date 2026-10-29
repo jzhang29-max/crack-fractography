@@ -81,7 +81,7 @@ beside them rather than after them.
 
 ### 4.3  The SEM detector carried across
 
-[FIGURE txm | The same detector as Section 3, with the same constant, applied to transmission X-ray microscopy of austenitic steel. (a)-(c) a B3 frame and (d)-(f) an AM/HC frame, the two specimen groups whose behaviour differs most: (a, d) the frame, contrast-stretched per crop for display only, the detector having run on the unstretched image; (b, e) the annotated crack in blue, with area that was not reviewed by an annotator dimmed and excluded from every number; (c, f) the prediction, green where it agrees with the annotation, orange where it marks reviewed not-crack, blue where annotated crack was missed. (g) pixel accuracy over reviewed pixels, expressed as the difference from an all-background prediction in percentage points. (h) reported crack area divided by annotated crack area, the vertical line at 1.0 being exact agreement. Scale bars 5 micrometres at {tm_nm} nm/px (Section 4).]
+[FIGURE txm | The same detector as Section 3, with the same constant, applied to transmission X-ray microscopy of austenitic steel. (a)-(c) a B3 frame and (d)-(f) an AM/HC frame, the two specimen groups whose behaviour differs most: (a, d) the frame, contrast-stretched per crop for display only, the detector having run on the unstretched image; (b, e) the annotated crack in blue; the reviewed area is at full brightness and everything an annotator did not rule on is dimmed and excluded from every number, so the bright islands are reviewed image and not features of the microstructure; (c, f) the prediction, green where it agrees with the annotation, orange where it marks reviewed not-crack, blue where annotated crack was missed. The frame shown for each group is the one with the longest annotated crack among the frames whose annotation is a trace rather than a filled region, the second condition being that at most a quarter of the annotated pixels lie more than {pr_px} px inside the annotation; {pr_txm_above} frames of the {pr_txm_n} fail it, and excluding a frame from a panel does not exclude it from any number here. (g) pixel accuracy over reviewed pixels, expressed as the difference from an all-background prediction in percentage points. (h) reported crack area divided by annotated crack area, the vertical line at 1.0 being exact agreement. Panels (g) and (h) are computed over every frame of every group. Scale bars 5 micrometres at {tm_nm} nm/px (Section 4).]
 
 The SEM detector was carried unchanged to {tx_n} TXM frames. Over the reviewed area, crack is
 {tx_prev}% and an all-background prediction scores {tx_empty}% accuracy.
@@ -97,19 +97,111 @@ improve on marking nothing.
 
 | Specimen group | Frames | Crack % of reviewed area | Accuracy | All-background | Recall | Area reported / annotated |
 |---|---|---|---|---|---|---|
-| B3 | {tx_b3_n} | 22.2% | {tx_b3_acc}% | {tx_b3_empty}% | {tx_b3_recall} | {tx_b3_area} |
-| B2 | {tx_b2_n} | 8.9% | {tx_b2_acc}% | {tx_b2_empty}% | {tx_b2_recall} | {tx_b2_area} |
-| Wrought | {tx_wrought_n} | 15.4% | {tx_wrought_acc}% | {tx_wrought_empty}% | {tx_wrought_recall} | {tx_wrought_area} |
-| AM/HC | {tx_amhc_n} | 2.6% | {tx_amhc_acc}% | {tx_amhc_empty}% | {tx_amhc_recall} | {tx_amhc_area} |
+| B3 | {tx_b3_n} | {tx_b3_prev}% | {tx_b3_acc}% | {tx_b3_empty}% | {tx_b3_recall} | {tx_b3_area} |
+| B2 | {tx_b2_n} | {tx_b2_prev}% | {tx_b2_acc}% | {tx_b2_empty}% | {tx_b2_recall} | {tx_b2_area} |
+| Wrought | {tx_wrought_n} | {tx_wrought_prev}% | {tx_wrought_acc}% | {tx_wrought_empty}% | {tx_wrought_recall} | {tx_wrought_area} |
+| AM/HC | {tx_amhc_n} | {tx_amhc_prev}% | {tx_amhc_acc}% | {tx_amhc_empty}% | {tx_amhc_recall} | {tx_amhc_area} |
 
-One group transfers. On B3 the detector records {tx_b3_acc}% accuracy against
+One group transfers in these pooled units, and the rest of this section is about how
+much that sentence depends on the pooling. On B3 the detector records {tx_b3_acc}% accuracy against
 {tx_b3_empty}% for an all-background prediction, a margin of {tx_b3_margin} points, at a
 recall of {tx_b3_recall} and an area ratio of {tx_b3_area}. On B2 the reported area is close
 to correct at {tx_b2_area} while the recall is {tx_b2_recall}, so the right quantity of
 foreground is placed substantially in the wrong locations. On AM/HC the detector reaches a
-recall of {tx_amhc_recall} while marking 13% of the reviewed area, and reports
+recall of {tx_amhc_recall} while marking {tx_amhc_marked}% of the reviewed area, and reports
 {tx_amhc_area} times the annotated crack area. On Wrought it finds most of the annotated
 crack and over-reports the area by {tx_wrought_area} times.
+
+[FIGURE txmcurve | The detector's one free constant, the MAD multiplier k, swept on the TXM collection over the same seven values as Section 3.4. (a) reported crack area divided by annotated crack area; the axis is logarithmic and the horizontal line at 1.0 is exact agreement. (b) pixel accuracy minus the accuracy an all-background prediction reaches on the same pixels; the horizontal line at zero is that prediction, so a curve below it describes a configuration that would do better by marking nothing. Each specimen group is drawn separately and the dashed line is the pooled value. Both panels are over reviewed pixels only.]
+
+**No setting of the constant changes which groups clear the line.** Across the
+whole grid, B3 stays above an all-background prediction at every value, from {tx_k3_b3} to
+{tx_k10_b3} points, and B2, Wrought and AM/HC stay below it at every value. The pooled
+curve is below it at every value too, reaching its best at {tx_pool_best} points at
+k = {tx_pool_bestk}. All four curves are flat above k = 7, so the sweep has nothing further
+to offer: this is not a configuration that was set wrongly. B2 is the one group where the
+constant does buy something, and only in the area units — the reported area reaches
+{tx_b2_bestarea} times the annotated at k = {tx_b2_bestareak}, essentially exact, while the
+accuracy stays {tx_b2_bestareamargin} points below marking nothing. The right quantity of
+foreground in the wrong places is what that combination means.
+
+[FIGURE txmbudget | (a) where the detector's marked area goes on each specimen group, at k = 6: the part that falls on annotated crack and the part that falls on reviewed not-crack, both as a percentage of the reviewed area, with the annotated crack area drawn as a dashed outline for comparison. (b) the same detector pooled over all {tx_n} frames beside the two no-information arms it has to beat, as pixel accuracy minus the accuracy an all-background prediction reaches. Reviewed pixels only, so the denominator is the area a human ruled on and not the frame.]
+
+Panel (a) separates two different failures that the pooled accuracy adds together. On B3
+and on Wrought the detector finds most of the annotated crack, at recalls of
+{tx_b3_recall} and {tx_wrought_recall}; the difference between them is what else they
+mark. For every pixel of annotated crack it finds, B3 marks {tx_b3_fpratio} pixels of
+reviewed not-crack and Wrought marks {tx_wrought_fpratio}, which is where that group's
+{tx_wrought_margin}-point deficit comes from. On B2 and AM/HC the blue part of the bar is
+small — recalls of {tx_b2_recall} and {tx_amhc_recall} — so the annotated crack is largely
+not marked at all and the marked area is somewhere else, at {tx_b2_fpratio} and
+{tx_amhc_fpratio} pixels of reviewed not-crack per pixel of crack found. Those are two
+different failures and a single accuracy cannot tell them apart. Panel (b) is the comparison the arms are entitled to — the detector is
+{tx_vs_otsu} points better than an Otsu darkness cut with no model and {tx_vs_all} points
+better than marking every pixel, and still below an empty mask.
+
+[FIGURE txmpipe | The same processing stages as Figure 1, run on a TXM frame instead of an SEM one, so the two pipelines can be compared panel for panel. (a) the whole frame with the detail boxed. (b) the detail. (c) the same detail after background flattening, which is the array the darkness criterion is applied to. (d) every pixel the criterion proposes, in blue. (e) after the morphological opening. (f) after the minimum connected-region area, which is the mask scored in this section. (g) the operator's annotated crack on the same detail, in green, with the reviewed area at full brightness and everything unreviewed dimmed. Panels (b)-(g) are contrast-stretched per crop for display; the detector ran on the unstretched frame and every mask shown is that run. Of the 23 frames with enough reviewed area of each verdict and an annotation that is a trace rather than a filled region, this one's accuracy margin is closest to the median of that set, so it is typical rather than flattering. Scale bars at {tm_nm} nm/px (Section 4).]
+
+**The transfer fails at the first stage, not the last.** On the typical frame the three mask
+panels are almost the same picture: the darkness criterion proposes very little (d), and
+the opening and the area filter remove almost none of what it proposed (e, f). The
+annotated crack in (g) is largely not among the proposals at all. That is the same place
+the recall is lost on the SEM side — Section 6.1 reports approximately 42% of annotated
+crack area there as lying outside the proposal support — and it is a different failure from
+the one the pooled accuracy suggests — the configuration is not marking the wrong things so
+much as not proposing the right ones. Panel (c) shows why: after background flattening the
+annotated crack on this frame is not a dark feature. The flattening radii and the darkness
+multiplier were both fitted where the crack is a dark line a few pixels across; a TXM
+mosaic of a thick specimen records the crack as a broad low-density band, and a criterion
+written for the first does not fire on the second at any setting of its one constant, which
+is what Figure 11(b) shows from the other direction.
+
+**Every number above weights a frame by its area, and that is doing most of the work.**
+A pooled accuracy counts each refereed pixel once, so a frame with a large painted region
+counts for many frames with small ones, and the painted areas here differ by a factor of
+{tpf_area_spread}. Giving each of the {tpf_n} frames one vote instead gives a different answer: the
+mean of the per-frame margins is {tpf_mean_all} points rather than {tx_margin}, the median
+is {tpf_med_all}, and {tpf_pos_all} of the {tpf_n} frames are individually above an
+all-background prediction. **Frame by frame the carried-over detector is close to even,
+and it is the area weighting, not the detector, that produces the pooled deficit.**
+
+The same split runs through the groups. The table gives, for each group, the pooled margin
+in percentage points, the mean of that group's per-frame margins, the pooled margin
+recomputed with the group's single largest frame removed, and that frame's share of the
+group's reviewed crack pixels.
+
+| Group | Frames | Pooled | Frame mean | Largest dropped | Largest share |
+|---|---|---|---|---|---|
+| B3 | {tpf_b3_n} | {tpf_b3_pool} | {tpf_b3_mean} | {tpf_b3_cut} | {tpf_b3_share}% |
+| B2 | {tpf_b2_n} | {tpf_b2_pool} | {tpf_b2_mean} | {tpf_b2_cut} | {tpf_b2_share}% |
+| Wrought | {tpf_wrought_n} | {tpf_wrought_pool} | {tpf_wrought_mean} | {tpf_wrought_cut} | {tpf_wrought_share}% |
+| AM/HC | {tpf_amhc_n} | {tpf_amhc_pool} | {tpf_amhc_mean} | {tpf_amhc_cut} | {tpf_amhc_share}% |
+
+Only AM/HC gives the same answer under both aggregations, and it is the group where the
+detector is worst. B3 stays positive under both. **Wrought changes sign**: pooled it is
+{tpf_wrought_pool} points, and as a mean over its four frames it is {tpf_wrought_mean}.
+B2 moves from {tpf_b2_pool} to {tpf_b2_mean}, which is no difference from marking nothing.
+Neither aggregation is wrong — a pooled figure answers what happens to a pixel and a
+per-frame mean answers what happens to a frame — but the sentence "one group transfers" is
+true only of the pooled form, and is reported here with the other.
+
+**And the group that transfers under both aggregations does not carry a crack trace.**
+The B3 group is {tpf_b3_n} frames, and a single one of them holds {tpf_b3_share}% of the
+group's reviewed crack pixels.
+
+What that frame's annotation is matters as much as how large it is. The share of
+annotated pixels lying more than {pr_px} px inside the annotation separates a stroke that
+follows a crack from a filled region: a stroke of any width has almost none, and
+{pr_txm_zero} of the {pr_txm_n} frames record exactly 0.0%. That B3 frame records
+{pr_txm_max}%, the highest in the collection. Across the collection the median is
+{pr_txm_med}% and {pr_txm_above} frames exceed 25%; by group, AM/HC has a median of
+{pr_amhc_med}% and {pr_amhc_above} such frames, while B3 has {pr_b3_above} of six and
+Wrought {pr_wrought_above} of four. On those frames the annotator has marked the open
+crack mouth as an area rather than tracing a line, so what the detector is scored against
+there is a large dark region, which a darkness rule finds easily. **The group where the
+carried-over detector clears an all-background prediction is also the group holding the
+most region-like annotation in the collection**, and the two facts should not be
+separated. Figure 10 shows a B3 frame whose annotation is a trace, for that reason.
 
 **This is reported as a transfer result and not as a capability.** Four specimen groups give
 four answers, each group is a small number of frames, and the groups are different materials
@@ -119,13 +211,69 @@ instrument, beam energy, voxel size at the specimen, reconstruction algorithm �
 recorded with the data, and the pixel size used for the scale bars is derived rather than
 measured. What the section establishes is narrow and still worth stating: a constant fitted on
 SEM steel in one laboratory, carried without modification to a different imaging physics,
-clears both no-information comparators on all four groups and clears an all-background
-prediction on one.
+clears both no-information comparators on all four groups, and clears an all-background
+prediction on one of them when the comparison is pooled over pixels and on
+{tpf_pos_all} of the {tpf_n} individual frames.
 
 **Section 4.1 and Section 4.3 are not in conflict.** The collection's own detector reaches a
 whole-frame median IoU of {tm_wf_iou} where the carried-over SEM detector falls below an
 all-background prediction, which is the expected ordering: one was fitted on this modality and
 the other was not. What Section 4.2 adds is that neither number should be read as a distance
-from the crack. The frame counts also differ between the three subsections — {tm_cv_n},
-{tm_ld_n}, {tm_wf_n} and {tx_n} frames respectively, according to which frames carry the
+from the crack. The frame counts also differ from measurement to measurement — {tm_cv_n}
+for the grouped cross-validation, {tm_ld_n} for the labelled-domain median, {tm_wf_n} for
+the whole-frame median, {tx_n} for the carried-over detector in Section 4.3 and
+{om_txm_n} for the overlap measures in Section 4.4, according to which frames carry the
 labels each measurement needs — and they are not pooled anywhere.
+
+### 4.4  Precision, recall and F1 on this laboratory's own two collections
+
+[FIGURE txmoverlap | Overlap measures for the crack class on this laboratory's own two collections, scored over reviewed pixels only and averaged over frames so that no single frame carries a collection. (a) mean precision, recall and F1; the error bar is one standard deviation over frames and the horizontal rule drawn on each bar is what that collection's own annotation scores against itself after being reduced to its centreline and redrawn three pixels wide — a prediction exactly right about where every crack runs and right about its width. (b) every frame as one point, precision against recall, with curves of constant F1. SEM is the detector of Section 3 on {om_sem_n} hand-corrected SEM frames; TXM is the same detector, same constant, on {om_txm_n} TXM frames.]
+
+Section 3.6 reports these three measures for the public collection, where every pixel of
+the annotation carries a verdict. This section reports them for the two collections the
+laboratory produced itself, at the same constant k = {om_k}, averaged over frames rather
+than pooled over pixels: pooling lets one frame carry a collection, and in the TXM set one
+frame holds {tpf_b3_share}% of its group's reviewed crack.
+
+On the {om_sem_n} SEM frames that carry both a painted crack and a reviewed not-crack
+verdict, the mean precision is {om_sem_prec}, the mean recall {om_sem_rec} and the mean F1
+{om_sem_f1}, with standard deviations over frames of {om_sem_precsd}, {om_sem_recsd} and
+{om_sem_f1sd}. On the {om_txm_n} TXM frames the same three are {om_txm_prec},
+{om_txm_rec} and {om_txm_f1}, with standard deviations {om_txm_precsd}, {om_txm_recsd} and
+{om_txm_f1sd}. The spread is as large as the difference between the collections, and on
+TXM it is structured by specimen group rather than scattered.
+
+**Two things have to be read with those six numbers, and both of them are larger than the
+numbers.**
+
+The first is the brush. Neither annotation is a crack trace; both are strokes far wider
+than the feature, {om_sem_width} px wide on the SEM frames and {om_txm_width} px on the TXM
+frames at the 90th percentile. Reducing each frame's own annotation to its centreline and
+redrawing it three pixels wide gives a prediction that is exactly right about where every
+crack runs, and against the stroke it came from it scores an F1 of {om_sem_cf1} on the SEM
+frames and {om_txm_cf1} on the TXM frames. The detector scores {om_sem_f1} and
+{om_txm_f1}. It is above that reference on {om_sem_above} of {om_sem_n} SEM frames and
+{om_txm_above} of {om_txm_n} TXM frames. **An F1 measured on these collections therefore
+ranks how closely a mask reproduces the annotator's stroke, and the detector outscores a
+geometrically correct trace because it marks wide, not because it is better located.**
+This is the same statement Section 4.2 makes for the collection's own detector, measured
+on a second detector and a second modality.
+
+The SEM annotation is the wider of the two by this measure, not the narrower. On the
+{pr_sem_n} SEM frames the share of annotated pixels lying more than {pr_px} px inside the
+annotation has a median of {pr_sem_med}% and reaches {pr_sem_max}%, and {pr_sem_above} of
+the {pr_sem_n} exceed 25%; the corresponding TXM figures are a median of {pr_txm_med}% and
+{pr_txm_above} of {pr_txm_n}. On more than half of this laboratory's own SEM frames the
+reference is therefore closer to a blocked-out area than to a traced line, which is the
+direct reason the SEM precision in this section is high while its ceiling is low: there is
+a great deal of annotated area to land inside.
+
+The second is the denominator. Neither collection adjudicates the whole frame, so a
+precision computed on it is a bracket rather than a value. The figures above exclude
+unreviewed pixels at both ends, which assumes every marked pixel nobody looked at is
+correct; at the other end, counting every one of them as wrong, the mean precision is
+{om_sem_lo} on the SEM frames and {om_txm_lo} on the TXM frames, and the mean F1 is
+{om_sem_f1lo} and {om_txm_f1lo}. The true value lies between the two, and which end a
+reader should stand nearer to is not something this annotation can settle. Section 3.6
+reports the public collection as values rather than as brackets for exactly this reason:
+there, every pixel carries a verdict.

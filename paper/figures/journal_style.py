@@ -65,6 +65,10 @@ COLUMN_CLASS = {
     "txm_transfer": ("double", W2),
     "T1 - TXM stages": ("double", W2),
     "T2 - TXM ceiling": ("double", W2),
+    "T3 - TXM operating curve": ("double", W2),
+    "T4 - TXM pixel budget": ("double", W2),
+    "T5 - overlap with its ceiling": ("double", W2),
+    "T6 - the SEM detector's stages on TXM": ("double", W2),
 }
 
 #: COLOUR, AND WHAT IT IS FOR. This figure set was greyscale-first. That was defensible

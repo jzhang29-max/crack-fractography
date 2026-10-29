@@ -35,7 +35,7 @@ stale. `[FIGURE name]` on its own line embeds a plate, and a missing plate is an
 
 | plate | shows |
 |---|---|
-| `P1 - public scores` | reported/annotated crack area, and pixel accuracy beside an all-background mask |
+| `P1 - public scores` | pixel accuracy beside the accuracy an all-background mask reaches. The area-ratio panel that stood beside it was withdrawn: its log axis had to reach 100 to hold the withdrawn EBC coating, leaving the three reported collections unreadable on the unity line, and the area ratio is the whole subject of `P2` |
 | `P2 - operating curve` | the one free constant, whole fields against the crops of them |
 | `P3 - width sensitivity` | what pixel accuracy costs for getting width wrong with location right |
 | `P4 - baselines` | seven classical detectors, tuned identically |
@@ -43,6 +43,12 @@ stale. `[FIGURE name]` on its own line embeds a plate, and a missing plate is an
 | `P8 - crack overlap` | **precision, recall and F1 for the crack class**, whole fields beside the released crops, each bar carrying what a mark-everything mask would score, plus a precision-recall curve over the parameter grid — `paper/figures/mk_crack_overlap.py`. No precision bracket is drawn here: [0.29, 0.99] belongs to this laboratory's partially refereed frames, not to the public collection these bars are computed on |
 | `P7 - workflow` | the evaluated branch with the real array each stage produces, and the three stages of the application that sit **outside** it — `paper/figures/mk_workflow.py` |
 | `P6 - pipeline in pictures` | **every step as a real image panel**, captured by running the shipped detector on one public field — `paper/figures/mk_pipeline_visual.py` |
+| `T1 - TXM stages`, `T2 - TXM ceiling` | the TXM collection's OWN detector rung by rung, and what its overlap score is measuring — `paper/figures/mk_txm_stages.py`, `mk_txm_ceiling.py` |
+| `T3 - TXM operating curve` | the SEM detector's one free constant swept on TXM, in both reported units, per specimen group — `paper/figures/mk_txm_plates.py` |
+| `T4 - TXM pixel budget` | where the marked area goes on each TXM group, and the two no-information arms — `paper/figures/mk_txm_plates.py` |
+| `T5 - overlap with its ceiling` | **mean precision, recall and F1 over frames** for this laboratory's own SEM and TXM collections, each bar carrying what a correct 3 px trace of its own paint earns and the other end of the precision bracket — `paper/figures/mk_txm_plates.py` |
+| `T6 - the SEM detector's stages on TXM` | the counterpart of `P6`: the same shipped stages, on a TXM frame, so the two pipelines compare panel for panel — `paper/figures/mk_txm_pipeline.py` |
+| `txm_transfer` | the SEM detector carried to TXM: two frames and the per-group bars — `analysis/research/improve/mk_txm_transfer_figure.py` |
 
 The paper now has an **Appendix A** giving the pixel budget for all five SEM sets measured, including the two that are not crack benchmarks, and an **Appendix B** with the pipeline plate.
 
@@ -76,6 +82,9 @@ The paper now has an **Appendix A** giving the pixel budget for all five SEM set
 | `figures/texture_channel_test.json`, `figures/texture_prototype.json` | a local-roughness channel for the lit crack interior, and its decoys | `analysis/research/improve/texture_channel_test.py`, `texture_prototype.py` |
 | `figures/watershed_to_the_lip.json` | growing the dark core to the crack lip by watershed, and its decoys | `analysis/research/improve/watershed_to_the_lip.py` |
 | `figures/txm_background_units.json` | the SEM detector on 31 TXM frames, refereed pixels only, swept over mad_k and split by specimen group | `analysis/research/improve/txm_background_units.py` |
+| `figures/txm_per_frame.json` | the same 31 frames one at a time, so a group's pooled margin can be read beside the mean of its frames' own margins and beside the margin with its largest frame removed | `analysis/research/improve/txm_per_frame.py` |
+| `figures/overlap_means_sem_txm.json` | mean precision/recall/F1 over frames for this lab's SEM and TXM collections, each beside the score a correct 3 px trace of its own paint earns, and both ends of the precision bracket a partly-refereed annotation supports | `analysis/research/improve/overlap_means_sem_txm.py` |
+| `figures/paint_region_vs_trace.json` | whether each painted crack is a stroke or a filled region, as the share of painted pixels more than 50 px inside the paint | `analysis/research/improve/paint_region_vs_trace.py` |
 | `figures/lab_madk_sweep.json`, `figures/lab_corpus_channels.json` | the same two questions on this lab's own 48 hand-corrected frames | `analysis/research/improve/lab_madk_sweep.py`, `lab_corpus_channels.py` |
 | `figures/metric_figures.json` | the corpus-side measurements, including the width curve on 26 tiles | `figures/measure_metrics.py` |
 | `figures/public_metrics.json` | pavement sets. **Measured, then removed from the paper** as the wrong modality | **generator not retained** — written in scratch and pruned. The numbers reproduce `public_benchmarks.json`'s F1 to four decimals, which is the only check on them now |

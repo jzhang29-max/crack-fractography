@@ -21,7 +21,10 @@ crossing and the selected setting survives it.
 
 The evaluated branch uses image intensity, multiple spatial scales and explicit mask
 operations. Each stage has a visible intermediate representation in Figure 1, and Figure 2
-separates the operations that lead to the final area estimate. Disabling the learned region
+separates the operations that lead to the final area estimate. Figure 13 shows the same
+stages on a frame of the second modality, which is where the inspectability earns
+something: the transfer there fails at the candidate stage rather than at the filters, and
+that is visible in the panels before it is visible in any score. Disabling the learned region
 classifier gives the reported configuration an inspectable processing path without a learned
 region-classification step.
 
@@ -44,7 +47,24 @@ accuracy at the selected setting, {wf6_acc}%, is below the {in_empty_acc}% of an
 all-background prediction, and Section 3.5 shows that the entire range available to pixel
 accuracy on this collection is {wc_f_head} percentage points, so no configuration could have
 been distinguished on that endpoint. And the same detector carried to a second imaging
-modality clears an all-background prediction on one specimen group of four.
+modality clears an all-background prediction on one specimen group of four when the
+comparison is pooled over pixels; giving each frame one vote instead, it is
+{tpf_mean_all} points from that prediction on average over the {tpf_n} frames, with
+{tpf_pos_all} of them individually above it, and one specimen group changes sign between
+the two aggregations. Section 4.3 reports both.
+
+A third qualifier concerns the references themselves. On this laboratory's own two
+collections the annotation is a painted stroke rather than a traced line — on the SEM
+frames a median of {pr_sem_med}% of annotated pixels lie more than {pr_px} px inside the
+annotation, reaching {pr_sem_max}% — and against such a reference the detector records a
+mean per-frame F1 of {om_sem_f1} on SEM and {om_txm_f1} on TXM where a geometrically
+correct three-pixel trace of the same annotation records {om_sem_cf1} and {om_txm_cf1}. It
+is above that trace on {om_sem_above} of {om_sem_n} SEM frames and {om_txm_above} of
+{om_txm_n} TXM frames. An overlap score on these collections therefore ranks resemblance
+to the annotator's stroke, which is the same conclusion Section 4.2 reaches for the TXM
+collection's own detector, reached independently on a second detector and a second
+modality. It is the clearest statement in this work of why the area endpoint rather than
+an overlap score carries the result.
 
 Together these establish an aggregate area result and an interpretable workflow within the
 evaluated collection, and they bound how far either should be read.

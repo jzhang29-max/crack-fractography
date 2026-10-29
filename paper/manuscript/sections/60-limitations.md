@@ -10,8 +10,12 @@ an all-background prediction. A decomposition of the aggregate summaries gives a
 cancellation explains the small net area discrepancy. The {ag_best_spec}% specificity must
 not be interpreted as foreground segmentation accuracy. Complete per-image precision, recall,
 Dice, intersection over union and boundary measures are required to assess localisation
-[3,4], and are deliberately not reported here because they cannot express the measurement
-this study is about.
+[3,4]. Section 3.6 reports the first three on the public collection and Section 4.4 reports
+them, averaged over frames, on this laboratory's own two collections; they are reported as
+secondary to the area endpoint, and Section 4.4 gives the two reasons — on both of this
+laboratory's collections the annotation is a stroke far wider than the feature, so an
+overlap score there pays for covering the stroke, and neither collection adjudicates the
+whole frame, so a precision computed on it is a bracket rather than a value.
 
 **The ranking reported in Section 3.2 is specific to the area endpoint and can be obtained
 without detection.** Dilating this detector's own output, which reads no new evidence from
@@ -31,6 +35,20 @@ of an open crack. Expansion experiments increased marked area and did not establ
 validated correction. A future detector could combine dark-core evidence with independently
 validated contextual or polarity-aware features; such changes require new experiments and
 joint assessment of area bias and spatial overlap.
+
+**The annotation geometry of this laboratory's own collections is itself a limitation, and
+it is now measured rather than asserted.** On the {pr_sem_n} SEM frames and {pr_txm_n} TXM
+frames that carry both verdicts, the share of annotated pixels lying more than {pr_px} px
+inside the annotation has a median of {pr_sem_med}% and {pr_txm_med}% and a maximum of
+{pr_sem_max}% and {pr_txm_max}%; {pr_sem_above} of {pr_sem_n} SEM frames and
+{pr_txm_above} of {pr_txm_n} TXM frames exceed 25%. A stroke that follows a crack scores
+near zero on this statistic, and {pr_txm_zero} TXM frames do. The frames above 25% carry a
+reference that is closer to a blocked-out area than to a traced line, so on those frames
+neither an overlap score nor a crack width can be read from the annotation, and the
+quantity a detector is being asked to reproduce is not the crack but the annotator's
+judgement about where the crack region lies. This is a property of the references and
+cannot be corrected by any change to the detector; correcting it requires re-annotation
+against a stated stroke rule, which Section 6.3 lists among what a new benchmark needs.
 
 ### 6.2  Scale and units
 
@@ -61,7 +79,10 @@ collection's own class list, and no annotation protocol, annotator count or clas
 accompanies it. No inter-annotator agreement can be computed, and no second annotator exists,
 so the reference cannot be distinguished from one annotator's judgement. A new benchmark
 should fix the tuning objective within training folds, preserve complete per-image results,
-report uncertainty for the primary endpoint, and document the annotation rules.
+report uncertainty for the primary endpoint, and document the annotation rules — including
+a stated stroke width, since Section 6.1 shows that the annotations available here vary
+between a traced line and a filled region and that the difference changes every overlap
+score computed against them.
 
 The released crops share parent images with the whole fields, so they do not form an
 independent test population. Image framing also changes the reported area ratio: cropping

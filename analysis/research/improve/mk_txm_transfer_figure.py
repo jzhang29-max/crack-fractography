@@ -10,6 +10,28 @@ Only refereed pixels are scored (1 = crack, 2 or 3 = not-crack, 0 = unreviewed, 
 so every percentage is of the refereed area and the panels shade the unrefereed part so a
 reader can see how much of each frame nobody ruled on.
 
+WHICH FRAME EACH ROW SHOWS, AND WHY THE RULE CHANGED. The first version of this plate
+picked `max(crack pixels)` within each group. That is the rule that selects the largest
+painted BLOB, and it did: the B3 frame it chose, b3_380_00um, carries 1,472,046 of that
+group's 2,431,104 refereed crack pixels, and 73.2% of those pixels lie more than 50 px
+INSIDE the paint. A stroke that follows a crack has almost no deep interior -- every
+AM/HC frame but one is at 0.0% on the same statistic -- so that annotation is a filled
+region and not a crack trace. The panel showed it at the centroid of the region, which is
+why the crop was solid paint with no micrograph visible in it.
+
+Ranking by skeleton length instead does NOT fix it: that frame has the longest skeleton in
+its group as well. The rule here therefore has two parts, both printed when this runs:
+
+  ELIGIBILITY -- at least 5,000 refereed pixels of each verdict, AND at most
+  MAX_DEEP_SHARE of the painted crack lying more than DEEP_PX inside the paint. The second
+  condition is what excludes a region.
+  CHOICE -- among the eligible frames, the LONGEST painted crack by skeleton length.
+
+The frames this selects are named in the caption. Excluding a frame from the PANEL does
+not exclude it from any number: the bars in (g) and (h) are computed over every frame of
+every group, the ineligible ones included, and Section 4.3 reports what dropping the
+largest B3 frame does to that group's margin.
+
 SCALE BARS. Every TXM frame has a pixel size, but it is DERIVED: 29.24 nm/px from
 operator-supplied mosaic geometry (a 30 um window at 0.35 overlap, 9x5 tiles over
 6367x3691 px), not read from instrument metadata, and the TXM repository marks it
@@ -34,7 +56,8 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from skimage import measure as skm
+from skimage import measure as skm, morphology as morph
+from scipy import ndimage as ndi
 import detect_cracks as D
 import detector_overrides as DO
 from scalebar import scalebar
@@ -43,6 +66,12 @@ import journal_style as J
 J.use()
 
 NM_PER_PX = 29.24          # derived from mosaic geometry; see the docstring
+#: A painted crack is eligible to be SHOWN only if its paint is a trace rather than a
+#: filled region. Measured as the share of painted pixels further than DEEP_PX from the
+#: edge of the paint. Across the 31 scorable frames this runs 0.0% (nine AM/HC frames) to
+#: 73.2% (the B3 frame the old rule chose); the four frames above 36% are the two B3 and
+#: two Wrought region annotations. 25% sits in the empty part of that range.
+DEEP_PX, MAX_DEEP_SHARE = 50, 0.25
 # The width this plate is printed at on the page (PAGE[0] - ML - MR in make_paper.py).
 # Drawn at 12.4 in it reached the page at 0.51x and its 8 pt labels printed at 4.1 pt.
 # Five columns do not fit in 6.37 in, so the panels and the bars are stacked instead.
@@ -93,17 +122,34 @@ for f in sorted(os.listdir(cdir)):
     if not os.path.exists(tif):
         continue
     corr = np.load(os.path.join(cdir, f))
-    c = int((corr == 1).sum())
+    crack = corr == 1
+    c = int(crack.sum())
     if c >= 5000 and int(((corr == 2) | (corr == 3)).sum()) >= 5000:
-        cands.append((group_of(stem), c, stem, tif, os.path.join(cdir, f)))
+        # LENGTH, not area, and only if the paint is a trace. See the docstring.
+        dt = ndi.distance_transform_edt(crack)
+        skel = int(morph.skeletonize(crack).sum())
+        wid = float(2 * np.percentile(dt[crack], 90))
+        deep = float((dt[crack] > DEEP_PX).mean())
+        cands.append((group_of(stem), skel, stem, tif, os.path.join(cdir, f), c, wid,
+                      deep))
 
-# the most heavily painted frame of each of the two groups that disagree most
+# the LONGEST TRACE-PAINTED crack in each of the two groups that disagree most
 pick = {}
 for g in ("B3", "AM/HC"):
     rows = [c for c in cands if c[0] == g]
-    if rows:
-        pick[g] = max(rows, key=lambda r: r[1])
-print({g: v[2][:48] for g, v in pick.items()})
+    ok = [r for r in rows if r[7] <= MAX_DEEP_SHARE]
+    if not ok:
+        raise SystemExit(
+            f"mk_txm_transfer_figure: no {g} frame has trace-like paint at "
+            f"MAX_DEEP_SHARE={MAX_DEEP_SHARE}. Do not fall back to the widest region -- "
+            f"that is the behaviour this rule exists to stop. Raise the bound "
+            f"deliberately, or drop the row.")
+    pick[g] = max(ok, key=lambda r: r[1])
+    for r in sorted(rows, key=lambda r: -r[1]):
+        tag = ("<- shown" if r is pick[g]
+               else "excluded" if r[7] > MAX_DEEP_SHARE else "        ")
+        print(f"  {g:<7} skeleton {r[1]:>7,} px  area {r[5]:>9,} px  paint p90 "
+              f"{r[6]:6.1f} px  deep {100 * r[7]:5.1f}%  {tag}  {r[2][:52]}")
 
 fig = plt.figure(figsize=(J.PAGEW, 6.9))
 # panels on top (2 rows x 3), bars underneath (1 row x 2). Side by side they needed
@@ -115,7 +161,7 @@ gs = fig.add_gridspec(3, 3, height_ratios=[1, 1, 1.25], hspace=0.055,
 for r, g in enumerate(("B3", "AM/HC")):
     if g not in pick:
         continue
-    _, _, stem, tif, cpath = pick[g]
+    _, _, stem, tif, cpath = pick[g][:5]
     corr = np.load(cpath)
     img8 = D.load_as_uint8(tif)
     flat = D.flatten_background(img8)
@@ -146,7 +192,11 @@ for r, g in enumerate(("B3", "AM/HC")):
 
     ax2 = fig.add_subplot(gs[r, 1])
     ov = np.dstack([I] * 3).astype(float) / 255.0
-    ov[~R] *= 0.45                       # unrefereed area dimmed: nobody ruled on it
+    # Unrefereed area dimmed: nobody ruled on it, and it is excluded from every number.
+    # 0.45 was too strong once the B3 row moved to a frame where most of the crop is
+    # unrefereed -- the reviewed islands then read as bright particles in the
+    # microstructure rather than as the part of the image a human looked at.
+    ov[~R] *= 0.62
     ov[C] = list(J.rgb(J.MASK))
     ax2.imshow(ov)
     scalebar(ax2, NM_PER_PX, H)
@@ -155,7 +205,7 @@ for r, g in enumerate(("B3", "AM/HC")):
 
     ax3 = fig.add_subplot(gs[r, 2])
     ov = np.dstack([I] * 3).astype(float) / 255.0
-    ov[~R] *= 0.45
+    ov[~R] *= 0.62
     # HOUSE TOKENS, NOT LITERALS. These were four hardcoded RGB floats, and two pairs
     # of them were invisible to a colour-blind reader: found vs marked-not-crack
     # measured 4.19 under worst-case CVD and annotated vs found 5.38, against the 5.9

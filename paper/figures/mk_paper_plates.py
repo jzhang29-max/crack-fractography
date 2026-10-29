@@ -80,43 +80,30 @@ MF = load(os.path.join(REPO, "docs/figures/metric_figures.json"), "corpus metric
 
 # ---------------------------------------------------------------- plate: public scores
 def plate_scores():
-    """Reported against annotated crack area, and accuracy against an all-background mask.
+    """Pixel accuracy against the accuracy an all-background mask reaches.
+
+    ONE PANEL, NOT TWO. This plate carried a reported/annotated crack-area panel beside
+    the accuracy one. It was withdrawn: its axis had to run to 100 to hold the withdrawn
+    EBC coating at 80x, which left the three collections the paper actually reports
+    stacked on the unity line and unreadable, and the area ratio it was trying to show is
+    the whole subject of Figure 4 (the operating curve), where it is drawn against the
+    constant that moves it. A panel that is unreadable for three of its four rows and
+    redundant for the fourth is not worth a reader's eye.
 
     No title and no prose inside the axes: IOP forbids a figure title outright and
-    Elsevier's caption rule says the title is "not displayed on the figure itself". Both
-    panels start at zero, because a truncated value axis under bars is the one thing in
-    this set a reviewer will call a misrepresentation -- which is why panel (b) now shows
-    the all-background reference as a marker on a full-range axis rather than as a tick on
-    a 20-point crop. Colour carries identity only.
+    Elsevier's caption rule says the title is "not displayed on the figure itself". The
+    bars start at zero, because a truncated value axis under bars is the one thing in this
+    set a reviewer will call a misrepresentation -- which is why the all-background
+    reference is a marker on a full-range axis rather than a tick on a 20-point crop.
+    Colour carries identity only.
     """
     order = [("Inconel 718\nwhole fields", "Inconel 718, whole fields"),
              ("Inconel 718\nreleased crops", "Inconel 718, released crops"),
              ("MetalDAM\nvoids", "MetalDAM voids (not cracks)"),
              ("EBC coating\nwithdrawn", "EBC coating, whole fields")]
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(J.PAGEW, 2.6), layout="constrained",
-                                   gridspec_kw={"width_ratios": [1.0, 1.0]})
+    fig, ax2 = plt.subplots(figsize=(J.W15, 2.3), layout="constrained")
     y = list(range(len(order)))[::-1]
     lab = [o[0] for o in order]
-    rat = [PAX[k]["detector"]["marked_pct"] / PAX[k]["detector"]["labelled_pct"]
-           for _, k in order]
-    best = min(BC["sweeps"]["whole_fields"],
-               key=lambda r: abs(r["area_agreement_corpus"] - 1.0))
-
-    for yi, r in zip(y, rat):
-        ax1.plot([min(r, 1.0), max(r, 1.0)], [yi, yi], color=J.G_MID, lw=0.9,
-                 zorder=2, solid_capstyle="butt")
-    ax1.plot(rat, y, linestyle="none", marker="o", markersize=7,
-             markerfacecolor=J.ACCENT, markeredgecolor=J.INK, markeredgewidth=0.6,
-             zorder=4, clip_on=False)
-    ax1.axvline(1.0, color=J.INK, lw=0.9, zorder=3)
-    ax1.plot([best["area_agreement_corpus"]], [y[0]], marker="D", color=J.INK,
-             markersize=4.5, zorder=6, clip_on=False)
-    ax1.set_xscale("log")
-    ax1.set_xticks([1, 10, 100])
-    ax1.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
-    ax1.set_yticks(y, lab)
-    ax1.set_xlabel("Reported / annotated crack area")
-    J.panel_label(ax1, "a")
 
     acc = [100 * PAX[k]["detector"]["accuracy"] for _, k in order]
     emp = [100 - PAX[k]["detector"]["labelled_pct"] for _, k in order]
@@ -126,23 +113,27 @@ def plate_scores():
              markeredgewidth=1.4, zorder=5, label="all-background mask")
     ax2.set_xlim(0, 105)
     ax2.set_xticks([0, 25, 50, 75, 100])
-    ax2.set_yticks(y, ["" for _ in order])
+    ax2.set_yticks(y, lab)
     ax2.set_xlabel("Pixel accuracy (%)")
     ax2.legend(loc="lower center", bbox_to_anchor=(0.5, 1.01), ncol=2,
                fontsize=J.TICK, handlelength=1.4, columnspacing=1.4,
                borderpad=0.0, handletextpad=0.5)
-    J.panel_label(ax2, "b")
 
     J.save(fig, os.path.join(OUT, "P1 - public scores.png"))
-    json.dump({"what": "reported vs annotated crack area, and pixel accuracy vs an "
-                       "all-background mask, for every collection scored",
-               "values": {k: {"area_agreement": PAX[k]["detector"]["marked_pct"]
-                              / PAX[k]["detector"]["labelled_pct"],
-                              "accuracy_pct": 100 * PAX[k]["detector"]["accuracy"],
+    json.dump({"what": "pixel accuracy against the accuracy an all-background mask "
+                       "reaches, for every collection scored",
+               "withdrawn_panel": "a reported/annotated crack-area panel stood beside "
+                                  "this one. Its log axis had to reach 100 to hold the "
+                                  "withdrawn EBC coating at 80x, which left the three "
+                                  "reported collections unreadable on the unity line, "
+                                  "and the area ratio it showed is the subject of the "
+                                  "operating-curve figure, drawn there against the "
+                                  "constant that moves it.",
+               "values": {k: {"accuracy_pct": 100 * PAX[k]["detector"]["accuracy"],
                               "all_background_accuracy_pct":
                                   100 - PAX[k]["detector"]["labelled_pct"]}
                           for _, k in order},
-               "source": "pixel_accounting.json + background_counting_table.json"},
+               "source": "pixel_accounting.json"},
               open(os.path.join(OUT, "P1 - public scores.caption.json"), "w"), indent=1)
 
 

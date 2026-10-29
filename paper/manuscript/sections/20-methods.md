@@ -121,3 +121,19 @@ TXM frames carry a pixel size of 29.24 nm/px, which is **derived from mosaic geo
 30 micrometre viewing window at 0.35 tile overlap over a 9 x 5 mosaic — and not read from
 instrument metadata.** Scale bars on TXM panels use that value and scale with it if the
 acquisition geometry is corrected.
+
+**Two aggregations, both reported.** The reviewed areas of these frames differ by a factor
+of {tpf_area_spread}, so a figure pooled over reviewed pixels weights a frame by how much
+of it was painted and one frame can carry a specimen group. Every pooled quantity in
+Section 4.3 is therefore reported beside the mean of the per-frame values, which gives each
+frame one vote. The two answer different questions — what happens to a pixel, and what
+happens to a frame — and on this collection they disagree, so neither is given alone.
+
+**Whether an annotation is a trace or a region, as a measured quantity.** Both of this
+laboratory's collections are painted rather than traced, and the two are not painted alike.
+The share of annotated pixels lying more than 50 px from the edge of the annotation
+separates the two cases: a stroke of any width has almost none, a filled region has a great
+deal. It is reported per collection in Sections 4.3 and 4.4, it decides which frames the
+micrograph panels may show, and it is the reason the overlap measures in Section 4.4 are
+each reported beside what a geometrically correct three-pixel trace of the same annotation
+scores against that annotation.
