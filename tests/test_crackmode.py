@@ -828,3 +828,33 @@ def test_a_wide_negative_spread_is_said_out_loud():
                                   "negative_min": 19.3, "negative_max": 36.9,
                                   "real_intergranular_pct": 31.0, "z_prime": 0.6})
     assert any("spans 19.3-36.9%" in n for n in out["notes"])
+
+
+def test_the_shifted_map_null_wraps_rather_than_pinning_to_the_border():
+    """A torus shift must WRAP. Clipping pins the sample onto one edge of the map.
+
+    The bug this pins: `_flank_share` offset its sampling coordinates and then np.clip()ed
+    them back inside the frame, so a large shift read almost the whole null sample at one
+    row or column of the grain map. On a real frame that moved the null from 29.8% to
+    14.3% and tripled its standard deviation, and the standard deviation is the denominator
+    of the z the caller reports.
+
+    Constructed so the two cases cannot agree by accident: the grain map is a column ramp,
+    so its left edge and its right edge carry different labels. A wrapped shift keeps
+    sampling the ramp; a clipped one collapses onto the last column.
+    """
+    import numpy as _np
+    mask = _np.zeros((80, 240), bool)
+    mask[38:42, 20:220] = True                      # a straight ribbon
+    grains = _np.repeat(_np.arange(1, 241)[None, :] // 8 + 1, 80, axis=0)
+    geo = CM.flank_geometry(mask, regularise_px=0)
+    big = (0, 200)                                  # a shift most coordinates cannot absorb
+    share, nd, _ins = CM._flank_share(grains, geo, 2, (0,), shift=big)
+    # under a wrap the sample still spans many distinct labels
+    ys, xs, n, ey, ex = geo["ys"], geo["xs"], geo["wall_dist"], geo["ey"], geo["ex"]
+    off = n + 2
+    ax_ = (_np.rint(xs + ex * off).astype(int) + big[1]) % grains.shape[1]
+    assert len(_np.unique(grains[0, ax_])) > 5, (
+        "the wrapped sample reads only "
+        f"{len(_np.unique(grains[0, ax_]))} distinct grain labels; a clip would collapse it")
+    assert nd > 0 and share is not None
