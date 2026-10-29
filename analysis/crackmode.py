@@ -139,6 +139,20 @@ MIN_SEGMENTS = 8
 #: Per class, below this the shortcut AUC is refused: it would describe the imbalance.
 MIN_PER_CLASS_FOR_AUC = 12
 
+#: Replicates drawn for each flank control, so the controls have a SPREAD and not just a value.
+#: Without it the resolution gate compares two single numbers and is blind to their variance,
+#: which is the specific failure Z' was invented to catch.
+FLANK_CONTROL_REPLICATES = 8
+
+#: Z' below this is refused. Z' = 1 - 3(sd_pos + sd_neg) / |mean_pos - mean_neg| is the
+#: screening-assay separation statistic of Zhang, Chung & Oldenburg (J. Biomol. Screen.
+#: 4:67-73, 1999), where >= 0.5 is the conventional "excellent assay" line and <= 0 means the
+#: two control populations overlap. It is reported ALONGSIDE the percentage-point gate below
+#: rather than replacing it: the pp gate is this project's own invented number, Z' is the
+#: field's, and a reader is owed both. A prior-art sweep of this module's gating turned Z' up
+#: as the published form of exactly the rule the pp gate states informally.
+FLANK_MIN_Z_PRIME = 0.5
+
 #: How many branches must leave a connected cluster of junction pixels for it to be a
 #: junction. A pixel with three skeleton neighbours is a CANDIDATE, not a node: on
 #: 260622_316_H_b2_back_CBS_01 the >=3-neighbour test fires on 11,638 pixels that form only
@@ -925,7 +939,8 @@ def _flank_share(g, geo, standoff_px, ignore, shift=(0, 0), flip=(False, False))
 
 
 def flank_controls(mask, grain_ids, *, standoff_px=2, ignore=(0,), seed=0,
-                   n_null=NULL_DRAWS, regularise_px=REGULARISE_PX):
+                   n_null=NULL_DRAWS, regularise_px=REGULARISE_PX,
+                   n_reps=FLANK_CONTROL_REPLICATES):
     """Positive, negative and null for the FLANK measurement itself.
 
     THIS IS NOT THE SAME CONTROL AS `controls`. That one validates boundary coincidence: a
@@ -986,6 +1001,56 @@ def flank_controls(mask, grain_ids, *, standoff_px=2, ignore=(0,), seed=0,
     out["boundary_to_crack_length_ratio"] = (round(out["boundary_skeleton_px"] / ncrack, 2)
                                              if ncrack else None)
 
+    # REPLICATES. _boundary_walk starts from a random boundary pixel and _placements draws
+    # random rigid placements, so both controls are already random variables; drawing one of
+    # each and reporting it as a value throws the spread away.
+    def _dilate_path(coords):
+        syn = np.zeros(mask.shape, bool)
+        syn[coords] = True
+        return ndi.binary_dilation(syn, morphology.disk(hw))
+
+    pos_reps, neg_reps = [], []
+    for _ in range(max(1, n_reps)):
+        w = _boundary_walk(boundary, ncrack, rng)
+        if w is None:
+            break
+        v, _nd, _ = _flank_share(g, flank_geometry(_dilate_path(w),
+                                                   regularise_px=regularise_px),
+                                 standoff_px, ignore)
+        if v is not None:
+            pos_reps.append(v)
+    d_rep = _dist_to_boundary(boundary)
+    places_rep = _placements(np.nonzero(geo["skel"]), mask.shape, rng,
+                             8 * max(1, n_reps))
+    if places_rep:
+        order = np.argsort([-float(np.mean(d_rep[c])) for c in places_rep])
+        for j in order[:max(1, n_reps)]:
+            v, _nd, _ = _flank_share(g, flank_geometry(_dilate_path(places_rep[int(j)]),
+                                                       regularise_px=regularise_px),
+                                     standoff_px, ignore)
+            if v is not None:
+                neg_reps.append(v)
+    # BOTH GATES MUST READ THE SAME CONTROL. The percentage-point gap used to read a single
+    # draw -- for the negative, the placement with the greatest MEAN DISTANCE to a boundary --
+    # while Z' read the replicate mean. Worse, the replicates show that mean distance does not
+    # rank placements by the flank share it is selecting for: on one 316 frame the two
+    # furthest placements read 35.8 and 36.9% while less-far ones read 19.3 and 19.5%. So the
+    # single draw was an arbitrary point in a wide distribution presented as "the" control.
+    # The headline control is now the replicate MEAN, which is also what Z' is defined on, and
+    # the furthest-placement value is kept beside it under its own name.
+    out["positive_replicates"] = [round(v, 2) for v in pos_reps]
+    out["negative_replicates"] = [round(v, 2) for v in neg_reps]
+    for nm_, reps in (("positive", pos_reps), ("negative", neg_reps)):
+        if reps:
+            out[nm_ + "_min"] = round(float(np.min(reps)), 2)
+            out[nm_ + "_max"] = round(float(np.max(reps)), 2)
+    if len(pos_reps) > 1 and len(neg_reps) > 1:
+        pm, nm_ = float(np.mean(pos_reps)), float(np.mean(neg_reps))
+        ps, ns = float(np.std(pos_reps, ddof=1)), float(np.std(neg_reps, ddof=1))
+        out["positive_sd"], out["negative_sd"] = round(ps, 2), round(ns, 2)
+        gap = abs(pm - nm_)
+        out["z_prime"] = (round(1.0 - 3.0 * (ps + ns) / gap, 3) if gap > 0 else None)
+
     walk = _boundary_walk(boundary, ncrack, rng)
     if walk is None:
         out["positive_control"] = None
@@ -1004,7 +1069,9 @@ def flank_controls(mask, grain_ids, *, standoff_px=2, ignore=(0,), seed=0,
         syn[walk] = True
         syn = ndi.binary_dilation(syn, morphology.disk(hw))
         v, ndp, _ = _flank_share(g, flank_geometry(syn, regularise_px=regularise_px), standoff_px, ignore)
-        out["positive_control"] = None if v is None else round(v, 2)
+        out["positive_control_single"] = None if v is None else round(v, 2)
+        out["positive_control"] = (round(float(np.mean(pos_reps)), 2) if pos_reps
+                                   else out["positive_control_single"])
         out["positive_decidable_px"] = ndp
 
     d = _dist_to_boundary(boundary)
@@ -1015,7 +1082,9 @@ def flank_controls(mask, grain_ids, *, standoff_px=2, ignore=(0,), seed=0,
         syn[far] = True
         syn = ndi.binary_dilation(syn, morphology.disk(hw))
         v, ndn, _ = _flank_share(g, flank_geometry(syn, regularise_px=regularise_px), standoff_px, ignore)
-        out["negative_control"] = None if v is None else round(v, 2)
+        out["negative_control_furthest"] = None if v is None else round(v, 2)
+        out["negative_control"] = (round(float(np.mean(neg_reps)), 2) if neg_reps
+                                   else out["negative_control_furthest"])
         out["negative_decidable_px"] = ndn
 
     H, W = mask.shape
@@ -1076,6 +1145,10 @@ def read_flank_controls(ctl):
         reasons.append(f"the positive control reaches only {pos:.1f}%; a path built along the "
                        f"partition's own boundaries must read near 100% intergranular by flank "
                        f"comparison, so the instrument is not detecting boundary-following.")
+    nmin, nmax = ctl.get("negative_min"), ctl.get("negative_max")
+    if nmin is not None and nmax is not None and nmax - nmin > 10.0:
+        notes.append(f"the negative control spans {nmin:.1f}-{nmax:.1f}% across replicates; "
+                     f"the gap below is read against its mean, not against one draw")
     if pos is not None and neg is not None:
         res = pos - neg
         ctl_res = round(float(res), 1)
@@ -1091,6 +1164,17 @@ def read_flank_controls(ctl):
         reasons.append(
             f"the crack reads {real:.1f}%, BELOW the negative control's {neg:.1f}%. Whatever "
             f"that number is, it is not how much of this crack followed a boundary.")
+    zp = ctl.get("z_prime")
+    if zp is not None:
+        notes.append(f"Z' = {zp:.3f} (Zhang/Chung/Oldenburg 1999; >= 0.5 is their 'excellent' "
+                     f"line, <= 0 means the control populations overlap)")
+        if zp < FLANK_MIN_Z_PRIME:
+            reasons.append(
+                f"Z' = {zp:.3f}, below {FLANK_MIN_Z_PRIME}. The positive and negative controls "
+                f"do not separate by enough relative to their own spread, which is the test "
+                f"the percentage-point gap cannot make: a 60 point gap between two controls "
+                f"that each vary by 15 points is not a resolved instrument.")
+
     ratio = ctl.get("boundary_to_crack_length_ratio")
     if ratio is not None:
         notes.append(f"the partition holds {ratio:.2f}x as much boundary as there is crack "

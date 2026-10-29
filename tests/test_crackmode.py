@@ -774,3 +774,57 @@ def test_the_node_rules_cannot_move_the_decidable_fraction():
         assert out["decidable_frac"] == base["decidable_frac"]
         assert out["n_centreline_px"] == base["n_centreline_px"]
         assert out["intergranular_pct_by_centreline"] == base["intergranular_pct_by_centreline"]
+
+
+def test_the_controls_carry_a_spread_and_a_z_prime():
+    """The percentage-point resolution gate compares two single numbers and is blind to their
+    variance. Z' = 1 - 3(sd_pos + sd_neg)/|mean_pos - mean_neg| is the published form of the
+    same rule (Zhang, Chung & Oldenburg 1999), and a prior-art sweep of this module's gating
+    turned it up as exactly what the invented gate was stating informally. It is reported
+    alongside, not instead: the reader is owed both numbers."""
+    g = grains()
+    on = np.zeros((SIDE, SIDE), bool)
+    on[GRAIN - 2:GRAIN + 2, :] = True
+    ctl = CM.flank_controls(on, g, n_null=16, n_reps=4)
+    assert len(ctl["positive_replicates"]) > 1
+    assert len(ctl["negative_replicates"]) > 1
+    assert ctl["z_prime"] is not None
+    read = CM.read_flank_controls(ctl)
+    assert any("Z'" in n for n in read["notes"])
+
+
+def test_wide_control_spread_is_refused_even_on_a_large_gap():
+    """A 60 point gap between two controls that each vary by 15 points is not a resolved
+    instrument, and the percentage-point gate alone would wave it through."""
+    tight = CM.read_flank_controls({"positive_control": 95.0, "negative_control": 20.0,
+                                    "real_intergranular_pct": 60.0, "z_prime": 0.72})
+    assert tight["quotable"], tight["reasons"]
+    loose = CM.read_flank_controls({"positive_control": 90.0, "negative_control": 30.0,
+                                    "real_intergranular_pct": 60.0, "z_prime": -0.5})
+    assert not loose["quotable"]
+    assert any("Z'" in r for r in loose["reasons"])
+
+
+def test_both_gates_read_the_same_control():
+    """The percentage-point gap used to read a single draw while Z' read the replicate mean,
+    so the two gates were judging two different controls. Worse, the single draw for the
+    negative was selected on MEAN DISTANCE to a boundary, a proxy the replicates show does not
+    rank placements by the flank share: on one 316 frame the two furthest placements read 35.8
+    and 36.9% while less-far ones read 19.3 and 19.5%."""
+    g = grains()
+    on = np.zeros((SIDE, SIDE), bool)
+    on[GRAIN - 2:GRAIN + 2, :] = True
+    ctl = CM.flank_controls(on, g, n_null=16, n_reps=4)
+    assert ctl["negative_control"] == pytest.approx(
+        sum(ctl["negative_replicates"]) / len(ctl["negative_replicates"]), abs=0.02)
+    assert ctl["positive_control"] == pytest.approx(
+        sum(ctl["positive_replicates"]) / len(ctl["positive_replicates"]), abs=0.02)
+    assert "negative_control_furthest" in ctl
+    assert ctl["negative_min"] <= ctl["negative_control"] <= ctl["negative_max"]
+
+
+def test_a_wide_negative_spread_is_said_out_loud():
+    out = CM.read_flank_controls({"positive_control": 99.0, "negative_control": 28.0,
+                                  "negative_min": 19.3, "negative_max": 36.9,
+                                  "real_intergranular_pct": 31.0, "z_prime": 0.6})
+    assert any("spans 19.3-36.9%" in n for n in out["notes"])
