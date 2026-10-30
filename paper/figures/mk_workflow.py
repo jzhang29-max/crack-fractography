@@ -54,7 +54,7 @@ import numpy as np                                  # noqa: E402
 import matplotlib                                   # noqa: E402
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt                     # noqa: E402
-from matplotlib.patches import FancyArrowPatch, Rectangle  # noqa: E402
+from matplotlib.patches import FancyArrowPatch, Polygon, Rectangle  # noqa: E402
 from scipy import ndimage as ndi                   # noqa: E402
 from skimage import exposure                       # noqa: E402
 
@@ -75,17 +75,12 @@ DETAIL = {"sem": 520, "txm": 700}
 ARMS = (("sem", "Scanning electron microscopy"),
         ("txm", "Transmission X-ray microscopy"))
 
-#: The shared rule, as three numbered operations. The parameters are read from the
-#: override module, never typed: a literal here once printed k = 5.0 while the paper had
-#: moved to 6.0, and the figure contradicted the sentence beside it.
-RULE = [
-    ("Flatten", f"estimate and subtract the background at {len(DO.SCALE_LADDER)} scales, "
-                f"$\\sigma$ = {min(DO.SCALE_LADDER)}–{max(DO.SCALE_LADDER)} px"),
-    ("Propose", f"keep pixels darker than median − {BM.MAD_K:g} × MAD, with an "
-                f"absolute floor at {DO.ABSOLUTE_DARK_THRESH} of 255"),
-    ("Clean", f"fill holes, remove isolated pixels, keep connected regions "
-              f"≥ {BM.MIN_AREA_PX} px"),
-]
+#: The shared rule, as three named operations and nothing else. What each one DOES is
+#: a sentence, and a sentence belongs in the caption: these three were set out here in
+#: a bordered block of descriptive text, which is a caption printed on the artwork
+#: however it is laid out. The names are node labels in a flow diagram, which is what
+#: this figure is; the constants they stand for are in the caption and in Table 1.
+RULE = ["Flatten", "Propose", "Clean"]
 
 
 def detail_of(d, tag):
@@ -147,7 +142,7 @@ def main():
     HDR = 0.42                      # column heading + the two half-labels
     CAP = 0.16                      # breathing room above the converging arrows
     ARR = 0.30
-    BOX = 1.02
+    BOX = 0.40
     PAIR = (CW - 0.07) / 2          # two square detail panels per arm
     Htot = M + HDR + FRAME_H + CAP + ARR + BOX + ARR + PAIR + M
 
@@ -227,21 +222,24 @@ def main():
         fx, fw = frame_rows[tag]
         arrow(fx + fw / 2, ytop, mid + (0.30 if tag == "txm" else -0.30), ybox - 0.015)
 
+    # THREE CHEVRONS, NOT A BOX OF TEXT. The rule is drawn as the flow it is: one node per
+    # operation, pointing left to right, with no border around the band and no sentence
+    # in it. The constants the nodes stand for are in the caption and in Table 1.
     bx = ax_at(M, ybox, W - 2 * M, BOX)
     bx.set_axis_off()
-    bx.add_patch(Rectangle((0, 0), 1, 1, transform=bx.transAxes, facecolor="white",
-                           edgecolor=J.INK, linewidth=0.9, zorder=1))
-    bx.text(0.5, 0.90, "ONE DETECTION RULE, APPLIED TO BOTH WITHOUT RETUNING",
-            fontsize=J.TICK, fontweight="bold", ha="center", va="center", color=J.INK,
-            transform=bx.transAxes)
-    for k, (name, desc) in enumerate(RULE):
-        yy = 0.635 - k * 0.215
-        bx.text(0.035, yy, f"{k + 1}", fontsize=J.TICK, fontweight="bold", ha="center",
-                va="center", color=J.ACCENT, transform=bx.transAxes)
-        bx.text(0.065, yy, name, fontsize=J.BODY, fontweight="bold", ha="left",
-                va="center", color=J.INK, transform=bx.transAxes)
-        bx.text(0.205, yy, desc, fontsize=J.TICK, ha="left", va="center",
-                color=J.G_DARK, transform=bx.transAxes)
+    bx.set_xlim(0, 1)
+    bx.set_ylim(0, 1)
+    nodes, gap, tip = len(RULE), 0.016, 0.026
+    span = (1.0 - (nodes - 1) * gap) / nodes
+    for k, name in enumerate(RULE):
+        x0 = k * (span + gap)
+        x1 = x0 + span
+        bx.add_patch(Polygon([(x0, 0.08), (x1 - tip, 0.08), (x1, 0.5), (x1 - tip, 0.92),
+                              (x0, 0.92), (x0 + (tip if k else 0.0), 0.5)],
+                             closed=True, facecolor="#e4ecf7", edgecolor=J.ACCENT,
+                             linewidth=0.8, zorder=2))
+        bx.text((x0 + x1) / 2, 0.5, name, fontsize=J.BODY, fontweight="bold",
+                ha="center", va="center", color=J.INK, zorder=3)
 
     # --- diverge ------------------------------------------------------------------
     ypair = ybox + BOX + ARR

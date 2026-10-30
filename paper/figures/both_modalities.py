@@ -17,18 +17,24 @@ already used and recorded, not re-picked to suit a new layout:
        median (mk_pipeline_visual.py). The evaluated public collection publishes no pixel
        size, so a panel drawn from it could carry no scale bar.
 
-  TXM  b2_342_81 at 29.24 nm/px -- of the frames whose annotation is a TRACE rather than a
-       filled region, the one whose painted crack has the strongest intensity contrast
-       against its own painted not-crack (Cohen d = +2.40 of a collection median +1.32,
-       `docs/figures/modality_contrast.json`).
+  TXM  b2_336_25 at 29.24 nm/px -- of the frames whose annotation is a TRACE rather than
+       a filled region, the SHARPEST one on which the shipped rule reaches at least a
+       quarter of the painted crack. Sharpness is the 99.5th percentile of Sobel gradient
+       magnitude over the frame's own intensity standard deviation, measured for every
+       frame of both collections by `analysis/research/improve/frame_legibility.py`; this
+       frame scores 0.22 against a corpus range of 0.07 to 0.22, with recall 0.286 and
+       precision 0.450.
 
-       THIS IS A LEGIBILITY CHOICE AND THE CAPTIONS SAY SO. The field was previously
-       b2_341_88_take2, the frame whose accuracy margin is closest to the median -- the
-       typical frame -- and on it the crack is a diffuse low-contrast band that reproduces
-       as a grey smudge. A methods figure whose panels cannot be read teaches nothing. The
-       distribution this frame sits at the top of is itself plotted, in Figure 2(d), so
-       the clear example and the honest spread are both in the paper and neither stands
-       in for the other.
+       WHY SHARPNESS AND NOT THE MEDIAN SCORE. Two earlier choices failed in the two
+       different ways available here. The frame typical by accuracy margin
+       (b2_341_88_take2) reproduces as a grey smudge: these mosaic averages differ by a
+       factor of three in high-frequency content, and on a soft one no panel is readable
+       at any magnification. The frame with the strongest painted-crack CONTRAST
+       (b2_342_81) is readable but the rule reaches only 15% of its paint, so the last
+       column of a stage figure is nearly empty. The rule above asks for both: a frame a
+       reader can see, on which the thing being illustrated actually happens. It is a
+       legibility choice, the captions say so, and the distribution these frames sit in
+       is itself plotted in Figure 2(d).
 
 The TXM pixel size is derived from operator-supplied mosaic geometry, not read from
 instrument metadata; the SEM one is read from the databar. The caption of every figure
@@ -68,7 +74,7 @@ import detector_overrides as DO                     # noqa: E402
 SEM_FIELD = "MAR_H_HIP_CBS_0007"
 SEM_NM_PER_PX = 51.883
 SEM_SCALE_SOURCE = "read from the instrument databar"
-TXM_FIELD = ("Average_mosaic_260618_b2_342_81_idx00000_mosaictileAA_img001of010"
+TXM_FIELD = ("Average_mosaic_260618_b2_336_25_idx00000_mosaictileAA_img001of010"
              ".xrm.bim.bim")
 TXM_NM_PER_PX = 29.24
 TXM_SCALE_SOURCE = "derived from operator-supplied mosaic geometry, not instrument metadata"

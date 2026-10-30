@@ -347,15 +347,9 @@ MP.VALUES["fig_modality_fov"] = f"{MD['matched_fov_um']:g}"
 # drift, and this project has shipped that drift before.
 CNT = MP._f(os.path.join(PAPER, "figures/out/F5 - over- and under-counting.caption.json"),
             "the over/under-counting plate's caption")
-_shares = [r["share_of_collection"] for coll in CNT["frames"].values()
-           for r in coll.values()]
 MP.VALUES.update({
-    "cnt_share_lo": MP._n(100 * min(_shares), 0),
-    "cnt_share_hi": MP._n(100 * max(_shares), 0),
     "cnt_txm_over_share": MP._n(
         100 * CNT["frames"]["TXM"]["over-counted"]["share_of_collection"], 0),
-    "cnt_sem_elig": str(CNT["frames"]["SEM"]["over-counted"]["eligible_frames"]),
-    "cnt_txm_elig": str(CNT["frames"]["TXM"]["over-counted"]["eligible_frames"]),
     "cnt_med_over": MP._n(
         min(p["over_pct"] for p in CNT["panels"] if p["kind"] == "over-counted"), 2),
 })

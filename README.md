@@ -64,6 +64,7 @@ Point `$PY` at an interpreter that has matplotlib, numpy, scipy and scikit-image
 `mk_modality.py` reads a measurement file and refuses to draw its last panel without one:
 
     $PY analysis/research/improve/modality_contrast.py   # -> docs/figures/modality_contrast.json
+    $PY analysis/research/improve/frame_legibility.py    # -> docs/figures/frame_legibility.json
 
 Every plate is drawn at the width it prints at, and the generator refuses to write one
 whose smallest type would print below 8 pt -- both target publishers ask for 8-12 pt at

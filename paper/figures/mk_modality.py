@@ -132,13 +132,15 @@ def _crack(n=140):
     disagree with one another.
     """
     t = np.linspace(0.0, 1.0, n)
-    x = 5.0 + t * (BW - 10.0)
+    x = 4.0 + t * (BW - 8.0)
     z = 2.0 + 9.0 * (0.5 + 0.44 * np.sin(2.4 * np.pi * t + 0.5))
-    # SHALLOW, AND THAT IS THE POINT. A sheet hanging two thirds of the way down the
-    # block fills the drawing and reads as a cavity; a crack opening at the surface and
-    # running a short way in reads as a crack. The depth is a drawing choice and the
-    # caption says the schematic is not to scale.
-    depth = 3.5 + 3.0 * np.sin(np.pi * t) ** 0.6
+    # A CURTAIN, NOT A BOWL. The depth used to be a half-sine -- zero at both ends and
+    # deepest in the middle -- which draws a lens-shaped cavity, and that is what the
+    # first version looked like. A crack is a sheet of roughly constant extent with a
+    # ragged lower edge, so the depth is nearly constant and the raggedness is what
+    # varies. It is a drawing choice; the caption says the schematic is not to scale.
+    depth = (5.6 + 1.1 * np.sin(5.1 * np.pi * t + 1.0) + 0.5 * np.sin(9.3 * np.pi * t)
+             ) * np.clip(np.sin(np.pi * t) ** 0.18, 0.0, 1.0)
     return x, z, depth
 
 
@@ -175,9 +177,12 @@ def combined_schematic(ax):
           facecolor="#f2f2f2", edgecolor=J.G_DARK, lw=0.7, zorder=2)
     _poly(ax, [(BW, 0, 0), (BW, 0, BD), (BW, BH, BD), (BW, BH, 0)],
           facecolor="#cfcfcf", edgecolor=J.G_DARK, lw=0.7, zorder=2)
-    _poly(ax, sheet, facecolor="#3d3d3d", edgecolor="none", zorder=3)
+    # ABOVE the front face, below the top face: at zorder 3 the sheet sat under both and
+    # two translucent greys over it left the crack a mid grey. Here only the sliver that
+    # is genuinely under the polished surface is softened, which is the depth cue wanted.
+    _poly(ax, sheet, facecolor="#2b2b2b", edgecolor="none", zorder=4.5)
     _poly(ax, [(0, 0, 0), (BW, 0, 0), (BW, BH, 0), (0, BH, 0)],
-          facecolor="#dcdcdc", edgecolor=J.G_DARK, lw=0.7, alpha=0.72, zorder=4)
+          facecolor="#dcdcdc", edgecolor=J.G_DARK, lw=0.7, alpha=0.58, zorder=4)
     _poly(ax, [(0, BH, 0), (BW, BH, 0), (BW, BH, BD), (0, BH, BD)],
           facecolor="#f2f2f2", edgecolor=J.G_DARK, lw=0.7, alpha=0.62, zorder=5)
     tr = np.array([_p(xx, BH, zz) for xx, zz in zip(x, z)])
@@ -196,9 +201,12 @@ def combined_schematic(ax):
                            edgecolor=J.INK, lw=0.7, zorder=9))
     ax.text(dcx, dcy, "detector", fontsize=J.TICK, ha="center", va="center",
             color=J.INK, zorder=10)
-    ax.add_patch(FancyArrowPatch((hit[0] - 0.8, hit[1] + 0.5), (dcx + 4.4, dcy - 2.4),
-                                 arrowstyle="-|>", mutation_scale=8, color=J.INK,
-                                 lw=0.8, zorder=8))
+    # a small fan of escaping signal rather than one arrow: it is what the detector
+    # collects, and one arrow reads as a reflection
+    for fx_, fy_ in ((4.4, -2.4), (6.6, -3.0), (2.2, -1.6)):
+        ax.add_patch(FancyArrowPatch((hit[0] - 0.8, hit[1] + 0.5),
+                                     (dcx + fx_, dcy + fy_), arrowstyle="-|>",
+                                     mutation_scale=7, color=J.INK, lw=0.7, zorder=8))
 
     # --- the X-ray beam: through the whole block to a detector behind it --------------
     # AT THE HEIGHT OF THE CRACK, not below it. The first version put the three rays

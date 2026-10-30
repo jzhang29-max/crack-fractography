@@ -68,6 +68,16 @@ NAME = "F5 - over- and under-counting"
 DOCFIG = os.path.join(os.path.dirname(os.path.dirname(HERE)), "docs", "figures")
 SCORES = os.path.join(DOCFIG, "overlap_means_sem_txm.json")
 TRACES = os.path.join(DOCFIG, "paint_region_vs_trace.json")
+LEGIB = os.path.join(DOCFIG, "frame_legibility.json")
+
+#: An over-counting panel has to show over-counting, not one object. On the TXM frame
+#: with the most over-counted pixels, 99.6% of that area is a SINGLE connected component
+#: -- one large low-attenuation region the operator rejected -- so the panel was a red
+#: rectangle whatever window was cut from it. A frame is eligible for the over-counting
+#: column only if its largest false-positive component is at most this share of its
+#: false-positive area. The shares are measured per frame by
+#: `analysis/research/improve/frame_legibility.py`.
+MAX_FP_CONCENTRATION = 0.35
 
 #: A frame is eligible only if its annotation is a TRACE rather than a filled region: at
 #: most this share of its painted-crack pixels further than 50 px inside the paint. It is
@@ -101,6 +111,13 @@ def worst_frames(coll):
     rows = json.load(open(SCORES))[coll]["per_frame"]
     deep = {r["frame"]: r["deep_share"]
             for r in json.load(open(TRACES))[coll]["frames"]}
+    if not os.path.exists(LEGIB):
+        raise SystemExit(
+            f"{LEGIB} is missing. Run analysis/research/improve/frame_legibility.py: the "
+            f"over-counting panel is chosen on a measured property of each frame and must "
+            f"not fall back to the unconstrained maximum.")
+    conc = {r["frame"]: r["fp_largest_share"]
+            for r in json.load(open(LEGIB))[coll]}
     missing = [r["frame"] for r in rows if r["frame"] not in deep]
     if missing:
         raise SystemExit(f"{coll}: no trace/region measurement for {missing[:3]}")
@@ -118,14 +135,21 @@ def worst_frames(coll):
            "under-counted": sum(r["_fn"] for r in rows)}
     out = {}
     for kind, key in (("over-counted", "_fp"), ("under-counted", "_fn")):
-        best = max(rows, key=lambda r: r[key])
+        pool = rows
+        if kind == "over-counted":
+            pool = [r for r in rows
+                    if conc.get(r["frame"], 1.0) <= MAX_FP_CONCENTRATION] or rows
+        best = max(pool, key=lambda r: r[key])
         out[kind] = {"frame": best["frame"], "f1": best["f1"],
                      "precision": best["precision"], "recall": best["recall"],
                      "px_of_this_kind": int(round(best[key])),
                      "collection_px_of_this_kind": int(round(tot[kind])),
                      "share_of_collection": (best[key] / tot[kind]
                                              if tot[kind] > 0 else None),
-                     "eligible_frames": len(rows),
+                     "eligible_frames": len(pool),
+                     "fp_largest_share": conc.get(best["frame"]),
+                     "max_fp_concentration": (MAX_FP_CONCENTRATION
+                                              if kind == "over-counted" else None),
                      "deep_share": deep[best["frame"]],
                      "max_deep_share": MAX_DEEP_SHARE}
     return out
@@ -150,19 +174,37 @@ def fetch(coll, want):
 MAX_ERROR_SHARE = 0.25
 
 
-def densest(mask, side, max_frac=MAX_ERROR_SHARE):
-    """The `side` x `side` window holding the most True pixels, among those not saturated.
+#: A window may not be mostly pixels nobody adjudicated. The under-counting panel first
+#: came out two thirds BLACK: the frame's widest crack has an unreviewed interior, the
+#: detector marks it, and an unreviewed pixel is correctly left uncoloured -- so the panel
+#: was dominated by a region that carries no verdict either way and illustrates neither
+#: error. Capping that share puts the window on the part of the crack a human actually
+#: ruled on.
+MAX_UNREVIEWED_SHARE = 0.25
 
-    Exact, not sampled: a box sum over the summed-area table, then the maximum over the
-    boxes whose True fraction is at most `max_frac`. Falls back to the unconstrained
-    maximum when no box satisfies the cap, and says so, rather than silently returning a
-    window chosen by a different rule than the caption states.
-    """
+
+def _boxsum(mask, sdim):
     ii = np.pad(np.cumsum(np.cumsum(mask.astype(np.int64), 0), 1), ((1, 0), (1, 0)))
+    return (ii[sdim:, sdim:] - ii[:-sdim, sdim:] - ii[sdim:, :-sdim]
+            + ii[:-sdim, :-sdim])
+
+
+def densest(mask, side, max_frac=MAX_ERROR_SHARE, veto=None,
+            max_veto=MAX_UNREVIEWED_SHARE):
+    """The `side` x `side` window holding the most True pixels, among the admissible ones.
+
+    Exact, not sampled: box sums over the summed-area table, then the maximum over the
+    boxes whose True fraction is at most `max_frac` and whose `veto` fraction is at most
+    `max_veto`. Falls back to the unconstrained maximum when no box satisfies both and
+    SAYS SO in the caption file, rather than silently returning a window chosen by a
+    different rule than the caption states.
+    """
     h, w = mask.shape
     sdim = min(side, h, w)
-    box = (ii[sdim:, sdim:] - ii[:-sdim, sdim:] - ii[sdim:, :-sdim] + ii[:-sdim, :-sdim])
+    box = _boxsum(mask, sdim)
     ok = box <= max_frac * sdim * sdim
+    if veto is not None:
+        ok &= _boxsum(veto, sdim) <= max_veto * sdim * sdim
     capped = bool(ok.any())
     search = np.where(ok, box, -1) if capped else box
     y, x = np.unravel_index(int(search.argmax()), search.shape)
@@ -188,7 +230,8 @@ def main():
             sel = over if kind == "over-counted" else under
             nm = nm_per_px[coll]
             side = int(round(FOV_UM * 1000.0 / nm))
-            y, x, sdim, cnt, capped = densest(sel, side)
+            y, x, sdim, cnt, capped = densest(sel, side,
+                                              veto=mask & ~pos & ~neg)
             sl = (slice(y, y + sdim), slice(x, x + sdim))
             # 0.5/99.5, not 2/98: on the BSE side-view frames 2/98 clips enough of the
             # dark tail that the matrix prints as paper-white and the panel loses its
@@ -205,8 +248,9 @@ def main():
             panels.append({
                 "coll": coll, "kind": kind, "rgb": np.clip(rgb, 0, 1), "nm": nm,
                 "frame": frame, "side": sdim, "origin": [y, x], "selected_px": cnt,
-                "fov_um": FOV_UM, "share_cap_applied": capped,
+                "fov_um": FOV_UM, "share_caps_applied": capped,
                 "max_error_share": MAX_ERROR_SHARE,
+                "max_unreviewed_share": MAX_UNREVIEWED_SHARE,
                 "agree_pct": 100 * float(agree[sl].mean()),
                 "over_pct": 100 * float(over[sl].mean()),
                 "under_pct": 100 * float(under[sl].mean()),
