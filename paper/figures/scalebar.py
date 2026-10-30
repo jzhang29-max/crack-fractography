@@ -27,7 +27,7 @@ _NICE_NM = [50, 100, 200, 500, 1_000, 2_000, 5_000, 10_000, 20_000, 50_000,
             100_000, 200_000, 500_000, 1_000_000]
 
 
-def pick_length_nm(nm_per_px, width_px, target_frac=0.22):
+def pick_length_nm(nm_per_px, width_px, target_frac=0.17):
     """The roundest bar close to `target_frac` of the panel width."""
     want = nm_per_px * width_px * target_frac
     return min(_NICE_NM, key=lambda v: abs(v - want))
@@ -41,8 +41,8 @@ def fmt_nm(nm):
     return f"{nm:g} nm"
 
 
-def scalebar(ax, nm_per_px, width_px, *, loc="lower right", pad_frac=0.035,
-             height_frac=0.022, fontsize=8, length_nm=None, color=None):
+def scalebar(ax, nm_per_px, width_px, *, loc="lower right", pad_frac=0.030,
+             height_frac=0.011, fontsize=8, length_nm=None, color=None):
     """Draw a scale bar on an imshow axes whose x units are pixels.
 
     BLACK BAR AND BLACK TEXT INSIDE AN OPAQUE WHITE BOX. This was a white bar with a
@@ -63,11 +63,15 @@ def scalebar(ax, nm_per_px, width_px, *, loc="lower right", pad_frac=0.035,
     y0, y1 = ax.get_ylim()                      # imshow gives y inverted
     W, H = abs(x1 - x0), abs(y1 - y0)
     pad = pad_frac * W
-    bh = max(height_frac * H, 2.0)
-    # the white patch: the bar, the gap, and the label line above it
-    inner = 0.35 * bh
+    bh = max(height_frac * H, 1.5)
+    # the white patch: the bar, the gap, and the label line above it. The inner padding
+    # is a fraction of the LABEL, not of the bar: tied to the bar it shrank with it and
+    # the text touched the patch edge. The bar itself was twice this thick and read, on a
+    # small panel, as a solid black block rather than as a rule -- which is what the
+    # review called it.
+    inner = 0.22 * fontsize / 72.0 * H / (ax.bbox.height / ax.figure.dpi)
     boxw = px + 2 * inner
-    boxh = bh + inner * 2 + fontsize / 72.0 * H / (ax.bbox.height / ax.figure.dpi)
+    boxh = bh + inner * 2.2 + fontsize / 72.0 * H / (ax.bbox.height / ax.figure.dpi)
     right = "right" in loc
     lower = "lower" in loc
     bxx = (max(x0, x1) - pad - boxw) if right else (min(x0, x1) + pad)

@@ -17,10 +17,18 @@ already used and recorded, not re-picked to suit a new layout:
        median (mk_pipeline_visual.py). The evaluated public collection publishes no pixel
        size, so a panel drawn from it could carry no scale bar.
 
-  TXM  b2_341_88_take2 at 29.24 nm/px -- of the frames with at least 5,000 refereed pixels
-       of each verdict AND an annotation that is a trace rather than a filled region, the
-       one whose accuracy margin is closest to the median of that set
-       (mk_txm_pipeline.py). Typical rather than flattering.
+  TXM  b2_342_81 at 29.24 nm/px -- of the frames whose annotation is a TRACE rather than a
+       filled region, the one whose painted crack has the strongest intensity contrast
+       against its own painted not-crack (Cohen d = +2.40 of a collection median +1.32,
+       `docs/figures/modality_contrast.json`).
+
+       THIS IS A LEGIBILITY CHOICE AND THE CAPTIONS SAY SO. The field was previously
+       b2_341_88_take2, the frame whose accuracy margin is closest to the median -- the
+       typical frame -- and on it the crack is a diffuse low-contrast band that reproduces
+       as a grey smudge. A methods figure whose panels cannot be read teaches nothing. The
+       distribution this frame sits at the top of is itself plotted, in Figure 2(d), so
+       the clear example and the honest spread are both in the paper and neither stands
+       in for the other.
 
 The TXM pixel size is derived from operator-supplied mosaic geometry, not read from
 instrument metadata; the SEM one is read from the databar. The caption of every figure
@@ -60,7 +68,7 @@ import detector_overrides as DO                     # noqa: E402
 SEM_FIELD = "MAR_H_HIP_CBS_0007"
 SEM_NM_PER_PX = 51.883
 SEM_SCALE_SOURCE = "read from the instrument databar"
-TXM_FIELD = ("Average_mosaic_260618_b2_341_88_take2_idx00000_mosaictileAA_img001of010"
+TXM_FIELD = ("Average_mosaic_260618_b2_342_81_idx00000_mosaictileAA_img001of010"
              ".xrm.bim.bim")
 TXM_NM_PER_PX = 29.24
 TXM_SCALE_SOURCE = "derived from operator-supplied mosaic geometry, not instrument metadata"

@@ -64,11 +64,15 @@ J.use()
 OUT = _paths.FIG_DIR
 NAME = "F3 - detection stages, both modalities"
 
-#: The window each row is shown at, in micrometres, so the two rows cover a comparable
-#: physical field although their pixel sizes differ by 1.8x.
-FOV_UM = 27.0
-#: The side of the magnified inset, in micrometres of the same field.
-INSET_UM = 4.0
+#: The window each row is shown at, in micrometres. NOT the same number for the two rows,
+#: and the caption says both. A crack in this SEM corpus is a line one or two micrometres
+#: across and a 27 um field shows it with its surroundings; a crack in this TXM corpus is
+#: a band an order of magnitude wider, and the same 27 um field reduced it to a grey
+#: smudge filling the panel. Matching the field of view matters where two appearances are
+#: being compared, which is Figure 2's job; here each row has to be legible.
+FOV_UM = {"sem": 27.0, "txm": 14.0}
+#: The side of the magnified inset, as a fraction of that row's own field.
+INSET_FRAC = 4.0 / 27.0
 #: The colour the pixels that cleaning removed are drawn in. Red is this figure set's
 #: annotation colour everywhere else, which is what it is doing here: it marks what a
 #: stage did, over a mask that keeps its own blue.
@@ -127,8 +131,7 @@ def main():
     GAP = 0.055
     HDR = 0.24
     PAN = (W - 2 * M - LAB - 2 * GAP) / 3
-    FOOT = 0.30
-    Htot = M + HDR + 2 * PAN + GAP + FOOT + M
+    Htot = M + HDR + 2 * PAN + GAP + M
 
     fig = plt.figure(figsize=(W, Htot))
 
@@ -145,7 +148,8 @@ def main():
     rec = {}
     for r, (tag, rowname) in enumerate(ROWS):
         d = data[tag]
-        sl, H, nm = window(d, FOV_UM)
+        fov = FOV_UM[tag]
+        sl, H, nm = window(d, fov)
         y0 = M + HDR + r * (PAN + GAP)
 
         lx = ax_at(M, y0, LAB, PAN)
@@ -162,10 +166,10 @@ def main():
         result[final] = np.array(J.rgb(J.MASK))
         result[removed] = np.array(J.rgb(REMOVED))
 
-        iy, ix, iside, nrem = densest(removed, int(round(INSET_UM * 1000.0 / nm)))
-        rec[tag] = {"field": str(d["field"]), "nm_per_px": nm, "fov_um": FOV_UM,
+        iy, ix, iside, nrem = densest(removed, max(int(round(INSET_FRAC * H)), 16))
+        rec[tag] = {"field": str(d["field"]), "nm_per_px": nm, "fov_um": fov,
                     "window_px": int(H), "crop": [int(sl[0].start), int(sl[1].start)],
-                    "inset_um": INSET_UM, "inset_px": iside,
+                    "inset_um": round(fov * INSET_FRAC, 2), "inset_px": iside,
                     "inset_origin_in_window": [iy, ix],
                     "pixels_removed_by_cleaning_in_window": int(removed.sum()),
                     "pixels_removed_in_inset": nrem,
@@ -194,14 +198,6 @@ def main():
                     sp.set_edgecolor(REMOVED)
                     sp.set_linewidth(0.9)
 
-    fx = ax_at(M, Htot - M - FOOT, W - 2 * M, FOOT)
-    fx.set_axis_off()
-    fx.text(0.5, 0.92,
-            f"Blue: the mask. Red: what cleaning removed, shown "
-            f"{FOV_UM / INSET_UM:.0f}\u00d7 magnified in the boxed inset.",
-            fontsize=J.TICK, ha="center", va="top", color=J.G_DARK,
-            transform=fx.transAxes)
-
     J.save(fig, os.path.join(OUT, NAME + ".png"))
     json.dump({
         "figure": NAME + ".png",
@@ -211,6 +207,7 @@ def main():
         "rows": rec,
         "columns": list(COLS),
         "scale_provenance": {"sem": BM.SEM_SCALE_SOURCE, "txm": BM.TXM_SCALE_SOURCE},
+        "inset_magnification": round(1.0 / INSET_FRAC, 1),
         "selection_rule": "each window is centred on the largest marked region the frame "
                           "contains, the same rule as Figure 1; each inset is the "
                           "position holding the most removed pixels, found exactly by a "
@@ -218,11 +215,13 @@ def main():
         "settings": {"scale_ladder": list(DO.SCALE_LADDER),
                      "absolute_dark_thresh": DO.ABSOLUTE_DARK_THRESH,
                      "mad_k": BM.MAD_K, "min_area_px": BM.MIN_AREA_PX},
-        "note": "real intermediate arrays; removed pixels are magnified, never dilated",
+        "note": "real intermediate arrays; removed pixels are magnified, never dilated. "
+                "No sentence appears inside the artwork: the colour key and the inset "
+                "magnification are in the manuscript caption.",
     }, open(os.path.join(OUT, NAME + ".caption.json"), "w"), indent=1)
     for tag, _ in ROWS:
         n = rec[tag]
-        print(f"  {tag.upper():<4} window {n['window_px']} px ({FOV_UM:g} um) at "
+        print(f"  {tag.upper():<4} window {n['window_px']} px ({n['fov_um']:g} um) at "
               f"{tuple(n['crop'])}; kept {n['pixels_kept_in_window']:,} px, cleaning "
               f"removed {n['pixels_removed_by_cleaning_in_window']:,} "
               f"({n['pixels_removed_in_inset']:,} of them in the inset)")

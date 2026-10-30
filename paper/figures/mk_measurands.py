@@ -238,8 +238,8 @@ def main():
     # the footnote. The table grew from five rows to seven when the measurands were taken
     # from the shipped code instead of recomputed.
     TABH = 0.26 + NROWS * ROWH + 0.12
-    FOOT = 0.46
-    Htot = Mg + max(IMH, 1.30) + 0.26 + TABH + FOOT + Mg
+    FOOT = 0.06        # no footnote: the colour key and the caveats are in the caption
+    Htot = Mg + max(IMH, 1.80) + 0.26 + TABH + FOOT + Mg
 
     fig = plt.figure(figsize=(W, Htot))
 
@@ -268,7 +268,7 @@ def main():
     scalebar(ax, nm, region.shape[1], fontsize=J.TICK)
 
     # --- (b) the width profile -----------------------------------------------------
-    PROFH = min(IMH, 1.30)
+    PROFH = min(IMH, 1.80)   # fill the row beside the micrograph rather than leaving it empty
     pax = ax_at(Mg + LW + GAP + 0.30, Mg + 0.22, RW - 0.36, PROFH - 0.58)
     s_um = np.concatenate([[0.0], np.cumsum(
         [np.hypot(path[i + 1][0] - path[i][0], path[i + 1][1] - path[i][1])
@@ -306,7 +306,7 @@ def main():
          f"{tort:.3f}" if isinstance(tort, (int, float))
          else f"no value: the axis has {n_branch} branch points"),
     ]
-    ytab = Mg + max(IMH, 1.30) + 0.26
+    ytab = Mg + max(IMH, 1.80) + 0.26
     dax = ax_at(Mg, ytab, W - 2 * Mg, TABH)
     dax.set_axis_off()
     C1, C2 = 0.175, 0.585
@@ -334,18 +334,6 @@ def main():
     dax.text(0.0, 1.0 + 0.055 / TABH, "(c)", fontsize=J.PANEL, fontweight="bold",
              va="bottom", ha="left", color=J.INK, transform=dax.transAxes)
 
-
-    fx = ax_at(Mg, Htot - Mg - FOOT, W - 2 * Mg, FOOT)
-    fx.set_axis_off()
-    fx.text(0.5, 0.95,
-            f"In (a): orange, the whole medial axis. Red: the two tips of the longest "
-            f"route, the chord between them, and the largest\ninscribed circle at the "
-            f"10th, 50th and 90th percentile of width. A straight digitised line of this "
-            f"length reports a tortuosity\nof {floor['min']:.2f} to {floor['max']:.2f} "
-            f"according to its angle, so a value near 1.08 is digitisation and not a "
-            f"wandering crack.",
-            fontsize=J.TICK, ha="center", va="top", color=J.G_DARK,
-            transform=fx.transAxes, linespacing=1.35)
 
     J.save(fig, os.path.join(OUT, NAME + ".png"))
     json.dump({

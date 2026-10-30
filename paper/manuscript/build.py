@@ -314,6 +314,32 @@ for _g, _t in (("B3", "b3"), ("B2", "b2"), ("Wrought", "wrought"), ("AM/HC", "am
         f"tpf_{_t}_mean": MP._n(_r["mean_of_per_frame_margins_pp"], 1),
     })
 
+# --- what the narrative plates actually drew, read from their own caption files -------
+# Everything the review took OUT of the artwork has to be stated in the caption instead,
+# and a caption that retypes a number the plate computed is a second copy of it. These
+# are read back from the files the generators write, so the figure and the sentence
+# beside it cannot drift apart.
+WF = MP._f(os.path.join(PAPER, "figures/out/F1 - workflow.caption.json"),
+           "the workflow plate's caption")
+ST = MP._f(os.path.join(PAPER, "figures/out/F3 - detection stages, both modalities"
+                              ".caption.json"), "the stage plate's caption")
+for _t in ("sem", "txm"):
+    _a = WF["arms"][_t]
+    _px, _nm = _a["frame_px"], _a["nm_per_px"]
+    MP.VALUES.update({
+        f"wf_{_t}_w": f"{_px[1]:,}", f"wf_{_t}_h": f"{_px[0]:,}",
+        f"wf_{_t}_nm": f"{_nm:g}",
+        f"wf_{_t}_umw": MP._n(_px[1] * _nm / 1000.0, 0),
+        f"wf_{_t}_umh": MP._n(_px[0] * _nm / 1000.0, 0),
+        f"wf_{_t}_marked": MP._n(_a["area_fraction_pct"], 2),
+        f"st_{_t}_fov": f"{ST['rows'][_t]['fov_um']:g}",
+    })
+MP.VALUES["st_zoom"] = f"{ST['inset_magnification']:g}"
+
+MD = MP._f(os.path.join(PAPER, "figures/out/F2 - how each modality sees a crack"
+                              ".caption.json"), "the modality plate's caption")
+MP.VALUES["fig_modality_fov"] = f"{MD['matched_fov_um']:g}"
+
 # --- what the over/under-counting figure actually drew, read from its own caption ------
 # The prose beside Figure 11 quotes how concentrated each error is. Those shares are
 # computed when the plate is drawn, so they are read back from the plate's caption file

@@ -26,9 +26,14 @@ and staged by its own code (`both_modalities.py`, which is the single source of 
 arrays for the whole figure set). Nothing here is drawn by hand, nothing is a mock-up,
 and no pixel is added for visibility.
 
-THE TWO SCALE BARS ARE NOT EQUALLY WELL FOUNDED, and the caption says so: the SEM one is
-read from the instrument databar, the TXM one is derived from operator-supplied mosaic
-geometry.
+NO SENTENCES INSIDE THE ARTWORK. Both target publishers say the description of a figure
+belongs in its caption and not on the figure itself, and the review said the same. What is
+left on the plate is structure a reader needs to parse the panels at all -- the two column
+headings, the two half-labels on each split frame, the panel letters, the scale bars and
+the rule box, which IS the figure rather than a description of it. The field sizes, the
+pixel sizes, the area fractions and the sentence about what each number means have all
+moved into the manuscript caption, which is the only place they can be checked against the
+measurement files anyway.
 
     <sem-crack-detector>/.venv/bin/python -B paper/figures/mk_workflow.py
 """
@@ -67,12 +72,8 @@ NAME = "F1 - workflow"
 #: 20 um, so the two windows look at features of comparable physical size.
 DETAIL = {"sem": 520, "txm": 700}
 
-ARMS = (
-    ("sem", "Scanning electron microscopy",
-     "electrons scattered back from a polished surface"),
-    ("txm", "Transmission X-ray microscopy",
-     "X-rays transmitted through the whole specimen"),
-)
+ARMS = (("sem", "Scanning electron microscopy"),
+        ("txm", "Transmission X-ray microscopy"))
 
 #: The shared rule, as three numbered operations. The parameters are read from the
 #: override module, never typed: a literal here once printed k = 5.0 while the paper had
@@ -135,21 +136,20 @@ def stretched(arr):
 
 
 def main():
-    data = {tag: BM.load(tag) for tag, _, _ in ARMS}
-    crops = {tag: detail_of(data[tag], tag) for tag, _, _ in ARMS}
+    data = {tag: BM.load(tag) for tag, _ in ARMS}
+    crops = {tag: detail_of(data[tag], tag) for tag, _ in ARMS}
 
     W = J.PAGEW
     M = 0.03
     CW = 2.78                       # one arm's column
     GAP = W - 2 * M - 2 * CW        # the centre gap the arrows cross
     FRAME_H = 1.42                  # whole-frame row, by height so both rows align
-    HDR = 0.60
-    CAP = 0.30
+    HDR = 0.42                      # column heading + the two half-labels
+    CAP = 0.16                      # breathing room above the converging arrows
     ARR = 0.30
     BOX = 1.02
     PAIR = (CW - 0.07) / 2          # two square detail panels per arm
-    FOOT = 0.60
-    Htot = M + HDR + FRAME_H + CAP + ARR + BOX + ARR + PAIR + FOOT + M
+    Htot = M + HDR + FRAME_H + CAP + ARR + BOX + ARR + PAIR + M
 
     fig = plt.figure(figsize=(W, Htot))
 
@@ -168,7 +168,7 @@ def main():
 
     letters = iter("abcdef")
     frame_rows, panel_notes = {}, {}
-    for i, (tag, title, mech) in enumerate(ARMS):
+    for i, (tag, title) in enumerate(ARMS):
         d = data[tag]
         img, final = d["img"], d["final"]
         y0, x0, H = crops[tag]
@@ -179,8 +179,6 @@ def main():
         hx.set_axis_off()
         hx.text(0.5, 0.95, title, fontsize=J.BODY, fontweight="bold", ha="center",
                 va="top", color=J.INK, transform=hx.transAxes)
-        hx.text(0.5, 0.58, mech, fontsize=J.TICK, ha="center", va="top",
-                color=J.G_DARK, transform=hx.transAxes)
 
         # --- the whole frame, sized by HEIGHT so the two arms' rows line up even though
         # the two frames have different aspect ratios. Cropping them to a common aspect
@@ -215,12 +213,6 @@ def main():
         scalebar(ax, nm * step, thumb.shape[1], fontsize=J.TICK)
         frame_rows[tag] = (fx, fw)
 
-        cx = ax_at(cx0, M + HDR + FRAME_H + 0.03, CW, CAP)
-        cx.set_axis_off()
-        cx.text(0.5, 0.95,
-                f"{img.shape[1] * nm / 1000:.0f} × {img.shape[0] * nm / 1000:.0f} "
-                f"µm at {nm:g} nm/px", fontsize=J.TICK, ha="center", va="top",
-                color=J.G_DARK, transform=cx.transAxes)
         panel_notes[tag] = dict(frame_px=[int(img.shape[0]), int(img.shape[1])],
                                 nm_per_px=nm, crop=[int(y0), int(x0)], detail_px=int(H),
                                 area_fraction_pct=round(100 * float(final.mean()), 3),
@@ -231,7 +223,7 @@ def main():
     ytop = M + HDR + FRAME_H + CAP
     ybox = ytop + ARR
     mid = W / 2
-    for tag, _, _ in ARMS:
+    for tag, _ in ARMS:
         fx, fw = frame_rows[tag]
         arrow(fx + fw / 2, ytop, mid + (0.30 if tag == "txm" else -0.30), ybox - 0.015)
 
@@ -253,7 +245,7 @@ def main():
 
     # --- diverge ------------------------------------------------------------------
     ypair = ybox + BOX + ARR
-    for i, (tag, _, _) in enumerate(ARMS):
+    for i, (tag, _) in enumerate(ARMS):
         d = data[tag]
         y0, x0, H = crops[tag]
         sl = (slice(y0, y0 + H), slice(x0, x0 + H))
@@ -275,24 +267,12 @@ def main():
             J.panel_label(ax, next(letters), inside=True)
             scalebar(ax, nm, H, fontsize=J.TICK)
 
-        fx = ax_at(cx0, ypair + PAIR + 0.05, CW, FOOT)
-        fx.set_axis_off()
-        meaning = ("a trace where the crack meets the polished surface"
-                   if tag == "sem" else
-                   "a shadow cast through the whole specimen thickness")
-        fx.text(0.5, 0.98,
-                f"{100 * float(d['final'].mean()):.2f}% of the frame marked",
-                fontsize=J.BODY, fontweight="bold", ha="center", va="top", color=J.INK,
-                transform=fx.transAxes)
-        fx.text(0.5, 0.56, meaning, fontsize=J.TICK, ha="center", va="top",
-                color=J.G_DARK, transform=fx.transAxes, wrap=True, linespacing=1.3)
-
     J.save(fig, os.path.join(OUT, NAME + ".png"))
     json.dump({
         "figure": NAME + ".png",
         "what": "two modalities in, one detection rule, two readings out",
         "arms": {tag: {"field": str(data[tag]["field"]), **panel_notes[tag]}
-                 for tag, _, _ in ARMS},
+                 for tag, _ in ARMS},
         "scale_provenance": {"sem": BM.SEM_SCALE_SOURCE, "txm": BM.TXM_SCALE_SOURCE},
         "selection_rule": "each arm's field is the one its single-modality figure already "
                           "recorded; each detail window is centred on the median pixel of "
@@ -302,9 +282,12 @@ def main():
                      "mad_k": BM.MAD_K, "min_area_px": BM.MIN_AREA_PX,
                      "use_region_classifier": DO.USE_REGION_CLASSIFIER},
         "note": "every panel is a real intermediate array; no pixel is added for "
-                "visibility and nothing is drawn by hand",
+                "visibility and nothing is drawn by hand. No sentence appears inside the "
+                "artwork: the field sizes, the pixel sizes and the area fractions "
+                "recorded here are the figure's caption material and live in the "
+                "manuscript",
     }, open(os.path.join(OUT, NAME + ".caption.json"), "w"), indent=1)
-    for tag, _, _ in ARMS:
+    for tag, _ in ARMS:
         n = panel_notes[tag]
         print(f"  {tag.upper():<4} {str(data[tag]['field'])[:44]:<44} "
               f"detail {n['detail_px']} px at {tuple(n['crop'])}, "

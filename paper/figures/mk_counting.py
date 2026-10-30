@@ -224,7 +224,7 @@ def main():
     GAP = 0.07
     PAN = (W - 2 * Mg - LAB - GAP) / 2
     HDR = 0.24
-    CAP = 0.34
+    CAP = 0.0      # no per-panel numbers: they are in the caption, read from this file
     LEG = 0.30
     Htot = Mg + HDR + 2 * (PAN + CAP) + GAP + LEG + Mg
 
@@ -233,11 +233,10 @@ def main():
     def ax_at(xin, yin, win, hin):
         return fig.add_axes([xin / W, 1.0 - (yin + hin) / Htot, win / W, hin / Htot])
 
-    for c, head in enumerate(("Over-counted: marked, operator said not crack",
-                              "Under-counted: operator's crack, not marked")):
+    for c, head in enumerate(("Over-counted", "Under-counted")):
         hx = ax_at(Mg + LAB + c * (PAN + GAP), Mg, PAN, HDR)
         hx.set_axis_off()
-        hx.text(0.5, 0.45, head, fontsize=J.TICK, fontweight="bold", ha="center",
+        hx.text(0.5, 0.45, head, fontsize=J.BODY, fontweight="bold", ha="center",
                 va="center", color=J.INK, transform=hx.transAxes)
 
     letters = iter("abcd")
@@ -256,28 +255,14 @@ def main():
                                    edgecolor=J.INK, linewidth=0.7, zorder=30))
             J.panel_label(ax, next(letters), inside=True)
             scalebar(ax, p["nm"], p["side"], fontsize=J.TICK)
-            cx = ax_at(Mg + LAB + c * (PAN + GAP), yrow + PAN + 0.02, PAN, CAP)
-            cx.set_axis_off()
-            cx.text(0.5, 0.95,
-                    f"agreement {p['agree_pct']:.1f}%, over {p['over_pct']:.1f}%, "
-                    f"under {p['under_pct']:.1f}% of the window\n"
-                    f"marked but never reviewed: {p['marked_unreviewed_pct']:.1f}%",
-                    fontsize=J.TICK, ha="center", va="top", color=J.G_DARK,
-                    transform=cx.transAxes, linespacing=1.3)
-
     lg = ax_at(Mg, Htot - Mg - LEG, W - 2 * Mg, LEG)
     lg.set_axis_off()
     items = ((AGREE, "marked, operator agrees"), (OVER, "marked, operator says not crack"),
-             (UNDER, "operator's crack, not marked"), (None, "nobody reviewed it"))
+             (UNDER, "operator's crack, not marked"))
     xx = 0.015
     for colour, text in items:
-        if colour is None:
-            lg.add_patch(Rectangle((xx, 0.52), 0.016, 0.26, transform=lg.transAxes,
-                                   facecolor=J.G_LIGHT, edgecolor=J.G_MID,
-                                   linewidth=0.5, clip_on=False))
-        else:
-            lg.add_patch(Rectangle((xx, 0.52), 0.016, 0.26, transform=lg.transAxes,
-                                   facecolor=colour, edgecolor="none", clip_on=False))
+        lg.add_patch(Rectangle((xx, 0.52), 0.016, 0.26, transform=lg.transAxes,
+                               facecolor=colour, edgecolor="none", clip_on=False))
         lg.text(xx + 0.024, 0.65, text, fontsize=J.TICK, va="center", ha="left",
                 color=J.G_DARK, transform=lg.transAxes)
         xx += 0.024 + 0.0105 * len(text) + 0.022

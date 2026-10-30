@@ -1,47 +1,42 @@
 #!/usr/bin/env python3
-"""Figure 2: what each microscopy actually records, and what a crack looks like in it.
+"""Figure 2: one crack, two measurement geometries, and what the criterion can reach.
 
-WHY THE PAPER NEEDS THIS. The paper measures the same quantity -- the fraction of a field
-that is crack -- in two microscopies, and treats a detector written for one as a candidate
-for the other. Whether that is a reasonable thing to do depends entirely on how the two
-form an image, and until now the paper asserted the difference in a clause and never
-showed it. A reader who does not already know the two techniques cannot tell whether the
-transfer in Section 4.3 is nearly trivial or nearly hopeless.
+WHY. The paper measures the same quantity in two microscopies and carries a detector
+written for one across to the other. Whether that is reasonable depends entirely on what
+each instrument records, and the paper asserted the difference in a clause.
 
-WHAT IS DRAWN AND WHAT IS MEASURED, kept strictly apart:
+ONE SCHEMATIC, NOT TWO. An earlier version drew the two geometries as separate pictures
+side by side, which left the comparison to the reader. They are drawn on ONE block of
+material containing ONE crack: the electron beam arrives at the polished top face and the
+signal has to escape back out of it, so what that instrument records is the line where the
+crack cuts that face; the X-ray beam crosses the whole thickness to a detector behind, so
+what IT records is the crack's silhouette along the beam. The same crack, two different
+measurands. The two are in practice different specimen preparations -- a polished section
+and a transmission specimen -- and the caption says so; drawing them on one block is what
+makes the two measurands comparable at a glance.
 
-  (a) and (b) are SCHEMATICS -- geometry, drawn by hand, not to scale. They carry the one
-      thing that is certain and that governs every measurement in this paper: scanning
-      electron microscopy records a signal that leaves a shallow volume at a polished
-      surface, so a pixel reports the specimen in ONE plane; transmission X-ray microscopy
-      records a beam that has crossed the whole specimen, so a pixel reports everything
-      along a line of sight.
+NO SENTENCES INSIDE THE ARTWORK. The labels on the schematic are part of the drawing. The
+description of the figure is in the manuscript caption.
 
-  (c) and (d) are REAL micrographs at a matched physical field of view, so the two
-      appearances can be compared without a reader having to convert pixel sizes.
+(d) IS A MEASUREMENT AND IS HERE BECAUSE THE OBVIOUS CAPTION FOR THE SCHEMATIC IS WRONG.
+"A void crosses less material, so it transmits more, so it reads bright" does not describe
+this corpus: a crack reads DARKER than the painted not-crack on 23 of 31 TXM frames too,
+and the radiometric convention of the stored arrays is not recorded anywhere in the three
+repositories, so no mechanism is offered for that. What (d) plots is the quantity the
+detector actually thresholds: per pixel, the largest MAD multiplier at which the
+multiscale darkness union would still propose it, summarised per frame over the pixels a
+human painted as crack, against the operating point.
 
-  (e) is a MEASUREMENT over both corpora, on the detector's own axis. The tempting caption
-      for (b) -- a void crosses less material, so it transmits more, so it reads bright --
-      does not describe this corpus at all: a crack reads DARKER than the not-crack a human
-      painted on the same frame on 23 of 31 TXM frames too, and the radiometric convention
-      of the stored arrays is not recorded anywhere in the three repositories, so no
-      mechanism is offered for that.
-
-      What (e) plots instead is the quantity the detector actually thresholds: per pixel,
-      the largest MAD multiplier at which the multiscale darkness union would still propose
-      it, summarised per frame over the pixels a human painted as crack. The operating
-      point is drawn as a line, so the panel says directly how much of each collection's
-      annotated crack the proposal stage can even reach. A standardised intensity contrast
-      was plotted here first and withdrawn: the two collections' NOT-crack verdicts were
-      painted to different conventions -- adversarially in one, as broad context strokes in
-      the other -- so a contrast measured against them is not comparable across the two, and
-      a panel inviting that comparison would have been the figure's main claim.
+A standardised intensity contrast was plotted here first and withdrawn: the two
+collections' NOT-crack verdicts were painted to different conventions -- adversarially in
+one, as broad context strokes in the other -- so a contrast measured against them is not
+comparable across the two, and a panel inviting that comparison would have been the
+figure's main claim.
 
     <sem-crack-detector>/.venv/bin/python -B paper/figures/mk_modality.py
 """
 import json
 import os
-import textwrap
 import sys
 import warnings
 
@@ -108,179 +103,203 @@ def stretch(arr):
                                       out_range=(0.0, 1.0))
 
 
-# ------------------------------------------------------------------ the two schematics
-def sem_schematic(ax):
-    """Beam in, signal back out of a shallow volume at a polished surface."""
+# ----------------------------------------------------------------- the one schematic
+#: The oblique projection the block is drawn in. A point (x, y, z) in the specimen's own
+#: coordinates -- x across, y up, z into the depth -- lands at (x + KZ*z, y + KY*z).
+KZ, KY = 0.40, 0.30
+#: The block, in those coordinates, and where its near-bottom-left corner sits on the
+#: canvas. The canvas is 100 x 34 and the panel is drawn at that aspect.
+BW, BH, BD = 30.0, 16.0, 13.0
+OX, OY = 26.0, 3.5
+#: How far the detector sits behind the block, and how thick it is drawn.
+DGAP, DTHICK = 11.0, 1.6
+
+
+def _p(x, y, z):
+    return (OX + x + KZ * z, OY + y + KY * z)
+
+
+def _poly(ax, pts, **kw):
+    from matplotlib.patches import Polygon as _P
+    ax.add_patch(_P([_p(*q) for q in pts], closed=True, **kw))
+
+
+def _crack(n=140):
+    """The crack as one analytic sheet: a plan-view track and a depth below the face.
+
+    One object, three views -- the trace on the top face, the sheet inside the block and
+    the silhouette on the detector are all computed from these arrays, so they cannot
+    disagree with one another.
+    """
+    t = np.linspace(0.0, 1.0, n)
+    x = 5.0 + t * (BW - 10.0)
+    z = 2.0 + 9.0 * (0.5 + 0.44 * np.sin(2.4 * np.pi * t + 0.5))
+    # SHALLOW, AND THAT IS THE POINT. A sheet hanging two thirds of the way down the
+    # block fills the drawing and reads as a cavity; a crack opening at the surface and
+    # running a short way in reads as a crack. The depth is a drawing choice and the
+    # caption says the schematic is not to scale.
+    depth = 3.5 + 3.0 * np.sin(np.pi * t) ** 0.6
+    return x, z, depth
+
+
+def _silhouette(z, depth, nbins=44):
+    """The crack's outline as the X-ray beam sees it: its extent in (depth, height).
+
+    Binned over z and reduced with a minimum, because the track doubles back on itself --
+    several points of the crack lie on one ray, and what the beam records is their union.
+    Taking the samples in their own order instead drew a sawtooth, which is an artefact of
+    the parameterisation and not of the crack.
+    """
+    zg = np.linspace(z.min(), z.max(), nbins)
+    lo = np.full(nbins, np.nan)
+    idx = np.clip(np.searchsorted(zg, z) - 1, 0, nbins - 1)
+    for i, d in zip(idx, depth):
+        lo[i] = d if np.isnan(lo[i]) else max(lo[i], d)
+    ok = ~np.isnan(lo)
+    lo = np.interp(zg, zg[ok], lo[ok])
+    return zg, BH - lo
+
+
+def combined_schematic(ax):
+    """One block, one crack, both instruments, so the two measurands can be compared."""
     ax.set_xlim(0, 100)
-    ax.set_ylim(0, 62)
+    ax.set_ylim(0, 30)
     ax.set_axis_off()
-    SURF = 36.0
-    ax.add_patch(Rectangle((6, 4), 88, SURF - 4, facecolor=J.G_LIGHT,
-                           edgecolor=J.G_DARK, linewidth=0.7, zorder=1))
-    ax.plot([6, 94], [SURF, SURF], color=J.INK, lw=1.1, zorder=3)
-    ax.text(94, SURF + 1.5, "polished surface", fontsize=J.TICK, ha="right",
-            va="bottom", color=J.G_DARK, zorder=6)
-    ax.text(8, 9.0, "bulk", fontsize=J.TICK, ha="left", va="bottom", color=J.G_DARK,
-            zorder=6)
-    ax.text(26, SURF - 10.5, "interaction\nvolume", fontsize=J.TICK, ha="center",
-            va="top", color=J.ACCENT, linespacing=1.2, zorder=8)
+    x, z, depth = _crack()
 
-    # the crack: a wedge opening at the surface and closing with depth
-    ax.add_patch(Polygon([(54, SURF), (60.5, SURF), (57.6, 16), (56.4, 16)],
-                         closed=True, facecolor=J.INK, edgecolor="none", zorder=4))
+    # the crack first, then the block's two near faces over it at partial opacity, so the
+    # sheet reads as being INSIDE the solid rather than painted on it
+    sheet = ([(xx, BH, zz) for xx, zz in zip(x, z)]
+             + [(xx, BH - dd, zz) for xx, zz, dd in zip(x[::-1], z[::-1], depth[::-1])])
+    _poly(ax, [(0, BH, 0), (BW, BH, 0), (BW, BH, BD), (0, BH, BD)],
+          facecolor="#f2f2f2", edgecolor=J.G_DARK, lw=0.7, zorder=2)
+    _poly(ax, [(BW, 0, 0), (BW, 0, BD), (BW, BH, BD), (BW, BH, 0)],
+          facecolor="#cfcfcf", edgecolor=J.G_DARK, lw=0.7, zorder=2)
+    _poly(ax, sheet, facecolor="#3d3d3d", edgecolor="none", zorder=3)
+    _poly(ax, [(0, 0, 0), (BW, 0, 0), (BW, BH, 0), (0, BH, 0)],
+          facecolor="#dcdcdc", edgecolor=J.G_DARK, lw=0.7, alpha=0.72, zorder=4)
+    _poly(ax, [(0, BH, 0), (BW, BH, 0), (BW, BH, BD), (0, BH, BD)],
+          facecolor="#f2f2f2", edgecolor=J.G_DARK, lw=0.7, alpha=0.62, zorder=5)
+    tr = np.array([_p(xx, BH, zz) for xx, zz in zip(x, z)])
+    ax.plot(tr[:, 0], tr[:, 1], color=J.ACCENT, lw=2.0, solid_capstyle="round", zorder=6)
 
-    # incident beam on matrix, and the signal that escapes
-    ax.add_patch(FancyArrowPatch((26, 60), (26, SURF + 0.6), arrowstyle="-|>",
-                                 mutation_scale=9, color=J.ACCENT, lw=1.1, zorder=5))
-    ax.add_patch(Polygon([(26, SURF), (21.5, SURF - 5.0), (26, SURF - 8.5),
-                          (30.5, SURF - 5.0)], closed=True, facecolor="white",
-                         edgecolor=J.ACCENT, linewidth=0.7, linestyle=(0, (2, 1.4)),
-                         zorder=4))
-    for dx in (-9, 9):
-        ax.add_patch(FancyArrowPatch((26, SURF + 0.6), (26 + dx * 1.5, 56),
-                                     arrowstyle="-|>", mutation_scale=8, color=J.INK,
-                                     lw=0.8, zorder=5))
+    # --- the electron column: in at the surface, out to a detector above --------------
+    bx, bz = x[len(x) // 2], z[len(z) // 2]
+    hit = _p(bx, BH, bz)
+    ax.add_patch(FancyArrowPatch((hit[0], hit[1] + 8.2), (hit[0], hit[1] + 0.5),
+                                 arrowstyle="-|>", mutation_scale=9, color=J.ACCENT,
+                                 lw=1.1, zorder=8))
+    ax.text(hit[0] + 1.4, hit[1] + 8.0, "electron beam", fontsize=J.TICK, ha="left",
+            va="top", color=J.ACCENT, zorder=9)
+    dcx, dcy = hit[0] - 17.0, hit[1] + 6.4
+    ax.add_patch(Rectangle((dcx - 7.2, dcy - 1.9), 14.4, 3.8, facecolor="white",
+                           edgecolor=J.INK, lw=0.7, zorder=9))
+    ax.text(dcx, dcy, "detector", fontsize=J.TICK, ha="center", va="center",
+            color=J.INK, zorder=10)
+    ax.add_patch(FancyArrowPatch((hit[0] - 0.8, hit[1] + 0.5), (dcx + 4.4, dcy - 2.4),
+                                 arrowstyle="-|>", mutation_scale=8, color=J.INK,
+                                 lw=0.8, zorder=8))
 
-    # incident beam into the crack mouth: what leaves is intercepted by the crack walls
-    ax.add_patch(FancyArrowPatch((57, 60), (57, SURF - 0.4), arrowstyle="-|>",
-                                 mutation_scale=9, color=J.ACCENT, lw=1.1, zorder=5))
-    ax.add_patch(FancyArrowPatch((57.4, 22), (66, 31), arrowstyle="-|>",
-                                 mutation_scale=8, color=J.G_MID, lw=0.8, zorder=3))
-    ax.plot([64.4, 67.6], [29.4, 32.6], color=J.ROI, lw=1.0, zorder=6)
-    ax.plot([64.4, 67.6], [32.6, 29.4], color=J.ROI, lw=1.0, zorder=6)
-    ax.text(69.5, 31, "blocked by\nthe crack wall", fontsize=J.TICK, ha="left",
-            va="center", color=J.G_DARK, linespacing=1.2, zorder=8)
-    ax.text(57, 12.5, "crack", fontsize=J.TICK, ha="center", va="top", color=J.INK,
-            zorder=8)
+    # --- the X-ray beam: through the whole block to a detector behind it --------------
+    # AT THE HEIGHT OF THE CRACK, not below it. The first version put the three rays
+    # under the sheet entirely, so they crossed nothing and the silhouette drawn on the
+    # detector contradicted the picture that was meant to produce it.
+    ybeam = BH - 0.55 * float(depth.mean())
+    for zz in (2.5, 6.5, 10.5):
+        ax.add_patch(FancyArrowPatch(_p(-15.0, ybeam, zz),
+                                     _p(BW + DGAP - 1.6, ybeam, zz),
+                                     arrowstyle="-|>", mutation_scale=8,
+                                     color=J.ACCENT2, lw=1.0, zorder=7))
+    lx, ly = _p(-15.0, ybeam, 10.5)
+    # BELOW the rays, not above them: above, it landed inside the SEM annotation that
+    # occupies the top-left corner.
+    ax.text(lx, _p(-15.0, ybeam, 2.5)[1] - 1.4, "X-ray beam", fontsize=J.TICK,
+            ha="left", va="top", color=J.ACCENT2, zorder=9)
 
-    ax.add_patch(Rectangle((8, 53), 22, 7, facecolor="white", edgecolor=J.INK,
-                           linewidth=0.7, zorder=7))
-    ax.text(19, 56.5, "detector", fontsize=J.TICK, ha="center", va="center",
-            color=J.INK, zorder=8)
-    ax.text(63, 58, "electron beam", fontsize=J.TICK, ha="left", va="center",
-            color=J.ACCENT, zorder=8)
+    # the detector, and the crack's silhouette recorded on it
+    _poly(ax, [(BW + DGAP, 0, 0), (BW + DGAP, 0, BD), (BW + DGAP, BH, BD),
+               (BW + DGAP, BH, 0)], facecolor="white", edgecolor=J.INK, lw=0.7, zorder=7)
+    _poly(ax, [(BW + DGAP, 0, 0), (BW + DGAP + DTHICK, 0, 0),
+               (BW + DGAP + DTHICK, BH, 0), (BW + DGAP, BH, 0)],
+          facecolor="#eeeeee", edgecolor=J.INK, lw=0.7, zorder=7)
+    zg, ylo = _silhouette(z, depth)
+    sil = ([(BW + DGAP, BH, zz) for zz in zg]
+           + [(BW + DGAP, yy, zz) for zz, yy in zip(zg[::-1], ylo[::-1])])
+    _poly(ax, sil, facecolor=J.ACCENT2, edgecolor="none", zorder=8)
 
-
-def txm_schematic(ax):
-    """Beam through the whole specimen, recorded behind it."""
-    ax.set_xlim(0, 100)
-    ax.set_ylim(0, 62)
-    ax.set_axis_off()
-    L, R = 30.0, 68.0
-    ax.add_patch(Rectangle((L, 12), R - L, 44, facecolor=J.G_LIGHT, edgecolor=J.G_DARK,
-                           linewidth=0.7, zorder=1))
-    ax.text((L + R) / 2, 1.0, "specimen,\nwhole thickness", fontsize=J.TICK,
-            ha="center", va="bottom", color=J.G_DARK, linespacing=1.2, zorder=6)
-
-    # a crack INSIDE the specimen -- it never reaches a surface, and that is the point
-    ax.add_patch(Polygon([(38, 34), (52, 38.5), (60, 36.5), (52, 35.7), (38, 32.6)],
-                         closed=True, facecolor=J.INK, edgecolor="none", zorder=4))
-
-    ax.add_patch(Rectangle((80, 12), 6, 44, facecolor="white", edgecolor=J.INK,
-                           linewidth=0.7, zorder=7))
-    ax.text(88.5, 34, "detector", fontsize=J.TICK, ha="left", va="center", rotation=90,
-            color=J.INK, zorder=8)
-    ax.text(2, 52, "X-ray\nbeam", fontsize=J.TICK, ha="left", va="center",
-            color=J.ACCENT, linespacing=1.25, zorder=8)
-
-    for y, through in ((44.0, False), (35.5, True)):
-        ax.add_patch(FancyArrowPatch((6, y), (79.4, y), arrowstyle="-|>",
-                                     mutation_scale=9, lw=1.1, zorder=5,
-                                     color=J.ACCENT if through else J.G_MID))
-    ax.annotate("crosses the crack", xy=(50, 35.5), xytext=(45, 23.0),
-                fontsize=J.TICK, ha="center", va="top", color=J.ACCENT, zorder=8,
-                arrowprops=dict(arrowstyle="-", color=J.ACCENT, lw=0.7,
-                                shrinkA=1, shrinkB=1))
-    ax.text(49, 57.5, "crosses solid material only", fontsize=J.TICK, ha="center",
-            va="bottom", color=J.G_DARK, zorder=8)
+    # --- what each instrument records -------------------------------------------------
+    t0 = _p(x[6], BH, z[6])
+    ax.annotate("what SEM records:\nthe crack where it cuts\nthe polished surface",
+                xy=(t0[0], t0[1]), xytext=(1.5, 26.5), fontsize=J.TICK, ha="left",
+                va="top", color=J.ACCENT, linespacing=1.25, zorder=10,
+                arrowprops=dict(arrowstyle="-", color=J.ACCENT, lw=0.7, shrinkA=2,
+                                shrinkB=2))
+    s0 = _p(BW + DGAP, BH - 3.5, float(np.median(zg)))
+    ax.annotate("what TXM records:\nits silhouette along\nthe whole thickness",
+                xy=(s0[0], s0[1]), xytext=(99.0, 26.5), fontsize=J.TICK, ha="right",
+                va="top", color=J.ACCENT2, linespacing=1.25, zorder=10,
+                arrowprops=dict(arrowstyle="-", color=J.ACCENT2, lw=0.7, shrinkA=2,
+                                shrinkB=2))
+    pf = _p(BW * 0.88, BH, BD * 0.72)
+    ax.annotate("polished surface", xy=pf, xytext=(_p(BW, BH, BD)[0] + 1.5,
+                                                   _p(BW, BH, BD)[1] + 2.4),
+                fontsize=J.TICK, ha="left", va="bottom", color=J.G_DARK, zorder=9,
+                arrowprops=dict(arrowstyle="-", color=J.G_DARK, lw=0.7, shrinkA=2,
+                                shrinkB=2))
+    k = len(x) // 5
+    cf = _p(x[k], BH - 0.55 * depth[k], z[k])
+    ax.annotate("crack", xy=cf, xytext=(cf[0] - 2.0, cf[1] - 7.5), fontsize=J.TICK,
+                ha="right", va="top", color=J.INK, zorder=10,
+                arrowprops=dict(arrowstyle="-", color=J.INK, lw=0.7, shrinkA=2,
+                                shrinkB=2))
 
 
 def main():
     data = {t: BM.load(t) for t in ("sem", "txm")}
-    con = json.load(open(CONTRAST)) if os.path.exists(CONTRAST) else None
-    if con is None:
+    if not os.path.exists(CONTRAST):
         raise SystemExit(
             f"{CONTRAST} is missing. Run analysis/research/improve/modality_contrast.py "
-            f"first -- panel (e) reports a measurement and must not be drawn from a "
+            f"first -- panel (d) reports a measurement and must not be drawn from a "
             f"remembered number.")
+    con = json.load(open(CONTRAST))
 
     W = J.PAGEW
     M = 0.03
-    GAP = 0.16
-    CW = (W - 2 * M - GAP) / 2
-    HDR = 0.36
-    SCH = 1.66
-    NOTE = 0.80
-    IMG = 1.42
-    CAPG = 0.30
-    CHART = 1.24
-    Htot = M + HDR + SCH + NOTE + IMG + CAPG + CHART + 0.30 + M
+    GAP = 0.13
+    SCH = (W - 2 * M) * 30.0 / 100.0          # the schematic's own aspect
+    IMG = 1.45
+    ROWGAP = 0.20
+    Htot = M + SCH + ROWGAP + IMG + M
 
     fig = plt.figure(figsize=(W, Htot))
 
     def ax_at(xin, yin, win, hin):
         return fig.add_axes([xin / W, 1.0 - (yin + hin) / Htot, win / W, hin / Htot])
 
-    arms = (
-        ("sem", "Scanning electron microscopy", sem_schematic,
-         "The signal escapes from a shallow volume just under the polished surface, so "
-         "a pixel reports ONE plane. A crack is seen where it cuts that plane; how far "
-         "it runs below is invisible."),
-        ("txm", "Transmission X-ray microscopy", txm_schematic,
-         "The beam crosses the whole specimen and is recorded behind it, so a pixel "
-         "reports everything along one line of sight. A crack anywhere in the thickness "
-         "changes it, and its apparent opening is the widest along the ray."),
-    )
+    sx = ax_at(M, M, W - 2 * M, SCH)
+    combined_schematic(sx)
+    sx.text(0.0, 0.985, "(a)", transform=sx.transAxes, fontsize=J.PANEL,
+            fontweight="bold", va="top", ha="left", color=J.INK)
 
-    letters = iter("abcd")
+    yrow = M + SCH + ROWGAP
     notes = {}
-    for i, (tag, title, draw, prose) in enumerate(arms):
-        x0 = M + i * (CW + GAP)
-        hx = ax_at(x0, M, CW, HDR)
-        hx.set_axis_off()
-        hx.text(0.5, 0.9, title, fontsize=J.BODY, fontweight="bold", ha="center",
-                va="top", color=J.INK, transform=hx.transAxes)
-
-        sx = ax_at(x0, M + HDR, CW, SCH)
-        draw(sx)
-        # placed by hand, not J.panel_label: its outside form sits at x = -0.02 of the
-        # axes, which for the left column of a full-width figure is off the page
-        sx.text(0.0, 1.03, f"({next(letters)})", transform=sx.transAxes,
-                fontsize=J.PANEL, fontweight="bold", va="bottom", ha="left", color=J.INK)
-
-        nx = ax_at(x0, M + HDR + SCH, CW, NOTE)
-        nx.set_axis_off()
-        # WRAPPED BY HAND. matplotlib's own `wrap=True` wraps to the FIGURE, not to the
-        # axes, so in a two-column layout the left column's prose ran straight across the
-        # right column's. 54 characters is the width of this column at 8 pt Arial.
-        nx.text(0, 1.0, textwrap.fill(prose, 54), fontsize=J.TICK, ha="left", va="top",
-                color=J.G_DARK, transform=nx.transAxes, linespacing=1.32)
-
-    for i, (tag, title, _draw, _prose) in enumerate(arms):
+    for i, (tag, letter) in enumerate((("sem", "b"), ("txm", "c"))):
         d = data[tag]
         sl, H, nm = crop_at(d, FOV_UM)
-        x0 = M + i * (CW + GAP)
-        ix = ax_at(x0 + (CW - IMG) / 2, M + HDR + SCH + NOTE, IMG, IMG)
+        ix = ax_at(M + i * (IMG + GAP), yrow, IMG, IMG)
         ix.imshow(stretch(d["img"][sl]), cmap="gray", vmin=0, vmax=1,
                   interpolation="nearest")
         J.micrograph(ix)
         ix.add_patch(Rectangle((0, 0), 1, 1, transform=ix.transAxes, fill=False,
                                edgecolor=J.INK, linewidth=0.8, zorder=30))
-        J.panel_label(ix, next(letters), inside=True)
+        J.panel_label(ix, letter, inside=True)
         scalebar(ix, nm, H, fontsize=J.TICK)
         notes[tag] = {"fov_um": FOV_UM, "window_px": int(H), "nm_per_px": nm,
                       "field": str(d["field"])}
 
-    cg = ax_at(M, M + HDR + SCH + NOTE + IMG, W - 2 * M, CAPG)
-    cg.set_axis_off()
-    cg.text(0.5, 0.95,
-            f"(c) and (d) are the same {FOV_UM:g} µm field of view, so the two "
-            f"appearances are directly comparable.", fontsize=J.TICK, ha="center",
-            va="top", color=J.G_DARK, transform=cg.transAxes)
-
-    # --- (e) the detector's own axis ------------------------------------------------
-    ax = ax_at(M + 0.56, M + HDR + SCH + NOTE + IMG + CAPG, W - 2 * M - 0.66,
-               CHART - 0.34)
+    # --- (d) the detector's own axis ------------------------------------------------
+    cx0 = M + 2 * (IMG + GAP)
+    ax = ax_at(cx0 + 0.52, yrow + 0.03, W - M - cx0 - 0.58, IMG - 0.38)
     cols = [("SEM", con["SEM"]["per_frame"], J.ACCENT)]
     for g in ("B3", "B2", "Wrought", "AM/HC"):
         rows = [r for r in con["TXM"]["per_frame"] if r.get("group") == g]
@@ -292,7 +311,7 @@ def main():
         ks = [r["median_critical_k_crack"] for r in rows]
         nbelow += sum(1 for v in ks if v < con["mad_k"])
         jit = rng.uniform(-0.17, 0.17, len(ks))
-        ax.plot(k + jit, ks, "o", ms=2.8, mfc=colour, mec="white", mew=0.3,
+        ax.plot(k + jit, ks, "o", ms=2.6, mfc=colour, mec="white", mew=0.3,
                 linestyle="none", zorder=3)
         ax.plot([k - 0.30, k + 0.30], [np.median(ks)] * 2, color=J.INK, lw=1.4, zorder=4)
     # LOGARITHMIC, because one SEM frame's painted crack sits at 52 MAD multiples and on
@@ -300,8 +319,8 @@ def main():
     # ratio to a frame's own spread, so a log axis is its natural one.
     ax.set_yscale("log")
     ax.axhline(con["mad_k"], color=J.ROI, lw=1.0, zorder=2)
-    ax.text(-0.52, con["mad_k"] * 1.18, f"k = {con['mad_k']:g}", fontsize=J.TICK,
-            va="bottom", ha="left", color=J.ROI)
+    ax.text(len(cols) - 0.45, con["mad_k"] * 1.16, f"k = {con['mad_k']:g}",
+            fontsize=J.TICK, va="bottom", ha="right", color=J.ROI)
     ax.set_xticks(range(len(cols)))
     ax.set_xticklabels([c[0] for c in cols], fontsize=J.TICK)
     ax.set_xlim(-0.6, len(cols) - 0.4)
@@ -310,23 +329,14 @@ def main():
     ax.set_yticks([1, 2, 5, 10, 20, 50])
     ax.set_yticklabels(["1", "2", "5", "10", "20", "50"], fontsize=J.TICK)
     ax.minorticks_off()
-    J.panel_label(ax, "e")
-
-    ex = ax_at(M, Htot - M - 0.30, W - 2 * M, 0.30)
-    ex.set_axis_off()
-    ntot = len(con["SEM"]["per_frame"]) + len(con["TXM"]["per_frame"])
-    ex.text(0.5, 0.92,
-            f"(e) one point per frame, bar at the median; {nbelow} of {ntot} frames "
-            f"fall below the line.",
-            fontsize=J.TICK, ha="center", va="top", color=J.G_DARK,
-            transform=ex.transAxes)
+    J.panel_label(ax, "d")
 
     J.save(fig, os.path.join(OUT, NAME + ".png"))
     json.dump({
         "figure": NAME + ".png",
-        "what": "(a), (b) schematics of image formation, drawn by hand and not to scale; "
-                "(c), (d) real micrographs at a matched field of view; (e) a measurement "
-                "over both corpora",
+        "what": "(a) one schematic of both measurement geometries on one crack, drawn "
+                "by hand and not to scale; (b), (c) real micrographs at a matched field "
+                "of view; (d) a measurement over both corpora",
         "micrographs": notes,
         "matched_fov_um": FOV_UM,
         "panel_e": {
@@ -361,10 +371,12 @@ def main():
             "TXM_frames_crack_brighter": con["TXM"]["frames_d_negative"],
         },
         "scale_provenance": {"sem": BM.SEM_SCALE_SOURCE, "txm": BM.TXM_SCALE_SOURCE},
-        "note": "panels (a) and (b) are schematics and are labelled as such; no "
-                "mechanism is claimed for the sign of the TXM contrast, because the "
-                "radiometric convention of the stored arrays is not recorded in any of "
-                "the three repositories",
+        "note": "panel (a) is a schematic and is labelled as such in the caption; the "
+                "two geometries are drawn on one block although they are in practice "
+                "different specimen preparations, which the caption states. No mechanism "
+                "is claimed for the sign of the TXM contrast, because the radiometric "
+                "convention of the stored arrays is not recorded in any of the three "
+                "repositories. No sentence appears inside the artwork.",
     }, open(os.path.join(OUT, NAME + ".caption.json"), "w"), indent=1)
     for tag in ("SEM", "TXM"):
         c = con[tag]
