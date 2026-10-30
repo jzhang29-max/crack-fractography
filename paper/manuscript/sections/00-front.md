@@ -46,6 +46,19 @@ SEM and TXM frames the mean per-frame F1 is {om_sem_f1} and {om_txm_f1} against
 {om_sem_cf1} and {om_txm_cf1} for a geometrically correct trace of the same annotations,
 which is the brush effect measured a second time.
 
+Where the transfer fails is also located, in the detector's own units rather than through
+a score. The proposal stage keeps a pixel that is darker than its frame's median by more
+than k scaled median absolute deviations at any radius of its scale ladder; measuring the
+operator's annotated crack on that same axis, the median annotated pixel sits at
+{mc_sem_k} on the {mc_sem_n} SEM frames and {mc_txm_k} on the {mc_txm_n} TXM frames
+against an operating point of {om_k}, below it on {mc_sem_below} and {mc_txm_below} of
+them, with a median of {mc_sem_prop}% and {mc_txm_prop}% of the annotated crack proposed
+at all. The reconstruction of the real proposal mask from that axis is checked pixel for
+pixel against the deployed detector on every frame and agrees to within {mc_recon} pixel.
+The loss is therefore at candidate generation and not at the filters that follow it, and
+it is a margin that is thinner in transmission X-ray microscopy rather than a failure
+peculiar to it.
+
 These findings support the detector as an interpretable approach to aggregate crack area
 measurement within the evaluated collection. The principal result concerns agreement in
 total image area, with pixel-level segmentation considered as a separate endpoint.

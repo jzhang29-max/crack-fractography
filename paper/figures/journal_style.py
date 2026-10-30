@@ -54,6 +54,13 @@ SCRIPT_FLOOR = 6.0
 #: Elsevier's Guide for Authors asks the author to state each figure's column class, so
 #: it is recorded per figure rather than left for a production editor to guess.
 COLUMN_CLASS = {
+    # the revised manuscript's narrative figures. F3 replaces both P6 and T6, which are
+    # kept below because the longer draft (paper/draft.pdf) still places P6.
+    "F1 - workflow": ("double", W2),
+    "F2 - how each modality sees a crack": ("double", W2),
+    "F3 - detection stages, both modalities": ("double", W2),
+    "F4 - what is measured": ("double", W2),
+    "F5 - over- and under-counting": ("double", W2),
     "P1 - public scores": ("1.5-column", W15),
     "P2 - operating curve": ("1.5-column", W15),
     "P3 - width sensitivity": ("1.5-column", W15),

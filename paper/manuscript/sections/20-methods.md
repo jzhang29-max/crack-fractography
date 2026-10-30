@@ -26,10 +26,11 @@ taken from this collection, and none is shown.** The crack area fraction reporte
 is a dimensionless ratio of pixel counts and does not depend on a pixel size; physical
 lengths cannot be derived from these images and none are reported.
 
-For that reason Figure 1, which illustrates the processing stages rather than the
-evaluation, is drawn from a field of this laboratory's own corpus at a known 51.883 nm/px
-and carries scale bars. The caption states that the field is not part of the evaluated
-collection. No quantitative result in this paper is taken from it.
+For that reason every micrograph panel in this paper — Figures {fig_workflow},
+{fig_modality}, {fig_stages} and {fig_measurands} — is drawn from a field of this
+laboratory's own corpus at a known pixel size and carries a scale bar, and each caption
+states that the field is not part of the evaluated collection. No quantitative result in
+Section 3 is taken from those fields.
 
 ### 2.2  Detector configuration
 
@@ -63,12 +64,20 @@ also fixed. A reader comparing this against a single-parameter classical filter 
 that the filter carries one constant and this configuration carries a frozen preprocessing
 budget.
 
-Figure 1 shows the microscopy example and the intermediate image outputs. Figure 2
-summarises the scored branch from grayscale input to area measurement.
+Figure {fig_stages} shows what each of those operations does to a real array, in both
+modalities. Three of the stages — the MAD criterion, the morphological opening and the
+connected-region floor — produce outputs that are indistinguishable from one another at
+print size, differing by a few hundred pixels in a half-million-pixel window, so they are
+drawn as one column with the pixels they removed in a second colour and magnified; giving
+each its own panel invites a reader to compare panels that cannot be told apart.
 
-[FIGURE pipeline | The detector applied to a single scanning electron field of this laboratory's own corpus, 6144 x 4096 px at 51.883 nm/px (319 x 213 micrometres). (a) the field as acquired, with the box marking the detail shown in (b-f). (b) the detail, 520 px square. (c) after background flattening, a multi-scale estimate at sigma 5 to 320 px subtracted. (d) dark candidates, pixels dark at any of the seven scales after the MAD criterion and the absolute intensity gate. (e) after hole filling, removal of components under 13 px and 8-connected labelling. (f) after removal of regions under 40 px; this is the scored mask. (g) the scored mask over the whole field. In (d-g) the stage output is shown in blue over the field it was computed from. Scale bars 50 micrometres in (a) and (g), 5 micrometres in (b)-(f). This field is NOT from the collection evaluated in Section 3: it is shown because that collection publishes no pixel size and so cannot carry a scale bar, and the field was selected by rule as the one whose crack area fraction is closest to the median of the 80 scaled frames available.]
+**Three stages of the application sit outside the branch evaluated here, and none of them
+runs in any figure or any number in this paper.** They are the learned region classifier,
+which is disabled; the second-pass region growth over concavity, bridge and interior-fill
+candidates; and the operator's painted correction, which overrides every automatic stage.
+The masks shown and scored throughout are the output of stages 1 to 3 alone.
 
-[FIGURE workflow | The scored detector workflow, with the array each stage produces. (a) the micrograph. (b) after background flattening. (c) the dark candidates. (d) after hole filling and the 40-pixel region floor; this is the scored mask. (e) the centreline the per-region length is measured from, over that mask. Panels (a)-(e) are a 520-pixel detail of MAR_H_HIP_CBS_0007 at 51.883 nm/px. Below the rule are three stages of the application that are outside the evaluated branch: the learned region classifier, which is disabled; the second-pass region growth; and the human's painted correction, shown on 260622_316_H_b2_back_CBS_01, for which no pixel size has been recovered and which therefore carries no scale bar.]
+[FIGURE stages | The three operations that change the array, in both modalities, on this laboratory's own fields. Columns: the frame as the detector receives it; the same window after the multiscale background estimate is subtracted, which is the array the darkness criterion is applied to; and the finished mask. Rows: scanning electron microscopy at 51.883 nm/px (top) and transmission X-ray microscopy at 29.24 nm/px (bottom), each shown over a matched 27 micrometre field. Blue is the mask that is scored. Red, in the third column, is what the morphological opening and the connected-region floor removed, drawn at 7x magnification in the boxed inset because at panel size it is a few pixels wide; the inset position is the window holding the most removed pixels, found exactly rather than chosen. The removed pixels are magnified, never dilated — no pixel in any panel of this paper is added for visibility. Each window is centred on the largest marked region its frame contains, the same rule as Figure {fig_workflow}, and every panel is contrast-stretched for display between its own 2nd and 98th percentiles, identically in both rows. Neither field belongs to the collection evaluated in Section 3.]
 
 ### 2.3  Measurement endpoints
 
@@ -87,6 +96,20 @@ Background specificity describes the fraction of reference background pixels cla
 background. With TN and FP denoting true-negative and false-positive pixels, specificity is
 TN / (TN + FP). Aggregate area agreement and background specificity have separate
 interpretations from foreground overlap [3,4].
+
+**The other quantities the application reports, and what each one is measured from.** Area
+fraction is the paper's endpoint, but the software also emits a length, two widths and an
+orientation per detected region, and those are what a reader of a crack-measurement study
+will want defined. Figure {fig_measurands} puts all of them on one real crack, computed by
+the functions the application itself calls rather than by a reimplementation. Two points in
+it are worth carrying forward. There are TWO lengths, not one: the network length sums every
+branch of the medial axis and the longest crack is the longest tip-to-tip route through it,
+and on the region shown they differ by 15 per cent. And both are sums of step lengths, with a
+diagonal step counted as the square root of two — a count of skeleton pixels understates a
+path length by up to 41 per cent, and dividing such a count by an endpoint distance once gave
+819 of 1,503 exported cracks a tortuosity below one, which is geometrically impossible.
+
+[FIGURE measurands | Every quantity the application measures on a detected region, drawn on the largest marked region the SEM field of Figure {fig_workflow} contains. (a) the region in blue with the whole medial axis in orange; in red, the two tips of the longest tip-to-tip route, the straight chord between them, and the largest circle that fits inside the crack at the 10th, 50th and 90th percentile of width along the axis. (b) the width along that route, with the mean width over the whole axis as the dashed line. (c) each measurand, the rule it is measured by, and its value here. Every number in (c) comes from the shipped measurement functions, called on the region that is drawn; the route drawn in (a) is checked against the length reported in (c) to within one pixel. The tortuosity row is deliberately empty: the shipped definition applies only to an unbranched medial axis and this region has nine branch points, so the software emits no value, and where it does emit one the figure's own control shows that digitisation alone puts a straight line between 1.00 and 1.08 according to its angle.]
 
 **An all-background reference point accompanies every accuracy figure in this manuscript.**
 On an image that is {ag_best_lab}% crack, a prediction that marks nothing scores

@@ -33,15 +33,37 @@ import make_paper as MP          # noqa: E402  -- Doc, resolve, VALUES, metrics,
 
 OUT = os.path.join(HERE, "Revised_Manuscript_v2.pdf")
 SECT = os.path.join(HERE, "sections")
+# --- THE FIGURE PROGRAMME ----------------------------------------------------------
+# Rebuilt after review. Five things changed, each in answer to a specific comment:
+#
+#   1. THE WORKFLOW COMES FIRST. `workflow` is Figure 1 and sits in the introduction. It
+#      shows both modalities entering, converging on one detection rule, and diverging
+#      into two readings that mean different physical things. The old Figure 1 was a row
+#      of five SEM panels and said nothing about the second modality, which is half of
+#      the paper.
+#
+#   2. HOW THE TWO MICROSCOPIES SEE A CRACK, in the introduction, because the reason the
+#      paper carries a detector from one to the other cannot be judged without it.
+#
+#   3. PANELS THAT LOOKED THE SAME ARE COMBINED. The old stage plate had seven panels of
+#      which four were indistinguishable at print size, and its whole-frame micrograph and
+#      whole-frame result sat at opposite corners. `stages` has three columns -- the three
+#      things that actually differ -- and what the combined stages removed is drawn in a
+#      second colour inside a magnified inset.
+#
+#   4. BOTH MODALITIES IN ONE FIGURE WHEREVER THEY WERE TWO. `stages` replaces BOTH the
+#      SEM stage plate (P6) and the TXM one (T6): 14 panels became 6.
+#
+#   5. TWO FIGURES THE PAPER DID NOT HAVE: what each measurand is, measured on one real
+#      crack; and what over-counting and under-counting actually look like.
 FIGS = {
-    "pipeline": os.path.join(PAPER, "figures/out/P6 - pipeline in pictures.png"),
-    # the stage diagram: the supplied manuscript had it as Figure 2 and the text
-    # still refers to it, so it has to be embedded or the reference dangles
-    # NOT docs/figures/fig_pipeline.png, which is the repository's own diagram: a title,
-    # paragraphs of prose, p-values and source identifiers, none of which a journal
-    # figure does. This one shows the real array each stage produces, and separates the
-    # branch the paper evaluates from the three stages that sit outside it.
-    "workflow": os.path.join(PAPER, "figures/out/P7 - workflow.png"),
+    "workflow": os.path.join(PAPER, "figures/out/F1 - workflow.png"),
+    "modality": os.path.join(
+        PAPER, "figures/out/F2 - how each modality sees a crack.png"),
+    "stages": os.path.join(
+        PAPER, "figures/out/F3 - detection stages, both modalities.png"),
+    "measurands": os.path.join(PAPER, "figures/out/F4 - what is measured.png"),
+    "counting": os.path.join(PAPER, "figures/out/F5 - over- and under-counting.png"),
     "areabars": os.path.join(PAPER, "figures/out/P1 - public scores.png"),
     "sweep": os.path.join(PAPER, "figures/out/P2 - operating curve.png"),
     "ceiling": os.path.join(PAPER, "figures/out/P3 - width sensitivity.png"),
@@ -63,8 +85,9 @@ FIGS = {
     "txmcurve": os.path.join(PAPER, "figures/out/T3 - TXM operating curve.png"),
     "txmbudget": os.path.join(PAPER, "figures/out/T4 - TXM pixel budget.png"),
     "txmoverlap": os.path.join(PAPER, "figures/out/T5 - overlap with its ceiling.png"),
-    "txmpipe": os.path.join(
-        PAPER, "figures/out/T6 - the SEM detector's stages on TXM.png"),
+    # T6, the SEM detector's stages on a TXM frame, is RETIRED: `stages` now shows the
+    # same three stages for both modalities side by side, and `counting` shows the
+    # comparison with the operator's annotation that was T6's last panel.
 }
 
 # --- values this manuscript needs that the longer draft does not define ----------------
@@ -83,6 +106,9 @@ MP.VALUES.update({
     # the false-negative share of the frame, which the longer draft does not
     # expose because its own limitations section quotes it differently
     "in_fn_pct": MP._n(MP.PA_W["fn_pct"], 2),
+    # the share of the frame that is background in BOTH the prediction and the
+    # annotation: the pixels every overlap measure discards, which Section 3.6 now names
+    "in_tn_pct": MP._n(MP.PA_W["tn_pct"], 1),
     "tx_n": str(TX["n_frames"]),
     "tx_cov": MP._n(100 * TX["refereed_coverage_frac"], 1),
     "tx_crack_px": f"{TX['refereed_crack_px']:,}",
@@ -288,20 +314,153 @@ for _g, _t in (("B3", "b3"), ("B2", "b2"), ("Wrought", "wrought"), ("AM/HC", "am
         f"tpf_{_t}_mean": MP._n(_r["mean_of_per_frame_margins_pp"], 1),
     })
 
+# --- what the over/under-counting figure actually drew, read from its own caption ------
+# The prose beside Figure 11 quotes how concentrated each error is. Those shares are
+# computed when the plate is drawn, so they are read back from the plate's caption file
+# rather than retyped: a figure and the sentence beside it that are maintained separately
+# drift, and this project has shipped that drift before.
+CNT = MP._f(os.path.join(PAPER, "figures/out/F5 - over- and under-counting.caption.json"),
+            "the over/under-counting plate's caption")
+_shares = [r["share_of_collection"] for coll in CNT["frames"].values()
+           for r in coll.values()]
+MP.VALUES.update({
+    "cnt_share_lo": MP._n(100 * min(_shares), 0),
+    "cnt_share_hi": MP._n(100 * max(_shares), 0),
+    "cnt_txm_over_share": MP._n(
+        100 * CNT["frames"]["TXM"]["over-counted"]["share_of_collection"], 0),
+    "cnt_sem_elig": str(CNT["frames"]["SEM"]["over-counted"]["eligible_frames"]),
+    "cnt_txm_elig": str(CNT["frames"]["TXM"]["over-counted"]["eligible_frames"]),
+    "cnt_med_over": MP._n(
+        min(p["over_pct"] for p in CNT["panels"] if p["kind"] == "over-counted"), 2),
+})
+
+# --- the detector's own axis, for the introduction's second figure --------------------
+# How dark the operator's painted crack actually is, in the units the proposal stage
+# thresholds in, per frame, for both collections. The reconstruction of the real proposal
+# mask from this axis is checked pixel for pixel against the installed detector on every
+# frame, so the number below is the detector's own margin and not a proxy for it.
+MC = MP._f(os.path.join(REPO, "docs/figures/modality_contrast.json"),
+           "modality contrast on the detector's axis")
+_mc_n = MC["SEM"]["n_frames"] + MC["TXM"]["n_frames"]
+_mc_below = (MC["SEM"]["frames_median_critical_k_below_k"]
+             + MC["TXM"]["frames_median_critical_k_below_k"])
+MP.VALUES.update({
+    "fig_modality_n": str(_mc_n),
+    "fig_modality_below": str(_mc_below),
+    "mc_sem_k": MP._n(MC["SEM"]["median_of_median_critical_k_crack"], 2),
+    "mc_txm_k": MP._n(MC["TXM"]["median_of_median_critical_k_crack"], 2),
+    "mc_sem_prop": MP._n(100 * MC["SEM"]["median_crack_px_proposed_frac"], 1),
+    "mc_txm_prop": MP._n(100 * MC["TXM"]["median_crack_px_proposed_frac"], 1),
+    "mc_sem_below": str(MC["SEM"]["frames_median_critical_k_below_k"]),
+    "mc_txm_below": str(MC["TXM"]["frames_median_critical_k_below_k"]),
+    "mc_sem_n": str(MC["SEM"]["n_frames"]),
+    "mc_txm_n": str(MC["TXM"]["n_frames"]),
+    "mc_recon": str(max(MC["SEM"]["max_reconstruction_mismatch_px"],
+                        MC["TXM"]["max_reconstruction_mismatch_px"])),
+})
+for _g, _t in (("B3", "b3"), ("B2", "b2"), ("Wrought", "wrought"), ("AM/HC", "amhc")):
+    _r = MC["TXM"]["by_group"][_g]
+    MP.VALUES.update({
+        f"mc_{_t}_k": MP._n(_r["median_of_median_critical_k_crack"], 2),
+        f"mc_{_t}_prop": MP._n(100 * _r["median_crack_px_proposed_frac"], 0),
+    })
+
+
 FIG_RE = re.compile(r"^\[FIGURE ([a-z]+)\s*\|\s*(.+)\]$")
+
+
+def number_the_figures(files):
+    """Assign figure numbers from the order the directives appear, and publish them.
+
+    WHY THIS EXISTS. Every figure number in the prose used to be typed: "Figure 1 shows
+    the microscopy example", "the ceiling in Figure 6". Inserting a figure at the front
+    silently redirects every one of them, and nothing in the build can tell -- a dangling
+    reference check passes cleanly while "Figure 6" now points at a different plate. The
+    review moved two new figures to the front of the paper, which is exactly that edit.
+
+    So the prose writes `{fig_ceiling}` and gets the number this function assigns. A name
+    with no `[FIGURE ...]` directive never enters VALUES, so `resolve` fails the build on
+    it, and a figure that is referenced but not placed cannot ship.
+    """
+    seen, order = set(), []
+    for src in files:
+        for raw in open(os.path.join(SECT, src), encoding="utf-8"):
+            m = FIG_RE.match(raw.strip())
+            if not m:
+                continue
+            key = m.group(1)
+            if key in seen:
+                raise SystemExit(f"figure key {key!r} is placed twice")
+            if key not in FIGS:
+                raise SystemExit(f"unknown figure key {key!r}")
+            seen.add(key)
+            order.append(key)
+    MP.VALUES.update({f"fig_{k}": str(i + 1) for i, k in enumerate(order)})
+    # AND A GUARD, so a typed number cannot come back. Checked on the RAW source, before
+    # the placeholders resolve, because after resolution every legitimate reference reads
+    # "Figure 7" too and the check would have nothing to see.
+    typed = []
+    for src in files:
+        for n, raw in enumerate(open(os.path.join(SECT, src), encoding="utf-8"), 1):
+            for m in re.finditer(r"Figures?\s+\d", raw):
+                typed.append(f"{src}:{n}: {raw.strip()[max(0, m.start() - 30):m.end() + 20]}")
+    if typed:
+        raise SystemExit(
+            "figure numbers typed into the prose, which silently point at the wrong plate "
+            "the next time a figure moves. Use {fig_<key>}:\n  " + "\n  ".join(typed))
+    unused = sorted(set(FIGS) - seen)
+    if unused:
+        print(f"  NOTE: {len(unused)} plate(s) defined and not placed: "
+              f"{', '.join(unused)}")
+    return order
+
+
+def paragraphs(text):
+    """Yield the file's lines with consecutive body lines joined into one.
+
+    A body line is anything that is not blank, not a heading, not a bullet, not a table
+    row and not a figure directive. Those four keep their own lines because each of them
+    is a single unit the renderer handles separately.
+    """
+    def structural(t):
+        st = t.strip()
+        return (not st or st.startswith(("#", "* ", "|"))
+                or FIG_RE.match(st) is not None)
+
+    buf = []
+    for raw in text.split("\n"):
+        line = raw.rstrip()
+        if structural(line):
+            if buf:
+                yield " ".join(buf)
+                buf = []
+            yield line
+        else:
+            buf.append(line.strip())
+    if buf:
+        yield " ".join(buf)
 
 
 def main():
     files = sorted(f for f in os.listdir(SECT) if f.endswith(".md"))
     if not files:
         raise SystemExit(f"{SECT} is empty")
+    order = number_the_figures(files)
     with PdfPages(OUT) as pdf:
         doc = MP.Doc(pdf)
         fign = 0
         pending = []
         for src in files:
             whole = MP.resolve(open(os.path.join(SECT, src), encoding="utf-8").read())
-            for raw in whole.split("\n"):
+            # JOIN A PARAGRAPH'S LINES BEFORE RENDERING. `Doc.text` wraps whatever it is
+            # given, and the sections are hard-wrapped at about 88 characters, so every
+            # source line was being wrapped on its own: the page break fell wherever the
+            # author's editor had broken the line, and a line holding a placeholder came
+            # out visibly short once the placeholder resolved to one digit. Joining the
+            # consecutive body lines of a paragraph and wrapping once puts the breaks
+            # where the page width puts them. Headings, bullets, tables and figure
+            # directives are left alone -- each of those IS one line.
+            for raw in paragraphs(whole):
                 line = raw.rstrip()
                 m = FIG_RE.match(line.strip())
                 if m:
@@ -339,6 +498,7 @@ def main():
         doc.close()
     print("wrote", OUT)
     print(f"resolved {len(MP.VALUES)} values; sections: {len(files)}; figures: {fign}")
+    print("  " + "; ".join(f"{i + 1} {k}" for i, k in enumerate(order)))
 
 
 if __name__ == "__main__":

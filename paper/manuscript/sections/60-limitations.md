@@ -26,7 +26,15 @@ overlap scores, and a reader should apply the same scepticism to the area rankin
 ranking of total marked area and nothing more.
 
 Diagnostic observations further limit the interpretation of the darkness criterion.
-Approximately 42% of annotated crack area lies outside the reported proposal support. The
+Approximately 42% of annotated crack area lies outside the reported proposal support **on
+the public Inconel 718 collection**. The corresponding measurement on this laboratory's
+own frames, which is a different collection and a different annotation and is reported in
+Figure {fig_modality}(e), is that the median frame has {mc_sem_prop}% of its annotated
+crack proposed in SEM and {mc_txm_prop}% in TXM, with the median annotated pixel sitting
+below the operating threshold on {mc_sem_below} of {mc_sem_n} and {mc_txm_below} of
+{mc_txm_n} frames. The three figures are not interchangeable — they are pooled over area,
+over frames and over frames respectively, on three different annotations — but they agree
+on where the loss is. The
 unreached labelled regions have higher reported mean intensity than the detected dark cores —
 a mean grey level of 127 against a background of 82 and detected cores of 59 — which is
 consistent with a contrast-polarity limitation rather than a threshold setting. Panels of the
@@ -60,11 +68,11 @@ ratio of pixel counts and does not depend on a pixel size, so the principal resu
 the absence; no physical length is reported for this collection and none can be.
 
 The consequence for presentation is that the method figure and the evaluation cannot be the
-same images. Figure 1 is drawn from this laboratory's own corpus, where 80 of 142 frames
+same images. Figures {fig_workflow} to {fig_measurands} are drawn from this laboratory's own corpus, where 80 of 142 frames
 carry a recoverable databar at 51.883 nm/px, so that the processing stages can be shown at a
 stated scale; every quantitative result in Sections 3 and 4 comes from the public collection
-and from the TXM frames respectively. A reader should not read Figure 1 as evidence for any
-number in this paper.
+and from the TXM frames respectively. A reader should not read those figures as evidence for
+any number in this paper.
 
 The TXM panels in Section 4 do carry scale bars, from a pixel size of 29.24 nm/px that is
 derived from mosaic geometry rather than read from instrument metadata. Those bars, and any

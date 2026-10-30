@@ -239,28 +239,42 @@ def summarise(label, rows):
     return out
 
 
-print(f"mad_k = {MADK:g}; refereed pixels only; a frame needs {MIN_PX} of each verdict\n")
-print("SEM -- this laboratory's hand-corrected frames")
-SEMR = summarise("SEM", run("SEM", sem_frames()))
-print("\nTXM -- the transmission X-ray collection")
-TXMR = summarise("TXM", run("TXM", txm_frames(), txm_group))
+def main():
+    """Score both collections and write the measurement file.
 
-if TXMR:
-    print("\nTXM by specimen group, mean over frames:")
-    for gname in ("B3", "B2", "Wrought", "AM/HC"):
-        sub = [x for x in TXMR["per_frame"] if x.get("group") == gname]
-        if sub:
-            print(f"  {gname:<8} n={len(sub):<3} P {np.mean([x['precision'] for x in sub]):.4f}"
-                  f"  R {np.mean([x['recall'] for x in sub]):.4f}"
-                  f"  F1 {np.mean([x['f1'] for x in sub]):.4f}"
-                  f"   3px-trace F1 {np.mean([x['ceiling_f1'] for x in sub]):.4f}")
+    THIS USED TO BE MODULE-LEVEL CODE, which made the import side-effecting: anything that
+    wanted `sem_frames()` or `txm_frames()` -- and `modality_contrast.py` wants both --
+    re-ran the whole benchmark and overwrote the measurement file as a side effect of the
+    import statement. Under a guard the loaders are reusable and the write happens only
+    when this file is the program.
+    """
+    print(f"mad_k = {MADK:g}; refereed pixels only; a frame needs {MIN_PX} of each verdict\n")
+    print("SEM -- this laboratory's hand-corrected frames")
+    semr = summarise("SEM", run("SEM", sem_frames()))
+    print("\nTXM -- the transmission X-ray collection")
+    txmr = summarise("TXM", run("TXM", txm_frames(), txm_group))
 
-p = os.path.join(REPO, "docs/figures/overlap_means_sem_txm.json")
-json.dump({"mad_k": MADK, "min_px_each_verdict": MIN_PX,
-           "aggregation": "mean over frames, one vote per frame; pixels are NOT pooled",
-           "scoring": "refereed pixels only: 1 = crack, 2 or 3 = not-crack, 0 excluded",
-           "ceiling": "the frame's own paint skeletonised and redrawn 3 px wide, scored "
-                      "against that same paint: what a detector exactly right about where "
-                      "the crack runs earns against this brush",
-           "SEM": SEMR, "TXM": TXMR}, open(p, "w"), indent=1)
-print("\nwrote", p)
+    if txmr:
+        print("\nTXM by specimen group, mean over frames:")
+        for gname in ("B3", "B2", "Wrought", "AM/HC"):
+            sub = [x for x in txmr["per_frame"] if x.get("group") == gname]
+            if sub:
+                print(f"  {gname:<8} n={len(sub):<3} "
+                      f"P {np.mean([x['precision'] for x in sub]):.4f}"
+                      f"  R {np.mean([x['recall'] for x in sub]):.4f}"
+                      f"  F1 {np.mean([x['f1'] for x in sub]):.4f}"
+                      f"   3px-trace F1 {np.mean([x['ceiling_f1'] for x in sub]):.4f}")
+
+    out = os.path.join(REPO, "docs/figures/overlap_means_sem_txm.json")
+    json.dump({"mad_k": MADK, "min_px_each_verdict": MIN_PX,
+               "aggregation": "mean over frames, one vote per frame; pixels are NOT pooled",
+               "scoring": "refereed pixels only: 1 = crack, 2 or 3 = not-crack, 0 excluded",
+               "ceiling": "the frame's own paint skeletonised and redrawn 3 px wide, scored "
+                          "against that same paint: what a detector exactly right about where "
+                          "the crack runs earns against this brush",
+               "SEM": semr, "TXM": txmr}, open(out, "w"), indent=1)
+    print("\nwrote", out)
+
+
+if __name__ == "__main__":
+    main()

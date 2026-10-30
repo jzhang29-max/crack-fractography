@@ -10,7 +10,7 @@ aggregate relative excess of approximately {ag_best_err_pct}%.
 The selected setting also recorded a reported background specificity of {ag_best_spec}%.
 This value characterises rejection of non-crack background pixels. Together, the area ratio
 and specificity quantify two aspects of the output: the total marked area and the
-classification of the background population. Figure 3 places the pixel accuracy against
+classification of the background population. Figure {fig_areabars} places the pixel accuracy against
 every collection scored in this work, beside the accuracy an all-background prediction
 reaches on each, and Table 2 collects the principal numerical results.
 
@@ -26,7 +26,7 @@ reaches on each, and Table 2 collects the principal numerical results.
 | Pixel accuracy of an all-background prediction | {in_empty_acc}% |
 | Fields with lower absolute area error than the default | 23 of {in_n} |
 
-[FIGURE areabars | Pixel accuracy on every collection scored in this work, with the vertical bar giving the accuracy an all-background prediction reaches on the same collection. MetalDAM is included for reference and labels voids rather than cracks; the EBC coating was withdrawn from this study as a ceramic. An area-ratio panel stood beside this one in an earlier version and was withdrawn: its logarithmic axis had to reach 100 to hold the withdrawn EBC coating, which left the three reported collections unreadable against the unity line, and the area ratio is the subject of Figure 5, where it is drawn against the constant that moves it.]
+[FIGURE areabars | Pixel accuracy on every collection scored in this work, with the vertical bar giving the accuracy an all-background prediction reaches on the same collection. MetalDAM is included for reference and labels voids rather than cracks; the EBC coating was withdrawn from this study as a ceramic. An area-ratio panel stood beside this one in an earlier version and was withdrawn: its logarithmic axis had to reach 100 to hold the withdrawn EBC coating, which left the three reported collections unreadable against the unity line, and the area ratio is the subject of Figure {fig_sweep}, where it is drawn against the constant that moves it.]
 
 ### 3.2  Descriptive comparison of aggregate area estimates
 
@@ -34,7 +34,7 @@ The darkness detector had the reported area ratio closest to unity among the sev
 method summaries. Its ratio of {arm_area_det} corresponds to an absolute relative aggregate
 area discrepancy of approximately 1.3%. The darkness-or-Sato union had a ratio of
 {arm_union_area}. The closest classical arm on its own was {arm_area_2nd_name} at
-{arm_area_2nd}. Table 3 and Figure 4 retain the complete displayed comparison.
+{arm_area_2nd}. Table 3 and Figure {fig_arms} retain the complete displayed comparison.
 
 {arm_tbl}
 
@@ -150,3 +150,36 @@ against it is a bracket whose ends are the assumption that every unadjudicated p
 pixel is wrong and the assumption that every one is right. No value in this section is a
 measurement of such a collection; Section 4.4 measures those two collections and gives
 both ends of that bracket for each.
+
+Figure {fig_budget} puts the three overlap measures back into the pixel accounting they
+discard. The annotated crack is {in_prev}% of the whole-field collection, so {in_tn_pct}%
+of every image is background in both the prediction and the annotation and takes no part in
+precision, recall or F1 at all; the panel shows the marked area split into the part that
+agrees with the annotation and the part that does not, against the annotated area, in the
+units the measurement is actually reported in. Its counterpart for the transmission X-ray
+collection is Figure {fig_txmbudget}.
+
+[FIGURE budget | The pixel budget on the Inconel 718 collection, in the units the measurement is reported in rather than as an overlap score. (a) the detector's marked area divided into the part that agrees with the annotation and the part that does not, with the annotated area drawn as an outline, both as a percentage of all image pixels. (b) marked area divided by annotated area, with unity marked. Precision, recall, F1 and IoU discard the pixels that are background in both, which at this collection's annotated crack fraction is most of the image; the over-marking ratio in (b) is the error a user of an area fraction feels. Figure {fig_txmbudget} is the same accounting for the transmission X-ray collection.]
+
+### 3.7  What the two errors look like
+
+The two failures that precision and recall measure do not look alike, and which one
+dominates decides what a user of the measurement can do about it. An over-count is a
+marked object the operator rejected, and it is visible to a person as soon as the mask is
+drawn; an under-count is annotated crack the detector never proposed, and the user is never
+shown it. Figure {fig_counting} gives the worst window of each kind in each of this
+laboratory's two collections, drawn on the frames whose annotation is a trace rather than a
+filled region.
+
+**They are the worst cases and not typical ones, deliberately, and the figure says so.** A
+first version of this figure drew the median-F1 frame of each collection, and its
+over-counting panels held 0.5% and 0.03% over-counted pixels: on a typical frame there is
+essentially nothing to look at, which is this collection's precision restated as a picture
+rather than a number. Each failure is also concentrated — the frame each panel comes from
+holds between {cnt_share_lo}% and {cnt_share_hi}% of all the pixels of its own error kind
+among the {cnt_sem_elig} eligible SEM frames and the {cnt_txm_elig} eligible TXM ones, and
+the TXM over-counting panel's frame alone holds {cnt_txm_over_share}% of that collection's.
+So the pictures say what the two failures look like and the measurements in Sections 3.6
+and 4.4 say how much of each there is; neither reading substitutes for the other.
+
+[FIGURE counting | The two errors, in both of this laboratory's collections. Columns: the window holding the most over-counted pixels, and the window holding the most under-counted ones. Rows: the SEM collection at 51.883 nm/px and the TXM collection at 29.24 nm/px, each over a 30 micrometre field. Blue is marked area the operator agrees with, red is marked area the operator ruled not crack, green is the operator's crack that was not marked, and marked pixels nobody adjudicated are left grey and counted separately under each panel — colouring them either way is the error that turns a precision of 0.99 into 0.29. Each panel comes from the frame holding the most pixels of its own error kind, ranked from the per-frame precision and recall of Section 4.4, and from the window within it holding the most, found exactly by a box sum rather than chosen by eye and capped at 25% of the window so that the panel shows the boundary of the error and not a block of flat colour. Only frames whose annotation is a trace rather than a filled region are eligible: on the rest the annotation asserts "there is crack in this region" over strokes hundreds of pixels wide, and any window inside one is solid under-count whatever the detector does.]

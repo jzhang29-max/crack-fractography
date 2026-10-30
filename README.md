@@ -37,7 +37,7 @@ rather than from typed numbers — an unresolved name fails the build instead of
 
 | | |
 |---|---|
-| `paper/manuscript/Revised_Manuscript_v2.pdf` | **the submission draft.** 17 pages, 8 figures, 22 references |
+| `paper/manuscript/Revised_Manuscript_v2.pdf` | **the submission draft.** 17 figures, 22 references |
 | `paper/draft.pdf` | the longer working draft the manuscript is cut from, carrying the negative results in full |
 | `docs/INDEX.md` | **start here for anything else.** Every document and every measurement file, with the script that produced it |
 
@@ -50,10 +50,20 @@ Point `$PY` at an interpreter that has matplotlib, numpy, scipy and scikit-image
 
     $PY paper/manuscript/build.py          # -> paper/manuscript/Revised_Manuscript_v2.pdf
     $PY paper/make_paper.py                # -> paper/draft.pdf
+    $PY paper/figures/both_modalities.py   # cache the two staged fields the next four read
+    $PY paper/figures/mk_workflow.py       # F1, manuscript Figure 1
+    $PY paper/figures/mk_modality.py       # F2, Figure 2 (needs modality_contrast.json)
+    $PY paper/figures/mk_stages.py         # F3, Figure 3 -- replaces plates P6 and T6
+    $PY paper/figures/mk_measurands.py     # F4, Figure 4
+    $PY paper/figures/mk_counting.py       # F5, Figure 11
     $PY paper/figures/mk_paper_plates.py   # plates P1-P5
-    $PY paper/figures/mk_pipeline_visual.py   # plate P6, manuscript Figure 1
-    $PY paper/figures/mk_workflow.py       # plate P7, manuscript Figure 2
-    $PY paper/figures/mk_crack_overlap.py  # plate P8, manuscript Figure 7
+    $PY paper/figures/mk_crack_overlap.py  # plate P8, manuscript Figure 9
+    $PY paper/figures/mk_pipeline_visual.py   # plate P6 -- for paper/draft.pdf only
+    $PY paper/figures/mk_txm_pipeline.py   # plate T6 -- for paper/draft.pdf only
+
+`mk_modality.py` reads a measurement file and refuses to draw its last panel without one:
+
+    $PY analysis/research/improve/modality_contrast.py   # -> docs/figures/modality_contrast.json
 
 Every plate is drawn at the width it prints at, and the generator refuses to write one
 whose smallest type would print below 8 pt -- both target publishers ask for 8-12 pt at

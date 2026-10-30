@@ -17,7 +17,7 @@ area fractions and overlap scores do not, being dimensionless.
 
 [FIGURE txmstages | The TXM collection's own detector, stage by stage, on one window of a typical frame. (a) the operator's painted crack, the reference for this window, in green. (b)-(d) the model, in blue: (b) seventeen hand-built channels — intensity, smoothing at sigma 2 to 64, gradient magnitude and Laplacian at sigma 1 to 8, and texture at sigma 2 and 8 — scaled and passed to a two-layer network, which runs with no encoder and is the fallback when the encoder is unreachable; (c) the same seventeen channels concatenated with 256 frozen SAM ViT-H encoder channels, 273 inputs, applied in 1024 px tiles at stride 896 and Hann-blended, the encoder never fine-tuned and its prompt encoder and mask decoder never called; (d) the mean of (b) and (c) at threshold 0.60 followed by speck pruning, which is what the application emits. The window is 1100 px of a frame whose full-resolution agreement with the operator is the corpus median, so it is typical rather than flattering. The display is contrast-stretched per crop; the model ran on the unstretched image. Scale bars 5 micrometres at {tm_nm} nm/px (Section 4).]
 
-The three rungs differ in what they mark, not by a little. On the window of Figure 8 the
+The three rungs differ in what they mark, not by a little. On the window of Figure {fig_txmstages} the
 operator painted {tm_ws_paint}% of the field. The seventeen-channel member alone reaches an
 IoU of {tm_ws_f17} against that paint while marking {tm_ws_f17pct}% of the window — it finds
 the crack's trace and floods the matrix with it. Adding the frozen encoder raises the IoU to
@@ -50,7 +50,7 @@ the prevalence of crack in the scored sample is nothing like its prevalence in a
 the folds are **grouped by image, not by specimen**, while the labelled frames span four
 specimen groups, so no whole specimen is ever held out. The whole-frame row is the one a
 reader should compare with Section 3. Its interquartile range is {tm_wf_q1} to {tm_wf_q3},
-and on the frame shown in Figure 8 the recall is {tm_wf_rec} while only {tm_wf_fp}% of the
+and on the frame shown in Figure {fig_txmstages} the recall is {tm_wf_rec} while only {tm_wf_fp}% of the
 pixels the operator painted as not-crack are marked.
 
 ### 4.2  What the overlap score is measuring
@@ -60,7 +60,7 @@ pixels the operator painted as not-crack are marked.
 The reference in this collection is a wide brush. The operator's stroke has a median width of
 {tm_ld_width} px and ranges from {tm_ld_wmin} to {tm_ld_wmax} px, over a crack whose dark core
 is a few pixels across. An IoU scored against that stroke therefore pays for covering the
-stroke, and the two series in Figure 9 show what that is worth: the annotation's own
+stroke, and the two series in Figure {fig_txmceiling} show what that is worth: the annotation's own
 centreline redrawn at three pixels scores {tm_ld_ceil}, while the deployed model scores
 {tm_ld_iou} — a ratio of medians of {tm_ld_ratio}. A trace that is exactly right about the
 location of every crack outscores the model on **{tm_ld_wins} of the {tm_ld_n} frames**.
@@ -76,7 +76,7 @@ collection, a higher overlap score is evidence that a mask resembles the annotat
 is not, by itself, evidence that it has found more crack.
 
 This is why Section 3 reports an area fraction with its measurement error as the endpoint and
-treats the overlap measures as secondary, and it is why the ceiling in Figure 6 is reported
+treats the overlap measures as secondary, and it is why the ceiling in Figure {fig_ceiling} is reported
 beside them rather than after them.
 
 ### 4.3  The SEM detector carried across
@@ -140,21 +140,30 @@ different failures and a single accuracy cannot tell them apart. Panel (b) is th
 {tx_vs_otsu} points better than an Otsu darkness cut with no model and {tx_vs_all} points
 better than marking every pixel, and still below an empty mask.
 
-[FIGURE txmpipe | The same processing stages as Figure 1, run on a TXM frame instead of an SEM one, so the two pipelines can be compared panel for panel. (a) the whole frame with the detail boxed. (b) the detail. (c) the same detail after background flattening, which is the array the darkness criterion is applied to. (d) every pixel the criterion proposes, in blue. (e) after the morphological opening. (f) after the minimum connected-region area, which is the mask scored in this section. (g) the operator's annotated crack on the same detail, in green, with the reviewed area at full brightness and everything unreviewed dimmed. Panels (b)-(g) are contrast-stretched per crop for display; the detector ran on the unstretched frame and every mask shown is that run. Of the 23 frames with enough reviewed area of each verdict and an annotation that is a trace rather than a filled region, this one's accuracy margin is closest to the median of that set, so it is typical rather than flattering. Scale bars at {tm_nm} nm/px (Section 4).]
+**The transfer fails at the first stage, not the last, and Figure {fig_modality}(e) says so
+in the criterion's own units.** The proposal stage keeps a pixel when it is darker than its
+frame's median by more than k scaled median absolute deviations, at any radius of the scale
+ladder. Measuring the operator's painted crack on that axis — which is the quantity
+Figure {fig_modality}(e) plots, with the reconstruction of the real proposal mask from it
+checked against the installed detector to within {mc_recon} pixel on every frame — the
+median painted-crack pixel sits at {mc_txm_k} on the TXM frames against an operating point
+of {om_k}, and below it on {mc_txm_below} of the {mc_txm_n} frames. The median frame has
+{mc_txm_prop}% of its painted crack proposed at all. The same measurement on the SEM side
+gives {mc_sem_k} and {mc_sem_prop}%, below the operating point on {mc_sem_below} of
+{mc_sem_n} frames, so this is not a TXM-specific pathology but a margin that is thinner in
+TXM.
 
-**The transfer fails at the first stage, not the last.** On the typical frame the three mask
-panels are almost the same picture: the darkness criterion proposes very little (d), and
-the opening and the area filter remove almost none of what it proposed (e, f). The
-annotated crack in (g) is largely not among the proposals at all. That is the same place
-the recall is lost on the SEM side — Section 6.1 reports approximately 42% of annotated
-crack area there as lying outside the proposal support — and it is a different failure from
-the one the pooled accuracy suggests — the configuration is not marking the wrong things so
-much as not proposing the right ones. Panel (c) shows why: after background flattening the
-annotated crack on this frame is not a dark feature. The flattening radii and the darkness
-multiplier were both fitted where the crack is a dark line a few pixels across; a TXM
-mosaic of a thick specimen records the crack as a broad low-density band, and a criterion
-written for the first does not fire on the second at any setting of its one constant, which
-is what Figure 11(b) shows from the other direction.
+That is a different failure from the one the pooled accuracy suggests: the configuration is
+not marking the wrong things so much as not proposing the right ones, and the third column
+of Figure {fig_stages} shows that the opening and the area floor then remove almost nothing
+of what little was proposed. It also separates cleanly by specimen group, which the pooled
+figure cannot: the median painted-crack pixel sits at {mc_b3_k} on B3 and {mc_wrought_k} on
+Wrought, where {mc_b3_prop}% and {mc_wrought_prop}% of the painted crack is proposed, and at
+{mc_b2_k} and {mc_amhc_k} on B2 and AM/HC, where only {mc_b2_prop}% and {mc_amhc_prop}% is.
+The flattening radii and the darkness multiplier were both set where a crack is a dark line
+a few pixels across; a TXM mosaic of a thick specimen records it as a broad low-density
+band, and a criterion written for the first does not fire on the second at any setting of
+its one constant, which is what Figure {fig_txmcurve}(b) shows from the other direction.
 
 **Every number above weights a frame by its area, and that is doing most of the work.**
 A pooled accuracy counts each refereed pixel once, so a frame with a large painted region
@@ -201,7 +210,7 @@ crack mouth as an area rather than tracing a line, so what the detector is score
 there is a large dark region, which a darkness rule finds easily. **The group where the
 carried-over detector clears an all-background prediction is also the group holding the
 most region-like annotation in the collection**, and the two facts should not be
-separated. Figure 10 shows a B3 frame whose annotation is a trace, for that reason.
+separated. Figure {fig_txm} shows a B3 frame whose annotation is a trace, for that reason.
 
 **This is reported as a transfer result and not as a capability.** Four specimen groups give
 four answers, each group is a small number of frames, and the groups are different materials

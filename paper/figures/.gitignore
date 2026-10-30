@@ -3,6 +3,12 @@
 *.npy
 *_thumb.png
 
+# both_modalities.py's staged-array cache: one .npz per modality, keyed by the detector
+# settings that produced it, so a settings change rebuilds it rather than being answered
+# by a stale file. 60 MB, derived, and the two field names are in the module, not here.
+both_sem_*.npz
+both_txm_*.npz
+
 # Stage 2 output; the figures as published live with the paper, not here.
 out/
 
