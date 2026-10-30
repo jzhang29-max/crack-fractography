@@ -143,7 +143,7 @@ def main():
     CW = 2.78                       # one arm's column
     GAP = W - 2 * M - 2 * CW        # the centre gap the arrows cross
     FRAME_H = 1.42                  # whole-frame row, by height so both rows align
-    HDR = 0.40
+    HDR = 0.60
     CAP = 0.30
     ARR = 0.30
     BOX = 1.02
@@ -179,21 +179,37 @@ def main():
         hx.set_axis_off()
         hx.text(0.5, 0.95, title, fontsize=J.BODY, fontweight="bold", ha="center",
                 va="top", color=J.INK, transform=hx.transAxes)
-        hx.text(0.5, 0.40, mech, fontsize=J.TICK, ha="center", va="top",
+        hx.text(0.5, 0.58, mech, fontsize=J.TICK, ha="center", va="top",
                 color=J.G_DARK, transform=hx.transAxes)
 
         # --- the whole frame, sized by HEIGHT so the two arms' rows line up even though
         # the two frames have different aspect ratios. Cropping them to a common aspect
         # would have made neither panel the whole frame, which is what it is for.
+        # ONE PANEL, SPLIT, NOT TWO PANELS AT OPPOSITE CORNERS. The frame as acquired and
+        # the frame with its finished mask are the same picture twice over, and the
+        # review's note was that panels which look alike have to be adjacent to be read
+        # at all. Drawn as one frame divided down the middle -- left as acquired, right
+        # with the mask -- so the comparison is made by the eye and not by memory, and
+        # the whole-frame result keeps the panel it used to need for itself.
         step = max(1, img.shape[1] // 1400)
         thumb = stretched(img[::step, ::step])
+        rgb = np.dstack([thumb] * 3)
+        half = thumb.shape[1] // 2
+        sub = final[::step, ::step][:, half:]
+        rgb[:, half:][sub] = np.array(J.rgb(J.MASK))
         fw = FRAME_H * thumb.shape[1] / thumb.shape[0]
         fx = cx0 + (CW - fw) / 2
         ax = ax_at(fx, M + HDR, fw, FRAME_H)
-        ax.imshow(thumb, cmap="gray", vmin=0, vmax=1, interpolation="nearest",
-                  aspect="equal")
+        ax.imshow(rgb, interpolation="nearest", aspect="equal")
+        ax.plot([half, half], [0, thumb.shape[0] - 1], color="white", lw=0.9, zorder=20)
+        ax.plot([half, half], [0, thumb.shape[0] - 1], color=J.INK, lw=0.4,
+                linestyle=(0, (2, 2)), zorder=21)
+        for frac, txt in ((0.25, "as acquired"), (0.75, "detected")):
+            ax.text(frac * thumb.shape[1], -0.045 * thumb.shape[0], txt,
+                    fontsize=J.TICK, ha="center", va="bottom", color=J.INK)
+        # the detail box, always drawn on whichever half actually contains it
         ax.add_patch(Rectangle((x0 / step, y0 / step), H / step, H / step, fill=False,
-                               edgecolor=J.ROI, linewidth=1.0))
+                               edgecolor=J.ROI, linewidth=1.0, zorder=22))
         J.micrograph(ax)
         J.panel_label(ax, next(letters), inside=True)
         scalebar(ax, nm * step, thumb.shape[1], fontsize=J.TICK)
