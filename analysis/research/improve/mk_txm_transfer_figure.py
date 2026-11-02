@@ -152,11 +152,17 @@ for g in ("B3", "AM/HC"):
               f"{r[6]:6.1f} px  deep {100 * r[7]:5.1f}%  {tag}  {r[2][:52]}")
 
 fig = plt.figure(figsize=(J.PAGEW, 6.9))
-# panels on top (2 rows x 3), bars underneath (1 row x 2). Side by side they needed
+# Panels on top (2 rows x 3), bars underneath (1 row x 2). Side by side they needed
 # 12.4 in and the page gives 6.37.
-# nested spacing: the micrograph rows abut, the bar row keeps a normal gap
-gs = fig.add_gridspec(3, 3, height_ratios=[1, 1, 1.25], hspace=0.055,
-                      wspace=0.015)
+#
+# NESTED, because one hspace cannot do two jobs. The comment here used to claim that
+# "the micrograph rows abut, the bar row keeps a normal gap" from a single 3-row
+# gridspec with hspace=0.055, which gives all three rows the SAME gap: the bar panels'
+# (g) and (h) labels sat against the bottom edge of the micrographs above them. An
+# outer two-row grid separates the two blocks, and each block sets its own spacing.
+outer = fig.add_gridspec(2, 1, height_ratios=[2.0, 1.25], hspace=0.17)
+gs = outer[0].subgridspec(2, 3, hspace=0.02, wspace=0.015)
+gsb = outer[1].subgridspec(1, 3, wspace=0.055)
 
 for r, g in enumerate(("B3", "AM/HC")):
     if g not in pick:
@@ -226,7 +232,7 @@ emp = [BG["by_group"][g]["arms"][key]["empty_mask_accuracy_pct"] for g in groups
 area = [BG["by_group"][g]["arms"][key]["area_agreement"] for g in groups]
 pool = BG["pooled"][key]
 
-axA = fig.add_subplot(gs[2, 0:2])
+axA = fig.add_subplot(gsb[0, 0:2])
 y = np.arange(len(groups))[::-1]
 cols = [J.ACCENT if g == "B3" else J.G_LIGHT for g in groups]
 # the SIGNED difference from an all-background mask, zero-based: the accuracies
@@ -241,7 +247,7 @@ axA.set_yticks(list(y) + [-1], groups + ["pooled"])
 axA.set_xlabel("Pixel accuracy relative to an\nall-background mask (points)")
 J.panel_label(axA, "g")
 
-axB = fig.add_subplot(gs[2, 2])
+axB = fig.add_subplot(gsb[0, 2])
 axB.barh(y, area, 0.6, color=cols, edgecolor=J.INK, linewidth=0.5, zorder=2)
 axB.barh([-1], [pool["area_agreement"]], 0.6, color=J.G_MID, edgecolor=J.INK,
          linewidth=0.5, zorder=2)

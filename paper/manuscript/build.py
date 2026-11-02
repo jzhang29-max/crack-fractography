@@ -109,6 +109,19 @@ MP.VALUES.update({
     # the share of the frame that is background in BOTH the prediction and the
     # annotation: the pixels every overlap measure discards, which Section 3.6 now names
     "in_tn_pct": MP._n(MP.PA_W["tn_pct"], 1),
+    # THE SCORES PLATE AND TABLE 2 USE DIFFERENT AGGREGATIONS, and that is why both are
+    # named. The plate reads pixel_accounting.json, whose own `metric` field says "mean
+    # per image, mad_k leave-one-image-out": the whole fields come out 0.77 points below
+    # an all-background prediction. Table 2's accuracy is the sweep row at the fixed
+    # selected k, pooled over pixels, where the same deficit is 0.41 points. The
+    # all-background value is identical in both, so the gap is entirely the aggregation.
+    # A sentence beside the plate that quoted Table 2's number would describe bars the
+    # plate does not draw.
+    "wf_margin_img": MP._n(abs(100 * MP.PA_W["accuracy"]
+                               - (100 - MP.PA_W["labelled_pct"])), 2),
+    "crop_margin_img": MP._n(abs(100 * MP.PA_C["accuracy"]
+                                 - (100 - MP.PA_C["labelled_pct"])), 2),
+    "wf_margin_pool": MP._n(abs(MP._WFK(6.0)["accuracy_margin_pp"]), 2),
     "tx_n": str(TX["n_frames"]),
     "tx_cov": MP._n(100 * TX["refereed_coverage_frac"], 1),
     "tx_crack_px": f"{TX['refereed_crack_px']:,}",

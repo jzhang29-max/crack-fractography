@@ -10,9 +10,7 @@ aggregate relative excess of approximately {ag_best_err_pct}%.
 The selected setting also recorded a reported background specificity of {ag_best_spec}%.
 This value characterises rejection of non-crack background pixels. Together, the area ratio
 and specificity quantify two aspects of the output: the total marked area and the
-classification of the background population. Figure {fig_areabars} places the pixel accuracy against
-every collection scored in this work, beside the accuracy an all-background prediction
-reaches on each, and Table 2 collects the principal numerical results.
+classification of the background population. Figure {fig_areabars}(a) places the pixel accuracy of every collection scored in this work beside the accuracy an all-background prediction reaches on the same pixels. The two are indistinguishable at this prevalence, which is the point, and it is why panel (b) plots the difference between them instead. Averaged over images, the detector sits {wf_margin_img} points BELOW an all-background prediction on the whole fields and {crop_margin_img} points above it on the released crops. Pooled over pixels at the selected setting, which is what Table 2 reports, the whole-field deficit is {wf_margin_pool} points; the all-background value is the same under both aggregations, so the difference between those two figures is the aggregation and nothing else. Table 2 collects the principal numerical results.
 
 | Endpoint | Reported or derived value |
 |---|---|
@@ -22,11 +20,12 @@ reaches on each, and Table 2 collects the principal numerical results.
 | Net aggregate area difference | +0.024 percentage points |
 | Absolute relative aggregate area discrepancy | Approximately {ag_best_err_pct}% |
 | Background specificity | {ag_best_spec}% |
-| Pixel accuracy | {wf6_acc}% |
+| Pixel accuracy, pooled over pixels at the selected setting | {wf6_acc}% |
 | Pixel accuracy of an all-background prediction | {in_empty_acc}% |
+| Pixel accuracy, mean over images at the leave-one-image-out setting | {in_acc}% |
 | Fields with lower absolute area error than the default | 23 of {in_n} |
 
-[FIGURE areabars | Pixel accuracy on every collection scored in this work, with the vertical bar giving the accuracy an all-background prediction reaches on the same collection. MetalDAM is included for reference and labels voids rather than cracks; the EBC coating was withdrawn from this study as a ceramic. An area-ratio panel stood beside this one in an earlier version and was withdrawn: its logarithmic axis had to reach 100 to hold the withdrawn EBC coating, which left the three reported collections unreadable against the unity line, and the area ratio is the subject of Figure {fig_sweep}, where it is drawn against the constant that moves it.]
+[FIGURE areabars | (a) pixel accuracy on every collection scored in this work, with the vertical bar giving the accuracy an all-background prediction reaches on the same collection. (b) the difference between the two, in points, from its own zero. Panel (a) keeps a full 0 to 100 range, because a cropped value axis under bars misrepresents; panel (b) is a different quantity, and it is the only axis on which these collections are distinguishable at all. The withdrawn EBC coating appears in (a) and not in (b): it is 20 points below an all-background prediction and on a shared difference axis it reduces the three reported collections to slivers, which is the same failure that withdrew an area-ratio panel from this plate in an earlier version -- that panel's logarithmic axis had to reach 100 to hold the same collection. MetalDAM is included for reference and labels voids rather than cracks. The area ratio is the subject of Figure {fig_sweep}, where it is drawn against the constant that moves it.]
 
 ### 3.2  Descriptive comparison of aggregate area estimates
 

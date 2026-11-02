@@ -80,28 +80,38 @@ MF = load(os.path.join(REPO, "docs/figures/metric_figures.json"), "corpus metric
 
 # ---------------------------------------------------------------- plate: public scores
 def plate_scores():
-    """Pixel accuracy against the accuracy an all-background mask reaches.
+    """Pixel accuracy against the accuracy an all-background mask reaches, and the gap.
 
-    ONE PANEL, NOT TWO. This plate carried a reported/annotated crack-area panel beside
-    the accuracy one. It was withdrawn: its axis had to run to 100 to hold the withdrawn
-    EBC coating at 80x, which left the three collections the paper actually reports
-    stacked on the unity line and unreadable, and the area ratio it was trying to show is
-    the whole subject of Figure 4 (the operating curve), where it is drawn against the
-    constant that moves it. A panel that is unreadable for three of its four rows and
-    redundant for the fourth is not worth a reader's eye.
+    TWO PANELS, AND THE SECOND IS THE POINT. With accuracy alone the plate is four bars
+    that all reach 95 to 99 and a reference marker sitting on top of each of them: at
+    this prevalence the detector and a prediction that marks nothing are indistinguishable
+    to the eye, which IS the paper's argument and is exactly why the argument could not be
+    read off the figure. Panel (b) plots the difference the text discusses -- accuracy
+    minus the accuracy an all-background mask reaches on the same pixels -- zero-based, so
+    the quantity that separates the collections is drawn at the size it actually is.
+
+    A DIFFERENCE AXIS IS NOT A TRUNCATED ONE. Panel (a) keeps its full 0-100 range,
+    because a cropped value axis under bars is the one thing in this set a reviewer will
+    call a misrepresentation. Panel (b) is a different quantity, drawn from its own zero,
+    and it is the same encoding the TXM transfer plate and the baseline plate already use.
+
+    A reported/annotated crack-area panel stood here in an earlier version and was
+    withdrawn: its axis had to run to 100 to hold the withdrawn EBC coating at 80x, which
+    left the three reported collections stacked on the unity line, and the area ratio is
+    the subject of the operating-curve figure, where it is drawn against the constant that
+    moves it.
 
     No title and no prose inside the axes: IOP forbids a figure title outright and
-    Elsevier's caption rule says the title is "not displayed on the figure itself". The
-    bars start at zero, because a truncated value axis under bars is the one thing in this
-    set a reviewer will call a misrepresentation -- which is why the all-background
-    reference is a marker on a full-range axis rather than a tick on a 20-point crop.
+    Elsevier's caption rule says the title is "not displayed on the figure itself".
     Colour carries identity only.
     """
     order = [("Inconel 718\nwhole fields", "Inconel 718, whole fields"),
              ("Inconel 718\nreleased crops", "Inconel 718, released crops"),
              ("MetalDAM\nvoids", "MetalDAM voids (not cracks)"),
              ("EBC coating\nwithdrawn", "EBC coating, whole fields")]
-    fig, ax2 = plt.subplots(figsize=(J.W15, 2.3), layout="constrained")
+    fig, (ax2, ax3) = plt.subplots(
+        1, 2, figsize=(J.W15, 2.5), layout="constrained",
+        gridspec_kw={"width_ratios": [1.35, 1.0]})
     y = list(range(len(order)))[::-1]
     lab = [o[0] for o in order]
 
@@ -118,10 +128,42 @@ def plate_scores():
     ax2.legend(loc="lower center", bbox_to_anchor=(0.5, 1.01), ncol=2,
                fontsize=J.TICK, handlelength=1.4, columnspacing=1.4,
                borderpad=0.0, handletextpad=0.5)
+    J.panel_label(ax2, "a")
+
+    # THE WITHDRAWN COLLECTION IS IN (a) AND NOT IN (b), and that is the same lesson the
+    # withdrawn area-ratio panel taught: the EBC coating sits 20 points below an
+    # all-background mask, and on a shared axis it squashes the three collections the
+    # paper actually reports into slivers a millimetre wide. A 0-100 accuracy axis
+    # absorbs it; a difference axis cannot. The caption says it is left out and why.
+    gap = [a_ - e_ for a_, e_ in zip(acc, emp)]
+    keep = [i for i, (l, _) in enumerate(order) if "EBC" not in l]
+    ax3.barh([y[i] for i in keep], [gap[i] for i in keep], 0.55,
+             color=[J.ACCENT if gap[i] > 0 else J.G_LIGHT for i in keep],
+             edgecolor=J.INK, linewidth=0.5, zorder=2)
+    ax3.axvline(0.0, color=J.INK, lw=0.9, zorder=3)
+    ax3.set_ylim(min(y) - 0.6, max(y) + 0.6)
+    ax3.set_yticks(y, ["" for _ in lab])
+    ax3.set_xlabel("Accuracy minus the\nall-background mask (points)")
+    J.panel_label(ax3, "b")
 
     J.save(fig, os.path.join(OUT, "P1 - public scores.png"))
-    json.dump({"what": "pixel accuracy against the accuracy an all-background mask "
-                       "reaches, for every collection scored",
+    json.dump({"what": "(a) pixel accuracy against the accuracy an all-background mask "
+                       "reaches, for every collection scored; (b) the difference between "
+                       "them, which is the quantity the text discusses and the only one "
+                       "at which the collections are distinguishable",
+               "why_two_panels": "with (a) alone the plate is four bars that all reach 95 "
+                                 "to 99 with the reference marker on top of each; that "
+                                 "indistinguishability is the paper's argument and could "
+                                 "not be read off the figure",
+               "axis_note": "(a) keeps a full 0-100 range because a cropped value axis "
+                            "under bars misrepresents; (b) is a DIFFERENCE, drawn from "
+                            "its own zero, the same encoding the baseline and TXM "
+                            "transfer plates use",
+               "ebc_left_out_of_b": "the withdrawn EBC coating is 20 points below an "
+                                    "all-background mask and on a shared difference axis "
+                                    "it reduces the three reported collections to "
+                                    "slivers; it is shown in (a), where a 0-100 axis "
+                                    "absorbs it",
                "withdrawn_panel": "a reported/annotated crack-area panel stood beside "
                                   "this one. Its log axis had to reach 100 to hold the "
                                   "withdrawn EBC coating at 80x, which left the three "
@@ -131,7 +173,9 @@ def plate_scores():
                                   "constant that moves it.",
                "values": {k: {"accuracy_pct": 100 * PAX[k]["detector"]["accuracy"],
                               "all_background_accuracy_pct":
-                                  100 - PAX[k]["detector"]["labelled_pct"]}
+                                  100 - PAX[k]["detector"]["labelled_pct"],
+                              "gap_points": (100 * PAX[k]["detector"]["accuracy"]
+                                             - (100 - PAX[k]["detector"]["labelled_pct"]))}
                           for _, k in order},
                "source": "pixel_accounting.json"},
               open(os.path.join(OUT, "P1 - public scores.caption.json"), "w"), indent=1)
