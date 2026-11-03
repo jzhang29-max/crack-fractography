@@ -167,15 +167,16 @@ pixel is wrong and the assumption that every one is right. No value in this sect
 measurement of such a collection; Section 4.4 measures those two collections and gives
 both ends of that bracket for each.
 
-Figure {fig_budget} puts the three overlap measures back into the pixel accounting they
+Figure {fig_budgets} puts the three overlap measures back into the pixel accounting they
 discard. The annotated crack is {in_prev}% of the whole-field collection, so {in_tn_pct}%
 of every image is background in both the prediction and the annotation and takes no part in
-precision, recall or F1 at all; the panel shows the marked area split into the part that
+precision, recall or F1 at all; panel (a) shows the marked area split into the part that
 agrees with the annotation and the part that does not, against the annotated area, in the
-units the measurement is actually reported in. Its counterpart for the transmission X-ray
-collection is Figure {fig_txmbudget}.
+units the measurement is actually reported in. Panel (b) is the same accounting for the
+transmission X-ray collection, in that collection's own denominator, and Section 4.3
+reads it; panel (c) is the one quantity the two arms can be compared on.
 
-[FIGURE budget | The pixel budget on the Inconel 718 collection, in the units the measurement is reported in rather than as an overlap score. (a) the detector's marked area divided into the part that agrees with the annotation and the part that does not, with the annotated area drawn as an outline, both as a percentage of all image pixels. (b) marked area divided by annotated area, with unity marked. Precision, recall, F1 and IoU discard the pixels that are background in both, which at this collection's annotated crack fraction is most of the image; the over-marking ratio in (b) is the error a user of an area fraction feels. Figure {fig_txmbudget} is the same accounting for the transmission X-ray collection.]
+[FIGURE budgets | The pixel budget in both arms, in the units the measurement is reported in rather than as an overlap score. (a) the detector's marked area on the two public collections, divided into the part that agrees with the annotation and the part that does not, with the annotated area drawn as an outline, all as a percentage of ALL image pixels. (b) the same accounting on the two specimen series of the transmission collection, as a percentage of the REVIEWED area, which is the area an operator ruled on and is about a fifth of the frame. The two panels are percentages of different things and are kept apart for that reason; no bar in (a) may be compared with a bar in (b). (c) marked area divided by annotated area for all four, which is dimensionless, has unity for its reference in both arms, and is the one quantity they share; it is drawn in a single neutral colour because blue and orange already carry a meaning in (a) and (b). Precision, recall, F1 and IoU discard the pixels that are background in both, which at these annotated crack fractions is most of the image, and the over-marking ratio in (c) is the error a user of an area fraction feels. The withdrawn EBC coating is omitted: at 20.29% marked against 0.27% annotated it would set the axis of (a) by itself.]
 
 ### 3.7  What the two errors look like
 

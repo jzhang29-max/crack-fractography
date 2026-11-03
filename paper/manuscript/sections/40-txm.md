@@ -141,7 +141,6 @@ the constant does buy something, and only in the area units — the reported are
 the accuracy stays {tx_b2_bestareamargin} points below marking nothing. The right quantity
 of foreground in the wrong places is what that combination means.
 
-[FIGURE txmbudget | (a) where the detector's marked area goes on each specimen group, at k = 6: the part that falls on annotated crack and the part that falls on reviewed not-crack, both as a percentage of the reviewed area, with the annotated crack area drawn as a dashed outline for comparison. (b) the same detector pooled over all {tx_n} frames beside the two no-information arms it has to beat, as pixel accuracy minus the accuracy an all-background prediction reaches. Reviewed pixels only, so the denominator is the area a human ruled on and not the frame.]
 
 Panel (a) separates two different failures that the pooled accuracy adds together. On B3
 the detector finds most of the annotated crack, at a recall of {tx_b3_recall}, and marks

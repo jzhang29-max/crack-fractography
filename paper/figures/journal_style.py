@@ -63,6 +63,7 @@ COLUMN_CLASS = {
     "F5 - over- and under-counting": ("double", W2),
     "P1 - public scores": ("1.5-column", W15),
     "P2 - the two sensitivities": ("double", W2),
+    "P5 - the pixel budget in both arms": ("double", W2),
     "P2 - operating curve": ("1.5-column", W15),
     "P3 - width sensitivity": ("1.5-column", W15),
     "P4 - baselines": ("1.5-column", W15),

@@ -83,7 +83,12 @@ FIGS = {
     # are the same kind of statement on the same collections with the same markers.
     "sensitivity": os.path.join(PAPER, "figures/out/P2 - the two sensitivities.png"),
     "arms": os.path.join(PAPER, "figures/out/P4 - baselines.png"),
-    "budget": os.path.join(PAPER, "figures/out/P5 - pixel budget.png"),
+    # ONE PLATE FOR BOTH ARMS. P5 and T4 drew the same accounting on two collections,
+    # two panels each. The denominators differ -- every pixel of the frame against only
+    # the pixels an operator adjudicated -- so they keep separate panels, and the
+    # dimensionless area ratio, which is the one quantity they share, is the third.
+    "budgets": os.path.join(
+        PAPER, "figures/out/P5 - the pixel budget in both arms.png"),
     # the overlap measures for the crack class, shown rather than only mentioned. It is
     # LAST in the results because the paper's primary endpoints are the ones computed
     # over every pixel of the frame, and this one is explicitly secondary to them.
@@ -98,7 +103,7 @@ FIGS = {
     # no-information arms, and the overlap measures on both of this laboratory's own
     # collections with the ceiling each is read against.
     "txmcurve": os.path.join(PAPER, "figures/out/T3 - TXM operating curve.png"),
-    "txmbudget": os.path.join(PAPER, "figures/out/T4 - TXM pixel budget.png"),
+
     "txmoverlap": os.path.join(PAPER, "figures/out/T5 - overlap with its ceiling.png"),
     # T6, the SEM detector's stages on a TXM frame, is RETIRED: `stages` now shows the
     # same three stages for both modalities side by side, and `counting` shows the

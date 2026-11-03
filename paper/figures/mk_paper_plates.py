@@ -28,6 +28,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _paths                  # noqa: E402
 import journal_style as J          # noqa: E402  -- the target journals' own rules
 
 J.use()
@@ -348,6 +349,118 @@ def plate_baselines():
         open(os.path.join(OUT, "P4 - baselines.caption.json"), "w"), indent=1)
 
 
+def plate_budget_both():
+    """The pixel budget in BOTH arms on one plate, with the area ratio shared.
+
+    WHAT THIS REPLACES. Two plates drew the same accounting twice: P5 for the public SEM
+    collections, T4 for the transmission collection, each a pair of panels. They answer
+    the same question -- where does the marked area go, and how far is the reported area
+    fraction from the annotated one -- so a reader who has parsed one has parsed the
+    other, and the review's note was that figures of that kind should be combined.
+
+    WHAT CANNOT BE SHARED, AND IS NOT. The two budgets are percentages of different
+    things. The SEM collections are scored over every pixel of the frame; the
+    transmission collection is scored over the pixels an operator adjudicated, which is
+    about a fifth of it. Those are different denominators and they are kept in separate
+    panels with separate axis labels, because putting them on one axis would invite a
+    comparison that is not available. The area ratio in (c) IS commensurable -- it is
+    dimensionless and its reference is one in both arms -- so that panel carries all four
+    collections and is the only place in the figure where they meet.
+    """
+    PA = load(os.path.join(REPO, "docs/figures/pixel_accounting.json"),
+              "pixel accounting")["sets"]
+    TXB = load(_paths.scoped("txm_background_units.json"), "the TXM budget")
+    K6 = "SEM detector, mad_k=6"
+    # EBC is out of the paper, so it is out of this plate: 20.29% marked against 0.27%
+    # labelled is 76.65x and would set the axis by itself.
+    sem = [k for k in ("Inconel 718, whole fields", "Inconel 718, released crops")
+           if PA.get(k)]
+    txm = [g for g in ("B3", "B2") if g in TXB["by_group"]]
+
+    fig = plt.figure(figsize=(J.PAGEW, 2.78), layout="constrained")
+    gs = fig.add_gridspec(1, 3, width_ratios=[1.30, 1.00, 1.15], wspace=0.06)
+    ax1, ax2, ax3 = (fig.add_subplot(g) for g in gs)
+
+    def budget(ax, rows, get, labels, xlabel):
+        for i, k in enumerate(rows):
+            r = get(k)
+            ax.barh(i + 0.16, r["labelled_pct"], 0.26, facecolor="none",
+                    edgecolor=J.INK, linewidth=0.9, zorder=2)
+            ax.barh(i - 0.16, r["tp_pct"], 0.26, color=J.ACCENT, edgecolor=J.INK,
+                    linewidth=0.5, zorder=2)
+            ax.barh(i - 0.16, r["fp_pct"], 0.26, left=r["tp_pct"], color=J.ACCENT2,
+                    edgecolor=J.INK, linewidth=0.5, zorder=2)
+        ax.set_yticks(range(len(rows)), labels)
+        ax.set_ylim(len(rows) - 0.5, -0.5)
+        ax.set_xlabel(xlabel)
+
+    def _sem(k):
+        r = PA[k]["detector"]
+        return {"labelled_pct": r["labelled_pct"], "tp_pct": r["tp_pct"],
+                "fp_pct": r["fp_pct"]}
+
+    def _txm(g):
+        r = TXB["by_group"][g]["arms"][K6]
+        return {"labelled_pct": r["tp_pct"] + r["fn_pct"], "tp_pct": r["tp_pct"],
+                "fp_pct": r["fp_pct"]}
+
+    budget(ax1, sem, _sem, ["Inconel 718\nwhole fields", "Inconel 718\nreleased crops"],
+           "Percent of all image pixels")
+    budget(ax2, txm, _txm, [f"TXM {g}" for g in txm], "Percent of reviewed area")
+    J.panel_label(ax1, "a")
+    J.panel_label(ax2, "b")
+    # OUTSIDE, UNDER ALL THREE PANELS. Inside (a) it covered a bar whichever corner it
+    # was put in: that panel has four bars in a 4.6-unit axis and no free corner.
+    fig.legend(handles=[Patch(facecolor="none", edgecolor=J.INK, label="annotated"),
+                        Patch(facecolor=J.ACCENT, edgecolor=J.INK, label="marked, agrees"),
+                        Patch(facecolor=J.ACCENT2, edgecolor=J.INK,
+                              label="marked, disagrees")],
+               loc="outside lower center", ncol=3, handletextpad=0.4, borderpad=0.2,
+               columnspacing=1.6)
+
+    # (c) the one quantity both arms share: dimensionless, reference one
+    names = ["Inconel 718, whole fields", "Inconel 718, released crops"] + \
+            [f"TXM {g}" for g in txm]
+    ratios = [PA[k]["detector"]["marked_pct"] / PA[k]["detector"]["labelled_pct"]
+              for k in sem] + \
+             [TXB["by_group"][g]["arms"][K6]["area_agreement"] for g in txm]
+    # ONE NEUTRAL COLOUR HERE, deliberately. Blue and orange already mean "agrees" and
+    # "disagrees" in (a) and (b); using them again for the arm would give the same two
+    # hues two meanings inside one figure. The rows are named instead.
+    ax3.barh(range(len(names)), ratios, 0.55, color=J.G_MID, edgecolor=J.INK,
+             linewidth=0.5, zorder=2)
+    ax3.axvline(1.0, color=J.INK, lw=0.9, zorder=3)
+    short = ["IN-718 fields", "IN-718 crops"] + [f"TXM {g}" for g in txm]
+    ax3.set_yticks(range(len(names)), short)
+    ax3.tick_params(axis="y", labelsize=J.TICK)
+    ax3.set_ylim(len(names) - 0.5, -0.5)
+    ax3.set_xlabel("Reported / annotated\ncrack area")
+    J.panel_label(ax3, "c")
+
+    J.save(fig, os.path.join(OUT, "P5 - the pixel budget in both arms.png"))
+    json.dump({
+        "what": "(a) the detector's marked area on the public SEM collections, split "
+                "into the part that agrees with the annotation and the part that does "
+                "not, with the annotated area as an outline, as a percentage of ALL "
+                "image pixels; (b) the same accounting on the transmission collection's "
+                "two specimen series, as a percentage of the REVIEWED area; (c) marked "
+                "area divided by annotated area for all four, which is dimensionless "
+                "and is the only quantity the two arms share",
+        "why one plate": "two plates drew the same accounting on two collections; the "
+                         "denominators differ and are kept apart, the dimensionless "
+                         "ratio is shared",
+        "denominators": {"a": "every pixel of the frame",
+                         "b": "only the pixels an operator adjudicated, which is "
+                              f"{100 * TXB['refereed_coverage_frac']:.1f}% of the frame"},
+        "ratios": dict(zip(names, [round(r, 4) for r in ratios])),
+        "omitted": "the EBC coating, 20.29% marked against 0.27% labelled, which would "
+                   "set the axis by itself",
+        "sources": ["docs/figures/pixel_accounting.json",
+                    os.path.basename(_paths.scoped("txm_background_units.json"))],
+    }, open(os.path.join(OUT, "P5 - the pixel budget in both arms.caption.json"), "w"),
+        indent=1)
+
+
 def plate_budget():
     """What the detector marks, as a share of the image, beside what the human marked.
 
@@ -549,4 +662,5 @@ if __name__ == "__main__":
     plate_sensitivity()
     plate_baselines()
     plate_budget()
+    plate_budget_both()
     print("\nplates in", OUT)
