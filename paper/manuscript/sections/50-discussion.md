@@ -48,7 +48,7 @@ accuracy at the selected setting, {wf6_acc}%, is below the {in_empty_acc}% of an
 all-background prediction, and Section 3.5 shows that the entire range available to pixel
 accuracy on this collection is {wc_f_head} percentage points, so no configuration could have
 been distinguished on that endpoint. And the same detector carried to a second imaging
-modality clears an all-background prediction on one specimen group of four when the
+modality clears an all-background prediction on one of its two specimen series when the
 comparison is pooled over pixels; giving each frame one vote instead, it is
 {tpf_mean_all} points from that prediction on average over the {tpf_n} frames, with
 {tpf_pos_all} of them individually above it, and one specimen group changes sign between

@@ -75,7 +75,7 @@ TRACES = _paths.scoped("paint_region_vs_trace.json")
 LEGIB = _paths.scoped("frame_legibility.json")
 
 #: An over-counting panel has to show over-counting, not one object. On the TXM frame
-#: with the most over-counted pixels, 99.6% of that area is a SINGLE connected component
+#: with the most over-counted pixels, 98.8% of that area is a SINGLE connected component
 #: -- one large low-attenuation region the operator rejected -- so the panel was a red
 #: rectangle whatever window was cut from it. A frame is eligible for the over-counting
 #: column only if its largest false-positive component is at most this share of its

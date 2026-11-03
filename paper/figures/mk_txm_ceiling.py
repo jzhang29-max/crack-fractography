@@ -1,7 +1,7 @@
 """Plate T2: what the TXM overlap score is actually measuring.
 
-The TXM labels are a wide brush -- median 53.9 px against a crack whose dark core is a few
-pixels. So an IoU scored against them rewards covering the STROKE, not finding the crack.
+The TXM labels are a wide brush -- a median of 80 px over the b2 and b3 frames, against a
+crack whose dark core is a few pixels. So an IoU scored against them rewards covering the STROKE, not finding the crack.
 This plate shows that directly: as the operator paints wider, the deployed model's IoU goes
 UP while the IoU a physically correct 3 px trace could reach goes DOWN. Both are measured in
 one pass, with one IoU convention, over the labelled domain only.
@@ -106,11 +106,16 @@ J.save(fig, os.path.join(OUT, NAME + ".png"), printed_width=J.COLUMN_CLASS.get(N
 CAPTION = dict(
     what=("The TXM overlap score rises with how wide the operator painted, while the score a "
           "physically correct crack trace could reach falls."),
-    why=("The TXM reference is a broad stroke, median 53.9 px, over a crack whose dark core is "
-         "a few pixels. An IoU scored against it therefore rewards covering the stroke. These "
+    why=(f"The TXM reference is a broad stroke, median {st.median(w):.1f} px, over a crack "
+         "whose dark core is a few pixels. An IoU scored against it therefore rewards "
+         "covering the stroke. These "
          "two series, measured in one pass with one convention, move in opposite directions "
          "with stroke width, which is what that statement means quantitatively."),
-    n_frames=D["n_frames"],
+    # READ FROM THE ROWS THE PLATE DRAWS, not from the record's top-level count. This
+    # emitted 61 while the plate drew the 24 b2/b3 frames, so the sidecar -- which is what
+    # a caption audit reads -- disagreed with the artwork it describes.
+    n_frames=len(R),
+    scope="specimen series " + " and ".join(SCOPE),
     iou_convention=D["iou_convention"],
     shipped_mask='effective_mask(corrections="none", tight=True) -- the human paint is '
                  'excluded, so the comparison is not circular',
@@ -130,15 +135,18 @@ CAPTION = dict(
                    for g in GROUPS},
     ),
     caveats=[
-        "Both headline figures are MEDIANS over frames, and the 13.56x is a ratio of two "
-        "medians, not a paired per-frame ratio.",
+        f"Both headline figures are MEDIANS over frames, and the "
+        f"{st.median(sh) / st.median(c3):.2f}x is a ratio of two medians, not a paired "
+        f"per-frame ratio.",
         "Panel (a)'s x axis is the median stroke width of each frame's own labels, so frames "
         "are not independent of the quantity they are plotted against by construction -- the "
         "point is the OPPOSITE SIGN of the two trends, not either slope on its own.",
         "The 3 px trace is a construction, not a measurement: skeletonize(label) dilated by "
         "disk(1). It is a lower bound on what a correct trace scores, not a model.",
-        "n = 61 here. The stage plate's corpus median is over 58 labelled frames. The two "
-        "frame sets are not identical and the numbers must not be pooled.",
+        f"n = {len(R)} here: the b2 and b3 rows of a 61-frame record, restricted to the "
+        f"specimen series this paper reports on. The stage plate's corpus median is over "
+        f"the same {len(R)} frames but under the WHOLE-FRAME convention, not this one; "
+        f"the two numbers are different quantities and must not be pooled.",
     ],
     source="paper/figures/txm_iou_ceiling_v2.json (generator: TXM repo "
            "code/audit/measure_iou_ceiling.py, run 2026-09-21)",

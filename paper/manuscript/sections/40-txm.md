@@ -152,7 +152,8 @@ largely not marked at all and the marked area is somewhere else, at {tx_b2_fprat
 of reviewed not-crack per pixel of crack found. Those are two different failures and a
 single accuracy cannot tell them apart. Panel (b) is the comparison the arms are entitled to â€” the detector is
 {tx_vs_otsu} points better than an Otsu darkness cut with no model and {tx_vs_all} points
-better than marking every pixel, and still below an empty mask.
+better than marking every pixel, and {tx_margin} points above an empty mask -- a
+margin that is one group's, as the first paragraph of this section sets out.
 
 **The transfer fails at the first stage, not the last, and Figure {fig_modality}(b) says so
 in the criterion's own units.** The proposal stage keeps a pixel when it is darker than its
@@ -215,7 +216,8 @@ group's reviewed crack pixels.
 What that frame's annotation is matters as much as how large it is. The share of
 annotated pixels lying more than {pr_px} px inside the annotation separates a stroke that
 follows a crack from a filled region: a stroke of any width has almost none, and
-{pr_txm_zero} of the {pr_txm_n} frames record exactly 0.0%. That B3 frame records
+no frame of the restricted collection records exactly 0.0%, against eight on the wider
+corpus, all of them in groups the paper no longer reports. That B3 frame records
 {pr_txm_max}%, the highest in the collection. Across the collection the median is
 {pr_txm_med}% and {pr_txm_above} of the {pr_txm_n} frames exceed 25%; by group, B3 has
 {pr_b3_above} of {tpf_b3_n} and B2 {pr_b2_above} of {tpf_b2_n}, with group medians of
@@ -235,7 +237,7 @@ instrument, beam energy, voxel size at the specimen, reconstruction algorithm â€
 recorded with the data, and the pixel size used for the scale bars is derived rather than
 measured. What the section establishes is narrow and still worth stating: a constant fitted on
 SEM steel in one laboratory, carried without modification to a different imaging physics,
-clears both no-information comparators on all four groups, and clears an all-background
+clears both no-information comparators on both groups, and clears an all-background
 prediction on one of them when the comparison is pooled over pixels and on
 {tpf_pos_all} of the {tpf_n} individual frames.
 

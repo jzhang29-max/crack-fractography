@@ -1,10 +1,12 @@
 """The SEM detector carried to TXM: where it works, where it does not, and by how much.
 
-Two rows of panels and two bars. The panels are the two specimen groups that behave most
-differently -- B3, where the detector transfers, and AM/HC, where it is effectively blind
-while still marking a tenth of the refereed area. The bars are every group, scored the way
-the rest of this work scores: accuracy against the accuracy of an EMPTY MASK, and the crack
-area fraction reported against the one painted.
+Two rows of panels and two bars. The panels are the two specimen series the paper reports
+on and the two that behave most differently -- B3, where the detector clears an empty mask
+by a wide margin, and B2, where it does not. The bars are both series and the pooled value,
+scored the way the rest of this work scores: accuracy against the accuracy of an EMPTY
+MASK, and the crack area fraction reported against the one painted. The rows and the bars
+are driven by what the restricted measurement record holds, so a change of scope moves them
+without an edit here.
 
 Only refereed pixels are scored (1 = crack, 2 or 3 = not-crack, 0 = unreviewed, excluded),
 so every percentage is of the refereed area and the panels shade the unrefereed part so a
@@ -27,10 +29,15 @@ its group as well. The rule here therefore has two parts, both printed when this
   condition is what excludes a region.
   CHOICE -- among the eligible frames, the LONGEST painted crack by skeleton length.
 
-The frames this selects are named in the caption. Excluding a frame from the PANEL does
-not exclude it from any number: the bars in (g) and (h) are computed over every frame of
-every group, the ineligible ones included, and Section 4.3 reports what dropping the
-largest B3 frame does to that group's margin.
+The frames this selects are named in the caption sidecar this script writes. Excluding a
+frame from the PANEL does not exclude it from any number: the bars in (g) and (h) are
+computed over every frame of both series, the ineligible ones included, and Section 4.3
+reports what dropping the largest B3 frame does to that group's margin.
+
+WHAT THE B3 ROW IS AGREEING WITH. That series' painted crack sits at essentially zero
+optical density -- see `txm_paint_free_beam.py` -- so most of what the detector proposes
+there it proposes through the absolute darkness floor, which fires on anything near zero.
+The row is drawn because the paper reports the series; the caption carries the audit.
 
 SCALE BARS. Every TXM frame has a pixel size, but it is DERIVED: 29.24 nm/px from
 operator-supplied mosaic geometry (a 30 um window at 0.35 overlap, 9x5 tiles over
@@ -72,6 +79,8 @@ NM_PER_PX = 29.24          # derived from mosaic geometry; see the docstring
 #: 73.2% (the B3 frame the old rule chose); the four frames above 36% are the two B3 and
 #: two Wrought region annotations. 25% sits in the empty part of that range.
 DEEP_PX, MAX_DEEP_SHARE = 50, 0.25
+#: The eligibility floor, named rather than repeated as a literal in the loop below.
+MIN_PX = 5000
 # The width this plate is printed at on the page (PAGE[0] - ML - MR in make_paper.py).
 # Drawn at 12.4 in it reached the page at 0.51x and its 8 pt labels printed at 4.1 pt.
 # Five columns do not fit in 6.37 in, so the panels and the bars are stacked instead.
@@ -132,7 +141,7 @@ for f in sorted(os.listdir(cdir)):
     corr = np.load(os.path.join(cdir, f))
     crack = corr == 1
     c = int(crack.sum())
-    if c >= 5000 and int(((corr == 2) | (corr == 3)).sum()) >= 5000:
+    if c >= MIN_PX and int(((corr == 2) | (corr == 3)).sum()) >= MIN_PX:
         # LENGTH, not area, and only if the paint is a trace. See the docstring.
         dt = ndi.distance_transform_edt(crack)
         skel = int(morph.skeletonize(crack).sum())
@@ -267,3 +276,39 @@ J.panel_label(axB, "h")
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 fig.subplots_adjust(left=0.085, right=0.995, top=0.995, bottom=0.085)
 J.save(fig, OUT)
+
+# THE SIDECAR. Every other plate in the programme writes one and this was the only figure
+# that did not, which made it the only figure whose caption could not be checked against
+# what was actually drawn.
+json.dump({
+    "figure": os.path.basename(OUT),
+    "what": "the SEM detector carried unchanged to the transmission collection: two rows "
+            "of panels, one per specimen series, and two bar panels over both series and "
+            "the pooled value",
+    "panel_rows": {g: {"frame": pick[g][2], "skeleton_px": int(pick[g][1]),
+                       "painted_crack_px": int(pick[g][5]),
+                       "paint_p90_width_px": round(float(pick[g][6]), 1),
+                       "deep_share": round(float(pick[g][7]), 4)}
+                   for g in PANEL_GROUPS if g in pick},
+    "selection_rule": {
+        "eligibility": f"at least {MIN_PX:,} refereed pixels of each verdict, and at most "
+                       f"{MAX_DEEP_SHARE:.0%} of the painted crack lying more than "
+                       f"{DEEP_PX} px inside the paint",
+        "choice": "among the eligible frames, the longest painted crack by skeleton length",
+        "note": "excluding a frame from a panel does not exclude it from any bar",
+    },
+    "bars": {"groups": groups, "mad_k": MADK,
+             "accuracy_margin_pp": {g: round(float(d), 3) for g, d in zip(groups, dif)},
+             "pooled_accuracy_margin_pp": round(float(pool["margin_pp"]), 3),
+             "area_agreement": {g: round(float(a), 4) for g, a in zip(groups, area)},
+             "pooled_area_agreement": round(float(pool["area_agreement"]), 4)},
+    "scoring": "refereed pixels only: 1 = crack, 2 or 3 = not-crack, 0 = unreviewed and "
+               "excluded from every denominator",
+    "scale_provenance": "29.24 nm/px DERIVED from operator-supplied mosaic geometry, not "
+                        "read from instrument metadata",
+    "source": os.path.basename(PATHS.scoped("txm_background_units.json")),
+    "read_with": "docs/figures/txm_paint_free_beam.json -- the B3 row's painted crack "
+                 "sits at essentially zero optical density, and most of what the detector "
+                 "proposes there comes from the absolute darkness floor",
+}, open(os.path.splitext(OUT)[0] + ".caption.json", "w"), indent=1)
+print("caption written")

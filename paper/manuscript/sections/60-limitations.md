@@ -50,7 +50,8 @@ frames that carry both verdicts, the share of annotated pixels lying more than {
 inside the annotation has a median of {pr_sem_med}% and {pr_txm_med}% and a maximum of
 {pr_sem_max}% and {pr_txm_max}%; {pr_sem_above} of {pr_sem_n} SEM frames and
 {pr_txm_above} of {pr_txm_n} TXM frames exceed 25%. A stroke that follows a crack scores
-near zero on this statistic, and {pr_txm_zero} TXM frames do. The frames above 25% carry a
+near zero on this statistic, and no TXM frame of the restricted collection reaches
+exactly zero; the eight that did are in groups the paper no longer reports. The frames above 25% carry a
 reference that is closer to a blocked-out area than to a traced line, so on those frames
 neither an overlap score nor a crack width can be read from the annotation, and the
 quantity a detector is being asked to reproduce is not the crack but the annotator's
@@ -68,11 +69,13 @@ ratio of pixel counts and does not depend on a pixel size, so the principal resu
 the absence; no physical length is reported for this collection and none can be.
 
 The consequence for presentation is that the method figure and the evaluation cannot be the
-same images. Figures {fig_workflow} to {fig_measurands} are drawn from this laboratory's own corpus, where 80 of 142 frames
-carry a recoverable databar at 51.883 nm/px, so that the processing stages can be shown at a
-stated scale; every quantitative result in Sections 3 and 4 comes from the public collection
-and from the TXM frames respectively. A reader should not read those figures as evidence for
-any number in this paper.
+same images. Figures {fig_workflow}, {fig_modality}, {fig_stages} and {fig_measurands} are
+drawn from this laboratory's own corpus, where 7 of the 23 b2 and b3 frames carry a
+recoverable databar, at {wf_sem_nm} nm/px on the one illustrated, so that the processing
+stages can be shown at a stated scale. Section 3's quantitative results come from the public
+collection and Section 4.3's from the transmission frames; Section 4.4 and the critical-k
+measurement of Figure {fig_modality}(b) are this laboratory's own frames, and are the
+exception to the sentence that used to stand here.
 
 The TXM panels in Section 4 do carry scale bars, from a pixel size of 29.24 nm/px that is
 derived from mosaic geometry rather than read from instrument metadata. Those bars, and any
