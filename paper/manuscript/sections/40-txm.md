@@ -82,63 +82,74 @@ beside them rather than after them.
 
 ### 4.3  The SEM detector carried across
 
-[FIGURE txm | The same detector as Section 3, with the same constant, applied to transmission X-ray microscopy of austenitic steel. (a)-(c) a B3 frame and (d)-(f) an AM/HC frame, the two specimen groups whose behaviour differs most: (a, d) the frame, contrast-stretched per crop for display only, the detector having run on the unstretched image; (b, e) the annotated crack in blue; the reviewed area is at full brightness and everything an annotator did not rule on is dimmed and excluded from every number, so the bright islands are reviewed image and not features of the microstructure; (c, f) the prediction, green where it agrees with the annotation, orange where it marks reviewed not-crack, blue where annotated crack was missed. The frame shown for each group is the one with the longest annotated crack among the frames whose annotation is a trace rather than a filled region, the second condition being that at most a quarter of the annotated pixels lie more than {pr_px} px inside the annotation; {pr_txm_above} frames of the {pr_txm_n} fail it, and excluding a frame from a panel does not exclude it from any number here. (g) pixel accuracy over reviewed pixels, expressed as the difference from an all-background prediction in percentage points. (h) reported crack area divided by annotated crack area, the vertical line at 1.0 being exact agreement. Panels (g) and (h) are computed over every frame of every group. Scale bars 5 micrometres at {tm_nm} nm/px (Section 4).]
+[FIGURE txm | The same detector as Section 3, with the same constant, applied to transmission X-ray microscopy of austenitic steel. (a)-(c) a B3 frame and (d)-(f) a B2 frame, the two specimen series the paper reports on and the two whose behaviour differs most: (a, d) the frame, contrast-stretched per crop for display only, the detector having run on the unstretched image; (b, e) the annotated crack in blue; the reviewed area is at full brightness and everything an annotator did not rule on is dimmed and excluded from every number, so the bright islands are reviewed image and not features of the microstructure; (c, f) the prediction, green where it agrees with the annotation, orange where it marks reviewed not-crack, blue where annotated crack was missed. The frame shown for each group is the one with the longest annotated crack among the frames whose annotation is a trace rather than a filled region, the second condition being that at most a quarter of the annotated pixels lie more than {pr_px} px inside the annotation; {pr_txm_above} frames of the {pr_txm_n} fail it, and excluding a frame from a panel does not exclude it from any number here. (g) pixel accuracy over reviewed pixels, expressed as the difference from an all-background prediction in percentage points. (h) reported crack area divided by annotated crack area, the vertical line at 1.0 being exact agreement. Panels (g) and (h) are computed over every frame of both groups, and the B3 bars should be read with Section 4.3's measurement of what that group's painted crack is: its median painted pixel has essentially zero optical density. Scale bars 5 micrometres at {tm_nm} nm/px (Section 4).]
 
 The SEM detector was carried unchanged to {tx_n} TXM frames. Over the reviewed area, crack is
 {tx_prev}% and an all-background prediction scores {tx_empty}% accuracy.
 
-**Pooled, the configuration does not transfer.** It records {tx_acc}% accuracy, {tx_margin}
-percentage points below an all-background prediction, and reports {tx_area} times the
-annotated crack area at a recall of {tx_recall}. It clears both no-information comparators
-comfortably — an Otsu darkness cut with no model records {tx_otsu_acc}% and marking every
-pixel {tx_all_acc}% — so the configuration is doing something. It is not doing enough to
-improve on marking nothing.
+**Pooled, the configuration clears the line, and the pooled figure is the wrong one to
+read.** It records {tx_acc}% accuracy, {tx_margin} percentage points ABOVE an
+all-background prediction, and reports {tx_area} times the annotated crack area at a
+recall of {tx_recall}. It also clears both no-information comparators comfortably — an
+Otsu darkness cut with no model records {tx_otsu_acc}% and marking every pixel
+{tx_all_acc}%.
 
-**The pooled figure is four different results.** The specimen groups do not behave alike:
+That pooled margin is one of the two groups. **Against an all-background prediction B3
+stands at {tx_b3_margin} points and B2 at {tx_b2_margin}**, both signed, and the pooled
+number is the area-weighted average of the two. It describes neither.
 
 [TABLE txmgroups | The pooled transmission result broken out by specimen group, over reviewed pixels only. The groups do not behave alike, and the pooled figure is not a description of any of them.]
 | Specimen group | Frames | Crack % of reviewed area | Accuracy | All-background | Recall | Area reported / annotated |
 |---|---|---|---|---|---|---|
 | B3 | {tx_b3_n} | {tx_b3_prev}% | {tx_b3_acc}% | {tx_b3_empty}% | {tx_b3_recall} | {tx_b3_area} |
 | B2 | {tx_b2_n} | {tx_b2_prev}% | {tx_b2_acc}% | {tx_b2_empty}% | {tx_b2_recall} | {tx_b2_area} |
-| Wrought | {tx_wrought_n} | {tx_wrought_prev}% | {tx_wrought_acc}% | {tx_wrought_empty}% | {tx_wrought_recall} | {tx_wrought_area} |
-| AM/HC | {tx_amhc_n} | {tx_amhc_prev}% | {tx_amhc_acc}% | {tx_amhc_empty}% | {tx_amhc_recall} | {tx_amhc_area} |
 
-One group transfers in these pooled units, and the rest of this section is about how
-much that sentence depends on the pooling. On B3 the detector records {tx_b3_acc}% accuracy against
-{tx_b3_empty}% for an all-background prediction, a margin of {tx_b3_margin} points, at a
-recall of {tx_b3_recall} and an area ratio of {tx_b3_area}. On B2 the reported area is close
-to correct at {tx_b2_area} while the recall is {tx_b2_recall}, so the right quantity of
-foreground is placed substantially in the wrong locations. On AM/HC the detector reaches a
-recall of {tx_amhc_recall} while marking {tx_amhc_marked}% of the reviewed area, and reports
-{tx_amhc_area} times the annotated crack area. On Wrought it finds most of the annotated
-crack and over-reports the area by {tx_wrought_area} times.
+One group transfers in these pooled units, and the rest of this section is about how much
+that sentence depends on the pooling and on the annotation underneath it. On B3 the
+detector records {tx_b3_acc}% accuracy against {tx_b3_empty}% for an all-background
+prediction, a margin of {tx_b3_margin} points, at a recall of {tx_b3_recall} and an area
+ratio of {tx_b3_area}. On B2 the reported area is close to correct at {tx_b2_area} while
+the recall is {tx_b2_recall}, so the right quantity of foreground is placed substantially
+in the wrong locations.
+
+**What B3's agreement is with.** On the B3 frames the median painted-crack pixel has an
+optical density of essentially zero — {fb_b3_crack}% of the painted crack lies below
+{fb_thresh} on the median frame, where {fb_b3_frame}% of the frame does, against
+{fb_b2_crack}% and {fb_b2_frame}% on B2. The same statistic on those frames' painted
+NOT-crack is {fb_b3_notcrack}%, so this is specific to the class scored and is not an
+annotator working carelessly past the specimen edge, which would show on both labels.
+Zero optical density is the signal of a beam path crossing no material, whether because
+it misses the specimen or because the crack there has opened through the full thickness.
+Either way it is not a test of the detection rule: the median painted-crack pixel on a B3
+frame reaches the detector as {fb_b3_img8} of 255 and {fb_b3_gate}% of the painted crack
+is below the absolute darkness floor of {fb_gate}, which marks it unconditionally whatever
+the relative criterion decides. Section 4.5 gives the split: {mc_b3_prop}% of B3's painted
+crack is proposed and most of that comes from the floor alone. **B3's margin should be
+read as a measurement of the annotation, not of the detector.**
 
 [FIGURE txmcurve | The detector's one free constant, the MAD multiplier k, swept on the TXM collection over the same seven values as Section 3.4. (a) reported crack area divided by annotated crack area; the axis is logarithmic and the horizontal line at 1.0 is exact agreement. (b) pixel accuracy minus the accuracy an all-background prediction reaches on the same pixels; the horizontal line at zero is that prediction, so a curve below it describes a configuration that would do better by marking nothing. Each specimen group is drawn separately and the dashed line is the pooled value. Both panels are over reviewed pixels only.]
 
-**No setting of the constant changes which groups clear the line.** Across the
-whole grid, B3 stays above an all-background prediction at every value, from {tx_k3_b3} to
-{tx_k10_b3} points, and B2, Wrought and AM/HC stay below it at every value. The pooled
-curve is below it at every value too, reaching its best at {tx_pool_best} points at
-k = {tx_pool_bestk}. All four curves are flat above k = 7, so the sweep has nothing further
-to offer: this is not a configuration that was set wrongly. B2 is the one group where the
-constant does buy something, and only in the area units — the reported area reaches
-{tx_b2_bestarea} times the annotated at k = {tx_b2_bestareak}, essentially exact, while the
-accuracy stays {tx_b2_bestareamargin} points below marking nothing. The right quantity of
-foreground in the wrong places is what that combination means.
+**No setting of the constant changes which group clears the line.** Across the whole
+grid, B3 stays above an all-background prediction at every value, from {tx_k3_b3} to
+{tx_k10_b3} points, and B2 stays below it at every value. The pooled curve, being the
+average of the two, crosses zero between k = 3 and k = 4 and reaches its best at
+{tx_pool_best} points at k = {tx_pool_bestk} — a crossing that belongs to the weighting
+and not to either group. Both curves are flat above k = 7, so the sweep has nothing
+further to offer: this is not a configuration that was set wrongly. B2 is the group where
+the constant does buy something, and only in the area units — the reported area reaches
+{tx_b2_bestarea} times the annotated at k = {tx_b2_bestareak}, essentially exact, while
+the accuracy stays {tx_b2_bestareamargin} points below marking nothing. The right quantity
+of foreground in the wrong places is what that combination means.
 
 [FIGURE txmbudget | (a) where the detector's marked area goes on each specimen group, at k = 6: the part that falls on annotated crack and the part that falls on reviewed not-crack, both as a percentage of the reviewed area, with the annotated crack area drawn as a dashed outline for comparison. (b) the same detector pooled over all {tx_n} frames beside the two no-information arms it has to beat, as pixel accuracy minus the accuracy an all-background prediction reaches. Reviewed pixels only, so the denominator is the area a human ruled on and not the frame.]
 
 Panel (a) separates two different failures that the pooled accuracy adds together. On B3
-and on Wrought the detector finds most of the annotated crack, at recalls of
-{tx_b3_recall} and {tx_wrought_recall}; the difference between them is what else they
-mark. For every pixel of annotated crack it finds, B3 marks {tx_b3_fpratio} pixels of
-reviewed not-crack and Wrought marks {tx_wrought_fpratio}, which is where that group's
-{tx_wrought_margin}-point deficit comes from. On B2 and AM/HC the blue part of the bar is
-small — recalls of {tx_b2_recall} and {tx_amhc_recall} — so the annotated crack is largely
-not marked at all and the marked area is somewhere else, at {tx_b2_fpratio} and
-{tx_amhc_fpratio} pixels of reviewed not-crack per pixel of crack found. Those are two
-different failures and a single accuracy cannot tell them apart. Panel (b) is the comparison the arms are entitled to — the detector is
+the detector finds most of the annotated crack, at a recall of {tx_b3_recall}, and marks
+{tx_b3_fpratio} pixels of reviewed not-crack for every pixel of crack it finds. On B2 the
+blue part of the bar is small — a recall of {tx_b2_recall} — so the annotated crack is
+largely not marked at all and the marked area is somewhere else, at {tx_b2_fpratio} pixels
+of reviewed not-crack per pixel of crack found. Those are two different failures and a
+single accuracy cannot tell them apart. Panel (b) is the comparison the arms are entitled to — the detector is
 {tx_vs_otsu} points better than an Otsu darkness cut with no model and {tx_vs_all} points
 better than marking every pixel, and still below an empty mask.
 
@@ -159,9 +170,11 @@ That is a different failure from the one the pooled accuracy suggests: the confi
 not marking the wrong things so much as not proposing the right ones, and the third column
 of Figure {fig_stages} shows that the opening and the area floor then remove almost nothing
 of what little was proposed. It also separates cleanly by specimen group, which the pooled
-figure cannot: the median painted-crack pixel sits at {mc_b3_k} on B3 and {mc_wrought_k} on
-Wrought, where {mc_b3_prop}% and {mc_wrought_prop}% of the painted crack is proposed, and at
-{mc_b2_k} and {mc_amhc_k} on B2 and AM/HC, where only {mc_b2_prop}% and {mc_amhc_prop}% is.
+figure cannot: the median painted-crack pixel sits at {mc_b3_k} on B3, where {mc_b3_prop}%
+of the painted crack is proposed, and at {mc_b2_k} on B2, where {mc_b2_prop}% is. B3's
+share is not evidence that the criterion fires on a crack there, for the reason given in
+Section 4.3: most of what it proposes on those frames is proposed by the absolute floor,
+on pixels at essentially zero optical density.
 The flattening radii and the darkness multiplier were both set where a crack is a dark line
 a few pixels across; a TXM mosaic of a thick specimen records it as a broad low-density
 band, and a criterion written for the first does not fire on the second at any setting of
@@ -173,8 +186,9 @@ counts for many frames with small ones, and the painted areas here differ by a f
 {tpf_area_spread}. Giving each of the {tpf_n} frames one vote instead gives a different answer: the
 mean of the per-frame margins is {tpf_mean_all} points rather than {tx_margin}, the median
 is {tpf_med_all}, and {tpf_pos_all} of the {tpf_n} frames are individually above an
-all-background prediction. **Frame by frame the carried-over detector is close to even,
-and it is the area weighting, not the detector, that produces the pooled deficit.**
+all-background prediction. The two aggregations agree in sign here, which they did not on
+the wider corpus, but they differ by enough that reporting either alone would be a choice
+the reader cannot see.
 
 The same split runs through the groups. The table gives, for each group, the pooled margin
 in percentage points, the mean of that group's per-frame margins, the pooled margin
@@ -186,16 +200,12 @@ group's reviewed crack pixels.
 |---|---|---|---|---|---|
 | B3 | {tpf_b3_n} | {tpf_b3_pool} | {tpf_b3_mean} | {tpf_b3_cut} | {tpf_b3_share}% |
 | B2 | {tpf_b2_n} | {tpf_b2_pool} | {tpf_b2_mean} | {tpf_b2_cut} | {tpf_b2_share}% |
-| Wrought | {tpf_wrought_n} | {tpf_wrought_pool} | {tpf_wrought_mean} | {tpf_wrought_cut} | {tpf_wrought_share}% |
-| AM/HC | {tpf_amhc_n} | {tpf_amhc_pool} | {tpf_amhc_mean} | {tpf_amhc_cut} | {tpf_amhc_share}% |
 
-Only AM/HC gives the same answer under both aggregations, and it is the group where the
-detector is worst. B3 stays positive under both. **Wrought changes sign**: pooled it is
-{tpf_wrought_pool} points, and as a mean over its four frames it is {tpf_wrought_mean}.
-B2 moves from {tpf_b2_pool} to {tpf_b2_mean}, which is no difference from marking nothing.
-Neither aggregation is wrong — a pooled figure answers what happens to a pixel and a
-per-frame mean answers what happens to a frame — but the sentence "one group transfers" is
-true only of the pooled form, and is reported here with the other.
+B3 stays positive under both, at {tpf_b3_pool} points pooled and {tpf_b3_mean} as a mean
+over its {tpf_b3_n} frames. B2 moves from {tpf_b2_pool} to {tpf_b2_mean}. Neither
+aggregation is wrong — a pooled figure answers what happens to a pixel and a per-frame
+mean answers what happens to a frame — and both are reported because they are different
+questions, not because one corrects the other.
 
 **And the group that transfers under both aggregations does not carry a crack trace.**
 The B3 group is {tpf_b3_n} frames, and a single one of them holds {tpf_b3_share}% of the
@@ -206,19 +216,20 @@ annotated pixels lying more than {pr_px} px inside the annotation separates a st
 follows a crack from a filled region: a stroke of any width has almost none, and
 {pr_txm_zero} of the {pr_txm_n} frames record exactly 0.0%. That B3 frame records
 {pr_txm_max}%, the highest in the collection. Across the collection the median is
-{pr_txm_med}% and {pr_txm_above} frames exceed 25%; by group, AM/HC has a median of
-{pr_amhc_med}% and {pr_amhc_above} such frames, while B3 has {pr_b3_above} of six and
-Wrought {pr_wrought_above} of four. On those frames the annotator has marked the open
+{pr_txm_med}% and {pr_txm_above} of the {pr_txm_n} frames exceed 25%; by group, B3 has
+{pr_b3_above} of {tpf_b3_n} and B2 {pr_b2_above} of {tpf_b2_n}, with group medians of
+{pr_b3_med}% and {pr_b2_med}%. On those frames the annotator has marked the open
 crack mouth as an area rather than tracing a line, so what the detector is scored against
 there is a large dark region, which a darkness rule finds easily. **The group where the
 carried-over detector clears an all-background prediction is also the group holding the
 most region-like annotation in the collection**, and the two facts should not be
 separated. Figure {fig_txm} shows a B3 frame whose annotation is a trace, for that reason.
 
-**This is reported as a transfer result and not as a capability.** Four specimen groups give
-four answers, each group is a small number of frames, and the groups are different materials
-and loading conditions, so the pooled figure is a weighted mean over four distinct
-measurements rather than an estimate of one. The acquisition parameters for this collection —
+**This is reported as a transfer result and not as a capability.** Two specimen groups
+give two answers of opposite sign, each group is a small number of frames, and the pooled
+figure is an area-weighted mean over two distinct measurements rather than an estimate of
+one. One of the two, as Section 4.3 sets out, is scored against an annotation whose
+painted crack lies at essentially zero optical density. The acquisition parameters for this collection —
 instrument, beam energy, voxel size at the specimen, reconstruction algorithm — are not
 recorded with the data, and the pixel size used for the scale bars is derived rather than
 measured. What the section establishes is narrow and still worth stating: a constant fitted on

@@ -79,7 +79,15 @@ PAGEW = 6.37
 FLOOR = 7.0
 MADK = 6.0                 # the operating point Section 3.2 argues for on SEM
 OUT = os.path.join(REPO, "paper/figures/out/txm_transfer.png")
-BG = json.load(open(os.path.join(REPO, "docs/figures/txm_background_units.json")))
+# THE RESTRICTED RECORD. The paper reports on specimen series b2 and b3, and the measuring
+# scripts write that scope to a separate file rather than overwriting the full-corpus one.
+# `scoped()` raises if it is missing instead of falling back, because a plate that quietly
+# drew the wider corpus would carry a caption naming the narrower one.
+sys.path.insert(0, os.path.join(REPO, "paper", "figures"))
+import _paths as PATHS                               # noqa: E402
+BG = json.load(open(PATHS.scoped("txm_background_units.json")))
+#: The two rows of panels and the bars, driven by what the restricted record holds.
+PANEL_GROUPS = tuple(g for g in ("B3", "B2") if g in BG["by_group"])
 
 
 
@@ -135,7 +143,7 @@ for f in sorted(os.listdir(cdir)):
 
 # the LONGEST TRACE-PAINTED crack in each of the two groups that disagree most
 pick = {}
-for g in ("B3", "AM/HC"):
+for g in PANEL_GROUPS:
     rows = [c for c in cands if c[0] == g]
     ok = [r for r in rows if r[7] <= MAX_DEEP_SHARE]
     if not ok:
@@ -164,7 +172,7 @@ outer = fig.add_gridspec(2, 1, height_ratios=[2.0, 1.25], hspace=0.17)
 gs = outer[0].subgridspec(2, 3, hspace=0.02, wspace=0.015)
 gsb = outer[1].subgridspec(1, 3, wspace=0.055)
 
-for r, g in enumerate(("B3", "AM/HC")):
+for r, g in enumerate(PANEL_GROUPS):
     if g not in pick:
         continue
     _, _, stem, tif, cpath = pick[g][:5]
@@ -225,7 +233,7 @@ for r, g in enumerate(("B3", "AM/HC")):
     J.panel_label(ax3, "cf"[r], inside=True)
 
 # ---- the bars: every group, in the units the paper reports ---------------------------
-groups = ["B3", "B2", "Wrought", "AM/HC"]
+groups = [g for g in ("B3", "B2", "Wrought", "AM/HC") if g in BG["by_group"]]
 key = f"SEM detector, mad_k={MADK:g}"
 acc = [BG["by_group"][g]["arms"][key]["accuracy_pct"] for g in groups]
 emp = [BG["by_group"][g]["arms"][key]["empty_mask_accuracy_pct"] for g in groups]

@@ -66,9 +66,13 @@ J.use()
 OUT = _paths.FIG_DIR
 NAME = "F5 - over- and under-counting"
 DOCFIG = os.path.join(os.path.dirname(os.path.dirname(HERE)), "docs", "figures")
-SCORES = os.path.join(DOCFIG, "overlap_means_sem_txm.json")
-TRACES = os.path.join(DOCFIG, "paint_region_vs_trace.json")
-LEGIB = os.path.join(DOCFIG, "frame_legibility.json")
+# THE RESTRICTED RECORDS. The paper reports on specimen series b2 and b3, so the frame
+# this plate chooses must be chosen from that pool: the previous run picked
+# AS_24hr_BSE_Side_008 and an AM/HC frame, neither of which is in the paper any more.
+# `scoped()` raises if a record is missing rather than falling back to the full corpus.
+SCORES = _paths.scoped("overlap_means_sem_txm.json")
+TRACES = _paths.scoped("paint_region_vs_trace.json")
+LEGIB = _paths.scoped("frame_legibility.json")
 
 #: An over-counting panel has to show over-counting, not one object. On the TXM frame
 #: with the most over-counted pixels, 99.6% of that area is a SINGLE connected component

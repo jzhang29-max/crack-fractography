@@ -27,6 +27,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _paths                                   # noqa: E402
 import journal_style as J          # noqa: E402
 
 J.use()
@@ -36,24 +37,38 @@ REPO = os.path.dirname(os.path.dirname(HERE))
 OUT = os.path.join(HERE, "out")
 os.makedirs(OUT, exist_ok=True)
 
-GROUPS = ["B3", "B2", "Wrought", "AM/HC"]
-#: One hue per claim, never per rank: the group under discussion and everything else.
-#: Four groups need four distinguishable rows, and the house palette carries two hues plus
-#: a neutral ramp, so the groups are separated by MARKER as well as by colour and nothing
-#: here depends on colour alone.
-GCOL = {"B3": J.ACCENT, "B2": J.ACCENT2, "Wrought": J.G_DARK, "AM/HC": J.G_MID}
-GMRK = {"B3": "o", "B2": "s", "Wrought": "^", "AM/HC": "D"}
+#: One hue per claim, never per rank. The two specimen series the paper reports on are
+#: separated by MARKER as well as by colour, so nothing here depends on colour alone.
+GCOL = {"B3": J.ACCENT, "B2": J.ACCENT2}
+GMRK = {"B3": "o", "B2": "s"}
 K6 = "SEM detector, mad_k=6"
 
 
-def load(name, what):
-    p = os.path.join(REPO, "docs", "figures", name)
+def load(name, what, scope=True):
+    """Read a measurement file, by default the b2/b3 record rather than the full corpus.
+
+    `_paths.scoped` raises if the restricted record is missing instead of falling back,
+    because a plate that silently drew the wider corpus would carry a caption naming the
+    narrower one and nothing in the output would show it.
+    """
+    try:
+        p = _paths.scoped(name, scope=scope)
+    except SystemExit:
+        raise
     if not os.path.exists(p):
         raise SystemExit(f"missing {what}: {p} -- run its measuring script first")
     return json.load(open(p))
 
 
 BG = load("txm_background_units.json", "TXM background units")
+
+#: Driven by the measurement file, not hard-coded: when the corpus is restricted the
+#: plates follow without an edit here, and a group still in the data cannot be dropped
+#: from a plate by forgetting to list it.
+GROUPS = [g for g in ("B3", "B2", "Wrought", "AM/HC") if g in BG["by_group"]]
+_unlisted = sorted(set(BG["by_group"]) - set(GROUPS))
+if _unlisted:
+    raise SystemExit(f"groups {_unlisted} are in the measurement file and not in GROUPS")
 GRID = BG["grid"]
 
 

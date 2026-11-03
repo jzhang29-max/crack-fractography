@@ -38,6 +38,23 @@ DEEP_PX = 50        #: the distance at which "inside the paint" starts
 #: identical at 200 and at 5000; on SEM it is 18 frames at 200 and 10 at 5000.
 MIN_PX = 200
 
+# ----------------------------------------------- specimen-series scope: b2 and b3 only
+#: WHY THIS EXISTS. A reviewer restricted the paper's own laboratory specimens to series
+#: b2 and b3 in BOTH microscopies. The SEM paint also carries series b4 and the MAR_* /
+#: AS_* / Cast_* / HIP_* fields; the TXM corrections also carry Wrought and AM/HC. Those
+#: are other specimens, so the restriction changes the frame SET and nothing else.
+#:
+#: OFF by default: unset, this file measures and writes exactly what it always did under
+#: exactly the same filename. Set, the enumeration skips out-of-scope frames and the
+#: output gains a `_b2b3` suffix, so a filtered run can never overwrite the full-corpus
+#: record. DEEP_PX, MIN_PX and the statistic itself are untouched: every per-frame row
+#: must be bit-identical with the switch on and off.
+#:
+#:     SCOPE_B2B3=1 <sem-crack-detector>/.venv/bin/python -B <this file>
+SCOPE = ("b2", "b3")
+SCOPE_ON = os.environ.get("SCOPE_B2B3", "") not in ("", "0")
+SUFFIX = "_b2b3" if SCOPE_ON else ""
+
 
 def group_of(n):
     n = n.lower()
@@ -48,6 +65,21 @@ def group_of(n):
     if "hc_316l" in n:
         return "AM/HC"
     return "B2"
+
+
+def in_scope_sem(stem):
+    """SEM carries the series in the frame stem: `..._b2_...`, `..._b3_...`, `..._b4_...`.
+
+    Checked against the 48 correction masks on disk: 20 admitted (all b2), 28 rejected,
+    `260622_316_H_b4_CBS_02` among them. The underscores are load-bearing.
+    """
+    return not SCOPE_ON or any(f"_{s}_" in stem.lower() for s in SCOPE)
+
+
+def in_scope_txm(stem):
+    """TXM is scoped through `group_of()` above -- this file's existing classifier, so the
+    scope cannot disagree with the by-group table it writes beside it."""
+    return not SCOPE_ON or group_of(stem).lower() in SCOPE
 
 
 def measure(crack):
@@ -85,6 +117,9 @@ for f in sorted(os.listdir(TXM_CORR)):
     if not f.endswith("_correction.npy"):
         continue
     stem = f[: -len("_correction.npy")]
+    if not in_scope_txm(stem):
+        print(f"  out of scope {SCOPE}: {group_of(stem):<8} {stem[:62]}")
+        continue
     if not os.path.exists(os.path.join(TXM, "images", stem + ".tif")):
         continue
     corr = np.load(os.path.join(TXM_CORR, f))
@@ -100,6 +135,9 @@ for f in sorted(os.listdir(SEM_PAINT)):
     if not f.endswith("_correction_mask.png"):
         continue
     stem = f[: -len("_correction_mask.png")]
+    if not in_scope_sem(stem):
+        print(f"  out of scope {SCOPE}: {stem}")
+        continue
     corr = np.array(Image.open(os.path.join(SEM_PAINT, f)))
     while corr.ndim > 2:
         corr = corr[..., 0]
@@ -129,10 +167,14 @@ for g in ("B3", "B2", "Wrought", "AM/HC"):
           f"{100 * v.min():5.1f}-{100 * v.max():5.1f}%  "
           f"{GRP[g]['frames_above_25pct']} above 25%")
 
-p = os.path.join(REPO, "docs/figures/paint_region_vs_trace.json")
-json.dump({"deep_px": DEEP_PX, "min_px_each_verdict": MIN_PX,
-           "statistic": "share of painted-crack pixels further than deep_px from the "
-                        "edge of the painted crack; a stroke of any width has almost "
-                        "none, a filled region has a lot",
-           "TXM": TX, "SEM": SE, "TXM_by_group": GRP}, open(p, "w"), indent=1)
+p = os.path.join(REPO, f"docs/figures/paint_region_vs_trace{SUFFIX}.json")
+assert SCOPE_ON == p.endswith("_b2b3.json"), "a scoped run must not write the full file"
+_payload = {"deep_px": DEEP_PX, "min_px_each_verdict": MIN_PX,
+            "statistic": "share of painted-crack pixels further than deep_px from the "
+                         "edge of the painted crack; a stroke of any width has almost "
+                         "none, a filled region has a lot",
+            "TXM": TX, "SEM": SE, "TXM_by_group": GRP}
+if SCOPE_ON:          # recorded only on a filtered run, so the unfiltered file is unchanged
+    _payload["specimen_scope"] = list(SCOPE)
+json.dump(_payload, open(p, "w"), indent=1)
 print("\nwrote", p)

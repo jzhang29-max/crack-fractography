@@ -1,4 +1,4 @@
-# Multiscale darkness detection for crack area fraction measurement in scanning electron micrographs of Inconel 718
+# Multiscale darkness detection for crack area fraction measurement in scanning electron and transmission X-ray micrographs
 
 [Author names]
 
@@ -36,12 +36,18 @@ that collection's labels, a reconstruction of the reference annotation that is e
 correct about position scores {tm_ld_ceil} where the deployed model scores {tm_ld_iou}, and
 the two move in opposite directions with the width of the annotator's stroke — so a higher
 overlap score there is evidence of resemblance to the brush rather than of crack found. The
-SEM detector itself, carried across unchanged to {tx_n} of those frames, reports {tx_area}
-times the annotated crack area pooled across four specimen groups and clears an
-all-background prediction on one of them; giving each frame one vote rather than pooling
-pixels, it sits {tpf_mean_all} points from that prediction with {tpf_pos_all} of the
-{tpf_n} frames above it, and one group changes sign between the two aggregations, so the
-pooled statement is reported with the per-frame one throughout. On this laboratory's own
+SEM detector itself, carried across unchanged to the {tx_n} frames of the two specimen
+series reported here, returns {tx_area} times the annotated crack area pooled and stands
+{tx_margin} points above an all-background prediction — but that pooled figure is the
+area-weighted average of {tx_b3_margin} points on one series and {tx_b2_margin} on the
+other, and describes neither. Giving each frame one vote rather than pooling pixels puts
+it at {tpf_mean_all} points with {tpf_pos_all} of the {tpf_n} frames above the prediction,
+so the pooled statement is reported with the per-frame one throughout. The series that
+clears the line is also the one whose annotation does not survive an audit of what it was
+painted on: {fb_b3_crack}% of its painted crack lies below {fb_thresh} optical density,
+where {fb_b3_frame}% of the frame does and {fb_b3_notcrack}% of the same frames' painted
+NOT-crack does, and {fb_b3_gate}% of it falls under the detector's absolute darkness
+floor, which marks it whatever the relative criterion decides. On this laboratory's own
 SEM and TXM frames the mean per-frame F1 is {om_sem_f1} and {om_txm_f1} against
 {om_sem_cf1} and {om_txm_cf1} for a geometrically correct trace of the same annotations,
 which is the brush effect measured a second time.
@@ -63,5 +69,6 @@ These findings support the detector as an interpretable approach to aggregate cr
 measurement within the evaluated collection. The principal result concerns agreement in
 total image area, with pixel-level segmentation considered as a separate endpoint.
 
-Keywords: scanning electron microscopy; Inconel 718; crack area fraction; multiscale image
-analysis; deterministic segmentation; cross-modality transfer; transmission X-ray microscopy
+Keywords: scanning electron microscopy; transmission X-ray microscopy; austenitic stainless
+steel; Inconel 718; crack area fraction; multiscale image analysis; deterministic
+segmentation; cross-modality transfer; annotation quality

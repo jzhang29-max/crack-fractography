@@ -76,8 +76,10 @@ import journal_style as J                           # noqa: E402
 J.use()
 OUT = _paths.FIG_DIR
 NAME = "F2 - how each modality sees a crack"
-CONTRAST = os.path.join(os.path.dirname(os.path.dirname(HERE)), "docs", "figures",
-                        "modality_contrast.json")
+# The restricted record: the paper reports on specimen series b2 and b3. `scoped()`
+# raises rather than falling back, so this panel cannot silently draw 31 frames under a
+# caption that says 18.
+CONTRAST = _paths.scoped("modality_contrast.json")
 MU = "µ"
 
 #: The matched field of view the two mounted micrographs are shown at. 15 um is 289 px of
@@ -91,7 +93,7 @@ BAR_UM = 5.0
 
 #: The specimen groups the TXM arm is reported in, in the order they are drawn. Set from
 #: the data rather than hard-coded, so a group that leaves the corpus leaves the figure.
-GROUP_ORDER = ("B3", "B2", "Wrought", "AM/HC")
+GROUP_ORDER = ("B3", "B2")
 
 
 def crop_at(d, um):

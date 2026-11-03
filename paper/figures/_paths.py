@@ -89,3 +89,39 @@ def tilebench():
         shutil.copyfile(TILE_META, staged)
     TB.SC, TB.CACHE, TB.UP = TILE_CACHE, TILE_CACHE, TILE_LABELS
     return TB
+
+
+# --- the specimen scope the paper reports on --------------------------------------------
+#: The paper's own laboratory data is restricted to specimen series b2 and b3, in both
+#: microscopies. The measurement scripts under analysis/research/improve/ write a SECOND
+#: record for that scope rather than overwriting the full-corpus one -- the full-corpus
+#: files are the evidence base for numbers that can no longer be regenerated, and several
+#: of their inputs no longer exist on any machine. The restricted record is the one the
+#: manuscript reads.
+#:
+#: PUBLIC BENCHMARK COLLECTIONS ARE NOT IN THIS SCOPE. Inconel 718, MetalDAM and the EBC
+#: coating are other people's data on other materials, not specimen series of this
+#: laboratory, and they keep their own unsuffixed files.
+SPECIMEN_SCOPE = ("b2", "b3")
+SCOPE_SUFFIX = "_b2b3"
+DOC_FIGURES = os.path.join(REPO, "docs", "figures")
+
+
+def scoped(name, *, scope=True):
+    """`scoped("overlap_means_sem_txm.json")` -> the b2/b3 record's absolute path.
+
+    IT RAISES RATHER THAN FALLING BACK. A figure or a manuscript value that silently
+    reads the full-corpus file when the restricted one is missing would report 31 frames
+    under a caption that says 18, and nothing in the output would show it. Regenerate the
+    file with SCOPE_B2B3=1 instead.
+    """
+    stem, ext = os.path.splitext(name)
+    path = os.path.join(DOC_FIGURES, (stem + SCOPE_SUFFIX + ext) if scope else name)
+    if not os.path.exists(path):
+        raise SystemExit(
+            f"{path} does not exist.\n"
+            f"  The manuscript reports on specimen series {', '.join(SPECIMEN_SCOPE)} and "
+            f"reads the restricted record, not the full-corpus one.\n"
+            f"  Regenerate it:  SCOPE_B2B3=1 <sem-crack-detector>/.venv/bin/python -B "
+            f"analysis/research/improve/{stem}.py")
+    return path

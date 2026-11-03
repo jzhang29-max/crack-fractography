@@ -22,7 +22,17 @@ import journal_style as J
 J.use()
 HERE = os.path.dirname(os.path.abspath(__file__))
 D = json.load(open(os.path.join(HERE, "txm_iou_ceiling_v2.json")))
-R = D["per_frame"]
+# RESTRICTED TO THE SPECIMEN SERIES THE PAPER REPORTS ON. The frozen record carries 61
+# frames across four groups; 24 of them are b2 or b3. The per-group block it also carries
+# is recomputed here from the surviving rows rather than read, so that panel (b) and
+# panel (a) cannot describe different frame sets.
+SCOPE = ("B2", "B3")
+R = [r for r in D["per_frame"] if r["group"] in SCOPE]
+if len(R) != sum(D["per_group"][g]["n"] for g in SCOPE):
+    raise SystemExit(
+        f"{len(R)} per-frame rows are in scope but the record's own per-group counts sum "
+        f"to {sum(D['per_group'][g]['n'] for g in SCOPE)} -- the two disagree about which "
+        f"frames belong to which group")
 OUT = os.path.join(HERE, "out")
 NAME = "T2 - TXM ceiling"
 
@@ -42,7 +52,21 @@ sh = [r["iou_shipped"] for r in R]
 c3 = [r["iou_w3"] for r in R]
 rho_sh, rho_c3 = spearman(sh, w), spearman(c3, w)
 
-GROUPS = ["AM", "B2", "WR", "B3"]            # ordered by median label width
+
+def _med(v):
+    v = sorted(v)
+    n = len(v)
+    return v[n // 2] if n % 2 else 0.5 * (v[n // 2 - 1] + v[n // 2])
+
+
+PG = {g: {"n": sum(1 for r in R if r["group"] == g),
+          "label_width_px": _med([r["label_width_px"] for r in R if r["group"] == g]),
+          "shipped": _med([r["iou_shipped"] for r in R if r["group"] == g]),
+          "ceiling_3px": _med([r["iou_w3"] for r in R if r["group"] == g])}
+      for g in SCOPE}
+
+GROUPS = sorted(SCOPE, key=lambda g: _med([r["label_width_px"] for r in R
+                                            if r["group"] == g]))
 fig = plt.figure(figsize=(J.W2, 2.45))
 gs = fig.add_gridspec(1, 2, width_ratios=[1.45, 1.0], wspace=0.30,
                       left=0.062, right=0.995, top=0.90, bottom=0.21)
@@ -67,12 +91,12 @@ J.panel_label(ax, "a")
 # (b) the same two quantities as specimen-group medians
 ax = fig.add_subplot(gs[0, 1])
 x = np.arange(len(GROUPS)); bw = 0.38
-m_sh = [D["per_group"][g]["shipped"] for g in GROUPS]
-m_c3 = [D["per_group"][g]["ceiling_3px"] for g in GROUPS]
+m_sh = [PG[g]["shipped"] for g in GROUPS]
+m_c3 = [PG[g]["ceiling_3px"] for g in GROUPS]
 ax.bar(x - bw / 2, m_sh, bw, color=J.ACCENT, edgecolor=J.INK, linewidth=0.5)
 ax.bar(x + bw / 2, m_c3, bw, color=J.ACCENT2, edgecolor=J.INK, linewidth=0.5)
 ax.set_xticks(x)
-ax.set_xticklabels([f"{g}\n{D['per_group'][g]['label_width_px']:.0f} px" for g in GROUPS])
+ax.set_xticklabels([f"{g}\n{PG[g]['label_width_px']:.0f} px" for g in GROUPS])
 ax.set_ylabel("median IoU"); ax.set_ylim(0, 1.0)
 J.panel_label(ax, "b")
 
@@ -99,10 +123,10 @@ CAPTION = dict(
         spearman_shipped_vs_width=round(rho_sh, 3),
         spearman_ceiling_vs_width=round(rho_c3, 3),
         frames_where_correct_trace_wins=sum(1 for r in R if r["iou_w3"] > r["iou_shipped"]),
-        per_group={g: dict(n=D["per_group"][g]["n"],
-                           label_width_px=round(D["per_group"][g]["label_width_px"], 1),
-                           shipped=round(D["per_group"][g]["shipped"], 4),
-                           ceiling_3px=round(D["per_group"][g]["ceiling_3px"], 4))
+        per_group={g: dict(n=PG[g]["n"],
+                           label_width_px=round(PG[g]["label_width_px"], 1),
+                           shipped=round(PG[g]["shipped"], 4),
+                           ceiling_3px=round(PG[g]["ceiling_3px"], 4))
                    for g in GROUPS},
     ),
     caveats=[

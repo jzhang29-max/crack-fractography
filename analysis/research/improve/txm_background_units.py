@@ -45,6 +45,27 @@ import detector_overrides as DO
 
 GRID = [3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 10.0]
 
+# ----------------------------------------------- specimen-series scope: b2 and b3 only
+#: WHY THIS EXISTS. A reviewer restricted the paper's own laboratory specimens to series
+#: b2 and b3. This TXM corpus also carries Wrought and AM/HC, which are other specimens,
+#: so the restriction changes the frame SET and nothing else.
+#:
+#: OFF by default: unset, this file measures and writes exactly what it always did under
+#: exactly the same filename. Set, the enumeration keeps only the B2 and B3 groups and the
+#: output gains a `_b2b3` suffix, so a filtered run can never overwrite the full-corpus
+#: record. The grid, the 5000-pixel floor and every arm are untouched.
+#:
+#: NOTE FOR THE IDENTITY CHECK. This file stores POOLED aggregates only -- it never kept a
+#: per-frame row -- so the pooled block necessarily moves when frames are dropped. What
+#: must not move is `by_group`: each group's accumulators are summed over that group's own
+#: frames, so the B2 and B3 blocks have to come out bit-identical with the switch on and
+#: off, and that is the check this file supports.
+#:
+#:     SCOPE_B2B3=1 <sem-crack-detector>/.venv/bin/python -B <this file>
+SCOPE = ("b2", "b3")
+SCOPE_ON = os.environ.get("SCOPE_B2B3", "") not in ("", "0")
+SUFFIX = "_b2b3" if SCOPE_ON else ""
+
 
 def group_of(name):
     """The four specimen groups, by the TXM project's own rule."""
@@ -58,6 +79,14 @@ def group_of(name):
     if "_b2_" in n or "b2_" in n:
         return "B2"
     return "other"
+
+
+def in_scope(stem):
+    """Scoped through `group_of()` above -- this file's own classifier, not a second one,
+    so the scope cannot disagree with the by-group tables it writes beside it. Note this
+    copy has an `other` fallback that the copies elsewhere lack; `other` is out of scope,
+    which is the conservative reading of a name the project's rule cannot place."""
+    return not SCOPE_ON or group_of(stem).lower() in SCOPE
 
 
 def arm(k):
@@ -86,6 +115,9 @@ for f in sorted(os.listdir(cdir)):
     if not f.endswith("_correction.npy"):
         continue
     stem = f[: -len("_correction.npy")]
+    if not in_scope(stem):
+        print(f"  out of scope {SCOPE}: {group_of(stem):<8} {stem[:62]}", flush=True)
+        continue
     tif = os.path.join(TXM, "images", stem + ".tif")
     if os.path.exists(tif):
         names.append((stem, tif, os.path.join(cdir, f)))
@@ -188,15 +220,18 @@ print(f"\nrefereed coverage: {100 * (tot_c + tot_n) / max(tot_px, 1):.1f}% of al
       f"pixels in the {used} frames were ruled on by a human. Every percentage above is "
       f"of the refereed area, not of the frame.")
 
-p = os.path.join(REPO, "docs/figures/txm_background_units.json")
-json.dump({"n_frames": used, "refereed_crack_px": tot_c, "refereed_notcrack_px": tot_n,
-           "refereed_coverage_frac": (tot_c + tot_n) / max(tot_px, 1),
-           "pooled": POOL, "by_group": PER, "grid": GRID,
-           "scoring": "refereed pixels only: 1 = crack, 2 or 3 = not-crack, 0 excluded. "
-                      "Percentages are of the refereed area.",
-           "why_no_overlap_scores": "the TXM paint is far wider than the feature; a prior "
-                                    "measurement puts the IoU ceiling for a correct 3 px "
-                                    "crack at 0.0498, so overlap here ranks brush "
-                                    "imitation"},
-          open(p, "w"), indent=1)
+p = os.path.join(REPO, f"docs/figures/txm_background_units{SUFFIX}.json")
+assert SCOPE_ON == p.endswith("_b2b3.json"), "a scoped run must not write the full file"
+_payload = {"n_frames": used, "refereed_crack_px": tot_c, "refereed_notcrack_px": tot_n,
+            "refereed_coverage_frac": (tot_c + tot_n) / max(tot_px, 1),
+            "pooled": POOL, "by_group": PER, "grid": GRID,
+            "scoring": "refereed pixels only: 1 = crack, 2 or 3 = not-crack, 0 excluded. "
+                       "Percentages are of the refereed area.",
+            "why_no_overlap_scores": "the TXM paint is far wider than the feature; a prior "
+                                     "measurement puts the IoU ceiling for a correct 3 px "
+                                     "crack at 0.0498, so overlap here ranks brush "
+                                     "imitation"}
+if SCOPE_ON:          # recorded only on a filtered run, so the unfiltered file is unchanged
+    _payload["specimen_scope"] = list(SCOPE)
+json.dump(_payload, open(p, "w"), indent=1)
 print("\nwrote", p)

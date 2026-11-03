@@ -44,8 +44,36 @@ from skimage import filters                             # noqa: E402
 import overlap_means_sem_txm as OV                      # noqa: E402  -- the loaders
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
-OUT = os.path.join(REPO, "docs", "figures", "frame_legibility.json")
-TRACES = os.path.join(REPO, "docs", "figures", "paint_region_vs_trace.json")
+
+# ----------------------------------------------- specimen-series scope: b2 and b3 only
+#: WHY THIS EXISTS. A reviewer restricted the paper's own laboratory specimens to series
+#: b2 and b3 in BOTH microscopies; the corpus also carries SEM b4 and MAR_*/AS_*/Cast_*/
+#: HIP_*, and TXM Wrought and AM/HC, which are other specimens.
+#:
+#: THE PREDICATE IS NOT REDEFINED HERE. This file does not enumerate frames itself -- it
+#: iterates `OV.sem_frames()` and `OV.txm_frames()` -- so the scope filter lives there, in
+#: one place, keyed on the same environment variable, and this file only has to agree
+#: about the filenames.
+#:
+#: THE TRACES FILE IS AN INPUT, NOT AN OUTPUT. `deep_share` is a property of one frame's
+#: paint, so the scoped and unscoped records of it are the same numbers over different
+#: frame sets. The scoped file is preferred when it exists, purely so a scoped run reads a
+#: scoped pipeline; the full-corpus file is a valid fallback because it is a superset and
+#: every in-scope frame is in it. Either way the lookup returns the same value.
+#:
+#: OFF by default: unset, this file measures and writes exactly what it always did under
+#: exactly the same filename. Nothing about sharpness, the 0.25 trace cut, the detector
+#: call or the selection rules is touched.
+#:
+#:     SCOPE_B2B3=1 <sem-crack-detector>/.venv/bin/python -B <this file>
+SCOPE = OV.SCOPE
+SCOPE_ON = OV.SCOPE_ON
+SUFFIX = OV.SUFFIX
+
+OUT = os.path.join(REPO, "docs", "figures", f"frame_legibility{SUFFIX}.json")
+TRACES = os.path.join(REPO, "docs", "figures", f"paint_region_vs_trace{SUFFIX}.json")
+if not os.path.exists(TRACES):
+    TRACES = os.path.join(REPO, "docs", "figures", "paint_region_vs_trace.json")
 
 
 def sharpness(img8):
@@ -86,6 +114,10 @@ def run(label, it, grouper=None):
 
 
 def main():
+    if SCOPE_ON:
+        print(f"SCOPE_B2B3 is set: specimen series {SCOPE} only, in both microscopies; "
+              f"output gains the '{SUFFIX}' suffix")
+    print(f"deep_share read from {TRACES}\n")
     res = {
         "sharpness": "99.5th percentile of Sobel gradient magnitude divided by the "
                      "frame's own intensity standard deviation",
@@ -97,6 +129,9 @@ def main():
         "SEM": run("SEM", OV.sem_frames()),
         "TXM": run("TXM", OV.txm_frames(), OV.txm_group),
     }
+    if SCOPE_ON:
+        res["specimen_scope"] = list(SCOPE)   # only on a filtered run
+    assert SCOPE_ON == OUT.endswith("_b2b3.json"), "a scoped run must not write the full file"
     json.dump(res, open(OUT, "w"), indent=1)
     print("\nwrote", OUT)
     for tag in ("SEM", "TXM"):

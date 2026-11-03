@@ -48,6 +48,38 @@ PAINT = os.path.join(SEM, "interior_active_learning", "paint")
 GRID = [3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 10.0]
 ST8 = np.ones((3, 3), bool)
 
+# ----------------------------------------------- specimen-series scope: b2 and b3 only
+#: WHY THIS EXISTS. A reviewer restricted the paper's own laboratory specimens to series
+#: b2 and b3. This SEM paint directory also carries series b4 and the MAR_* / AS_* /
+#: Cast_* / HIP_* fields, which are other specimens, so the restriction changes the frame
+#: SET and nothing else.
+#:
+#: OFF by default: unset, this file sweeps and writes exactly what it always did under
+#: exactly the same filename. Set, the enumeration keeps only b2 and b3 frames and the
+#: output gains a `_b2b3` suffix, so a filtered run can never overwrite the full-corpus
+#: record. The grid, the 200-pixel floors, the body mask and the paired test are untouched.
+#:
+#: NOTE FOR THE IDENTITY CHECK. This file stores POOLED means and a paired test only -- it
+#: never kept a per-frame row -- so no per-frame value can be read back out of the
+#: full-corpus file. What CAN be checked is that the frame lists are the exact in-scope
+#: subsets, and that `means["6.0"]["precision"]` still equals `SEM.mean_precision` in
+#: overlap_means_sem_txm, which computes the same quantity over the same frame set from
+#: the same loader; in the full corpus those two agree to the last bit.
+#:
+#:     SCOPE_B2B3=1 <sem-crack-detector>/.venv/bin/python -B <this file>
+SCOPE = ("b2", "b3")
+SCOPE_ON = os.environ.get("SCOPE_B2B3", "") not in ("", "0")
+SUFFIX = "_b2b3" if SCOPE_ON else ""
+
+
+def in_scope(stem):
+    """SEM carries the series in the frame stem: `..._b2_...`, `..._b3_...`, `..._b4_...`.
+
+    Checked against the 48 correction masks on disk: 20 admitted (all b2), 28 rejected,
+    `260622_316_H_b4_CBS_02` among them. The underscores are load-bearing.
+    """
+    return not SCOPE_ON or any(f"_{s}_" in stem.lower() for s in SCOPE)
+
 
 class U:
     pass
@@ -104,6 +136,9 @@ REC, PRE, MARK = {k: [] for k in GRID}, {k: [] for k in GRID}, {k: [] for k in G
 rec_names, pre_names = [], []
 
 for nm in names:
+    if not in_scope(nm):
+        print(f"  out of scope {SCOPE}: {nm}", flush=True)
+        continue
     try:
         got = load_frame(nm)
     except Exception as e:
@@ -162,16 +197,19 @@ for k in GRID:
     print(f"  k={k:4.1f}  recall {r['median_delta']:+.4f} (p {r['p']:.4f}, n={r['n']})"
           f"   precision {pq['median_delta']:+.4f} (p {pq['p']:.4f}, n={pq['n']})")
 
-p = os.path.join(REPO, "docs/figures/lab_madk_sweep.json")
-json.dump({"grid": GRID, "n_recall_frames": len(rec_names),
-           "n_precision_frames": len(pre_names),
-           "recall_frames": rec_names, "precision_frames": pre_names,
-           "means": {str(k): {"recall": float(np.mean(REC[k])),
-                              "precision": float(np.mean(PRE[k])) if PRE[k] else None,
-                              "marked_pct_of_body": float(np.mean(MARK[k]))} for k in GRID},
-           "paired_vs_shipped_5": OUT,
-           "scoring": "positives corr==1; negatives corr==2 or 3; corr==0 unrefereed and "
-                      "excluded. Recall and precision use DIFFERENT frame sets and are "
-                      "never pooled into an F1."},
-          open(p, "w"), indent=1)
+p = os.path.join(REPO, f"docs/figures/lab_madk_sweep{SUFFIX}.json")
+assert SCOPE_ON == p.endswith("_b2b3.json"), "a scoped run must not write the full file"
+_payload = {"grid": GRID, "n_recall_frames": len(rec_names),
+            "n_precision_frames": len(pre_names),
+            "recall_frames": rec_names, "precision_frames": pre_names,
+            "means": {str(k): {"recall": float(np.mean(REC[k])),
+                               "precision": float(np.mean(PRE[k])) if PRE[k] else None,
+                               "marked_pct_of_body": float(np.mean(MARK[k]))} for k in GRID},
+            "paired_vs_shipped_5": OUT,
+            "scoring": "positives corr==1; negatives corr==2 or 3; corr==0 unrefereed and "
+                       "excluded. Recall and precision use DIFFERENT frame sets and are "
+                       "never pooled into an F1."}
+if SCOPE_ON:          # recorded only on a filtered run, so the unfiltered file is unchanged
+    _payload["specimen_scope"] = list(SCOPE)
+json.dump(_payload, open(p, "w"), indent=1)
 print("\nwrote", p)

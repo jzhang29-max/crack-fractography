@@ -41,6 +41,23 @@ CORR = os.path.join(TXM, "paint", "corrections")
 GRID = [3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 10.0]
 NM_PER_PX = 29.24
 
+# ----------------------------------------------- specimen-series scope: b2 and b3 only
+#: WHY THIS EXISTS. A reviewer restricted the paper's own laboratory specimens to series
+#: b2 and b3. This TXM corpus also carries Wrought and AM/HC, which are other specimens,
+#: so the restriction changes the frame SET and nothing else.
+#:
+#: OFF by default: unset, this file measures and writes exactly what it always did under
+#: exactly the same filename. Set, the enumeration keeps only the B2 and B3 groups and the
+#: output gains a `_b2b3` suffix, so a filtered run can never overwrite the full-corpus
+#: record. The grid, the 5000-pixel floor and every per-frame quantity are untouched; the
+#: per-group blocks for B2 and B3 are built from their own frames alone and must come out
+#: bit-identical either way.
+#:
+#:     SCOPE_B2B3=1 <sem-crack-detector>/.venv/bin/python -B <this file>
+SCOPE = ("b2", "b3")
+SCOPE_ON = os.environ.get("SCOPE_B2B3", "") not in ("", "0")
+SUFFIX = "_b2b3" if SCOPE_ON else ""
+
 
 class U:
     pass
@@ -70,10 +87,20 @@ def group_of(n):
     return "B2"
 
 
+def in_scope(stem):
+    """Scoped through `group_of()` above -- this file's existing classifier, not a second
+    one, so the scope cannot disagree with the per-group table it writes beside it."""
+    return not SCOPE_ON or group_of(stem).lower() in SCOPE
+
+
 rows = []
 files = sorted(f for f in os.listdir(CORR) if f.endswith("_correction.npy"))
 for i, f in enumerate(files, 1):
     stem = f[: -len("_correction.npy")]
+    if not in_scope(stem):
+        print(f"  [{i:>2}] out of scope {SCOPE}: {group_of(stem):<8} {stem[:56]}",
+              flush=True)
+        continue
     tif = os.path.join(TXM, "images", stem + ".tif")
     if not os.path.exists(tif):
         continue
@@ -160,11 +187,14 @@ for g in ("B3", "B2", "Wrought", "AM/HC"):
     print(f"           longest painted crack in the group: "
           f"{SUMM[g]['longest_skeleton_frame'][:60]}")
 
-p = os.path.join(REPO, "docs/figures/txm_per_frame.json")
-json.dump({"mad_k_grid": GRID, "nm_per_px": NM_PER_PX,
-           "scoring": "refereed pixels only: 1 = crack, 2 or 3 = not-crack, 0 excluded",
-           "panel_selection_rule": "max skeleton_px within a group: the longest painted "
-                                   "crack, not the largest painted area",
-           "n_frames": len(rows), "per_group": SUMM, "frames": rows},
-          open(p, "w"), indent=1)
+p = os.path.join(REPO, f"docs/figures/txm_per_frame{SUFFIX}.json")
+assert SCOPE_ON == p.endswith("_b2b3.json"), "a scoped run must not write the full file"
+_payload = {"mad_k_grid": GRID, "nm_per_px": NM_PER_PX,
+            "scoring": "refereed pixels only: 1 = crack, 2 or 3 = not-crack, 0 excluded",
+            "panel_selection_rule": "max skeleton_px within a group: the longest painted "
+                                    "crack, not the largest painted area",
+            "n_frames": len(rows), "per_group": SUMM, "frames": rows}
+if SCOPE_ON:          # recorded only on a filtered run, so the unfiltered file is unchanged
+    _payload["specimen_scope"] = list(SCOPE)
+json.dump(_payload, open(p, "w"), indent=1)
 print("\nwrote", p)

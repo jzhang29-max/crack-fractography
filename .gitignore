@@ -25,3 +25,9 @@ _smoke.log
 # when the release gate runs the packaged binary by hand.
 _smoke_data/
 _smoke.log
+
+# The publishable dataset folder built by tools/build_release.py, and the Zenodo
+# download cache beside it. Several gigabytes of image data plus other people's
+# redistributed collections -- the BUILDER is the reproducible artifact, never the
+# bytes it assembles.
+release/

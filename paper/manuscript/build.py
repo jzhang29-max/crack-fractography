@@ -23,6 +23,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 PAPER = os.path.dirname(HERE)
 REPO = os.path.dirname(PAPER)
 sys.path.insert(0, PAPER)
+sys.path.insert(0, os.path.join(PAPER, "figures"))
 sys.dont_write_bytecode = True
 
 import matplotlib
@@ -30,6 +31,15 @@ matplotlib.use("Agg")
 from matplotlib.backends.backend_pdf import PdfPages
 
 import make_paper as MP          # noqa: E402  -- Doc, resolve, VALUES, metrics, layout
+import _paths as PATHS           # noqa: E402  -- scoped(), the b2/b3 measurement records
+
+# THE LABORATORY ARMS ARE READ FROM THE RESTRICTED RECORD. The paper reports on specimen
+# series b2 and b3 only, in both microscopies, and `PATHS.scoped()` resolves each
+# measurement file to the record computed over that scope. It raises if one is missing
+# rather than falling back to the full-corpus file, because a silent fallback would print
+# 31 frames under a caption that says 18 and nothing in the output would show it. Public
+# benchmark collections are not specimen series and keep their own unsuffixed files.
+GROUPS = ("B3", "B2")
 
 OUT = os.path.join(HERE, "Revised_Manuscript_v2.pdf")
 SECT = os.path.join(HERE, "sections")
@@ -96,7 +106,7 @@ FIGS = {
 }
 
 # --- values this manuscript needs that the longer draft does not define ----------------
-TX = MP._f(os.path.join(REPO, "docs/figures/txm_background_units.json"), "TXM")
+TX = MP._f(PATHS.scoped("txm_background_units.json"), "TXM")
 TM = MP._f(os.path.join(REPO, "docs/figures/txm_model_scores.json"), "TXM model scores")
 _cv, _ld, _wf, _ws = TM["cross_validated"], TM["labelled_domain"], TM["whole_frame"], TM["window_stages"]
 _k6 = "SEM detector, mad_k=6"
@@ -251,7 +261,7 @@ MP.VALUES.update({
     "ov_prec_lo": MP._n(_OV_W["per_k"][min(_OV_W["per_k"], key=float)]["precision"]),
     "ov_recall_lo": MP._n(_OV_W["per_k"][min(_OV_W["per_k"], key=float)]["recall"]),
 })
-for g in ("B3", "B2", "Wrought", "AM/HC"):
+for g in GROUPS:
     d = TX["by_group"][g]["arms"][_k6]
     tag = g.replace("/", "").lower()
     MP.VALUES.update({
@@ -298,7 +308,7 @@ MP.VALUES.update({
 # of its OWN paint earns against that same paint, because both collections are painted
 # with a stroke far wider than the feature and an overlap score against such a stroke
 # pays for covering the stroke.
-OVM = MP._f(os.path.join(REPO, "docs/figures/overlap_means_sem_txm.json"),
+OVM = MP._f(PATHS.scoped("overlap_means_sem_txm.json"),
             "per-frame overlap means")
 for _tag in ("SEM", "TXM"):
     _d = OVM[_tag]
@@ -325,7 +335,7 @@ for _tag in ("SEM", "TXM"):
 MP.VALUES["om_k"] = MP._n(OVM["mad_k"], 1)
 
 # --- trace or region: what the annotation IS, Sections 4.3 and 4.4 --------------------
-PRT = MP._f(os.path.join(REPO, "docs/figures/paint_region_vs_trace.json"),
+PRT = MP._f(PATHS.scoped("paint_region_vs_trace.json"),
             "paint region vs trace")
 _pct = lambda v: MP._n(100 * v, 1)
 MP.VALUES.update({
@@ -340,7 +350,7 @@ MP.VALUES.update({
     "pr_sem_max": _pct(PRT["SEM"]["max_deep_share"]),
     "pr_sem_above": str(PRT["SEM"]["frames_above_25pct"]),
 })
-for _g, _t in (("B3", "b3"), ("B2", "b2"), ("Wrought", "wrought"), ("AM/HC", "amhc")):
+for _g, _t in (("B3", "b3"), ("B2", "b2")):
     _r = PRT["TXM_by_group"][_g]
     MP.VALUES.update({
         f"pr_{_t}_med": _pct(_r["median_deep_share"]),
@@ -349,12 +359,35 @@ for _g, _t in (("B3", "b3"), ("B2", "b2"), ("Wrought", "wrought"), ("AM/HC", "am
         f"pr_{_t}_zero": str(_r["frames_at_zero"]),
     })
 
+# --- is the painted crack on the specimen at all? -------------------------------------
+# Not a scope question and not a score: a property of the annotation, measured before any
+# number is read off it. The stored transmission arrays are optical density, so free beam
+# reads near zero and the attenuating bulk near one. The module sweeps the threshold,
+# carries the other-label control and writes an overlay for every frame.
+FB = MP._f(os.path.join(REPO, "docs/figures/txm_paint_free_beam.json"),
+           "the free-beam audit of the transmission paint")
+_FBT = "0.1"
+_fb = lambda g, k: FB["by_group"][g][k][_FBT]
+_fbc = lambda g: FB["by_group"][g]
+MP.VALUES.update({
+    "fb_thresh": _FBT,
+    "fb_b3_crack": _pct(_fb("B3", "median_share_crack_below_od")),
+    "fb_b3_notcrack": _pct(_fb("B3", "median_share_notcrack_below_od")),
+    "fb_b3_frame": _pct(_fb("B3", "median_share_frame_below_od")),
+    "fb_b2_crack": _pct(_fb("B2", "median_share_crack_below_od")),
+    "fb_b2_frame": _pct(_fb("B2", "median_share_frame_below_od")),
+    "fb_b3_img8": str(_fbc("B3")["median_img8_of_painted_crack"]),
+    "fb_b3_gate": _pct(_fbc("B3")["median_crack_below_absolute_gate"]),
+    "fb_b2_gate": _pct(_fbc("B2")["median_crack_below_absolute_gate"]),
+    "fb_gate": str(FB["absolute_gate"]),
+})
+
 # --- the per-frame TXM rows, so Section 4.3 can say what one frame is worth ------------
 # The pooled numbers weight each frame by its refereed area, so a frame with a large
 # painted region counts for many frames with small ones. Giving every frame one vote is a
 # different estimand, not a correction of the pooled one, and the two disagree here by
 # enough that reporting either alone would be a choice the reader cannot see.
-TPF = MP._f(os.path.join(REPO, "docs/figures/txm_per_frame.json"), "TXM per frame")
+TPF = MP._f(PATHS.scoped("txm_per_frame.json"), "TXM per frame")
 _K6 = "SEM detector, mad_k=6"
 _allm = [f["arms"][_K6]["margin_pp"] for f in TPF["frames"]]
 _allm_sorted = sorted(_allm)
@@ -369,7 +402,7 @@ MP.VALUES.update({
     "tpf_med_all": MP._n(_med, 2),
     "tpf_pos_all": str(sum(1 for x in _allm if x > 0)),
 })
-for _g, _t in (("B3", "b3"), ("B2", "b2"), ("Wrought", "wrought"), ("AM/HC", "amhc")):
+for _g, _t in (("B3", "b3"), ("B2", "b2")):
     _r = TPF["per_group"][_g]
     MP.VALUES.update({
         f"tpf_{_t}_n": str(_r["n"]),
@@ -424,7 +457,7 @@ MP.VALUES.update({
 # thresholds in, per frame, for both collections. The reconstruction of the real proposal
 # mask from this axis is checked pixel for pixel against the installed detector on every
 # frame, so the number below is the detector's own margin and not a proxy for it.
-MC = MP._f(os.path.join(REPO, "docs/figures/modality_contrast.json"),
+MC = MP._f(PATHS.scoped("modality_contrast.json"),
            "modality contrast on the detector's axis")
 _mc_n = MC["SEM"]["n_frames"] + MC["TXM"]["n_frames"]
 _mc_below = (MC["SEM"]["frames_median_critical_k_below_k"]
@@ -443,7 +476,7 @@ MP.VALUES.update({
     "mc_recon": str(max(MC["SEM"]["max_reconstruction_mismatch_px"],
                         MC["TXM"]["max_reconstruction_mismatch_px"])),
 })
-for _g, _t in (("B3", "b3"), ("B2", "b2"), ("Wrought", "wrought"), ("AM/HC", "amhc")):
+for _g, _t in (("B3", "b3"), ("B2", "b2")):
     _r = MC["TXM"]["by_group"][_g]
     MP.VALUES.update({
         f"mc_{_t}_k": MP._n(_r["median_of_median_critical_k_crack"], 2),

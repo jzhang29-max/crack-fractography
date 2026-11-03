@@ -57,6 +57,45 @@ CORR = os.path.join(TXM, "paint", "corrections")
 MADK = 6.0          # the setting Section 3.4 selects; the sweep is in lab_madk_sweep.json
 MIN_PX = 200        # a frame needs this many of BOTH verdicts to score all three measures
 
+# ----------------------------------------------- specimen-series scope: b2 and b3 only
+#: WHY THIS EXISTS. A reviewer restricted the paper's own laboratory specimens to series
+#: b2 and b3 in BOTH microscopies. The full corpus is wider than that: the SEM paint also
+#: carries series b4 and the MAR_* / AS_* / Cast_* / HIP_* fields, and the TXM corrections
+#: also carry Wrought and AM/HC. Those are different specimens, not different frames of
+#: the same ones, so the reviewer's restriction is a change of frame SET, nothing else.
+#:
+#: The switch is OFF by default. Unset, this file enumerates, measures and writes exactly
+#: what it always did, under exactly the same filename. Set, the only two things that
+#: change are WHICH frames are enumerated and the output name, which gains a `_b2b3`
+#: suffix so that a filtered run can never overwrite the full-corpus record. No threshold,
+#: no aggregation and no per-frame computation is touched by it: every number a frame
+#: earns must be bit-identical with the switch on and off.
+#:
+#:     SCOPE_B2B3=1 <sem-crack-detector>/.venv/bin/python -B <this file>
+SCOPE = ("b2", "b3")
+SCOPE_ON = os.environ.get("SCOPE_B2B3", "") not in ("", "0")
+SUFFIX = "_b2b3" if SCOPE_ON else ""
+
+
+def in_scope_sem(stem):
+    """SEM carries the series in the frame stem: `..._b2_...`, `..._b3_...`, `..._b4_...`.
+
+    Verified against the 48 correction masks on disk: 20 admitted (all b2), 28 rejected,
+    among them `260622_316_H_b4_CBS_02`, which a bare `b2`/`b3` substring test would also
+    reject but a looser one might not. The underscores are load-bearing.
+    """
+    return not SCOPE_ON or any(f"_{s}_" in stem.lower() for s in SCOPE)
+
+
+def in_scope_txm(stem):
+    """TXM is scoped through `txm_group()` below -- this project's own classifier.
+
+    There is deliberately no second TXM name rule anywhere in this change: the groups the
+    paper already reports (B3 / Wrought / AM/HC / B2) are the groups that are kept or
+    dropped, so the scope cannot disagree with the by-group tables beside it.
+    """
+    return not SCOPE_ON or txm_group(stem).lower() in SCOPE
+
 
 class U:
     pass
@@ -122,6 +161,9 @@ def width_p90(pos):
 def sem_frames():
     for nm in sorted(f[: -len("_correction_mask.png")] for f in os.listdir(PAINT)
                      if f.endswith("_correction_mask.png")):
+        if not in_scope_sem(nm):
+            print(f"  out of scope {SCOPE}: {nm}", flush=True)
+            continue
         try:
             raw = tifffile.imread(os.path.join(SEM, "original", nm + ".tif"))
         except Exception as e:
@@ -163,6 +205,9 @@ def txm_frames():
         if not f.endswith("_correction.npy"):
             continue
         stem = f[: -len("_correction.npy")]
+        if not in_scope_txm(stem):
+            print(f"  out of scope {SCOPE}: {txm_group(stem):<8} {stem[:62]}", flush=True)
+            continue
         tif = os.path.join(TXM, "images", stem + ".tif")
         if not os.path.exists(tif):
             continue
@@ -249,6 +294,9 @@ def main():
     when this file is the program.
     """
     print(f"mad_k = {MADK:g}; refereed pixels only; a frame needs {MIN_PX} of each verdict\n")
+    if SCOPE_ON:
+        print(f"SCOPE_B2B3 is set: specimen series {SCOPE} only, in both microscopies; "
+              f"output gains the '{SUFFIX}' suffix\n")
     print("SEM -- this laboratory's hand-corrected frames")
     semr = summarise("SEM", run("SEM", sem_frames()))
     print("\nTXM -- the transmission X-ray collection")
@@ -265,14 +313,18 @@ def main():
                       f"  F1 {np.mean([x['f1'] for x in sub]):.4f}"
                       f"   3px-trace F1 {np.mean([x['ceiling_f1'] for x in sub]):.4f}")
 
-    out = os.path.join(REPO, "docs/figures/overlap_means_sem_txm.json")
-    json.dump({"mad_k": MADK, "min_px_each_verdict": MIN_PX,
+    out = os.path.join(REPO, f"docs/figures/overlap_means_sem_txm{SUFFIX}.json")
+    assert SCOPE_ON == out.endswith("_b2b3.json"), "a scoped run must not write the full file"
+    payload = {"mad_k": MADK, "min_px_each_verdict": MIN_PX,
                "aggregation": "mean over frames, one vote per frame; pixels are NOT pooled",
                "scoring": "refereed pixels only: 1 = crack, 2 or 3 = not-crack, 0 excluded",
                "ceiling": "the frame's own paint skeletonised and redrawn 3 px wide, scored "
                           "against that same paint: what a detector exactly right about where "
                           "the crack runs earns against this brush",
-               "SEM": semr, "TXM": txmr}, open(out, "w"), indent=1)
+               "SEM": semr, "TXM": txmr}
+    if SCOPE_ON:          # recorded only on a filtered run, so the unfiltered file is unchanged
+        payload["specimen_scope"] = list(SCOPE)
+    json.dump(payload, open(out, "w"), indent=1)
     print("\nwrote", out)
 
 

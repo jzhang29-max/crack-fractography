@@ -47,8 +47,29 @@ import fullframe_recall_decomposition as FRD            # noqa: E402  -- k_max l
 
 u = OV.u                      # the instance the overrides are installed on
 
+# ----------------------------------------------- specimen-series scope: b2 and b3 only
+#: WHY THIS EXISTS. A reviewer restricted the paper's own laboratory specimens to series
+#: b2 and b3 in BOTH microscopies; the corpus also carries SEM b4 and MAR_*/AS_*/Cast_*/
+#: HIP_*, and TXM Wrought and AM/HC, which are other specimens.
+#:
+#: THE PREDICATE IS NOT REDEFINED HERE. This file does not enumerate frames itself -- it
+#: iterates `OV.sem_frames()` and `OV.txm_frames()`, the same two loaders the overlap
+#: scorer uses -- so the scope filter lives there, in one place, keyed on the same
+#: environment variable, and this file only has to agree about the output name. Importing
+#: the flag rather than re-deriving it also makes it impossible for the two files to
+#: disagree about whether a run was filtered.
+#:
+#: OFF by default: unset, this file measures and writes exactly what it always did under
+#: exactly the same filename. The definition of d, MIN_PX, the ladder, the absolute floor
+#: and the reconstruction check are untouched.
+#:
+#:     SCOPE_B2B3=1 <sem-crack-detector>/.venv/bin/python -B <this file>
+SCOPE = OV.SCOPE
+SCOPE_ON = OV.SCOPE_ON
+SUFFIX = OV.SUFFIX
+
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(HERE))),
-                   "docs", "figures", "modality_contrast.json")
+                   "docs", "figures", f"modality_contrast{SUFFIX}.json")
 MIN_PX = OV.MIN_PX          # the same floor the overlap scorer uses, for one frame set
 
 
@@ -193,11 +214,16 @@ def main():
                 "take no part. SEM 8-bit frames are percentile-stretched per frame by the "
                 "application's loader, which is why a standardised effect size is used.",
     }
+    if SCOPE_ON:
+        res["specimen_scope"] = list(SCOPE)   # only on a filtered run
+        print(f"SCOPE_B2B3 is set: specimen series {SCOPE} only, in both microscopies; "
+              f"output gains the '{SUFFIX}' suffix\n")
     print("SEM")
     res["SEM"] = run("SEM", OV.sem_frames())
     print("TXM")
     res["TXM"] = run("TXM", OV.txm_frames(), OV.txm_group)
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
+    assert SCOPE_ON == OUT.endswith("_b2b3.json"), "a scoped run must not write the full file"
     json.dump(res, open(OUT, "w"), indent=1)
     print("wrote", OUT)
 
