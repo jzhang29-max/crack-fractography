@@ -435,6 +435,11 @@ for _t in ("sem", "txm"):
         f"wf_{_t}_umw": MP._n(_px[1] * _nm / 1000.0, 0),
         f"wf_{_t}_umh": MP._n(_px[0] * _nm / 1000.0, 0),
         f"wf_{_t}_marked": MP._n(_a["area_fraction_pct"], 2),
+        f"wf_{_t}_detail": f"{_a['detail_um']:g}",
+        f"wf_{_t}_regions": f"{_a['regions']:,}",
+        f"wf_{_t}_medw": MP._n(_a["area_weighted_median_width_um"], 2),
+        f"wf_{_t}_largest": MP._n(
+            100 * _a["largest_region_share_of_marked_area"], 0),
         f"st_{_t}_fov": f"{ST['rows'][_t]['fov_um']:g}",
     })
 MP.VALUES["st_zoom"] = f"{ST['inset_magnification']:g}"

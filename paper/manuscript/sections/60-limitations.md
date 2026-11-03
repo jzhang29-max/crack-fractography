@@ -29,7 +29,7 @@ Diagnostic observations further limit the interpretation of the darkness criteri
 Approximately 42% of annotated crack area lies outside the reported proposal support **on
 the public Inconel 718 collection**. The corresponding measurement on this laboratory's
 own frames, which is a different collection and a different annotation and is reported in
-Figure {fig_modality}(e), is that the median frame has {mc_sem_prop}% of its annotated
+Figure {fig_modality}(b), is that the median frame has {mc_sem_prop}% of its annotated
 crack proposed in SEM and {mc_txm_prop}% in TXM, with the median annotated pixel sitting
 below the operating threshold on {mc_sem_below} of {mc_sem_n} and {mc_txm_below} of
 {mc_txm_n} frames. The three figures are not interchangeable — they are pooled over area,

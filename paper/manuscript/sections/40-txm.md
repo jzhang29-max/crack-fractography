@@ -152,11 +152,11 @@ single accuracy cannot tell them apart. Panel (b) is the comparison the arms are
 {tx_vs_otsu} points better than an Otsu darkness cut with no model and {tx_vs_all} points
 better than marking every pixel, and still below an empty mask.
 
-**The transfer fails at the first stage, not the last, and Figure {fig_modality}(e) says so
+**The transfer fails at the first stage, not the last, and Figure {fig_modality}(b) says so
 in the criterion's own units.** The proposal stage keeps a pixel when it is darker than its
 frame's median by more than k scaled median absolute deviations, at any radius of the scale
 ladder. Measuring the operator's painted crack on that axis — which is the quantity
-Figure {fig_modality}(e) plots, with the reconstruction of the real proposal mask from it
+Figure {fig_modality}(b) plots, with the reconstruction of the real proposal mask from it
 checked against the installed detector to within {mc_recon} pixel on every frame — the
 median painted-crack pixel sits at {mc_txm_k} on the TXM frames against an operating point
 of {om_k}, and below it on {mc_txm_below} of the {mc_txm_n} frames. The median frame has

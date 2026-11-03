@@ -24,7 +24,7 @@ operations. Each stage has a visible intermediate representation in Figure {fig_
 Figure {fig_workflow} separates the operations that lead to the final area estimate. The
 lower row of Figure {fig_stages} is the same three stages on a frame of the second
 modality, which is where the inspectability earns something: the transfer there fails at the
-candidate stage rather than at the filters, and Figure {fig_modality}(e) measures by how
+candidate stage rather than at the filters, and Figure {fig_modality}(b) measures by how
 much in the criterion's own units. Disabling the learned region
 classifier gives the reported configuration an inspectable processing path without a learned
 region-classification step.
