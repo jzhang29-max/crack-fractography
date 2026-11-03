@@ -256,53 +256,96 @@ def plate_width():
 
 
 def plate_baselines():
-    """Eight arms, ranked by reported/annotated crack area, with accuracy beside them.
+    """Seven arms on BOTH framings of the same images, as a dot plot rather than bars.
 
-    Panel (b) previously ran from 97.4 to 98.5 so the differences between arms would show.
-    That is a truncated axis under bars and it is the clearest misrepresentation available
-    in this figure set, so it now runs from zero and the arms are, correctly, almost
-    indistinguishable on accuracy -- which is the paper's point about accuracy at this
-    prevalence, not a defect of the chart.
+    WHAT CHANGED. This was two panels of horizontal bars showing one collection, and the
+    review's note was that it reads as too simple for what it carries. Two things were
+    wrong with it beyond that.
+
+    First, bars from zero are the wrong form for panel (a). The quantity is reported area
+    divided by annotated area and its meaningful reference is ONE, not zero; a bar from
+    zero spends most of its length on the part of the scale where nothing is at issue and
+    encodes the interesting part -- the deviation from agreement -- as the small
+    difference between long bars. A dot on a rule drawn from unity encodes exactly the
+    deviation, and the arms order by it.
+
+    Second, and more useful, the plate showed one of the two collections when the paper's
+    own argument is that the two disagree. Both are drawn now, one marker each, joined by
+    a rule: the same seven arms, the same images, cut two ways. Every arm is BELOW an
+    all-background mask on the whole fields and several are above it on the crops cut
+    from those same fields, and this detector is one of them -- it moves from -0.41 to
+    +1.07 points. That reversal is the paper's point about the framing, and it was not
+    visible anywhere in the figure set.
+
+    Panel (b) keeps zero as its origin because the difference from an all-background mask
+    is signed and zero IS its reference. Neither axis is cropped.
     """
-    arms = AB["whole_fields"]["arms"]
-    empty = AB["whole_fields"]["empty_mask_accuracy_pct"]
+    WF, CR = AB["whole_fields"], AB["crops"]
     short = {"DETECTOR (shipped)": "this detector",
              "UNION darkness OR Sato": "darkness OR Sato",
              "global threshold (Otsu on flat)": None}
-    rank = sorted(((short.get(k, k), v) for k, v in arms.items()
+    rank = sorted(((short.get(k, k), k) for k in WF["arms"]
                    if short.get(k, k) is not None),
-                  key=lambda kv: -abs(kv[1]["area_agreement"] - 1.0))
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(J.PAGEW, 2.9), layout="constrained",
-                                   gridspec_kw={"width_ratios": [1.0, 0.78]})
+                  key=lambda kv: abs(WF["arms"][kv[1]]["area_agreement"] - 1.0))
+    names = [a for a, _ in rank]
+    keys = [k for _, k in rank]
     y = list(range(len(rank)))
-    cols = [J.ACCENT if k == "this detector" else J.G_LIGHT for k, _ in rank]
+    HERO = names.index("this detector")
 
-    ax1.barh(y, [v["area_agreement"] for _, v in rank], 0.6, color=cols,
-             edgecolor=J.INK, linewidth=0.5, zorder=2)
-    ax1.axvline(1.0, color=J.INK, lw=0.9, zorder=3)
-    ax1.set_yticks(y, [k for k, _ in rank])
-    ax1.set_xlim(0, 1.35)
-    ax1.set_xlabel("Reported / annotated crack area")
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(J.PAGEW, 2.75), layout="constrained",
+                                   gridspec_kw={"width_ratios": [1.0, 0.82]})
+
+    def dots(ax, wf, cr, ref, label):
+        # the band marks the row this paper's own detector is on, so the eye finds it
+        # without giving that row a colour the other rows do not have
+        ax.axhspan(HERO - 0.5, HERO + 0.5, color="#eef2f8", zorder=0)
+        for i, (a, b) in enumerate(zip(wf, cr)):
+            ax.plot([a, b], [i, i], color=J.G_LIGHT, lw=1.6, solid_capstyle="round",
+                    zorder=2)
+        ax.axvline(ref, color=J.INK, lw=0.9, zorder=3)
+        ax.plot(wf, y, "o", ms=5.0, mfc=J.ACCENT, mec="white", mew=0.6,
+                linestyle="none", zorder=4, label="whole fields ($n$ = 31)")
+        ax.plot(cr, y, "s", ms=4.6, mfc="white", mec=J.ACCENT2, mew=1.3,
+                linestyle="none", zorder=5, label="released crops ($n$ = 26)")
+        ax.set_ylim(len(rank) - 0.5, -0.5)
+        ax.set_xlabel(label)
+
+    a_wf = [WF["arms"][k]["area_agreement"] for k in keys]
+    a_cr = [CR["arms"][k]["area_agreement"] for k in keys]
+    dots(ax1, a_wf, a_cr, 1.0, "Reported / annotated crack area")
+    ax1.set_yticks(y, names)
+    for t, n in zip(ax1.get_yticklabels(), names):
+        if n == "this detector":
+            t.set_fontweight("bold")
+    ax1.legend(loc="lower right", handletextpad=0.3, borderpad=0.25, labelspacing=0.25)
     J.panel_label(ax1, "a")
 
-    # THE SIGNED DIFFERENCE, not the accuracy itself. Drawn from zero, every arm's
-    # accuracy is 97-98% and the bars are indistinguishable -- true, and the paper's point,
-    # but unreadable. Cropping the axis to show it would be the misrepresentation the
-    # convention exists to prevent. The difference from an all-background mask is the
-    # quantity actually at issue, it is signed, and zero is its natural origin.
-    d = [v["accuracy_pct"] - empty for _, v in rank]
-    ax2.barh(y, d, 0.6, color=cols, edgecolor=J.INK, linewidth=0.5, zorder=2)
-    ax2.axvline(0.0, color=J.INK, lw=0.9, zorder=3)
+    m_wf = [WF["arms"][k]["accuracy_pct"] - WF["empty_mask_accuracy_pct"] for k in keys]
+    m_cr = [CR["arms"][k]["accuracy_pct"] - CR["empty_mask_accuracy_pct"] for k in keys]
+    dots(ax2, m_wf, m_cr, 0.0, "Pixel accuracy relative to an\nall-background mask (points)")
     ax2.set_yticks(y, ["" for _ in rank])
-    ax2.set_xlabel("Pixel accuracy relative to an\nall-background mask (points)")
     J.panel_label(ax2, "b")
 
     J.save(fig, os.path.join(OUT, "P4 - baselines.png"))
-    json.dump({"what": "eight arms ranked by reported/annotated crack area, with pixel "
-                       "accuracy and the all-background reference",
-               "arms": arms, "all_background_accuracy_pct": empty,
-               "source": "docs/figures/arms_background_units.json"},
-              open(os.path.join(OUT, "P4 - baselines.caption.json"), "w"), indent=1)
+    json.dump({
+        "what": "seven arms on the whole fields and on the released crops cut from them, "
+                "ranked by agreement in total marked area on the whole fields; (a) "
+                "reported over annotated area against unity, (b) pixel accuracy against "
+                "an all-background mask on the same pixels",
+        "why a dot plot": "the reference of the ratio in (a) is one, not zero, so a bar "
+                          "from zero encodes the quantity at issue as the difference "
+                          "between the long ends of long bars; and the two collections "
+                          "disagree, which is the paper's own point and which the "
+                          "single-collection version of this plate could not show",
+        "reversal": {"this detector, whole fields": round(m_wf[HERO], 3),
+                     "this detector, released crops": round(m_cr[HERO], 3)},
+        "arms_whole_fields": WF["arms"], "arms_crops": CR["arms"],
+        "all_background_accuracy_pct": {"whole_fields": WF["empty_mask_accuracy_pct"],
+                                        "crops": CR["empty_mask_accuracy_pct"]},
+        "omitted": "Otsu on the flattened image, which marks 55x the annotated area on "
+                   "the whole fields and would set the axis alone",
+        "source": "docs/figures/arms_background_units.json"},
+        open(os.path.join(OUT, "P4 - baselines.caption.json"), "w"), indent=1)
 
 
 def plate_budget():
@@ -389,10 +432,121 @@ def plate_budget():
         open(os.path.join(OUT, "P5 - pixel budget.caption.json"), "w"), indent=1)
 
 
+# ------------------------------------------------- plate: the two sensitivity curves
+#: The TXM sweep, pooled over frames, read in the same ratio units as the SEM sweep. The
+#: file is named explicitly rather than discovered, and recorded in the caption JSON,
+#: because a plate that silently falls back to a different corpus is the hardest kind of
+#: error to see afterwards.
+TXM_SWEEP_FILE = "txm_background_units.json"
+
+
+def plate_sensitivity():
+    """Both of the paper's sensitivity curves on one plate, in two panels.
+
+    WHY THEY ARE ONE FIGURE NOW. They were two, each a single line plot alone on a
+    1.5-column plate, and a reviewer's note was that the pair is too large for what it
+    says. They are the same kind of statement -- what moves the reported area, and what
+    moves the accuracy -- drawn on the same two collections with the same two markers, so
+    a reader who has parsed one panel has already parsed the other. Side by side they
+    occupy a little over half the page the pair used to.
+
+    (a) adds the transmission collection to the sweep, which neither plate carried. The
+    quantity is a RATIO in both -- reported crack area over annotated crack area -- so
+    the three series are commensurable, but the TXM denominator is the area an operator
+    adjudicated rather than the whole frame, and the caption says so. What the panel is
+    for is the comparison the review asked for: the two microscopies against the one
+    constant, and where each of them crosses agreement.
+    """
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(J.PAGEW, 2.45), layout="constrained")
+
+    # --- (a) the one free constant --------------------------------------------------
+    wf, cr = BC["sweeps"]["whole_fields"], BC["sweeps"]["crops"]
+    tx = load(os.path.join(REPO, "docs", "figures", TXM_SWEEP_FILE),
+              "the TXM sweep")["pooled"]
+    tk = sorted(float(k.rsplit("=", 1)[1]) for k in tx if k.startswith("SEM detector"))
+    ax1.plot([r["mad_k"] for r in wf], [r["area_agreement_corpus"] for r in wf],
+             marker="o", ms=3.6, color=J.ACCENT, label="SEM, whole fields")
+    ax1.plot([r["mad_k"] for r in cr], [r["area_agreement_corpus"] for r in cr],
+             marker="s", ms=3.4, linestyle="--", color=J.ACCENT2,
+             markerfacecolor="white", label="SEM, released crops")
+    ax1.plot(tk, [tx[f"SEM detector, mad_k={k:g}"]["area_agreement"] for k in tk],
+             marker="^", ms=3.6, linestyle=":", color=J.G_DARK,
+             label="TXM, reviewed pixels")
+    ax1.axhline(1.0, color=J.INK, lw=0.7)
+    best = min(wf, key=lambda r: abs(r["area_agreement_corpus"] - 1.0))
+    ax1.plot([best["mad_k"]], [best["area_agreement_corpus"]], marker="D", color=J.INK,
+             markersize=5.0, zorder=6)
+    ax1.set_xscale("log")
+    ax1.set_yscale("log")
+    ax1.set_xticks([1, 10])
+    ax1.set_yticks([0.1, 1, 10])
+    for a in (ax1.get_xaxis(), ax1.get_yaxis()):
+        a.set_major_formatter(matplotlib.ticker.ScalarFormatter())
+    ax1.set_xlabel("MAD multiplier, $k$")
+    ax1.set_ylabel("Reported / annotated crack area")
+    ax1.legend(loc="upper right", handletextpad=0.4, borderpad=0.25, labelspacing=0.25)
+    J.panel_label(ax1, "a")
+
+    # --- (b) the width the annotation is drawn at -----------------------------------
+    wbw, cbw = WBG["whole_fields"], WBG["crops"]
+    ws = sorted(int(k) for k in wbw["by_width"])
+    ax2.plot(ws, [wbw["by_width"][str(w)]["accuracy_pct"] for w in ws], marker="o",
+             ms=3.6, color=J.ACCENT, label=f"whole fields ($n$ = {wbw['n']})")
+    ax2.plot(ws, [cbw["by_width"][str(w)]["accuracy_pct"] for w in ws], marker="s",
+             ms=3.4, linestyle="--", color=J.ACCENT2, markerfacecolor="white",
+             label=f"released crops ($n$ = {cbw['n']})")
+    ax2.axhline(wbw["empty_mask_accuracy_pct"], color=J.ACCENT, lw=0.7, linestyle=":")
+    ax2.axhline(cbw["empty_mask_accuracy_pct"], color=J.ACCENT2, lw=0.7, linestyle=":",
+                label="all-background, same corpus")
+    for d in (wbw, cbw):
+        bw = d["best_accuracy_width"]
+        ax2.plot([bw], [d["by_width"][str(bw)]["accuracy_pct"]], marker="D", color=J.INK,
+                 markersize=5.0, zorder=6)
+    ax2.set_xscale("log")
+    ax2.set_xticks([1, 10])
+    ax2.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+    ax2.set_xlabel("Width the centreline is redrawn at (px)")
+    ax2.set_ylabel("Pixel accuracy (%)")
+    # headroom at the bottom so the key sits on white rather than across the curves. The
+    # axis is NOT cropped at the top to separate the series -- the range still reaches
+    # both all-background lines, which is what the panel is read against.
+    lo = min(cbw["by_width"][str(w)]["accuracy_pct"] for w in ws)
+    ax2.set_ylim(lo - 1.35, None)
+    ax2.legend(loc="lower left", handletextpad=0.4, borderpad=0.25, labelspacing=0.25)
+    J.panel_label(ax2, "b")
+
+    J.save(fig, os.path.join(OUT, "P2 - the two sensitivities.png"))
+    json.dump({
+        "what": "(a) reported crack area divided by annotated, against the detector's "
+                "single free constant, on the two public SEM collections and on the "
+                "transmission collection; (b) pixel accuracy of the annotation reduced "
+                "to its centreline and redrawn at a fixed width, against that width",
+        "why one plate": "the two curves were two 1.5-column plates with one line each; "
+                         "they make the same kind of statement on the same collections "
+                         "with the same markers, and the pair was larger than what it "
+                         "said",
+        "units warning": "panel (a)'s three series are all the ratio reported/annotated "
+                         "crack area, but the SEM series are over every pixel of the "
+                         "frame and the TXM series is over the pixels an operator "
+                         "adjudicated. The ratio is commensurable; the denominators "
+                         "cover different things, and the caption says so.",
+        "whole_fields": {str(r["mad_k"]): r["area_agreement_corpus"] for r in wf},
+        "crops": {str(r["mad_k"]): r["area_agreement_corpus"] for r in cr},
+        "txm_pooled": {f"{k:g}": tx[f"SEM detector, mad_k={k:g}"]["area_agreement"]
+                       for k in tk},
+        "marker": {"mad_k": best["mad_k"], "ratio": best["area_agreement_corpus"]},
+        "width_whole_fields": wbw, "width_crops": cbw,
+        "sources": ["docs/figures/background_counting_table.json",
+                    "docs/figures/width_ceiling_background_units.json",
+                    "docs/figures/" + TXM_SWEEP_FILE],
+    }, open(os.path.join(OUT, "P2 - the two sensitivities.caption.json"), "w"), indent=1)
+
+
 if __name__ == "__main__":
     plate_scores()
     plate_transfer()
     plate_width()
+    plate_sensitivity()
     plate_baselines()
     plate_budget()
     print("\nplates in", OUT)

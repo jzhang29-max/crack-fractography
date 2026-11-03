@@ -63,10 +63,15 @@ FIGS = {
     "stages": os.path.join(
         PAPER, "figures/out/F3 - detection stages, both modalities.png"),
     "measurands": os.path.join(PAPER, "figures/out/F4 - what is measured.png"),
+    "parameters": os.path.join(
+        PAPER, "figures/out/F6 - how the parameters were determined.png"),
     "counting": os.path.join(PAPER, "figures/out/F5 - over- and under-counting.png"),
     "areabars": os.path.join(PAPER, "figures/out/P1 - public scores.png"),
-    "sweep": os.path.join(PAPER, "figures/out/P2 - operating curve.png"),
-    "ceiling": os.path.join(PAPER, "figures/out/P3 - width sensitivity.png"),
+    # ONE PLATE, NOT TWO. The sweep over the detector's free constant and the sweep
+    # over the width the annotation is drawn at were a 1.5-column plate each, one line
+    # apiece, and the review's note was that the pair is larger than what it says. They
+    # are the same kind of statement on the same collections with the same markers.
+    "sensitivity": os.path.join(PAPER, "figures/out/P2 - the two sensitivities.png"),
     "arms": os.path.join(PAPER, "figures/out/P4 - baselines.png"),
     "budget": os.path.join(PAPER, "figures/out/P5 - pixel budget.png"),
     # the overlap measures for the crack class, shown rather than only mentioned. It is
@@ -98,6 +103,37 @@ _k6 = "SEM detector, mad_k=6"
 _pool = TX["pooled"][_k6]
 
 
+#: The two sweeps compared over the k values BOTH collections were run at, so neither
+#: series is given a range the other was never measured on. The transmission grid is the
+#: shorter of the two and sets the comparison.
+_SWGRID = sorted(float(k.rsplit("=", 1)[1]) for k in TX["pooled"]
+                 if k.startswith("SEM detector, mad_k="))
+_SWSEM = {r["mad_k"]: r["area_agreement_corpus"]
+          for r in MP._f(os.path.join(REPO, "docs/figures/background_counting_table.json"),
+                         "background counting")["sweeps"]["whole_fields"]}
+_missing = [k for k in _SWGRID if k not in _SWSEM]
+if _missing:
+    raise SystemExit(
+        f"the transmission sweep was run at k = {_missing} and the SEM sweep was not, so "
+        f"the two cannot be compared over a common grid. Shorten _SWGRID deliberately "
+        f"rather than letting the comparison quietly span different ranges.")
+_SWSPAN = ([_SWSEM[k] for k in _SWGRID],
+           [TX["pooled"][f"SEM detector, mad_k={k:g}"]["area_agreement"]
+            for k in _SWGRID])
+
+
+#: The shipped detector's accuracy margin on each of the two cuts of the same images.
+_AB = MP._f(os.path.join(REPO, "docs/figures/arms_background_units.json"),
+            "arms in background units")["sets"]
+_ARM = tuple(_AB[k]["arms"]["DETECTOR (shipped)"]["accuracy_pct"]
+             - _AB[k]["empty_mask_accuracy_pct"] for k in ("whole_fields", "crops"))
+if not (_ARM[0] < 0 < _ARM[1]):
+    raise SystemExit(
+        f"the baselines reversal is quoted as a sign change and the measured margins are "
+        f"{_ARM} -- rewrite the sentence in Section 3.2 rather than letting it assert a "
+        f"reversal that is no longer in the data")
+
+
 def _rec(d):
     return d["tp_pct"] / max(d["tp_pct"] + d["fn_pct"], 1e-12)
 
@@ -122,6 +158,22 @@ MP.VALUES.update({
     "crop_margin_img": MP._n(abs(100 * MP.PA_C["accuracy"]
                                  - (100 - MP.PA_C["labelled_pct"])), 2),
     "wf_margin_pool": MP._n(abs(MP._WFK(6.0)["accuracy_margin_pp"]), 2),
+    # THE SWEEP'S LEVERAGE, ONE MICROSCOPY AGAINST THE OTHER. Both ratios are read off
+    # the same seven values of k, so the comparison is of how far each collection's
+    # reported-over-annotated area moves, not of where it sits. Computed here rather
+    # than typed, because the transmission file is the one that changes when the corpus
+    # is restricted and a typed number would not follow it.
+    "sw_sem_lo": MP._n(min(_SWSPAN[0]), 2),
+    "sw_sem_hi": MP._n(max(_SWSPAN[0]), 2),
+    "sw_sem_span": MP._n(max(_SWSPAN[0]) / min(_SWSPAN[0]), 1),
+    "sw_txm_lo": MP._n(min(_SWSPAN[1]), 2),
+    "sw_txm_hi": MP._n(max(_SWSPAN[1]), 2),
+    "sw_txm_span": MP._n(max(_SWSPAN[1]) / min(_SWSPAN[1]), 1),
+    "sw_grid": f"{min(_SWGRID):g} to {max(_SWGRID):g}",
+    # the reversal the baselines plate now draws: the same detector, the same images,
+    # two cuts, opposite signs against an all-background prediction
+    "arm_rev_wf": MP._n(abs(_ARM[0]), 2),
+    "arm_rev_cr": MP._n(abs(_ARM[1]), 2),
     "tx_n": str(TX["n_frames"]),
     "tx_cov": MP._n(100 * TX["refereed_coverage_frac"], 1),
     "tx_crack_px": f"{TX['refereed_crack_px']:,}",
@@ -400,6 +452,9 @@ for _g, _t in (("B3", "b3"), ("B2", "b2"), ("Wrought", "wrought"), ("AM/HC", "am
 
 
 FIG_RE = re.compile(r"^\[FIGURE ([a-z]+)\s*\|\s*(.+)\]$")
+#: `[TABLE key | caption]` on its own line, IMMEDIATELY BEFORE a pipe table. The same
+#: shape as the figure directive, and for the same reason -- see `number_the_tables`.
+TBL_RE = re.compile(r"^\[TABLE ([a-z0-9_]+)\s*\|\s*(.+)\]$")
 
 
 def number_the_figures(files):
@@ -448,17 +503,65 @@ def number_the_figures(files):
     return order
 
 
+def number_the_tables(files):
+    """Assign table numbers from the order the `[TABLE ...]` directives appear.
+
+    EXACTLY THE DISCIPLINE `number_the_figures` IMPOSES ON FIGURES, and for the same
+    reason: a typed "Table 2" silently points at a different table the moment a table is
+    inserted ahead of it, and no dangling-reference check can see that. The prose writes
+    `{tbl_<key>}` and gets the number this function assigns; a key with no directive
+    never enters VALUES, so `resolve` fails the build on it.
+
+    Unlike figures there is no registry of known keys -- a table has no plate on disk --
+    so the key is only a label, and its only constraint is that it is placed once.
+    """
+    seen, order = set(), []
+    for src in files:
+        for raw in open(os.path.join(SECT, src), encoding="utf-8"):
+            m = TBL_RE.match(raw.strip())
+            if not m:
+                continue
+            key = m.group(1)
+            if key in seen:
+                raise SystemExit(f"table key {key!r} is placed twice")
+            seen.add(key)
+            order.append(key)
+    MP.VALUES.update({f"tbl_{k}": str(i + 1) for i, k in enumerate(order)})
+    # AND THE GUARD, on the RAW source before the placeholders resolve, because after
+    # resolution every legitimate reference reads "Table 3" too.
+    typed = []
+    for src in files:
+        for n, raw in enumerate(open(os.path.join(SECT, src), encoding="utf-8"), 1):
+            for m in re.finditer(r"Tables?\s+\d", raw):
+                typed.append(f"{src}:{n}: {raw.strip()[max(0, m.start() - 30):m.end() + 20]}")
+    if typed and order:
+        raise SystemExit(
+            "table numbers typed into the prose, which silently point at the wrong table "
+            "the next time a table moves. Use {tbl_<key>}:\n  " + "\n  ".join(typed))
+    if typed:
+        # NOT YET FATAL, and only because no table carries a directive yet: with no
+        # `{tbl_<key>}` published there is nothing the author could write instead, and
+        # raising here would mean the manuscript could not be built at all. The first
+        # `[TABLE ...]` directive added to the sections turns this into the hard failure
+        # above, which is the state the figures are already in.
+        print(f"  WARNING: {len(typed)} typed table number(s) in the prose. These become "
+              f"a hard build failure as soon as one [TABLE ...] directive exists:")
+        for t in typed:
+            print(f"    {t}")
+    return order
+
+
 def paragraphs(text):
     """Yield the file's lines with consecutive body lines joined into one.
 
     A body line is anything that is not blank, not a heading, not a bullet, not a table
-    row and not a figure directive. Those four keep their own lines because each of them
-    is a single unit the renderer handles separately.
+    row and not a figure or table directive. Those keep their own lines because each of
+    them is a single unit the renderer handles separately.
     """
     def structural(t):
         st = t.strip()
         return (not st or st.startswith(("#", "* ", "|"))
-                or FIG_RE.match(st) is not None)
+                or FIG_RE.match(st) is not None or TBL_RE.match(st) is not None)
 
     buf = []
     for raw in text.split("\n"):
@@ -479,10 +582,35 @@ def main():
     if not files:
         raise SystemExit(f"{SECT} is empty")
     order = number_the_figures(files)
+    torder = number_the_tables(files)
+    laid, undirected = [], []
     with PdfPages(OUT) as pdf:
         doc = MP.Doc(pdf)
         fign = 0
-        pending = []
+        pending, directive, src = [], None, None
+
+        def flush_table():
+            """Render the pipe rows collected so far, with the directive's caption and
+            number when one preceded them and with neither when none did."""
+            nonlocal pending, directive
+            body = [r for r in pending
+                    if not all(set(c) <= set("-: ") for c in r)]
+            pending = []
+            if not body:
+                directive = None
+                return
+            if directive:
+                n, cap, key = directive
+                got = doc.table(body, MP.SMALL, caption=cap, number=n)
+                laid.append((f"Table {n} ({key})", got))
+            else:
+                undirected.append((src, " | ".join(body[0])))
+                got = doc.table(body, MP.SMALL,
+                                name=f"{src}: the undirected table headed "
+                                     f"{' | '.join(body[0])!r}")
+                laid.append((f"(no directive) {src}: {body[0][0][:28]}", got))
+            directive = None
+
         for src in files:
             whole = MP.resolve(open(os.path.join(SECT, src), encoding="utf-8").read())
             # JOIN A PARAGRAPH'S LINES BEFORE RENDERING. `Doc.text` wraps whatever it is
@@ -495,6 +623,18 @@ def main():
             # directives are left alone -- each of those IS one line.
             for raw in paragraphs(whole):
                 line = raw.rstrip()
+                mt = TBL_RE.match(line.strip())
+                if mt:
+                    if pending:
+                        raise SystemExit(
+                            f"{src}: [TABLE {mt.group(1)}] sits INSIDE a pipe table; the "
+                            f"directive goes immediately before the first row")
+                    if directive:
+                        raise SystemExit(
+                            f"{src}: [TABLE {directive[2]}] is not followed by a pipe "
+                            f"table")
+                    directive = (torder.index(mt.group(1)) + 1, mt.group(2), mt.group(1))
+                    continue
                 m = FIG_RE.match(line.strip())
                 if m:
                     fign += 1
@@ -509,10 +649,12 @@ def main():
                     pending.append([c.strip() for c in line.strip().strip("|").split("|")])
                     continue
                 if pending:
-                    doc.table([r for r in pending
-                               if not all(set(c) <= set("-: ") for c in r)], MP.SMALL)
-                    pending = []
+                    flush_table()
                     doc.y -= 0.06
+                if directive and line.strip():
+                    raise SystemExit(
+                        f"{src}: [TABLE {directive[2]}] must sit immediately before a "
+                        f"pipe table, and the next content is {line.strip()[:60]!r}")
                 if not line.strip():
                     doc.y -= 0.07
                 elif line.startswith("### "):
@@ -526,12 +668,25 @@ def main():
                 else:
                     doc.text(line, MP.BODY, lead=MP.LEAD["body"])
         if pending:
-            doc.table([r for r in pending
-                       if not all(set(c) <= set("-: ") for c in r)], MP.SMALL)
+            flush_table()
+        if directive:
+            raise SystemExit(f"[TABLE {directive[2]}] is not followed by a pipe table")
         doc.close()
     print("wrote", OUT)
-    print(f"resolved {len(MP.VALUES)} values; sections: {len(files)}; figures: {fign}")
+    print(f"resolved {len(MP.VALUES)} values; sections: {len(files)}; figures: {fign}; "
+          f"tables: {len(laid)}")
     print("  " + "; ".join(f"{i + 1} {k}" for i, k in enumerate(order)))
+    for nm, got in laid:
+        print(f"  {nm}: {got['size']:.1f} pt, columns "
+              f"{'/'.join(f'{w:.0f}' for w in got['widths_pt'])} pt "
+              f"({''.join(got['align'])})")
+    if undirected:
+        # THE PROSE AUTHOR NEEDS THE LIST, not a silent omission. These render with no
+        # caption and no number, which is correct but is not the finished state.
+        print(f"  WARNING: {len(undirected)} table(s) carry no [TABLE key | caption] "
+              f"directive and so ship with no number and no caption:")
+        for s, hdr in undirected:
+            print(f"    {s}: | {hdr} |")
 
 
 if __name__ == "__main__":

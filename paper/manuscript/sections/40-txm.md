@@ -37,6 +37,7 @@ Grouped cross-validation over {tm_cv_n} labelled images puts the ensemble at IoU
 The same deployed model, on the same collection, returns three materially different numbers
 according to what is scored:
 
+[TABLE txmiou | One deployed model on one collection, scored three ways. The three rows differ only in which pixels are admitted and how frames are combined; the spread between them is larger than any difference this paper reports between methods.]
 | What is scored | Aggregation | Frames | IoU |
 |---|---|---|---|
 | 250,000 sampled hand-painted pixels per fold, 5 folds grouped by image | mean over folds | {tm_cv_n} | {tm_cv_ens} |
@@ -76,7 +77,7 @@ collection, a higher overlap score is evidence that a mask resembles the annotat
 is not, by itself, evidence that it has found more crack.
 
 This is why Section 3 reports an area fraction with its measurement error as the endpoint and
-treats the overlap measures as secondary, and it is why the ceiling in Figure {fig_ceiling} is reported
+treats the overlap measures as secondary, and it is why the ceiling in Figure {fig_sensitivity}(b) is reported
 beside them rather than after them.
 
 ### 4.3  The SEM detector carried across
@@ -95,6 +96,7 @@ improve on marking nothing.
 
 **The pooled figure is four different results.** The specimen groups do not behave alike:
 
+[TABLE txmgroups | The pooled transmission result broken out by specimen group, over reviewed pixels only. The groups do not behave alike, and the pooled figure is not a description of any of them.]
 | Specimen group | Frames | Crack % of reviewed area | Accuracy | All-background | Recall | Area reported / annotated |
 |---|---|---|---|---|---|---|
 | B3 | {tx_b3_n} | {tx_b3_prev}% | {tx_b3_acc}% | {tx_b3_empty}% | {tx_b3_recall} | {tx_b3_area} |
@@ -179,6 +181,7 @@ in percentage points, the mean of that group's per-frame margins, the pooled mar
 recomputed with the group's single largest frame removed, and that frame's share of the
 group's reviewed crack pixels.
 
+[TABLE txmpool | Pooled against per-frame aggregation, by specimen group, in percentage points of accuracy margin. The last two columns recompute the pooled margin with each group's single largest frame removed and give that frame's share of the group's reviewed crack pixels, which is what the two aggregations disagree about.]
 | Group | Frames | Pooled | Frame mean | Largest dropped | Largest share |
 |---|---|---|---|---|---|
 | B3 | {tpf_b3_n} | {tpf_b3_pool} | {tpf_b3_mean} | {tpf_b3_cut} | {tpf_b3_share}% |

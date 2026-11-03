@@ -12,10 +12,18 @@ SEM arm" shows the same pixels of the same field, and likewise for TXM.
 WHICH FIELDS, AND WHY THESE. Both are chosen by the rules the single-modality figures
 already used and recorded, not re-picked to suit a new layout:
 
-  SEM  MAR_H_HIP_CBS_0007 at 51.883 nm/px -- of the 80 frames with a recovered pixel size
-       and an original on disk, the one whose crack area fraction is closest to the
-       median (mk_pipeline_visual.py). The evaluated public collection publishes no pixel
-       size, so a panel drawn from it could carry no scale bar.
+  SEM  260622_316_H_b2_back_CBS_01 at 42.194 nm/px. The paper is now restricted to
+       specimen series b2 and b3, so the previous choice -- MAR_H_HIP_CBS_0007, of a
+       different alloy -- is out of scope whatever its merits. Of the eleven b2 frames
+       that carry a hand correction, exactly TWO have a recoverable pixel size: the
+       2026-06-22 session was saved uncropped and its 280 databar rows survive, while the
+       2026-07-08 session was saved already cropped and nothing in those files records a
+       scale (`analysis/research/improve/sem_databar_scale.py`, and `scale.from_tiff`
+       finds no FEI block in any b2 or b3 original). Of those two the sharper is taken:
+       0.869 against 0.431 on the gradient measure of `frame_legibility.json`, with
+       recall 0.991 against 0.520. A frame with no pixel size could carry no scale bar
+       and no micrometre axis, which rules out nine of the eleven before legibility is
+       considered at all.
 
   TXM  b2_336_25 at 29.24 nm/px -- of the frames whose annotation is a TRACE rather than
        a filled region, the SHARPEST one on which the shipped rule reaches at least a
@@ -71,9 +79,12 @@ import detect_cracks as D                           # noqa: E402
 import detector_overrides as DO                     # noqa: E402
 
 #: The two fields, with the pixel size each is reported at and where that size came from.
-SEM_FIELD = "MAR_H_HIP_CBS_0007"
-SEM_NM_PER_PX = 51.883
-SEM_SCALE_SOURCE = "read from the instrument databar"
+SEM_FIELD = "260622_316_H_b2_back_CBS_01"
+SEM_NM_PER_PX = 42.194
+SEM_SCALE_SOURCE = ("measured from the scale bar in the instrument databar that survives "
+                    "in the uncropped original -- 100 um over 2370 px -- and checked "
+                    "against the printed horizontal field width of 259 um, which gives "
+                    "42.155 nm/px, a disagreement of 0.09%")
 TXM_FIELD = ("Average_mosaic_260618_b2_336_25_idx00000_mosaictileAA_img001of010"
              ".xrm.bim.bim")
 TXM_NM_PER_PX = 29.24

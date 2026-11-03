@@ -12,6 +12,7 @@ in this project repeatedly. `[FIGURE name]` on its own line embeds that plate.
 
     <sem-crack-detector>/.venv/bin/python -B paper/make_paper.py
 """
+import functools
 import json
 import os
 import re
@@ -23,6 +24,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.image as mpimg
+from matplotlib.font_manager import FontProperties
+from matplotlib.lines import Line2D
+from matplotlib.textpath import TextToPath
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
@@ -38,6 +42,172 @@ LEAD = {"body": 0.175, "h1": 0.34, "h2": 0.27, "h3": 0.22}
 #: characters per line at each size. A single WRAP for every size overflowed the title off
 #: the right margin: 96 characters is right for 9.3 pt body and far too many for 15 pt.
 WRAP = {"body": 96, "h1": 54, "h2": 74, "h3": 86, "small": 108}
+
+# --- TABLE TYPOGRAPHY -----------------------------------------------------------------
+# Booktabs rule weights, in points: a heavier rule above the header and below the last
+# row, a lighter one under the header, and NO vertical rules and no row shading. The
+# previous renderer drew its only rule as a run of hyphen characters.
+RULE_HEAVY, RULE_LIGHT = 1.0, 0.5
+TBL_MAX_LINES = 3             # a text cell may wrap onto at most this many lines
+TBL_GUT = 1.55                # inter-column gutter, in multiples of the type size
+TBL_LEAD = 1.30               # line pitch inside a cell, in multiples of the type size
+TBL_ROWGAP = 0.34             # extra air between rows, in multiples of the type size
+TBL_TEXT_PT = (PAGE[0] - ML - MR) * 72.0      # the measure, in points
+
+_T2P = TextToPath()
+
+
+@functools.lru_cache(maxsize=1 << 16)
+def _tw(s, size, bold=False):
+    """The width of `s` in POINTS, set in the body face at `size` pt.
+
+    Measured through matplotlib's text-path machinery, which is the same unhinted run of
+    glyph advances the PDF backend lays the string out with. The old table renderer
+    multiplied a CHARACTER COUNT by 0.6*size instead, which is only true of a monospaced
+    face -- and so the tables had to be set in one. Everything below (column widths,
+    wrapping, decimal alignment, the fit test) is built on this function.
+    """
+    if not s:
+        return 0.0
+    fp = FontProperties(size=size, weight="bold" if bold else "normal")
+    return _T2P.get_text_width_height_descent(s, fp, s.count("$") >= 2)[0]
+
+
+#: A cell counts as a number -- and so right-aligns -- when it is digits with an optional
+#: leading sign, an optional decimal part, an optional +/- tolerance and an optional short
+#: trailing unit. "97.2%", "+0.024", "1.013x", "13 px" and "6" all qualify; "40 pixels",
+#: "8-connected components" and "23 of 15" do not.
+_NUM_CELL = re.compile(
+    r"^[+\-−±]?\s*\d[\d,]*(?:\.\d+)?"
+    r"(?:\s*[±+\-−]\s*\d[\d,]*(?:\.\d+)?)?"
+    r"\s*(?:%|×|[A-Za-zµμ]{1,3})?$")
+#: where the decimal point sits, for aligning a numeric column on it
+_DEC_PT = re.compile(r"\.\d")
+
+
+def _is_number(s):
+    return bool(_NUM_CELL.match(s.strip()))
+
+
+def _dec_split(s):
+    """Split a cell into the part left of its decimal point and the part from the point
+    on, so a column can be aligned on the point rather than merely flushed right."""
+    m = _DEC_PT.search(s)
+    return (s[:m.start()], s[m.start():]) if m else (s, "")
+
+
+def _wrap_pt(s, width_pt, size, bold=False, first_pt=None):
+    """Greedy word wrap to a width in POINTS, measured not counted.
+
+    `first_pt` gives the first line a different measure, which is how the caption runs on
+    after its bold "Table N." label.
+    """
+    words = []
+    for wd in s.split():
+        # A LONE SLASH OR DASH IS NOT A WORD. "Area reported / annotated" was breaking
+        # as "Area reported" / "/ annotated", which no copy-editor would pass; keep the
+        # connector at the end of the line it belongs to.
+        if wd in ("/", "-", "–", "—", "|") and words:
+            words[-1] += " " + wd
+        else:
+            words.append(wd)
+    if not words:
+        return [""]
+    limit = first_pt if first_pt is not None else width_pt
+    lines, cur = [], ""
+    for wd in words:
+        trial = f"{cur} {wd}" if cur else wd
+        if cur and _tw(trial, size, bold) > limit + 0.01:
+            lines.append(cur)
+            cur, limit = wd, width_pt
+        else:
+            cur = trial
+    lines.append(cur)
+    return lines
+
+
+def _plan_table(rows, size):
+    """Lay the table out at `size` pt, or say which column made that impossible.
+
+    Returns ``(plan, None)`` or ``(None, offending_column_index)``. The column model is:
+    every cell measured at its rendered width; numeric columns held at their natural
+    width because a number must never break; text columns capped at a common ceiling
+    found by bisection, so the WIDEST columns are the ones that give ground, and then
+    wrapped onto at most TBL_MAX_LINES lines. Only when that fails does the caller try a
+    smaller size -- shrinking the type is the last resort, not the first.
+    """
+    cols = len(rows[0])
+    gut = TBL_GUT * size
+    budget = TBL_TEXT_PT - gut * (cols - 1)
+    if budget <= 0:
+        return None, 0
+
+    align, head, tail, nat, minw = [], [], [], [], []
+    for c in range(cols):
+        body = [r[c].strip() for r in rows[1:] if r[c].strip()]
+        numeric = bool(body) and all(_is_number(v) for v in body)
+        align.append("r" if numeric else "l")
+        hw = _tw(rows[0][c], size, True)
+        if numeric:
+            parts = [_dec_split(r[c].strip()) for r in rows[1:]]
+            h = max([_tw(p[0], size) for p in parts] or [0.0])
+            t = max([_tw(p[1], size) for p in parts] or [0.0])
+            head.append(h)
+            tail.append(t)
+            nat.append(max(h + t, hw))
+            # A NUMBER IS NEVER BROKEN, BUT ITS HEADING IS. Holding the whole column at
+            # the width of "Crack % of reviewed area" drove the seven-column TXM table
+            # to the 7 pt floor while its data cells were five characters wide.
+            minw.append(max(h + t, max([_tw(wd, size, True)
+                                        for wd in rows[0][c].split()] or [0.0])))
+        else:
+            head.append(0.0)
+            tail.append(0.0)
+            nat.append(max([_tw(r[c], size, i == 0) for i, r in enumerate(rows)] or [0.0]))
+            longest = max([_tw(wd, size, i == 0)
+                           for i, r in enumerate(rows) for wd in r[c].split()] or [0.0])
+            minw.append(min(longest, nat[c]))
+
+    if sum(nat) <= budget:
+        w = nat[:]
+    elif sum(minw) <= budget:
+        lo, hi = 0.0, max(nat)
+        for _ in range(60):                # bisect the common ceiling on column width
+            mid = (lo + hi) / 2.0
+            if sum(min(n, max(m, mid)) for n, m in zip(nat, minw)) <= budget:
+                lo = mid
+            else:
+                hi = mid
+        w = [min(n, max(m, lo)) for n, m in zip(nat, minw)]
+    else:
+        # even with every text column broken at its longest word the row is too wide
+        return None, max(range(cols), key=lambda c: minw[c])
+
+    wrapped = []
+    for i, r in enumerate(rows):
+        cells = []
+        for c in range(cols):
+            if align[c] == "r" and i:
+                cells.append([r[c].strip()])
+            else:
+                cells.append(_wrap_pt(r[c], w[c], size, i == 0))
+        n = max(len(x) for x in cells)
+        if n > TBL_MAX_LINES:
+            return None, max(range(cols), key=lambda c: len(cells[c]))
+        wrapped.append(cells)
+
+    # Spend what is left over on the gutters, so the table fills the measure and the
+    # rules span the text block rather than stopping somewhere inside it.
+    spare = budget - sum(w)
+    gut_eff = gut + (spare / (cols - 1) if cols > 1 else 0.0)
+    x0, xs = ML * 72.0, []
+    for c in range(cols):
+        xs.append(x0)
+        x0 += w[c] + gut_eff
+    if cols == 1:
+        w = [TBL_TEXT_PT]
+    return {"size": size, "cols": cols, "align": align, "w": w, "x": xs,
+            "head": head, "tail": tail, "rows": wrapped}, None
 
 
 def _markup(s):
@@ -526,42 +696,146 @@ class Doc:
                            va="top", ha="left", transform=self.page.transFigure)
             self.y -= LEAD["body"]
 
-    def table(self, rows, size):
-        """Pipe tables were printing as raw markdown. Rendered as aligned columns in a
-        monospaced face, which is honest for a draft and needs no column model."""
+    def _rule(self, lw):
+        """A booktabs rule across the measure, drawn as a line and not as hyphens."""
+        y = self.y / PAGE[1]
+        ln = Line2D([ML / PAGE[0], (PAGE[0] - MR) / PAGE[0]], [y, y],
+                    transform=self.page.transFigure, color="black", linewidth=lw,
+                    solid_capstyle="butt", clip_on=False)
+        self.page.add_artist(ln)
+
+    def _cell(self, x_pt, y, s, size, bold=False, ha="left"):
+        if not s:
+            return
+        self.page.text(x_pt / 72.0 / PAGE[0], y / PAGE[1], s, fontsize=size,
+                       fontweight="bold" if bold else "normal", va="top", ha=ha,
+                       transform=self.page.transFigure)
+
+    def table(self, rows, size, caption=None, number=None, name=None):
+        """A journal table: proportional type, booktabs rules, a real column model.
+
+        What this replaces was a terminal dump -- fixed-width monospace, space-padded to
+        equal columns, a row of hyphens for the header rule, and the whole table's type
+        shrunk until the widest CHARACTER COUNT fitted. Here every cell is measured at
+        its rendered width (`_tw`), columns are allocated from that, a long text column
+        WRAPS rather than making the whole table smaller, numeric columns right-align on
+        their decimal point, and the rules are lines.
+
+        `number` and `caption` come from a `[TABLE key | caption]` directive and set the
+        "Table N." head above the rules; a table with no directive renders with neither,
+        which is what the sections still contain.
+        """
         # TABLE CELLS NEED THE SAME MARKUP STRIP AS BODY TEXT. They did not get it, so
         # "**1.30x**" printed with its asterisks inside the table while the same emphasis
         # was stripped correctly in the paragraph above it.
         rows = [[_markup(c) for c in r] for r in rows]
+        if not rows:
+            return
         cols = max(len(r) for r in rows)
         rows = [r + [""] * (cols - len(r)) for r in rows]
-        w = [max(len(r[c]) for r in rows) for c in range(cols)]
-        lines = ["  ".join(r[c].ljust(w[c]) for c in range(cols)).rstrip() for r in rows]
-        # SHRINK TO FIT, OR THE TABLE IS SILENTLY CUT OFF. A monospace line is about
-        # 0.6*size wide per character; Appendix A's widest row ran past the right margin
-        # and its last two columns simply vanished off the page with nothing to say so.
-        avail_pt = (PAGE[0] - ML - MR) * 72.0
-        widest = max(len(x) for x in lines)
-        fit = avail_pt / (0.6 * max(widest, 1))
-        if fit < size:
-            size = max(fit, FLOOR)
-        if widest * 0.6 * size > avail_pt + 0.5:
+        label = f"Table {number}." if number else None
+        tag = (f"Table {number} ({caption[:48]})" if number
+               else (name or "the table headed " + " | ".join(rows[0])))
+
+        # LARGEST TYPE THAT FITS, NOT SMALLEST THAT WORKS. Step down from the requested
+        # size; the first size whose plan lays out inside the measure wins. Wrapping is
+        # tried at every step before the size moves, so a long text column costs two or
+        # three lines rather than costing the whole table a point of type.
+        plan, blame = None, 0
+        s = size
+        while s >= FLOOR - 1e-9:
+            plan, blame = _plan_table(rows, round(s, 2))
+            if plan:
+                break
+            s -= 0.1
+        if plan is None:
+            # KEEP THE EXISTING FAILURE MODE LOUD. The old renderer raised rather than
+            # let a table run off the page; so does this one, and it names the column.
             raise SystemExit(
-                f"table needs {widest} characters and will not fit at the {FLOOR} pt floor "
-                f"-- drop or shorten a column rather than letting it run off the page")
-        for i, (r, line) in enumerate(zip(rows, lines)):
-            self.space(LEAD["body"])
-            self.page.text(ML / PAGE[0], self.y / PAGE[1], line, fontsize=size,
-                           fontweight="bold" if i == 0 else "normal", va="top", ha="left",
-                           family="monospace", transform=self.page.transFigure)
-            self.y -= LEAD["body"]
-            if i == 0:
-                self.space(0.05)
-                self.page.text(ML / PAGE[0], self.y / PAGE[1],
-                               "-" * len(line), fontsize=size, va="top", ha="left",
-                               family="monospace", color="0.55",
-                               transform=self.page.transFigure)
-                self.y -= 0.09
+                f"{tag}: column {blame + 1} ({rows[0][blame]!r}) will not fit inside the "
+                f"{TBL_TEXT_PT / 72:.2f} in text block even wrapped onto {TBL_MAX_LINES} "
+                f"lines at the {FLOOR} pt floor -- shorten or drop that column rather "
+                f"than letting the table run past the margin")
+        size = plan["size"]
+        lead = TBL_LEAD * size / 72.0
+        rowgap = TBL_ROWGAP * size / 72.0
+        caplead = TBL_LEAD * SMALL / 72.0
+        body = plan["rows"][1:]
+        hdr_h = max(len(c) for c in plan["rows"][0]) * lead
+
+        cap_lines = []
+        if caption:
+            cap_lines = _wrap_pt(caption, TBL_TEXT_PT, SMALL,
+                                 first_pt=TBL_TEXT_PT - _tw(label + "  ", SMALL, True))
+        head_h = (0.10 + len(cap_lines) * caplead + 0.055 + 0.055 + hdr_h + 0.045 + 0.055)
+        body_h = sum(max(len(c) for c in r) * lead + rowgap for r in body)
+        total = head_h + body_h + 0.050 + 0.10
+        page_h = PAGE[1] - MT - MB
+
+        # DO NOT ORPHAN THE HEADER. If the whole block does not fit in what is left of
+        # this page, start it on the next one; a table genuinely taller than one page
+        # cannot do that, so it only insists on carrying its first row past the header
+        # and repeats the header after the break.
+        first_h = (max(len(c) for c in body[0]) * lead + rowgap) if body else 0.0
+        need = total if total <= page_h else head_h + first_h + 0.050 + 0.10
+        if self.y - need < MB:
+            self._new()
+
+        def start_block(first):
+            self.y -= 0.10
+            if first and cap_lines:
+                x = ML * 72.0 + _tw(label + "  ", SMALL, True)
+                self._cell(ML * 72.0, self.y, label, SMALL, bold=True)
+                self._cell(x, self.y, cap_lines[0], SMALL)
+                self.y -= caplead
+                for ln in cap_lines[1:]:
+                    self._cell(ML * 72.0, self.y, ln, SMALL)
+                    self.y -= caplead
+            elif first and label:
+                self._cell(ML * 72.0, self.y, label, SMALL, bold=True)
+                self.y -= caplead
+            self.y -= 0.055
+            self._rule(RULE_HEAVY)
+            self.y -= 0.055
+            self._row(plan, plan["rows"][0], size, lead, bold=True)
+            self.y -= 0.045
+            self._rule(RULE_LIGHT)
+            self.y -= 0.055
+
+        start_block(True)
+        for r in body:
+            h = max(len(c) for c in r) * lead
+            if self.y - h - 0.050 < MB:
+                self.y -= 0.050
+                self._rule(RULE_HEAVY)
+                self._new()
+                start_block(False)
+            self._row(plan, r, size, lead)
+            self.y -= rowgap
+        self.y -= 0.050
+        self._rule(RULE_HEAVY)
+        self.y -= 0.10
+        return {"size": size, "widths_pt": plan["w"], "align": plan["align"]}
+
+    def _row(self, plan, cells, size, lead, bold=False):
+        """One table row. Numeric columns are set on their decimal point, every other
+        column flush left, and a wrapped cell keeps the row's rules aligned because the
+        row advances by its tallest cell."""
+        for c in range(plan["cols"]):
+            y = self.y
+            for ln in cells[c]:
+                if plan["align"][c] == "r":
+                    right = plan["x"][c] + plan["w"][c]
+                    if bold:
+                        self._cell(right, y, ln, size, bold=True, ha="right")
+                    else:
+                        h, _t = _dec_split(ln)
+                        anchor = right - plan["tail"][c]
+                        self._cell(anchor - _tw(h, size), y, ln, size)
+                else:
+                    self._cell(plan["x"][c], y, ln, size, bold=bold)
+                y -= lead
+        self.y -= max(len(c) for c in cells) * lead
 
     def figure(self, path, caption):
         img = mpimg.imread(path)

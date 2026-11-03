@@ -1,0 +1,300 @@
+{
+ "what": "pixel size of the b2 and b3 SEM frames, recovered from the instrument databar that survives in the uncropped originals",
+ "why": "scale.from_tiff() finds no FEI block in any of these files and the project's extracted metadata table covers only the MAR_* frames, so without this the specimen series the paper reports on has no pixel size and no figure drawn from it can carry a scale bar",
+ "method": {
+  "reported": "the annotated length of the drawn scale bar divided by the measured span between its two end ticks",
+  "control": "the printed horizontal field width divided by the frame width in pixels, an independent number from the same strip",
+  "tolerance": 0.01,
+  "hand_read": "only the bar's annotation and the printed field width; the tick span, which is what precision depends on, is measured. The crop each was transcribed from is written to docs/figures/evidence/sem_databar/ so it can be checked",
+  "tick_rule": "a column bright over at least 80% of rows 2-90 of the databar; the outermost two such runs in the right three quarters of the strip"
+ },
+ "n_frames_examined": 23,
+ "n_recovered": 7,
+ "worst_disagreement_pct": 0.093,
+ "frames": [
+  {
+   "frame": "260622_316_H_b2_back_CBS_01",
+   "frame_px": [
+    4376,
+    6144
+   ],
+   "fov_rows": 4096,
+   "databar_rows": 280,
+   "tick_columns": [
+    3472.5,
+    5842.5
+   ],
+   "tick_span_px": 2370.0,
+   "bar_annotation_um": 100.0,
+   "printed_hfw_um": 259.0,
+   "nm_per_px": 42.1941,
+   "nm_per_px_from_printed_hfw": 42.1549,
+   "disagreement_pct": 0.093,
+   "field_width_um": 259.24
+  },
+  {
+   "frame": "260622_316_H_b2_front_CBS_01",
+   "frame_px": [
+    4376,
+    6144
+   ],
+   "fov_rows": 4096,
+   "databar_rows": 280,
+   "tick_columns": [
+    3472.5,
+    5842.5
+   ],
+   "tick_span_px": 2370.0,
+   "bar_annotation_um": 100.0,
+   "printed_hfw_um": 259.0,
+   "nm_per_px": 42.1941,
+   "nm_per_px_from_printed_hfw": 42.1549,
+   "disagreement_pct": 0.093,
+   "field_width_um": 259.24
+  },
+  {
+   "frame": "260622_316_H_b2_front_CBS_02",
+   "frame_px": [
+    4376,
+    6144
+   ],
+   "fov_rows": 4096,
+   "databar_rows": 280,
+   "tick_columns": [
+    3769.0,
+    5546.0
+   ],
+   "tick_span_px": 1777.0,
+   "bar_annotation_um": 50.0,
+   "printed_hfw_um": 173.0,
+   "nm_per_px": 28.1373,
+   "nm_per_px_from_printed_hfw": 28.1576,
+   "disagreement_pct": 0.072,
+   "field_width_um": 172.88
+  },
+  {
+   "frame": "260622_316_H_b2_front_CBS_03",
+   "frame_px": [
+    4376,
+    6144
+   ],
+   "fov_rows": 4096,
+   "databar_rows": 280,
+   "tick_columns": [
+    3564.0,
+    5786.0
+   ],
+   "tick_span_px": 2222.0,
+   "bar_annotation_um": 30.0,
+   "printed_hfw_um": 82.9,
+   "nm_per_px": 13.5014,
+   "nm_per_px_from_printed_hfw": 13.4928,
+   "disagreement_pct": 0.063,
+   "field_width_um": 82.95
+  },
+  {
+   "frame": "260622_316_H_b2_front_CBS_04",
+   "frame_px": [
+    4376,
+    6144
+   ],
+   "fov_rows": 4096,
+   "databar_rows": 280,
+   "tick_columns": [
+    3769.0,
+    5546.0
+   ],
+   "tick_span_px": 1777.0,
+   "bar_annotation_um": 50.0,
+   "printed_hfw_um": 173.0,
+   "nm_per_px": 28.1373,
+   "nm_per_px_from_printed_hfw": 28.1576,
+   "disagreement_pct": 0.072,
+   "field_width_um": 172.88
+  },
+  {
+   "frame": "260622_316_amb_b3_CBS_01",
+   "frame_px": [
+    4376,
+    6144
+   ],
+   "fov_rows": 4096,
+   "databar_rows": 280,
+   "tick_columns": [
+    3472.5,
+    5842.5
+   ],
+   "tick_span_px": 2370.0,
+   "bar_annotation_um": 100.0,
+   "printed_hfw_um": 259.0,
+   "nm_per_px": 42.1941,
+   "nm_per_px_from_printed_hfw": 42.1549,
+   "disagreement_pct": 0.093,
+   "field_width_um": 259.24
+  },
+  {
+   "frame": "260622_316_amb_b3_CBS_02",
+   "frame_px": [
+    4376,
+    6144
+   ],
+   "fov_rows": 4096,
+   "databar_rows": 280,
+   "tick_columns": [
+    3769.0,
+    5546.0
+   ],
+   "tick_span_px": 1777.0,
+   "bar_annotation_um": 50.0,
+   "printed_hfw_um": 173.0,
+   "nm_per_px": 28.1373,
+   "nm_per_px_from_printed_hfw": 28.1576,
+   "disagreement_pct": 0.072,
+   "field_width_um": 172.88
+  },
+  {
+   "frame": "260708_316_H_b2_front_CBS_001",
+   "frame_px": [
+    2188,
+    3072
+   ],
+   "nm_per_px": null,
+   "why": "saved already cropped to the field of view; the file holds no databar and nothing can be recovered from it"
+  },
+  {
+   "frame": "260708_316_H_b2_front_CBS_002",
+   "frame_px": [
+    2044,
+    3067
+   ],
+   "nm_per_px": null,
+   "why": "saved already cropped to the field of view; the file holds no databar and nothing can be recovered from it"
+  },
+  {
+   "frame": "260708_316_H_b2_front_CBS_003",
+   "frame_px": [
+    2044,
+    3068
+   ],
+   "nm_per_px": null,
+   "why": "saved already cropped to the field of view; the file holds no databar and nothing can be recovered from it"
+  },
+  {
+   "frame": "260708_316_H_b2_front_CBS_004",
+   "frame_px": [
+    2045,
+    3072
+   ],
+   "nm_per_px": null,
+   "why": "saved already cropped to the field of view; the file holds no databar and nothing can be recovered from it"
+  },
+  {
+   "frame": "260708_316_H_b2_front_CBS_005",
+   "frame_px": [
+    4093,
+    6139
+   ],
+   "nm_per_px": null,
+   "why": "saved already cropped to the field of view; the file holds no databar and nothing can be recovered from it"
+  },
+  {
+   "frame": "260708_316_H_b2_front_CBS_006",
+   "frame_px": [
+    2044,
+    3071
+   ],
+   "nm_per_px": null,
+   "why": "saved already cropped to the field of view; the file holds no databar and nothing can be recovered from it"
+  },
+  {
+   "frame": "260708_316_H_b2_front_CBS_007",
+   "frame_px": [
+    2047,
+    3071
+   ],
+   "nm_per_px": null,
+   "why": "saved already cropped to the field of view; the file holds no databar and nothing can be recovered from it"
+  },
+  {
+   "frame": "260708_316_H_b2_front_CBS_008",
+   "frame_px": [
+    2045,
+    3072
+   ],
+   "nm_per_px": null,
+   "why": "saved already cropped to the field of view; the file holds no databar and nothing can be recovered from it"
+  },
+  {
+   "frame": "260708_316_H_b2_front_CBS_009",
+   "frame_px": [
+    2038,
+    3072
+   ],
+   "nm_per_px": null,
+   "why": "saved already cropped to the field of view; the file holds no databar and nothing can be recovered from it"
+  },
+  {
+   "frame": "260708_316_H_b2_front_CBS_010",
+   "frame_px": [
+    2037,
+    3072
+   ],
+   "nm_per_px": null,
+   "why": "saved already cropped to the field of view; the file holds no databar and nothing can be recovered from it"
+  },
+  {
+   "frame": "260708_316_H_b2_front_CBS_011",
+   "frame_px": [
+    2041,
+    3072
+   ],
+   "nm_per_px": null,
+   "why": "saved already cropped to the field of view; the file holds no databar and nothing can be recovered from it"
+  },
+  {
+   "frame": "260708_316_H_b2_front_CBS_012",
+   "frame_px": [
+    2038,
+    3072
+   ],
+   "nm_per_px": null,
+   "why": "saved already cropped to the field of view; the file holds no databar and nothing can be recovered from it"
+  },
+  {
+   "frame": "260708_316_H_b2_front_CBS_013",
+   "frame_px": [
+    2046,
+    3072
+   ],
+   "nm_per_px": null,
+   "why": "saved already cropped to the field of view; the file holds no databar and nothing can be recovered from it"
+  },
+  {
+   "frame": "260708_316_H_b2_front_CBS_014",
+   "frame_px": [
+    2045,
+    3072
+   ],
+   "nm_per_px": null,
+   "why": "saved already cropped to the field of view; the file holds no databar and nothing can be recovered from it"
+  },
+  {
+   "frame": "260708_316_H_b2_front_CBS_015",
+   "frame_px": [
+    4092,
+    6144
+   ],
+   "nm_per_px": null,
+   "why": "saved already cropped to the field of view; the file holds no databar and nothing can be recovered from it"
+  },
+  {
+   "frame": "260708_316_H_b2_front_CBS_016",
+   "frame_px": [
+    4090,
+    6144
+   ],
+   "nm_per_px": null,
+   "why": "saved already cropped to the field of view; the file holds no databar and nothing can be recovered from it"
+  }
+ ]
+}

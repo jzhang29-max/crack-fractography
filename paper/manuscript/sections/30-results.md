@@ -10,8 +10,9 @@ aggregate relative excess of approximately {ag_best_err_pct}%.
 The selected setting also recorded a reported background specificity of {ag_best_spec}%.
 This value characterises rejection of non-crack background pixels. Together, the area ratio
 and specificity quantify two aspects of the output: the total marked area and the
-classification of the background population. Figure {fig_areabars}(a) places the pixel accuracy of every collection scored in this work beside the accuracy an all-background prediction reaches on the same pixels. The two are indistinguishable at this prevalence, which is the point, and it is why panel (b) plots the difference between them instead. Averaged over images, the detector sits {wf_margin_img} points BELOW an all-background prediction on the whole fields and {crop_margin_img} points above it on the released crops. Pooled over pixels at the selected setting, which is what Table 2 reports, the whole-field deficit is {wf_margin_pool} points; the all-background value is the same under both aggregations, so the difference between those two figures is the aggregation and nothing else. Table 2 collects the principal numerical results.
+classification of the background population. Figure {fig_areabars}(a) places the pixel accuracy of every collection scored in this work beside the accuracy an all-background prediction reaches on the same pixels. The two are indistinguishable at this prevalence, which is the point, and it is why panel (b) plots the difference between them instead. Averaged over images, the detector sits {wf_margin_img} points BELOW an all-background prediction on the whole fields and {crop_margin_img} points above it on the released crops. Pooled over pixels at the selected setting, which is what Table {tbl_endpoints} reports, the whole-field deficit is {wf_margin_pool} points; the all-background value is the same under both aggregations, so the difference between those two figures is the aggregation and nothing else. Table {tbl_endpoints} collects the principal numerical results.
 
+[TABLE endpoints | The principal numerical results at the selected setting, on the 31 whole fields. The two pixel accuracies are the same quantity under two aggregations and are both given because the figures quote different ones: the pooled row is over pixels at the fixed selected multiplier, the per-image row is the mean over images at the leave-one-image-out setting, and the all-background value is identical under both.]
 | Endpoint | Reported or derived value |
 |---|---|
 | Reference crack area | {ag_best_lab}% of image area |
@@ -25,7 +26,7 @@ classification of the background population. Figure {fig_areabars}(a) places the
 | Pixel accuracy, mean over images at the leave-one-image-out setting | {in_acc}% |
 | Fields with lower absolute area error than the default | 23 of {in_n} |
 
-[FIGURE areabars | (a) pixel accuracy on every collection scored in this work, with the vertical bar giving the accuracy an all-background prediction reaches on the same collection. (b) the difference between the two, in points, from its own zero. Panel (a) keeps a full 0 to 100 range, because a cropped value axis under bars misrepresents; panel (b) is a different quantity, and it is the only axis on which these collections are distinguishable at all. The withdrawn EBC coating appears in (a) and not in (b): it is 20 points below an all-background prediction and on a shared difference axis it reduces the three reported collections to slivers, which is the same failure that withdrew an area-ratio panel from this plate in an earlier version -- that panel's logarithmic axis had to reach 100 to hold the same collection. MetalDAM is included for reference and labels voids rather than cracks. The area ratio is the subject of Figure {fig_sweep}, where it is drawn against the constant that moves it.]
+[FIGURE areabars | (a) pixel accuracy on every collection scored in this work, with the vertical bar giving the accuracy an all-background prediction reaches on the same collection. (b) the difference between the two, in points, from its own zero. Panel (a) keeps a full 0 to 100 range, because a cropped value axis under bars misrepresents; panel (b) is a different quantity, and it is the only axis on which these collections are distinguishable at all. The withdrawn EBC coating appears in (a) and not in (b): it is 20 points below an all-background prediction and on a shared difference axis it reduces the three reported collections to slivers, which is the same failure that withdrew an area-ratio panel from this plate in an earlier version -- that panel's logarithmic axis had to reach 100 to hold the same collection. MetalDAM is included for reference and labels voids rather than cracks. The area ratio is the subject of Figure {fig_sensitivity}(a), where it is drawn against the constant that moves it.]
 
 ### 3.2  Descriptive comparison of aggregate area estimates
 
@@ -33,11 +34,20 @@ The darkness detector had the reported area ratio closest to unity among the sev
 method summaries. Its ratio of {arm_area_det} corresponds to an absolute relative aggregate
 area discrepancy of approximately 1.3%. The darkness-or-Sato union had a ratio of
 {arm_union_area}. The closest classical arm on its own was {arm_area_2nd_name} at
-{arm_area_2nd}. Table 3 and Figure {fig_arms} retain the complete displayed comparison.
+{arm_area_2nd}. Table {tbl_arms} and Figure {fig_arms} retain the complete displayed comparison.
 
+[TABLE arms | Seven arms on the 31 whole fields, each given its own best parameter by the same leave-one-image-out rule and ordered by agreement in total marked area. The ordering applies to the area endpoint and to these displayed summaries; it does not establish superiority in foreground overlap.]
 {arm_tbl}
 
-[FIGURE arms | Seven arms on the 31 whole fields, each given its own best parameter by the same leave-one-image-out rule and ordered by agreement in total marked area. (a) reported crack area divided by annotated crack area; the vertical line at 1.0 is exact agreement. (b) pixel accuracy expressed as the difference from an all-background prediction on the same images, in percentage points. The accuracies themselves span 97.7 to 98.2% and are plotted as a difference because a value axis cropped to separate them would misrepresent their similarity. Otsu thresholding on the flattened image is omitted here, marking 99.5% of the frame, and appears in Appendix A. This detector is the dark bar.]
+[FIGURE arms | Seven arms on both framings of the same images, each given its own best parameter by the same leave-one-image-out rule and ordered by agreement in total marked area on the whole fields. The filled circle is the 31 whole fields and the open square the 26 released crops cut from them, joined by a rule. (a) reported crack area divided by annotated crack area; the vertical line at 1.0 is exact agreement. The marks are drawn on a rule against unity rather than as bars from zero, because one and not zero is this quantity's reference. (b) pixel accuracy expressed as the difference from an all-background prediction on the same pixels, in percentage points, where zero IS the reference and the origin is therefore zero. The accuracies themselves span 97.7 to 98.2% on the whole fields and are plotted as a difference because a value axis cropped to separate them would misrepresent their similarity. Neither axis is cropped. Otsu thresholding on the flattened image is omitted, marking 55 times the annotated area on the whole fields, and appears in Appendix A. The shaded row is this detector.]
+
+**The ordering is a property of the framing and not of the methods.** Drawing both
+collections on one plate shows that every one of the seven arms sits below an all-background
+prediction on the whole fields, and that four of them sit above it on the crops cut from
+those same fields. This detector is one of the four, moving from {arm_rev_wf} points below
+to {arm_rev_cr} points above. The images are the same; only the cut is different. No ranking
+in this section should be read as a property of a method without the collection it was
+measured on attached to it.
 
 The area comparison identifies a specific strength of the selected configuration: its total
 foreground area closely matches the reported reference total. The numerical ordering applies
@@ -54,7 +64,7 @@ difference.
 
 ### 3.4  The operating-setting sweep, in full
 
-[FIGURE sweep | Reported crack area divided by annotated crack area against the MAD multiplier k, on the 31 whole fields and on the 26 released crops cut from them. Both axes are logarithmic and the horizontal line at 1.0 is exact agreement. The diamond marks k = 6.0. The leftmost seven points of each series are the range swept in the earlier analysis.]
+[FIGURE sensitivity | The two sensitivities the result rests on, on one plate. (a) reported crack area divided by annotated crack area against the MAD multiplier k. Both axes are logarithmic and the horizontal line at 1.0 is exact agreement; the diamond marks k = 6.0, and the leftmost seven points of each SEM series are the range swept in the earlier analysis. All three series are the same ratio, but the two SEM series are over every pixel of the frame and the transmission series is over the pixels an operator adjudicated, so the ratios are commensurable while their denominators cover different things. (b) pixel accuracy of the reference annotation reduced to its centreline and redrawn at a fixed width, against that width: a prediction exactly correct about where every crack lies and wrong only about how wide it is drawn. The horizontal axis is logarithmic, the dotted lines give the accuracy of an all-background prediction on each collection, and the diamonds mark each curve's maximum. The vertical axis of (b) is not cropped to separate the series: it still reaches both all-background lines, which is what the curves are read against.]
 
 The earlier analysis selected its operating setting from a grid of seven values running from
 1.0 to the default of 5.0. **The default was the largest value tested, and the area ratio was
@@ -76,11 +86,18 @@ because those crops are cut around their own cracks and the detector already und
 them. The two framings of the same images disagree about the correct operating setting, which
 is a reason not to read a single tuned constant as a property of the method.
 
+Panel (a) also carries the transmission collection, which the sweep had never been drawn
+against. Over the {sw_grid} range both were run at, the whole-field ratio moves by a factor
+of {sw_sem_span}, from {sw_sem_hi} to {sw_sem_lo}, and crosses unity on the way. The
+transmission ratio moves by a factor of {sw_txm_span}, from {sw_txm_hi} to {sw_txm_lo}, and
+never approaches it. **The one free constant has leverage on one microscopy and almost none
+on the other**, so no choice of k makes the carried-over rule agree on transmission, and the
+disagreement reported in Section 4 is not a tuning failure. The two series are the same
+ratio; their denominators are not the same population, and the caption says which.
+
 ### 3.5  What the area endpoint can resolve
 
-[FIGURE ceiling | Pixel accuracy of the reference annotation reduced to its centreline and redrawn at a fixed width, against that width: a prediction exactly correct about where every crack lies and wrong only about how wide it is drawn. The horizontal axis is logarithmic. Dotted lines give the accuracy of an all-background prediction on each collection, and the diamonds mark each curve's maximum.]
-
-A comparison is only readable against the range in which it can move. Taking the reference
+Figure {fig_sensitivity}(b) carries this section. A comparison is only readable against the range in which it can move. Taking the reference
 annotation itself, reducing it to its centreline and redrawing it at a fixed width gives a
 prediction with perfect localisation whose only error is width. Whatever that construction
 scores is an upper reference point for this collection.
