@@ -14,28 +14,24 @@
   "hybrid_mean_iou": 0.7777,
   "mean_precision": 0.9313,
   "mean_recall": 0.8416,
-  "not_specimen_independent": "grouping is by image; the labelled frames span four specimen groups, so a whole specimen is never held out"
+  "not_specimen_independent": "grouping is by image, not by specimen, so a whole specimen is never held out",
+  "not_restricted": "this block is the cross-validation artefact as it was run, over all 71 labelled frames of four specimen groups. It predates the restriction to b2 and b3 and cannot be recomputed over the restricted set: no per-fold record survives. The two blocks below ARE restricted."
  },
  "labelled_domain": {
   "convention": "intersection over union restricted to the labelled domain (painted crack OR painted not-crack)",
   "mask": "effective_mask(corrections=\"none\", tight=True) -- human paint excluded",
-  "n_frames": 61,
-  "median_iou": 0.6748,
-  "median_3px_ceiling": 0.0498,
-  "ratio_of_medians": 13.56,
-  "median_label_width_px": 53.85,
-  "label_width_min_px": 10.2,
+  "n_frames": 24,
+  "scope": "specimen series B2 and B3",
+  "median_iou": 0.8063,
+  "median_3px_ceiling": 0.0316,
+  "ratio_of_medians": 25.54,
+  "median_label_width_px": 80.03,
+  "label_width_min_px": 12.0,
   "label_width_max_px": 329.3,
   "frames_where_correct_3px_trace_wins": 0,
-  "spearman_model_iou_vs_label_width": 0.603,
-  "spearman_3px_ceiling_vs_label_width": -0.813,
+  "spearman_model_iou_vs_label_width": 0.322,
+  "spearman_3px_ceiling_vs_label_width": -0.529,
   "per_group": {
-   "AM": {
-    "n": 25,
-    "ceiling_3px": 0.07317087386562997,
-    "shipped": 0.5468238375900458,
-    "label_width_px": 32.2490309931942
-   },
    "B2": {
     "n": 14,
     "ceiling_3px": 0.033886407419907796,
@@ -47,37 +43,32 @@
     "ceiling_3px": 0.02906810419792434,
     "shipped": 0.9063204059397241,
     "label_width_px": 118.85699070343416
-   },
-   "WR": {
-    "n": 12,
-    "ceiling_3px": 0.03428007127661009,
-    "shipped": 0.7720496653852111,
-    "label_width_px": 65.36568055487916
    }
   }
  },
  "whole_frame": {
   "convention": "full-resolution IoU against the operator's painted crack, whole frame",
-  "n_frames": 58,
-  "median_iou": 0.507,
-  "q1": 0.36,
-  "q3": 0.712,
-  "example_frame_iou": 0.5032,
-  "example_frame_recall": 0.6167,
-  "example_frame_fp_on_painted_notcrack": 0.0054
+  "n_frames": 24,
+  "median_iou": 0.6348284927704557,
+  "q1": 0.34300627710213016,
+  "q3": 0.8768846245417536,
+  "example_frame_iou": 0.5844,
+  "example_frame_recall": 0.8231,
+  "example_frame_fp_on_painted_notcrack": 0.00226
  },
  "window_stages": {
   "note": "one 1100 px window of the example frame; these are not corpus figures",
   "threshold": 0.6,
-  "operator_paint_pct": 9.35,
-  "f17_iou": 0.1043,
-  "hybrid_iou": 0.5215,
-  "ensemble_iou": 0.516,
-  "deployed_mask_pct": 8.27,
-  "f17_pct": 59.23,
-  "agreement_f17_vs_hybrid": 0.1324,
-  "agreement_hybrid_vs_ensemble": 0.9377,
-  "_agreement_source": "measured from the cached arrays by paper/figures/mk_txm_stages.py; see its caption JSON"
+  "operator_paint_pct": 33.64,
+  "f17_iou": 0.5234,
+  "hybrid_iou": 0.5992,
+  "ensemble_iou": 0.6017,
+  "deployed_mask_pct": 39.92,
+  "f17_pct": 57.97,
+  "hybrid_pct": 39.8,
+  "agreement_f17_vs_hybrid": 0.6813,
+  "agreement_hybrid_vs_ensemble": 0.9778,
+  "_agreement_source": "read from paper/figures/txm_stats.json, which paper/figures/txm_full.py writes from the cached arrays"
  },
  "scale": {
   "nm_per_px": 29.24,

@@ -35,7 +35,15 @@ CV = json.load(open(os.path.join(TXM, "research", "member_split_v4.json")))
 CEIL = json.load(open(os.path.join(REPO, "paper", "figures", "txm_iou_ceiling_v2.json")))
 STATS = json.load(open(os.path.join(REPO, "paper", "figures", "txm_stats.json")))
 
-R = CEIL["per_frame"]
+# RESTRICTED TO THE SPECIMEN SERIES THE PAPER REPORTS ON, the same 24 of 61 rows that
+# the ceiling plate draws. The frozen record's own top-level n_frames and per_group block
+# describe all four groups; recomputing from the surviving rows keeps this file, the
+# plate and the manuscript describing one frame set.
+SCOPE = ("B2", "B3")
+R = [r for r in CEIL["per_frame"] if r["group"] in SCOPE]
+if len(R) != sum(CEIL["per_group"][g]["n"] for g in SCOPE):
+    raise SystemExit("the per-frame rows in scope and the record's own per-group counts "
+                     "disagree about which frames belong to which group")
 w = [r["label_width_px"] for r in R]
 sh = [r["iou_shipped"] for r in R]
 c3 = [r["iou_w3"] for r in R]
@@ -70,13 +78,19 @@ out = {
         "hybrid_mean_iou": CV["mean_iou_hybrid_only"],
         "mean_precision": CV["mean_precision"],
         "mean_recall": CV["mean_recall"],
-        "not_specimen_independent": "grouping is by image; the labelled frames span four "
-                                    "specimen groups, so a whole specimen is never held out",
+        "not_specimen_independent": "grouping is by image, not by specimen, so a whole "
+                                    "specimen is never held out",
+        "not_restricted": "this block is the cross-validation artefact as it was run, "
+                          "over all 71 labelled frames of four specimen groups. It "
+                          "predates the restriction to b2 and b3 and cannot be "
+                          "recomputed over the restricted set: no per-fold record "
+                          "survives. The two blocks below ARE restricted.",
     },
     "labelled_domain": {
         "convention": CEIL["iou_convention"],
         "mask": 'effective_mask(corrections="none", tight=True) -- human paint excluded',
-        "n_frames": CEIL["n_frames"],
+        "n_frames": len(R),
+        "scope": "specimen series " + " and ".join(SCOPE),
         "median_iou": round(st.median(sh), 4),
         "median_3px_ceiling": round(st.median(c3), 4),
         "ratio_of_medians": round(st.median(sh) / st.median(c3), 2),
@@ -86,7 +100,7 @@ out = {
         "frames_where_correct_3px_trace_wins": sum(1 for r in R if r["iou_w3"] > r["iou_shipped"]),
         "spearman_model_iou_vs_label_width": round(_spearman(sh, w), 3),
         "spearman_3px_ceiling_vs_label_width": round(_spearman(c3, w), 3),
-        "per_group": {g: CEIL["per_group"][g] for g in sorted(CEIL["per_group"])},
+        "per_group": {g: CEIL["per_group"][g] for g in sorted(SCOPE)},
     },
     "whole_frame": {
         "convention": "full-resolution IoU against the operator's painted crack, whole frame",
@@ -106,11 +120,18 @@ out = {
         "hybrid_iou": round(STATS["ph_iou"], 4),
         "ensemble_iou": round(STATS["crop_iou"], 4),
         "deployed_mask_pct": round(STATS["crop_mask_pct"], 2),
-        "f17_pct": 59.23,
-        "agreement_f17_vs_hybrid": 0.1324,
-        "agreement_hybrid_vs_ensemble": 0.9377,
-        "_agreement_source": "measured from the cached arrays by "
-                             "paper/figures/mk_txm_stages.py; see its caption JSON",
+        # READ, NOT TYPED. These three were literals sitting beside a comment that said
+        # they had been "measured from the cached arrays by mk_txm_stages.py". They were
+        # stale copies of a measurement taken on a frame the paper no longer uses, and
+        # nothing about re-running the plate could update them: the comment named a
+        # source the code did not read. They come from txm_stats.json now, which is what
+        # that plate's generator writes, so a re-cut frame moves them.
+        "f17_pct": round(STATS["p17_pct"], 2),
+        "hybrid_pct": round(STATS["ph_pct"], 2),
+        "agreement_f17_vs_hybrid": round(STATS["agreement_p17_vs_ph"], 4),
+        "agreement_hybrid_vs_ensemble": round(STATS["agreement_ph_vs_mask"], 4),
+        "_agreement_source": "read from paper/figures/txm_stats.json, which "
+                             "paper/figures/txm_full.py writes from the cached arrays",
     },
     "scale": {
         "nm_per_px": STATS["nm_per_px"],

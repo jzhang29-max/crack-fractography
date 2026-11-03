@@ -15,18 +15,19 @@ area fractions and overlap scores do not, being dimensionless.
 
 ### 4.1  The collection's own detector
 
-[FIGURE txmstages | The TXM collection's own detector, stage by stage, on one window of a typical frame. (a) the operator's painted crack, the reference for this window, in green. (b)-(d) the model, in blue: (b) seventeen hand-built channels — intensity, smoothing at sigma 2 to 64, gradient magnitude and Laplacian at sigma 1 to 8, and texture at sigma 2 and 8 — scaled and passed to a two-layer network, which runs with no encoder and is the fallback when the encoder is unreachable; (c) the same seventeen channels concatenated with 256 frozen SAM ViT-H encoder channels, 273 inputs, applied in 1024 px tiles at stride 896 and Hann-blended, the encoder never fine-tuned and its prompt encoder and mask decoder never called; (d) the mean of (b) and (c) at threshold 0.60 followed by speck pruning, which is what the application emits. The window is 1100 px of a frame whose full-resolution agreement with the operator is the corpus median, so it is typical rather than flattering. The display is contrast-stretched per crop; the model ran on the unstretched image. Scale bars 5 micrometres at {tm_nm} nm/px (Section 4).]
+[FIGURE txmstages | The TXM collection's own detector, stage by stage, on one window of a typical b2 frame. (a) the operator's painted crack, the reference for this window, in green. (b)-(d) the model, in blue: (b) seventeen hand-built channels — intensity, smoothing at sigma 2 to 64, gradient magnitude and Laplacian at sigma 1 to 8, and texture at sigma 2 and 8 — scaled and passed to a two-layer network, which runs with no encoder and is the fallback when the encoder is unreachable; (c) the same seventeen channels concatenated with 256 frozen SAM ViT-H encoder channels, 273 inputs, applied in 1024 px tiles at stride 896 and Hann-blended, the encoder never fine-tuned and its prompt encoder and mask decoder never called; (d) the mean of (b) and (c) at threshold 0.60 followed by speck pruning, which is what the application emits. The window is the 1100 px square of that frame holding the most painted crack, found by a box sum over the summed-area table of the paint. The frame itself is the one of the {tm_ld_n} labelled b2 and b3 frames whose agreement with the operator is closest to that restricted corpus's median -- 0.800 against {tm_ld_iou} over adjudicated pixels, and 0.584 against {tm_wf_iou} scored whole-frame -- so the frame is typical rather than flattering, while the window within it is the densest the frame has and is {tm_ws_paint}% painted crack against 14.6% over the frame. The display is contrast-stretched to the frame's own display limits, not per crop; the model ran on the unstretched image. This frame is low contrast in that display: painted crack separates from everything else by 0.34 matrix standard deviations, against 2.06 on the raw mosaic before destitching and flat-fielding, so what the eye reads here as a faint region is a strong signal the display pipeline has removed. Scale bars 5 micrometres at {tm_nm} nm/px (Section 4).]
 
 The three rungs differ in what they mark, not by a little. On the window of Figure {fig_txmstages} the
 operator painted {tm_ws_paint}% of the field. The seventeen-channel member alone reaches an
-IoU of {tm_ws_f17} against that paint while marking {tm_ws_f17pct}% of the window — it finds
-the crack's trace and floods the matrix with it. Adding the frozen encoder raises the IoU to
-{tm_ws_hyb} and cuts what is marked to {tm_ws_pct}%, close to the operator's own coverage. The
-deployed mean of the two scores {tm_ws_ens}. **The step that matters is the encoder, not the
-averaging.** The two members agree with each other at an IoU of only {tm_ws_ab} on this
-window, so the encoder changes what is marked rather than refining it; the hybrid and the
-deployed mean agree at {tm_ws_bc}, so the averaging is close to a no-op here and whatever it
-contributes is a corpus-level result rather than a visible one.
+IoU of {tm_ws_f17} against that paint while marking {tm_ws_f17pct}% of the window, well
+over the operator's own coverage. Adding the frozen encoder raises the IoU to {tm_ws_hyb}
+and cuts what is marked to {tm_ws_hybpct}%. The deployed mean of the two marks
+{tm_ws_pct}% and scores {tm_ws_ens}. **The step that matters is the encoder, not the
+averaging.** The two members agree with each other at an IoU of {tm_ws_ab} on this window,
+so the encoder trims the seventeen-channel member's over-marking rather than relocating
+it; the hybrid and the deployed mean agree at {tm_ws_bc}, so the averaging is close to a
+no-op here and whatever it contributes is a corpus-level result rather than a visible one.
+Both figures are one window of one frame and are reported as such.
 
 Grouped cross-validation over {tm_cv_n} labelled images puts the ensemble at IoU
 {tm_cv_ens} with a standard deviation of {tm_cv_sd} and a lowest fold of {tm_cv_min}, against
@@ -37,7 +38,7 @@ Grouped cross-validation over {tm_cv_n} labelled images puts the ensemble at IoU
 The same deployed model, on the same collection, returns three materially different numbers
 according to what is scored:
 
-[TABLE txmiou | One deployed model on one collection, scored three ways. The three rows differ only in which pixels are admitted and how frames are combined; the spread between them is larger than any difference this paper reports between methods.]
+[TABLE txmiou | One deployed model scored three ways. The second and third rows differ only in which pixels are admitted and how frames are combined, over the same {tm_ld_n} b2 and b3 frames; the spread between them is larger than any difference this paper reports between methods. The first row is the cross-validation artefact as it was run, over all {tm_cv_n} labelled frames of four specimen groups: it predates the restriction, no per-fold record survives, and it therefore cannot be recomputed over the restricted set. It is reported with that scope attached rather than omitted, because it is the number the collection's own documentation quotes.]
 | What is scored | Aggregation | Frames | IoU |
 |---|---|---|---|
 | 250,000 sampled hand-painted pixels per fold, 5 folds grouped by image | mean over folds | {tm_cv_n} | {tm_cv_ens} |
@@ -45,11 +46,12 @@ according to what is scored:
 | Every pixel of the frame, at full resolution | median over frames | {tm_wf_n} | {tm_wf_iou} |
 
 The spread across those three rows, {tm_cv_ens} to {tm_wf_iou}, is larger than any difference
-between the three model rungs. Two properties of the cross-validated row explain most of it
+between the three model rungs. Three properties of the cross-validated row explain most of it
 and must travel with it: the rows are drawn from painted pixels rather than from frames, so
-the prevalence of crack in the scored sample is nothing like its prevalence in a frame; and
-the folds are **grouped by image, not by specimen**, while the labelled frames span four
-specimen groups, so no whole specimen is ever held out. The whole-frame row is the one a
+the prevalence of crack in the scored sample is nothing like its prevalence in a frame; the
+folds are **grouped by image, not by specimen**, so no whole specimen is ever held out; and
+it is the only row here computed over the whole labelled corpus rather than over the b2 and
+b3 frames this paper reports on. The whole-frame row is the one a
 reader should compare with Section 3. Its interquartile range is {tm_wf_q1} to {tm_wf_q3},
 and on the frame shown in Figure {fig_txmstages} the recall is {tm_wf_rec} while only {tm_wf_fp}% of the
 pixels the operator painted as not-crack are marked.

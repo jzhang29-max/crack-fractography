@@ -231,6 +231,12 @@ MP.VALUES.update({
     "tm_ws_f17": MP._n(_ws["f17_iou"], 3),
     "tm_ws_hyb": MP._n(_ws["hybrid_iou"], 3),
     "tm_ws_ens": MP._n(_ws["ensemble_iou"], 3),
+    # TWO DIFFERENT COVERAGES, and the sentence about the encoder wanted the hybrid's.
+    # tm_ws_pct read the ENSEMBLE's coverage while the prose beside it said "adding the
+    # frozen encoder cuts what is marked to {tm_ws_pct}%" -- a number attached to the
+    # wrong object. The ensemble's is kept under its own name for the sentence that does
+    # describe it.
+    "tm_ws_hybpct": MP._n(_ws["hybrid_pct"], 1),
     "tm_ws_pct": MP._n(_ws["deployed_mask_pct"], 1),
     "tm_ws_f17pct": MP._n(_ws["f17_pct"], 1),
     "tm_ws_ab": MP._n(_ws["agreement_f17_vs_hybrid"], 3),

@@ -65,12 +65,16 @@ OUT = _paths.FIG_DIR
 NAME = "F3 - detection stages, both modalities"
 
 #: The window each row is shown at, in micrometres. NOT the same number for the two rows,
-#: and the caption says both. A crack in this SEM corpus is a line one or two micrometres
-#: across and a 27 um field shows it with its surroundings; a crack in this TXM corpus is
-#: a band an order of magnitude wider, and the same 27 um field reduced it to a grey
-#: smudge filling the panel. Matching the field of view matters where two appearances are
-#: being compared, which is Figure 2's job; here each row has to be legible.
-FOV_UM = {"sem": 27.0, "txm": 14.0}
+#: and the caption says both. The SEM value was 27 um when the illustrated field was one
+#: whose cracks are a line one or two micrometres across. On the b2 field the paper now
+#: draws from, the main crack is twenty to thirty micrometres across, so a 27 um window
+#: is inside the crack whatever rule chooses it and both the micrograph and the mask come
+#: out as flat blocks. 60 um shows that crack with the matrix on either side of it, which
+#: is what a stage panel has to show. The TXM value is unchanged: that crack is a band a
+#: few micrometres wide and the same 60 um field would reduce it to a smudge. Matching
+#: the field of view between the two matters where their appearances are being compared,
+#: which is Figure 2's job; here each row has to be legible on its own terms.
+FOV_UM = {"sem": 60.0, "txm": 14.0}
 #: The side of the magnified inset, as a fraction of that row's own field.
 INSET_FRAC = 4.0 / 27.0
 #: The colour the pixels that cleaning removed are drawn in. Red is this figure set's
@@ -91,21 +95,40 @@ def stretch(a):
                                       out_range=(0.0, 1.0))
 
 
+#: THE WINDOW RULE, shared by Figures 1 and 3. Not "the most marked pixels": on a field
+#: whose crack is wider than the window, the densest position is solid mask and the panel
+#: shows no boundary at all. Capping the marked fraction does not fix it either -- the
+#: maximiser then sits exactly at the cap, and on the b2 field that put the window on the
+#: crack mouth with half the panel one flat colour. What a detection panel is FOR is the
+#: line the detector drew, so the window is the one containing the most mask-BOUNDARY
+#: pixels. A solid block has almost none, an empty region has none, and the maximiser is
+#: therefore a window where mask meets matrix across the panel. No cap is needed.
+def boundary_window(final, H):
+    """Top-left corner of the H x H window holding the most mask-boundary pixels."""
+    edge = final & ~ndi.binary_erosion(final, np.ones((3, 3), bool))
+    ii = np.pad(np.cumsum(np.cumsum(edge.astype(np.int64), 0), 1), ((1, 0), (1, 0)))
+    box = ii[H:, H:] - ii[:-H, H:] - ii[H:, :-H] + ii[:-H, :-H]
+    if not box.size or box.max() <= 0:
+        raise SystemExit(f"no {H} px window contains any mask boundary -- the field or "
+                         f"the window size needs revisiting, not a silent fallback")
+    y0, x0 = np.unravel_index(int(box.argmax()), box.shape)
+    return int(y0), int(x0)
+
+
 def window(d, um):
-    """Centred on the largest marked region the frame contains -- Figure 1's rule."""
+    """The position holding the most mask boundary -- Figure 1's rule exactly.
+
+    The rule used to be "centred on the largest marked region the frame CONTAINS", with
+    border-touching regions censored. On the b2 SEM field the paper is now drawn from
+    that fails: the main crack runs out of both sides of the field, so the censor removes
+    the object the figure exists to show. `boundary_window` above is the replacement and
+    is the rule Figure 1 states -- the two figures say they share it, so they have to.
+    """
     nm = float(d["nm_per_px"])
-    H = int(round(um * 1000.0 / nm))
     f = d["final"]
-    lab, _ = ndi.label(f, np.ones((3, 3), bool))
-    sz = np.bincount(lab.ravel())
-    sz[0] = 0
-    for b in set(np.unique(np.concatenate(
-            [lab[0], lab[-1], lab[:, 0], lab[:, -1]]))) - {0}:
-        sz[b] = 0
-    cy, cx = ndi.center_of_mass(lab == int(sz.argmax()))
-    y0 = max(min(int(cy) - H // 2, f.shape[0] - H), 0)
-    x0 = max(min(int(cx) - H // 2, f.shape[1] - H), 0)
-    return (slice(y0, y0 + H), slice(x0, x0 + H)), H, nm
+    H = min(int(round(um * 1000.0 / nm)), f.shape[0], f.shape[1])
+    y0, x0 = boundary_window(f, H)
+    return (slice(int(y0), int(y0) + H), slice(int(x0), int(x0) + H)), H, nm
 
 
 def densest(mask, side):
@@ -208,8 +231,10 @@ def main():
         "columns": list(COLS),
         "scale_provenance": {"sem": BM.SEM_SCALE_SOURCE, "txm": BM.TXM_SCALE_SOURCE},
         "inset_magnification": round(1.0 / INSET_FRAC, 1),
-        "selection_rule": "each window is centred on the largest marked region the frame "
-                          "contains, the same rule as Figure 1; each inset is the "
+        "selection_rule": "each window is the position holding the most mask-boundary "
+                          "pixels, found exactly by a box sum over the summed-area "
+                          "table, the same rule as "
+                          "Figure 1; each inset is the "
                           "position holding the most removed pixels, found exactly by a "
                           "box sum over the summed-area table",
         "settings": {"scale_ladder": list(DO.SCALE_LADDER),

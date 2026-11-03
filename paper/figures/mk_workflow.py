@@ -84,12 +84,6 @@ NAME = "F1 - workflow"
 #: change of field or of magnification cannot silently change what the panel shows. The
 #: two differ because the two cracks differ in scale by about that factor.
 DETAIL_UM = {"sem": 90.0, "txm": 20.0}
-#: The most of a detail window that may be marked. Without it the window rule returns a
-#: block of flat colour: the SEM field's main crack is wider than the window, so the
-#: densest position inside it is entirely crack and the panel shows no boundary, which
-#: is the one thing a reader needs in order to judge a detection.
-MAX_MARKED_FRAC = 0.55
-
 ARMS = (("sem", "SEM"), ("txm", "TXM"))
 COLS = ("Field", "Crack", "Detected", "Measured")
 
@@ -97,6 +91,25 @@ COLS = ("Field", "Crack", "Detected", "Measured")
 #: the comparison between the two microscopies is the point, two axes would hide it.
 WLIM = (0.06, 8.0)
 LLIM = (0.3, 3000.0)
+
+#: THE WINDOW RULE, shared by Figures 1 and 3. Not "the most marked pixels": on a field
+#: whose crack is wider than the window, the densest position is solid mask and the panel
+#: shows no boundary at all. Capping the marked fraction does not fix it either -- the
+#: maximiser then sits exactly at the cap, and on the b2 field that put the window on the
+#: crack mouth with half the panel one flat colour. What a detection panel is FOR is the
+#: line the detector drew, so the window is the one containing the most mask-BOUNDARY
+#: pixels. A solid block has almost none, an empty region has none, and the maximiser is
+#: therefore a window where mask meets matrix across the panel. No cap is needed.
+def boundary_window(final, H):
+    """Top-left corner of the H x H window holding the most mask-boundary pixels."""
+    edge = final & ~ndi.binary_erosion(final, np.ones((3, 3), bool))
+    ii = np.pad(np.cumsum(np.cumsum(edge.astype(np.int64), 0), 1), ((1, 0), (1, 0)))
+    box = ii[H:, H:] - ii[:-H, H:] - ii[H:, :-H] + ii[:-H, :-H]
+    if not box.size or box.max() <= 0:
+        raise SystemExit(f"no {H} px window contains any mask boundary -- the field or "
+                         f"the window size needs revisiting, not a silent fallback")
+    y0, x0 = np.unravel_index(int(box.argmax()), box.shape)
+    return int(y0), int(x0)
 
 
 def detail_of(d, tag):
@@ -108,28 +121,15 @@ def detail_of(d, tag):
     the paper is now drawn from, that rule fails in the opposite direction: the main
     crack runs out of both sides of the field, so the censor removes the very object the
     figure exists to show, and the window landed on a secondary region of 1.5 um while
-    87.7% of the marked area sat elsewhere.
-
-    So: the window holding the MOST marked pixels, found exactly by a box sum over the
-    summed-area table rather than by a centroid, subject to being at most
-    MAX_MARKED_FRAC marked. The cap is what keeps the panel informative -- the densest
-    window on this field is solid crack, and a panel of flat blue shows a reader nothing
-    about where the detector put its boundary. The region the measurement panel rings is
-    then the largest one whose centroid falls inside that window, so the three panels of
-    a row are about the same object.
+    87.7% of the marked area sat elsewhere. `boundary_window` above says what replaced
+    it and why neither "the most marked pixels" nor a cap on that was the answer. The
+    region the measurement panel rings is the largest one inside the chosen window, so
+    the four panels of a row are about the same object.
     """
     f = d["final"]
     H = int(round(DETAIL_UM[tag] * 1000.0 / float(d["nm_per_px"])))
     H = min(H, f.shape[0], f.shape[1])
-    ii = np.pad(np.cumsum(np.cumsum(f.astype(np.int64), 0), 1), ((1, 0), (1, 0)))
-    box = ii[H:, H:] - ii[:-H, H:] - ii[H:, :-H] + ii[:-H, :-H]
-    ok = box <= MAX_MARKED_FRAC * H * H
-    if not ok.any():
-        raise SystemExit(f"{tag}: no {H} px window is at most {MAX_MARKED_FRAC:.0%} "
-                         f"marked -- the cap or the window size needs revisiting, not a "
-                         f"silent fallback to the densest block of flat colour")
-    y0, x0 = np.unravel_index(int(np.where(ok, box, -1).argmax()), box.shape)
-    y0, x0 = int(y0), int(x0)
+    y0, x0 = boundary_window(f, H)
     lab, _ = ndi.label(f, np.ones((3, 3), bool))
     win = lab[y0:y0 + H, x0:x0 + H]
     sz = np.bincount(win.ravel())
@@ -368,11 +368,11 @@ def main():
         "arms": {tag: {"field": str(data[tag]["field"]), **notes[tag], **dists[tag]}
                  for tag, _ in ARMS},
         "scale_provenance": {"sem": BM.SEM_SCALE_SOURCE, "txm": BM.TXM_SCALE_SOURCE},
-        "selection_rule": "each detail window is the position holding the most marked "
+        "selection_rule": "each detail window is the position holding the most mask-boundary "
                           "pixels, found exactly by a box sum over the summed-area "
-                          f"table, subject to being at most {MAX_MARKED_FRAC:.0%} "
-                          "marked so that the panel shows a boundary and not a block of "
-                          "flat colour; the same rule for both rows. The ringed region "
+                          "table of the mask's own BOUNDARY pixels, so the panel is a "
+                          "place where mask meets matrix rather than a block of flat "
+                          "colour; the same rule for both rows. The ringed region "
                           "in the last column is the largest one inside that window.",
         "display": "one 2nd-98th percentile range per frame, applied to the field and "
                    "to the detail cut from it, so the detail is the field magnified "
