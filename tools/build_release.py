@@ -252,6 +252,35 @@ INCONEL_RE = re.compile(r"(^|/)inconel ?718", re.IGNORECASE)
 #: downloaded archive into a folder that is about to be published is not something to do
 #: by accident. They are counted and named in checks.json, and left in the zip.
 IMAGE_EXT = (".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp")
+# ------------------------------------------------------- the hot-cracking weld arm
+#: WHY A THIRD PUBLIC COLLECTION. The two laboratory arms and the Inconel frames leave a
+#: gap that the measured difficulty axis makes explicit: nothing in the release has a
+#: crack of intermediate definition sitting INSIDE strongly competing microstructural
+#: texture. The Inconel frames are one isolated crack on a largely uniform matrix (their
+#: largest connected component holds 99.75% of the annotated area); the laboratory SEM
+#: frames are broad-brush regions over dense grain structure; the TXM frames are a
+#: fragmented network at high separation. This collection -- light-microscope images of
+#: Varestraint-test TIG weld surfaces, where solidification ripples cover the whole field
+#: and the hot cracks are short and embedded in them -- lands between them on separation,
+#: on background Sobel, on component count and on largest-component share. It was chosen
+#: by measuring four candidates on the same instrument, not by reputation, and the
+#: numbers are in checks.json under `difficulty`.
+WELD_RECORD = "16919145"
+WELD_API = f"https://zenodo.org/api/records/{WELD_RECORD}"
+WELD_EXPECT_DOI = f"10.5281/zenodo.{WELD_RECORD}"
+WELD_ARCHIVE = "segmented.zip"
+#: The archive is 11.4 GB for 609 pairs and this release ships a subset, so the whole
+#: thing is never downloaded: zip keeps its directory at the end of the file, so the
+#: directory is read over HTTP ranges and only the chosen members are fetched.
+#:
+#: THE SUBSET IS CHOSEN BY MEASUREMENT. Every one of the 609 masks is fetched -- they
+#: total 10 MB -- and the crack area of each is measured. Within each wire x
+#: magnification group the frames nearest that group's MEDIAN crack area fraction are
+#: taken, so the subset is typical of its group rather than its most visible members.
+#: Picking the clearest frames is how a dataset ends up flattering whatever is run on it.
+WELD_KEEP_PER_GROUP = 2
+WELD_MIN_CRACK_PX = 500
+
 #: The public masks are anti-aliased binary, so they are read at a midpoint threshold.
 #: WHETHER THAT IS SAFE IS CHECKED, NOT ASSUMED: a mask that is not bimodal fails the
 #: build rather than being silently thresholded down the middle of a gradient.
@@ -825,6 +854,471 @@ def zenodo_extract(zips, out, written):
                           "split_field_overlap": overlap}, problems
 
 
+class HTTPFile(io.RawIOBase):
+    """A seekable file over HTTP byte ranges, so `zipfile` can read a remote archive.
+
+    Downloading 11.4 GB to ship 20 image pairs is not a transfer worth making, and
+    caching it would put 11.4 GB beside a release the user asked to make smaller. Zip
+    stores its central directory at the END of the file, so with range requests the
+    directory can be read in one request and only the chosen members fetched.
+    """
+
+    def __init__(self, url, chunk=1 << 22):
+        self.url, self.pos, self.chunk = url, 0, chunk
+        self._cache: dict = {}
+        self.requests = self.bytes = 0
+        with urllib.request.urlopen(
+                urllib.request.Request(url, method="HEAD"), timeout=60) as r:
+            self.size = int(r.headers["Content-Length"])
+            self.final = r.geturl()
+        if r.headers.get("Accept-Ranges", "").lower() != "bytes":
+            # Not fatal -- the server may still honour Range -- but worth saying, since
+            # a server that ignores Range would silently return the whole file.
+            say(f"    note: {url} does not advertise byte ranges")
+
+    def seekable(self):
+        return True
+
+    def readable(self):
+        return True
+
+    def tell(self):
+        return self.pos
+
+    def seek(self, off, whence=0):
+        self.pos = (off if whence == 0 else
+                    self.pos + off if whence == 1 else self.size + off)
+        return self.pos
+
+    def _fetch(self, idx):
+        if idx in self._cache:
+            return self._cache[idx]
+        start = idx * self.chunk
+        end = min(start + self.chunk, self.size) - 1
+        req = urllib.request.Request(self.final,
+                                     headers={"Range": f"bytes={start}-{end}"})
+        last = None
+        for attempt in range(6):
+            try:
+                with urllib.request.urlopen(req, timeout=120) as r:
+                    if r.status != 206:
+                        die(f"{self.url} ignored a Range request (HTTP {r.status}). "
+                            f"Reading a subset of an 11 GB archive depends on it.")
+                    data = r.read()
+                break
+            except (urllib.error.URLError, OSError) as e:
+                last = e
+                if attempt == 5:
+                    die(f"reading {self.url} over byte ranges failed after 6 attempts "
+                        f"({last}). Nothing is substituted.")
+                time.sleep(2 * (attempt + 1))
+        self.requests += 1
+        self.bytes += len(data)
+        if len(self._cache) > 48:
+            self._cache.clear()
+        self._cache[idx] = data
+        return data
+
+    def read(self, n=-1):
+        if n is None or n < 0:
+            n = self.size - self.pos
+        n = min(n, self.size - self.pos)
+        out = bytearray()
+        while n > 0:
+            idx = self.pos // self.chunk
+            off = self.pos - idx * self.chunk
+            buf = self._fetch(idx)[off:off + n]
+            if not buf:
+                break
+            out += buf
+            self.pos += len(buf)
+            n -= len(buf)
+        return bytes(out)
+
+    def readinto(self, b):
+        d = self.read(len(b))
+        b[:len(d)] = d
+        return len(d)
+
+
+def weld_record():
+    say(f"  GET {WELD_API}")
+    try:
+        with urllib.request.urlopen(WELD_API, timeout=60) as r:
+            rec = json.loads(r.read().decode("utf-8"))
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        die(f"the Zenodo API for record {WELD_RECORD} could not be read ({e}). Nothing "
+            f"is substituted; pass --skip-weld to build without this arm and say so.")
+    md = rec.get("metadata", {})
+    lic = (md.get("license") or {}).get("id")
+    say(f"  record {WELD_RECORD}: {md.get('title')!r}")
+    say(f"  doi {rec.get('doi')}   licence {lic}")
+    if rec.get("doi") != WELD_EXPECT_DOI:
+        die(f"record {WELD_RECORD} reports DOI {rec.get('doi')!r}, not "
+            f"{WELD_EXPECT_DOI!r}.")
+    if lic != "cc-by-4.0":
+        die(f"record {WELD_RECORD} is licensed {lic!r}, not 'cc-by-4.0'. This release "
+            f"ships only what it may redistribute, and that is checked before the "
+            f"first byte is written, not afterwards.")
+    f = next((x for x in rec.get("files", []) if x["key"] == WELD_ARCHIVE), None)
+    if f is None:
+        die(f"record {WELD_RECORD} has no {WELD_ARCHIVE}; it holds "
+            f"{[x['key'] for x in rec.get('files', [])]}.")
+    return rec, f
+
+
+def weld_pairs(zf):
+    """{(wire, magnification, number): (image member, mask member)} from the archive."""
+    tr, mk = {}, {}
+    for m in zf.infolist():
+        if m.is_dir():
+            continue
+        p = m.filename.replace("\\", "/").split("/")
+        if len(p) < 5:
+            continue
+        key = (p[1], p[2], os.path.splitext(p[4])[0])
+        if p[3] == "train":
+            tr[key] = m
+        elif p[3] == "mask":
+            mk[key] = m
+    return {k: (tr[k], mk[k]) for k in sorted(set(tr) & set(mk))}
+
+
+def weld_census(zf, pairs, cache):
+    """Crack area of every one of the 609 masks, cached between runs.
+
+    The masks total 10 MB, so measuring all of them costs almost nothing and is what
+    lets the subset be chosen on evidence instead of on filename order.
+    """
+    cp = os.path.join(cache, f"weld_{WELD_RECORD}_mask_census.json")
+    if os.path.exists(cp):
+        got = json.load(open(cp, encoding="utf-8"))
+        if len(got) == len(pairs):
+            say(f"  mask census: {len(got)} masks, read from the cache")
+            return got
+    say(f"  measuring all {len(pairs)} masks (about "
+        f"{sum(m.file_size for _i, m in pairs.values()) / 1e6:.0f} MB)")
+    got = {}
+    for i, (k, (_img, msk)) in enumerate(sorted(pairs.items()), 1):
+        a = np.array(Image.open(io.BytesIO(zf.read(msk))).convert("L"))
+        crack = a >= PUBLIC_MASK_THRESHOLD
+        got["|".join(k)] = {
+            "wire": k[0], "magnification": k[1], "number": k[2],
+            "h": int(a.shape[0]), "w": int(a.shape[1]),
+            "crack_px": int(crack.sum()),
+            "area_fraction": round(float(crack.mean()), 8),
+            "midtone_fraction": round(float(((a > 0) & (a < 246)).mean()), 6),
+            "image_bytes": int(_img.file_size)}
+        if i % 150 == 0:
+            say(f"    {i}/{len(pairs)}")
+    os.makedirs(cache, exist_ok=True)
+    write_text(cp, json.dumps(got, indent=1) + "\n")
+    return got
+
+
+def weld_select(census):
+    """Two frames per wire x magnification, nearest that group's median crack area.
+
+    NEAREST THE MEDIAN, not the largest. A subset chosen by how much crack it contains
+    is a subset chosen to make a detector look good on it.
+    """
+    groups: dict = {}
+    for key, c in census.items():
+        if c["crack_px"] >= WELD_MIN_CRACK_PX:
+            groups.setdefault((c["wire"], c["magnification"]), []).append((key, c))
+    picked, report = [], {}
+    for g, items in sorted(groups.items()):
+        med = float(np.median([c["area_fraction"] for _k, c in items]))
+        ranked = sorted(items, key=lambda kc: (abs(kc[1]["area_fraction"] - med), kc[0]))
+        take = ranked[:WELD_KEEP_PER_GROUP]
+        picked += [k for k, _c in take]
+        report["/".join(g)] = {
+            "candidates_with_crack": len(items),
+            "group_median_area_fraction": round(med, 8),
+            "taken": [{"key": k, "area_fraction": c["area_fraction"],
+                       "crack_px": c["crack_px"]} for k, c in take]}
+    return sorted(picked), report
+
+
+def build_weld(out, cache, written):
+    """Fetch and index the hot-cracking weld subset. Returns (rows, report, problems)."""
+    rec, fmeta = weld_record()
+    md = rec.get("metadata", {})
+    url = (fmeta.get("links") or {}).get("self") or \
+        f"{WELD_API}/files/{WELD_ARCHIVE}/content"
+    fh = HTTPFile(url)
+    say(f"  {WELD_ARCHIVE}: {human(fh.size)} remote; reading its directory over byte "
+        f"ranges rather than downloading it")
+    zf = zipfile.ZipFile(fh)
+    pairs = weld_pairs(zf)
+    say(f"  {len(pairs)} image/mask pairs in the archive")
+    if not pairs:
+        die(f"record {WELD_RECORD} yielded no train/mask pairs; its layout has changed.")
+    census = weld_census(zf, pairs, cache)
+    picked, report = weld_select(census)
+    say(f"  selected {len(picked)} pairs: {WELD_KEEP_PER_GROUP} per wire x "
+        f"magnification, nearest each group's median crack area")
+
+    rows, problems, midtones = [], [], []
+    for key in picked:
+        wire, mag, num = key.split("|")
+        img_m, msk_m = pairs[(wire, mag, num)]
+        fid = f"weld_w{wire}_x{mag}_{num}"
+        di = os.path.join(out, "images", "weld", fid + os.path.splitext(img_m.filename)[1])
+        dm = os.path.join(out, "masks", "weld", fid + os.path.splitext(msk_m.filename)[1])
+        for member, dst in ((img_m, di), (msk_m, dm)):
+            # Already here from an earlier run? Then it is not fetched again, which is
+            # what lets a long transfer make progress across runs instead of starting
+            # over. Retried per member: one dropped connection in the middle of a
+            # 16 MB image should cost that image, not the build.
+            if not (os.path.exists(dst) and os.path.getsize(dst) == member.file_size):
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                last = None
+                for attempt in range(1, 6):
+                    try:
+                        data = zf.read(member)
+                        if len(data) != member.file_size:
+                            raise OSError(f"got {len(data)} of {member.file_size} bytes")
+                        with open(dst, "wb") as o:
+                            o.write(data)
+                        last = None
+                        break
+                    except Exception as e:                      # noqa: BLE001
+                        last = e
+                        say(f"    {os.path.basename(dst)}: attempt {attempt}/5 failed "
+                            f"({type(e).__name__}: {e}); retrying")
+                        time.sleep(3 * attempt)
+                if last is not None:
+                    die(f"fetching {member.filename} from the weld archive failed five "
+                        f"times ({type(last).__name__}: {last}). Nothing is "
+                        f"substituted; re-run to resume from what is already on disk.")
+            written.add(dst)
+
+        mask = np.array(Image.open(dm).convert("L"))
+        with Image.open(di) as im:
+            iw, ih = im.size
+        mid = float(((mask > 0) & (mask < 246)).mean())
+        midtones.append(mid)
+        crack = int((mask >= PUBLIC_MASK_THRESHOLD).sum())
+        if (ih, iw) != mask.shape:
+            problems.append(f"{fid}: image {(ih, iw)} vs mask {mask.shape}")
+        rows.append(frame_row(
+            frame_id=fid, modality="LM-public", series="weld",
+            session={"date": md.get("publication_date"),
+                     "instrument": "Keyence optical light microscope",
+                     "detector": None, "beam": None,
+                     "source": "the record states the images are light-microscope "
+                               "photographs of modified Varestraint-Transvarestraint "
+                               "TIG weld surfaces, taken at 50x and 100x; it names no "
+                               "further acquisition parameters"},
+            raw_shape=(ih, iw), box=(0, 0, ih, iw), mask_shape=mask.shape,
+            status="ok" if (ih, iw) == mask.shape else "unresolved",
+            nm=None, scale_source="none",
+            scale_note="the record publishes no pixel size. A scale bar IS drawn into "
+                       "each image and the nominal magnification (50x or 100x) is in "
+                       "the archive's own folder structure and is recorded here as "
+                       "`magnification`, so a pixel size is recoverable by reading the "
+                       "bar -- but it has not been read, so none is asserted",
+            hist={0: 0, 1: crack, 2: int(mask.size - crack), 3: 0},
+            image_file=os.path.relpath(di, out), mask_file=os.path.relpath(dm, out),
+            source_repo=f"zenodo:{WELD_RECORD}",
+            source_image=img_m.filename, source_mask=msk_m.filename,
+            source_image_sha=f"crc32:{img_m.CRC:08x}",
+            source_mask_sha=f"crc32:{msk_m.CRC:08x}",
+            extra={"annotation_kind": "binary_full",
+                   "mask_threshold": PUBLIC_MASK_THRESHOLD,
+                   "weld_wire": wire, "magnification": f"{mag}x"}))
+        say(f"  {fid:<24} {ih}x{iw}  crack {crack:>8,}  "
+            f"({100 * crack / mask.size:.4f}% of frame)")
+
+    worst = max(midtones) if midtones else 0.0
+    if worst > PUBLIC_MASK_MAX_MIDTONE:
+        die(f"a weld mask carries {100 * worst:.2f}% of its pixels strictly between 0 "
+            f"and 246, against a limit of {100 * PUBLIC_MASK_MAX_MIDTONE:g}%. These "
+            f"masks are supposed to be binary and a threshold at "
+            f"{PUBLIC_MASK_THRESHOLD} is not safe on one that is not.")
+    say(f"  worst anti-aliased fraction on a shipped weld mask: {100 * worst:.3f}%")
+    say(f"  byte ranges: {fh.requests} request(s), {human(fh.bytes)} fetched of "
+        f"{human(fh.size)}")
+    return rows, {
+        "record": WELD_RECORD, "doi": rec.get("doi"), "title": md.get("title"),
+        "licence": (md.get("license") or {}).get("id"),
+        "publication_date": md.get("publication_date"),
+        "creators": ", ".join(c.get("name", "?") for c in md.get("creators", [])),
+        "archive": WELD_ARCHIVE, "archive_bytes": fh.size,
+        "pairs_in_archive": len(pairs), "pairs_shipped": len(rows),
+        "bytes_fetched": fh.bytes,
+        "bytes_fetched_note": "what THIS run transferred. A rebuild re-fetches nothing "
+                              "already on disk at the right size, so this is small on "
+                              "a rebuild; `shipped_bytes` is the arm's actual cost",
+        "shipped_bytes": sum(
+            os.path.getsize(os.path.join(out, r[k]))
+            for r in rows for k in ("image_file", "mask_file")),
+        "selection": {
+            "rule": f"every mask in the archive was measured; within each wire x "
+                    f"magnification group the {WELD_KEEP_PER_GROUP} frames nearest "
+                    f"that group's MEDIAN crack area fraction were taken, among those "
+                    f"with at least {WELD_MIN_CRACK_PX} crack px. Nearest the median, "
+                    f"not the largest: a subset chosen by how much crack it contains "
+                    f"is a subset chosen to flatter whatever is run on it",
+            "per_group": report},
+        "worst_midtone_fraction": round(worst, 5)}, problems
+
+
+# ===================================================================== the difficulty axis
+#: WHY THIS EXISTS. A reader choosing a collection to try a method on needs to know which
+#: one is hard and in what way, and "high contrast" turned out to be the wrong word for
+#: the public Inconel frames: they are not the high-contrast end of anything. What makes
+#: them easy is that each holds ONE isolated crack on a largely uniform matrix. So the
+#: release states a measured axis instead of an impression, computed identically on every
+#: frame of every arm, and a collection added later has to be placed on it rather than
+#: described.
+#:
+#: Every statistic is taken AFTER the same 1.0/99.5 percentile stretch to 8 bits, which
+#: is the only way a uint16 micrograph, a float32 mosaic and an 8-bit PNG are comparable
+#: at all. `d_core`, `d_stroke` and `bg_sharpness` are invariant to that stretch; `bg_cv`
+#: and `bg_sobel_p995_over_mean` are not, and are comparable only because the stretch is
+#: the same everywhere. Both facts are written into checks.json beside the numbers.
+DIFFICULTY_BAND_FRAC = 0.004      # exclusion band around the annotation, of the short side
+DIFFICULTY_MIN_BG_PX = 50
+DIFFICULTY_MIN_CRACK_PX = 20
+
+
+def _sobel_sharpness(g_at, spread):
+    """99.5th percentile of Sobel magnitude over a spread.
+
+    This is `frame_legibility.sharpness()`, which divides by the frame's own intensity
+    standard deviation. It is lifted from that file rather than rewritten, for the same
+    reason `txm_group` is: a second copy of a definition is a second definition.
+    """
+    return float(np.percentile(g_at, 99.5) / (spread or 1.0))
+
+
+def _crack_core(crack):
+    """The deeper half of the annotation, by its own distance to its own edge.
+
+    A broad brush labels the crack AND the bright matrix at its lip, so a statistic over
+    the whole stroke mixes the feature with its surroundings. Taking the inner half by
+    depth adapts to a 3 px trace and a 500 px painted region alike, with no fixed radius
+    to pick. On this laboratory's SEM arm the core is markedly LESS separated from
+    background than the whole stroke, which is the measurement telling you the
+    annotation is a region and its middle is matrix.
+    """
+    from scipy import ndimage as _ndi
+    if not crack.any():
+        return crack, 0.0
+    dt = _ndi.distance_transform_edt(crack)
+    thr = max(1.0, float(np.percentile(dt[crack], 50)))
+    core = dt >= thr
+    return (core if core.any() else crack), thr
+
+
+def difficulty(raw, crack, reviewed):
+    """Every difficulty statistic for one frame. `crack` and `reviewed` are bool."""
+    from scipy import ndimage as _ndi
+    from skimage import filters as _filters
+
+    img = stretch8(raw).astype(np.float32)
+    # Sobel on the WHOLE frame, then sampled. Masking first manufactures an edge along
+    # the annotation boundary and the statistic would measure that edge.
+    g = _filters.sobel(img)
+    bg_rev = reviewed & ~crack
+    bg_all = ~crack
+    core, core_thr = _crack_core(crack)
+
+    # A TIGHT ANNOTATION PUTS THE CRACK'S OWN EDGE IN THE BACKGROUND, and the pixels just
+    # outside a close-fitting mask are the steepest gradient in the frame. Measured on
+    # the existing arms, including them changed the texture ranking. Texture is therefore
+    # taken at least `band` px away from the annotation, with the unbanded value beside
+    # it so the size of the effect stays visible.
+    band = max(3, int(round(DIFFICULTY_BAND_FRAC * min(crack.shape))))
+    near = _ndi.binary_dilation(crack, _ndi.generate_binary_structure(2, 2),
+                                iterations=band)
+    bg_far = bg_rev & ~near
+
+    out = {"crack_px": int(crack.sum()), "core_px": int(core.sum()),
+           "reviewed_bg_px": int(bg_rev.sum()), "far_bg_px": int(bg_far.sum()),
+           "exclusion_band_px": band, "core_depth_threshold_px": round(core_thr, 2)}
+    nulls = ("bg_mean", "bg_sd", "d_stroke", "d_core", "bg_cv_unbanded",
+             "bg_sobel_p995_over_mean_unbanded", "bg_cv",
+             "bg_sobel_p995_over_mean", "bg_sharpness")
+    for k in nulls:
+        out[k] = None
+
+    if bg_rev.sum() >= DIFFICULTY_MIN_BG_PX:
+        bmean, bsd = float(img[bg_rev].mean()), float(img[bg_rev].std())
+        out["bg_mean"], out["bg_sd"] = round(bmean, 2), round(bsd, 3)
+        # (1) standardised separation. Positive means the crack is darker than its
+        #     background; NEGATIVE means it is not, which is a real outcome and not an
+        #     error -- it is what a wide label over a dark matrix produces.
+        for tag, m in (("stroke", crack), ("core", core)):
+            if m.sum() >= DIFFICULTY_MIN_CRACK_PX and bsd > 0:
+                out[f"d_{tag}"] = round((bmean - float(img[m].mean())) / bsd, 4)
+        if bmean:
+            out["bg_cv_unbanded"] = round(bsd / bmean, 4)
+            out["bg_sobel_p995_over_mean_unbanded"] = round(
+                _sobel_sharpness(g[bg_rev], bmean), 4)
+        if bg_far.sum() >= DIFFICULTY_MIN_BG_PX:
+            fmean, fsd = float(img[bg_far].mean()), float(img[bg_far].std())
+            if fmean:
+                # (2) background texture, away from the annotation.
+                out["bg_cv"] = round(fsd / fmean, 4)
+                out["bg_sobel_p995_over_mean"] = round(_sobel_sharpness(g[bg_far], fmean), 4)
+            if fsd:
+                out["bg_sharpness"] = round(_sobel_sharpness(g[bg_far], fsd), 4)
+
+    # (3) how much of the frame is as dark as the crack's core -- how many competing
+    #     features a darkness rule has to reject. Over ALL non-crack pixels, because
+    #     that is what such a rule faces; the refereed-only figure sits beside it.
+    out["core_median"] = out["dark_as_crack_all_bg"] = None
+    out["dark_as_crack_reviewed_bg"] = None
+    if core.sum() >= DIFFICULTY_MIN_CRACK_PX:
+        cmed = float(np.median(img[core]))
+        out["core_median"] = round(cmed, 2)
+        out["dark_as_crack_all_bg"] = round(float((img[bg_all] <= cmed).mean()), 5)
+        if bg_rev.sum() >= DIFFICULTY_MIN_BG_PX:
+            out["dark_as_crack_reviewed_bg"] = round(
+                float((img[bg_rev] <= cmed).mean()), 5)
+
+    # (4) one clean crack, or a network? A COUNT IS NOT A MASS: 305 components once read
+    #     as fragmentation in this project until the largest was found to hold 97% of the
+    #     area, so the share goes beside the count and neither is reported alone.
+    lab, n = _ndi.label(crack, np.ones((3, 3), bool))
+    out["crack_components"] = int(n)
+    out["crack_largest_component_share"] = None
+    if n and crack.sum():
+        sz = np.bincount(lab.ravel())
+        sz[0] = 0
+        out["crack_largest_component_share"] = round(float(sz.max()) / crack.sum(), 4)
+    out["crack_area_fraction"] = round(float(crack.mean()), 6)
+    return out
+
+
+#: The columns the per-arm summary and the README table report, in order.
+DIFFICULTY_KEYS = ("d_stroke", "d_core", "bg_cv", "bg_sobel_p995_over_mean",
+                   "dark_as_crack_all_bg", "crack_area_fraction", "crack_components",
+                   "crack_largest_component_share")
+
+
+def difficulty_summary(rows):
+    """Median and quartiles per arm. Medians, because these distributions are skewed."""
+    out = {}
+    for arm in sorted({r["modality"] for r in rows}):
+        sub = [r["difficulty"] for r in rows
+               if r["modality"] == arm and r.get("difficulty")]
+        if not sub:
+            continue
+        stat = {"n_frames": len(sub)}
+        for k in DIFFICULTY_KEYS:
+            v = [x[k] for x in sub if x.get(k) is not None]
+            stat[k] = ({"median": round(float(np.median(v)), 4),
+                        "q1": round(float(np.percentile(v, 25)), 4),
+                        "q3": round(float(np.percentile(v, 75)), 4), "n": len(v)}
+                       if v else None)
+        out[arm] = stat
+    return out
+
+
 # ========================================================================= preview making
 def _font(size):
     for p in ("/System/Library/Fonts/Helvetica.ttc",
@@ -866,7 +1360,7 @@ def stretch8(a):
     lo, hi = np.percentile(a, [1.0, 99.5])
     if hi <= lo:
         lo, hi = float(a.min()), float(max(a.max(), a.min() + 1))
-    return np.clip((a - lo) / (hi - lo) * 255.0, 0, 255).astype(np.uint8)
+    return np.clip((a - lo) / (hi - lo) * 255.0, 0, 255).astype(np.float32)
 
 
 def make_preview(img8, paint, nm_per_px, out_path):
@@ -1367,13 +1861,19 @@ def write_tables(out, rows):
             "shape_status", "nm_per_px", "scale_source", "scale_note",
             "px_state_0_unreviewed", "px_state_1_crack", "px_state_2_not_crack",
             "px_state_3_not_crack_erased", "px_total", "px_reviewed", "px_crack",
-            "px_not_crack", "mask_threshold", "source_repo", "source_image_file",
+            "px_not_crack", "mask_threshold",
+            "d_stroke", "d_core", "bg_cv", "bg_sobel_p995_over_mean",
+            "dark_as_crack_all_bg", "crack_area_fraction", "crack_components",
+            "crack_largest_component_share",
+            "source_repo", "source_image_file",
             "source_mask_file", "source_image_sha256", "source_mask_sha256"]
     with open(os.path.join(out, "metadata.csv"), "w", newline="", encoding="utf-8") as fh:
         w = csv.DictWriter(fh, fieldnames=cols, extrasaction="ignore")
         w.writeheader()
         for r in rows:
-            w.writerow(r)
+            # the difficulty statistics live nested in frames.json; the CSV gets them
+            # flat so the index can be sorted by them without a JSON parser
+            w.writerow({**r, **(r.get("difficulty") or {})})
     write_text(os.path.join(out, "frames.json"),
                json.dumps({"dataset": DATASET_NAME,
                            "paint_states": {"0": "unreviewed, excluded from every "
@@ -1734,7 +2234,187 @@ def _undeclared_note(zen):
         "behind them is undocumented. Say so rather than letting a reader discover it.")
 
 
-def build_readme(out, rows, zen, darkness, mask_audit, s3_audit, sem_series):
+def _difficulty_section(rows, diff_sum):
+    """The measured axis, as a table, with what each column means in one line."""
+    label = {"SEM": "`sem` (this lab)", "TXM": "`txm` (this lab)",
+             "SEM-public": "`inconel718`", "LM-public": "`weld`"}
+    cols = [("d_stroke", "d stroke"), ("d_core", "d core"), ("bg_cv", "bg CV"),
+            ("bg_sobel_p995_over_mean", "bg Sobel"),
+            ("dark_as_crack_all_bg", "dark as crack"),
+            ("crack_area_fraction", "area frac"),
+            ("crack_components", "components"),
+            ("crack_largest_component_share", "largest comp")]
+    head = "| arm | n | " + " | ".join(c[1] for c in cols) + " |"
+    rule = "|" + "|".join("---" for _ in range(len(cols) + 2)) + "|"
+    body = []
+    for arm in sorted(diff_sum):
+        st = diff_sum[arm]
+        cells = []
+        for k, _n in cols:
+            cells.append(f"{st[k]['median']:.4g}" if st.get(k) else "--")
+        body.append(f"| {label.get(arm, arm)} | {st['n_frames']} | "
+                    + " | ".join(cells) + " |")
+    return """## How hard is each arm? A measured axis
+
+Which collection is hard, and in what way, is a question this release answers with
+numbers rather than adjectives -- partly because the obvious adjective turned out to be
+wrong. The public Inconel frames look like high-contrast black-and-white crack pictures,
+and they are not: on the standardised separation between annotated crack and refereed
+background they score **negative**, meaning the annotated crack is not darker than its
+surroundings at all. What makes them easy is something else, and the last column is
+where you can see it.
+
+Every number below is a median over that arm's frames, computed by the same code on
+every frame of every arm, after the same 1.0/99.5 percentile stretch to 8 bits -- which
+is the only way a uint16 micrograph, a float32 mosaic and an 8-bit PNG are comparable.
+Per-frame values are in `metadata.csv` and `frames.json`; the definitions, the quartiles
+and which statistics survive the stretch unchanged are in `checks.json` under
+`difficulty`.
+
+""" + "\n".join([head, rule] + body) + """
+
+- **d stroke / d core** -- how many background standard deviations darker the annotation
+  is than its refereed background, over the whole stroke and over its inner half.
+  Positive means darker. **The gap between the two columns is informative on its own:**
+  where the core is *less* separated than the stroke, the annotation is a painted region
+  whose middle is matrix rather than feature.
+- **bg CV, bg Sobel** -- spread and 99.5th-percentile Sobel magnitude of the background,
+  in units of its own mean, measured away from the annotation. The Sobel rule is the
+  `sharpness` definition this project's `frame_legibility.py` already uses. Note what it
+  does and does not say: a high value can come from bright specks rather than from
+  crack-like structure, so read it beside the next column.
+- **dark as crack** -- the share of non-crack pixels at or below the median of the
+  annotation's core, which is how much of the frame a darkness rule has to reject.
+- **components / largest comp** -- how many connected pieces the annotation has, and
+  what share of its area the biggest one holds. **A count is not a mass**: the share is
+  the column that separates one clean crack from a network, and the count alone does
+  not.
+"""
+
+
+def _weld_section(weld, diff_sum):
+    if not weld:
+        return ("## The hot-cracking weld arm\n\nSkipped on this build "
+                "(`--skip-weld`); `images/weld/` is absent.")
+    sel = weld["selection"]
+    rows = "\n".join(
+        f"| wire {g.split('/')[0]}, {g.split('/')[1]}x | {v['candidates_with_crack']} | "
+        f"{v['group_median_area_fraction']:.2%} | "
+        + ", ".join(f"`{t['key'].replace('|', '/')}` ({t['area_fraction']:.2%})"
+                    for t in v["taken"]) + " |"
+        for g, v in sorted(sel["per_group"].items()))
+    d = diff_sum.get("LM-public", {})
+
+    def med(k):
+        return f"{d[k]['median']:.4g}" if d.get(k) else "--"
+
+    # WHERE IT LANDS IS COMPUTED, NOT CLAIMED. A collection chosen to be mid-range and
+    # then described as mid-range has had nothing demonstrated about it.
+    others = [a for a in diff_sum if a != "LM-public"]
+    lines, n_between, n_total = [], 0, 0
+    for k, nm in (("d_core", "d core"), ("d_stroke", "d stroke"),
+                  ("bg_sobel_p995_over_mean", "bg Sobel"), ("bg_cv", "bg CV"),
+                  ("crack_components", "components"),
+                  ("crack_largest_component_share", "largest comp"),
+                  ("dark_as_crack_all_bg", "dark as crack"),
+                  ("crack_area_fraction", "area frac")):
+        vals = [diff_sum[a][k]["median"] for a in others if diff_sum[a].get(k)]
+        if not vals or not d.get(k):
+            continue
+        v, lo, hi = d[k]["median"], min(vals), max(vals)
+        n_total += 1
+        if lo <= v <= hi:
+            verdict, n_between = "**between**", n_between + 1
+        else:
+            verdict = "**above all three**" if v > hi else "**below all three**"
+        lines.append(f"| {nm} | {v:.4g} | {lo:.4g} to {hi:.4g} | {verdict} |")
+    placement = "\n".join(
+        ["| statistic | weld | the other three arms span | where it lands |",
+         "|---|---|---|---|"] + lines)
+
+    return f"""## The hot-cracking weld arm
+
+{weld['pairs_shipped']} light-microscope images of modified Varestraint-Transvarestraint
+TIG weld surfaces, with hand-drawn binary hot-crack masks. Zenodo record
+{weld['record']} (doi:`{weld['doi']}`, licence `{weld['licence']}`), *{weld['title']}*,
+{weld['creators']}, {weld['publication_date']}.
+
+**Why this one, and what it is for.** The difficulty table above has a hole in it. The
+Inconel frames are one isolated crack on a largely uniform matrix -- their largest
+connected component holds {diff_sum.get('SEM-public', {}).get('crack_largest_component_share', {}).get('median', float('nan')):.1%}
+of the annotated area. The laboratory SEM frames are broad-brush regions over dense
+grain structure, and the TXM frames are a fragmented network at high separation. None of
+them is a crack of *intermediate* definition sitting inside strongly competing texture,
+and that is the case a method is most likely to fail on quietly. On these weld surfaces
+the solidification ripples cover the whole field and the hot cracks are short and
+embedded in them.
+
+**It was chosen by measurement, not by reputation**, and this is where it actually
+landed. For each statistic the table below gives the weld median against the range the
+three existing arms span. "Between" is computed from the numbers, not asserted:
+
+{placement}
+
+So it is a middle case on **{n_between} of the {n_total}** statistics, including the
+one the gap was defined by -- the separation of crack from background, where it sits
+between the laboratory SEM arm and TXM -- and the number of annotated components.
+**Three qualifications, because the table is more interesting than a headline:**
+
+- On **largest-component share** it reads {med('crack_largest_component_share')}, which
+  the table calls below all three. It misses the laboratory SEM arm's
+  {diff_sum.get('SEM', {}).get('crack_largest_component_share', {}).get('median', 0):.4g}
+  by about a thousandth. Read that as "indistinguishable from the SEM arm", not as a
+  fourth distinct value.
+- On **dark as crack** it is between, but at the very bottom of the range and
+  effectively tied with TXM. It is not a middle case on that axis in any useful sense.
+- Its **background is the most textured of the four** (bg CV above all three) and its
+  **cracks are the smallest share of the frame** of any arm. Those are the two places
+  it genuinely extends the release rather than filling in it.
+
+**And it is light microscopy, not electron microscopy** -- a different instrument from
+every other arm here. It is a companion for the competing-texture problem, not a second
+SEM arm, and a result that transfers to it has not thereby been shown to transfer
+across modality.
+
+The runner-up was the EBC coating crack class in the same Zenodo record as the Inconel
+frames (24 whole fields, measured on this same instrument). It is also intermediate on
+separation, but its largest connected component holds a smaller share of the annotation
+than any existing arm rather than falling between them, and looking at the frames shows
+why that is not the gap being filled: its strong texture is a porous top coat occupying
+a different band of the image from the cracks, which run through a comparatively plain
+layer below. The weld ripples run through the cracks.
+
+**How the subset was chosen.** The archive is {human(weld['archive_bytes'])} for
+{weld['pairs_in_archive']} pairs and this release ships {weld['pairs_shipped']}. All
+{weld['pairs_in_archive']} masks were measured -- they total about 10 MB -- and within
+each wire x magnification group the {WELD_KEEP_PER_GROUP} frames **nearest that group's
+median crack area** were taken, among those with at least {WELD_MIN_CRACK_PX} crack
+pixels. Nearest the median, not the largest: a subset chosen by how much crack it
+contains is a subset chosen to flatter whatever is run on it.
+
+**The archive is never downloaded.** Zip keeps its directory at the end of the file, so
+the builder reads that directory over HTTP byte ranges in a single request and then
+fetches only the members it keeps -- about {human(weld['shipped_bytes'])} of the
+{human(weld['archive_bytes'])} archive on a first build, and almost nothing on a rebuild,
+since a member already on disk at the right size is not fetched again. (The
+`bytes_fetched` figure in `checks.json` is what *that* run transferred, so it is small
+on a rebuild; the bytes shipped are the honest cost of the arm.)
+
+| group | frames with crack | group median area | taken |
+|---|---|---|---|
+{rows}
+
+The masks are binary and label the whole field, so `annotation_kind` is `binary_full`
+and `reviewed` is true everywhere, as for the Inconel frames. **No pixel size is
+asserted.** The record publishes none; a scale bar is drawn into each image and the
+nominal magnification is in the archive's folder structure and is recorded per frame as
+`magnification`, so one is recoverable by reading the bar -- but it has not been read,
+so none is claimed.
+"""
+
+
+def build_readme(out, rows, zen, darkness, mask_audit, s3_audit, sem_series,
+                 diff_sum, weld):
     nocrack = [r for r in rows if r["px_crack"] == 0]
     nonotcrack = [r for r in rows if r["px_not_crack"] == 0]
     both = [r for r in rows if r["px_crack"] >= MIN_VERDICT_PX
@@ -1742,6 +2422,7 @@ def build_readme(out, rows, zen, darkness, mask_audit, s3_audit, sem_series):
     sem = [r for r in rows if r["modality"] == "SEM"]
     txm = [r for r in rows if r["modality"] == "TXM"]
     pub = [r for r in rows if r["modality"] == "SEM-public"]
+    wld = [r for r in rows if r["modality"] == "LM-public"]
     scaled = [r for r in sem if r["nm_per_px"]]
     unscaled = [r for r in sem if not r["nm_per_px"]]
     unresolved = [r for r in rows if not r["shape_status"].startswith("ok")]
@@ -1861,6 +2542,7 @@ Built {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}.
 | `sem` | {len(sem)} | 4-state hand correction masks | {len(scaled)} of {len(sem)} recovered, {len(unscaled)} null |
 | `txm` | {len(txm)} (B2 {len(txm_b2)}, B3 {len(txm_b3)}) | 4-state hand correction masks | all {TXM_NM_PER_PX} nm/px, **derived, not instrument metadata** |
 | `inconel718` | {len(pub)} (train {sum(1 for r in pub if r.get('inconel_split') == 'train')}, test {sum(1 for r in pub if r.get('inconel_split') == 'test')}) | binary masks, third-party | **none published anywhere in that record** |
+| `weld` | {len(wld)} | binary masks, third-party | **none asserted** (a bar is drawn in the image) |
 
 **{len(rows)} frames in all, one row each in `metadata.csv`.** Images and masks are
 separated at the top so the folder can be read without descending into it: every image
@@ -1877,6 +2559,7 @@ path as the image it belongs to.
   images/txm/<frame>.tif               masks/txm/<frame>.png
   images/inconel718/train/<name>.tif   masks/inconel718/train/<name>.png
   images/inconel718/test/<name>.png    masks/inconel718/test/<name>.png
+  images/weld/<frame>.png              masks/weld/<frame>.png
 
   previews/<frame>.png                 evidence/<frame>__databar.png
 ```
@@ -2187,6 +2870,14 @@ repository, run with `SCOPE_B2B3=1`. The frame set it enumerates is the frame se
 
 ---
 
+{_difficulty_section(rows, diff_sum)}
+
+---
+
+{_weld_section(weld, diff_sum)}
+
+---
+
 {_data_availability(rows, zen)}
 
 ---
@@ -2226,7 +2917,7 @@ python score.py <frame_id> <prediction.png>
     write_text(os.path.join(out, "README.md"), body)
 
 
-def build_licensing(out, zen):
+def build_licensing(out, zen, weld):
     """Each subtree's licence, stated separately, because they are not the same.
 
     This file used to carry a long warning: the release shipped 13,303 files out of a
@@ -2247,8 +2938,8 @@ def build_licensing(out, zen):
     body = f"""\
 # Licensing
 
-The laboratory data and the Inconel 718 frames are not under the same terms. This file
-states each separately.
+The laboratory data and the two public collections are not under the same terms. This
+file states each separately.
 
 ---
 
@@ -2316,7 +3007,27 @@ as received; nothing here vouches for how they were drawn.
 
 ---
 
-## 3. Attribution
+## 3. The hot-cracking weld frames
+
+`images/weld/` and `masks/weld/` -- {weld['pairs_shipped'] if weld else 0} image/mask
+pairs, third-party data.
+
+**Zenodo record {WELD_RECORD}, CC BY 4.0, DOI `{WELD_EXPECT_DOI}`.**
+{weld['creators'] if weld else 'Liepold, Kromm, Kannengiesser'} (Bundesanstalt fuer
+Materialforschung und -pruefung), *{weld['title'] if weld else 'Semantic Segmentation for Hot Cracking'}*,
+{weld['publication_date'] if weld else '2025'}. The licence was checked against the
+record's own metadata before the first byte was written, not afterwards, and the build
+stops if it is anything other than CC BY 4.0.
+
+This record is a single deposit by one institution. Unlike the Inconel record it
+re-publishes no other collection, so there is no upstream licence to reconcile.
+{weld['pairs_shipped'] if weld else 0} of its {weld['pairs_in_archive'] if weld else 609}
+pairs are shipped here; the rest are at the DOI. Attribution for these frames belongs to
+that depositor.
+
+---
+
+## 4. Attribution
 
 If you use the laboratory arms:
 
@@ -2327,6 +3038,11 @@ If you use the Inconel 718 frames, cite the Zenodo record:
 
 > Tian, Jiayi. *Cross-Material Few-Shot Segmentation for Generalizable Microstructure
 > Analysis.* Zenodo, 2026. doi:10.5281/zenodo.{ZENODO_RECORD}.
+
+If you use the weld frames:
+
+> Liepold, P., Kromm, A., Kannengiesser, T. *Semantic Segmentation for Hot Cracking.*
+> Zenodo, 2025. doi:{WELD_EXPECT_DOI}.
 
 See `CITATION.cff` for the machine-readable form.
 """
@@ -2391,8 +3107,22 @@ references:
     doi: "10.5281/zenodo.{ZENODO_RECORD}"
     year: 2026
     notes: >-
-      Source of the inconel718/ subtree. Marked CC BY 4.0; see LICENSING.md for the
-      upstream licence conflict that marking carries.
+      Source of the images/inconel718 and masks/inconel718 frames. Marked CC BY 4.0;
+      see LICENSING.md for the upstream licence conflict that marking carries.
+  - type: dataset
+    title: "Semantic Segmentation for Hot Cracking"
+    authors:
+      - family-names: Liepold
+        given-names: Philipp
+      - family-names: Kromm
+        given-names: Arne
+      - family-names: Kannengiesser
+        given-names: Thomas
+    doi: "10.5281/zenodo.{WELD_RECORD}"
+    year: 2025
+    notes: >-
+      Source of the images/weld and masks/weld frames: 20 of its 609 image/mask pairs,
+      chosen by measurement. CC BY 4.0.
 """)
 
 
@@ -2443,7 +3173,9 @@ def main():
                     help="where the Zenodo zips are kept between runs "
                          "(default: _zenodo_cache beside --out)")
     ap.add_argument("--skip-zenodo", action="store_true",
-                    help="build the two laboratory arms only; the report must say so")
+                    help="leave out the Inconel 718 arm; the report must say so")
+    ap.add_argument("--skip-weld", action="store_true",
+                    help="leave out the hot-cracking weld arm; the report must say so")
     ap.add_argument("--no-previews", action="store_true")
     args = ap.parse_args()
 
@@ -2530,6 +3262,18 @@ def main():
                "files": files, "census": census, "extracted": n_ex,
                "extracted_bytes": b_ex, "report": report, "classes": classes}
 
+    # ------------------------------------------------------------------- the weld arm
+    weld = None
+    if args.skip_weld:
+        say("")
+        say("hot-cracking weld -- SKIPPED (--skip-weld). This tree is incomplete.")
+    else:
+        say("")
+        say(f"hot-cracking weld -- public collection, Zenodo record {WELD_RECORD}")
+        weld_rows, weld, weld_problems = build_weld(out, cache, written)
+        rows += weld_rows
+        problems += weld_problems
+
     ids = [r["frame_id"] for r in rows]
     dupes = sorted({i for i in ids if ids.count(i) > 1})
     if dupes:
@@ -2537,30 +3281,60 @@ def main():
             f"index, the previews and the loader are all keyed by frame id, so a "
             f"collision would silently serve one frame's annotation for another.")
 
-    # ------------------------------------------------------------------------ previews
-    if not args.no_previews:
-        say("")
-        say("previews")
-        for r in rows:
-            if r.get("annotation_kind") != "four_state_partial":
-                continue
-            if not r["shape_status"].startswith("ok"):
-                say(f"  {r['frame_id']}: no preview, shape unresolved")
-                continue
-            img = tifffile.imread(os.path.join(out, r["image_file"]))
-            if img.ndim == 3:
-                img = img[..., 0]
-            img = img[r["crop_row0"]:r["crop_row1"], r["crop_col0"]:r["crop_col1"]]
-            paint = np.array(Image.open(os.path.join(out, r["mask_file"])))
-            while paint.ndim > 2:
-                paint = paint[..., 0]
+    # ------------------------------------------- one pass per frame: difficulty, preview
+    say("")
+    say("per-frame pass: difficulty statistics" +
+        ("" if args.no_previews else " and previews"))
+    n_diff = 0
+    for r in rows:
+        if not r["shape_status"].startswith("ok"):
+            say(f"  {r['frame_id']}: skipped, shape unresolved")
+            continue
+        ip = os.path.join(out, r["image_file"])
+        if os.path.splitext(ip)[1].lower() in (".tif", ".tiff"):
+            img = tifffile.imread(ip)
+        else:
+            img = np.array(Image.open(ip))
+        if img.ndim == 3:
+            img = img[..., :3].mean(2) if img.shape[2] >= 3 else img[..., 0]
+        img = img[r["crop_row0"]:r["crop_row1"], r["crop_col0"]:r["crop_col1"]]
+        paint = np.array(Image.open(os.path.join(out, r["mask_file"])))
+        while paint.ndim > 2:
+            paint = paint[..., 0]
+        if r["annotation_kind"] == "binary_full":
+            crack = paint >= r["mask_threshold"]
+            reviewed = np.ones(paint.shape, bool)
+        else:
+            crack = paint == 1
+            reviewed = crack | (paint == 2) | (paint == 3)
+        if crack.sum() >= DIFFICULTY_MIN_CRACK_PX:
+            r["difficulty"] = difficulty(img, crack, reviewed)
+            n_diff += 1
+        if not args.no_previews and r["annotation_kind"] == "four_state_partial":
             p = os.path.join(out, "previews", r["frame_id"] + ".png")
-            make_preview(stretch8(img), paint, r["nm_per_px"], p)
+            make_preview(stretch8(img).astype(np.uint8), paint, r["nm_per_px"], p)
             r["preview_file"] = os.path.relpath(p, out)
             written.add(p)
+    say(f"  difficulty measured on {n_diff} of {len(rows)} frames "
+        f"(a frame needs {DIFFICULTY_MIN_CRACK_PX} crack px)")
+    if not args.no_previews:
         say(f"  wrote {sum(1 for r in rows if r.get('preview_file'))} previews "
-            f"({sum(1 for r in rows if r['nm_per_px'])} with a scale bar, "
-            f"{sum(1 for r in rows if not r['nm_per_px'])} without, by design)")
+            f"({sum(1 for r in rows if r.get('preview_file') and r['nm_per_px'])} with "
+            f"a scale bar, "
+            f"{sum(1 for r in rows if r.get('preview_file') and not r['nm_per_px'])} "
+            f"without, by design)")
+
+    diff_sum = difficulty_summary(rows)
+    say("")
+    say("  the difficulty axis, median per arm "
+        "(all after the same 1.0/99.5 percentile stretch):")
+    hdr = f"    {'arm':<13}{'n':>4}" + "".join(f"{k[:15]:>17}" for k in DIFFICULTY_KEYS)
+    say(hdr)
+    for arm, st in sorted(diff_sum.items()):
+        line = f"    {arm:<13}{st['n_frames']:>4}"
+        for k in DIFFICULTY_KEYS:
+            line += (f"{st[k]['median']:>17.4f}" if st.get(k) else f"{'--':>17}")
+        say(line)
 
     # -------------------------------------------------------------------------- checks
     say("")
@@ -2611,8 +3385,8 @@ def main():
                        .replace("MIN_PX = 200", f"MIN_PX = {MIN_VERDICT_PX}"))
     write_tables(out, rows)
     build_readme(out, rows, zen, darkness, mask_audit, s3_audit,
-                 sem_series)
-    build_licensing(out, zen)
+                 sem_series, diff_sum, weld)
+    build_licensing(out, zen, weld)
     build_citation(out, rows)
 
     # Everything except the two files that do not exist yet. They are scanned
@@ -2687,6 +3461,94 @@ def main():
         "all_sem_masks_vs_originals": mask_audit,
         "txm_state_3_across_source": s3_audit,
         "pruned_files": removed,
+        "difficulty": {
+            "what": "a measured axis for how hard each collection is, so a reader can "
+                    "choose one on evidence rather than on an impression, and so a "
+                    "collection added later has to be PLACED on it rather than "
+                    "described. Medians and quartiles per arm; per-frame values are in "
+                    "frames.json under each frame's `difficulty`.",
+            "preprocessing": "every frame is put through the same 1.0/99.5 percentile "
+                             "stretch to 8 bits first; without it a uint16 micrograph, "
+                             "a float32 mosaic and an 8-bit PNG are not comparable",
+            "invariant_to_that_stretch": ["d_stroke", "d_core", "bg_sharpness"],
+            "not_invariant_to_that_stretch": ["bg_cv", "bg_sobel_p995_over_mean",
+                                              "dark_as_crack_all_bg"],
+            "definitions": {
+                "d_stroke": "(mean of refereed background - mean of the whole "
+                            "annotation) / SD of refereed background. Positive means "
+                            "the crack is darker than its background; negative is a "
+                            "real outcome, not an error",
+                "d_core": "the same, over the deeper half of the annotation by distance "
+                          "to its own edge. A broad brush labels the crack AND the "
+                          "bright matrix at its lip; comparing the two says how much of "
+                          "the annotation is feature",
+                "bg_cv": "SD / mean of refereed background, excluding a band around the "
+                         "annotation",
+                "bg_sobel_p995_over_mean": "99.5th percentile of Sobel magnitude over "
+                                           "the same region, divided by its mean. The "
+                                           "Sobel rule is frame_legibility.sharpness()",
+                "exclusion_band": f"{DIFFICULTY_BAND_FRAC} of the frame's short side, "
+                                  f"at least 3 px. Without it the pixels just outside a "
+                                  f"tight mask -- the crack's own bright lip -- "
+                                  f"dominate the texture statistic, and measured on "
+                                  f"these arms that inverted the texture ranking. The "
+                                  f"unbanded values are kept per frame beside the "
+                                  f"banded ones",
+                "dark_as_crack_all_bg": "share of ALL non-crack pixels at or below the "
+                                        "median of the annotation's core -- how many "
+                                        "competing features a darkness rule must "
+                                        "reject. The refereed-only figure is beside it",
+                "crack_components": "connected components of the annotation, "
+                                    "8-connectivity",
+                "crack_largest_component_share": "the share of annotated area the "
+                                                 "largest component holds. A COUNT IS "
+                                                 "NOT A MASS: this is what separates "
+                                                 "one clean crack from a network, and "
+                                                 "the count alone does not",
+            },
+            "per_arm": diff_sum,
+            "candidates_considered": {
+                "what": "a ONE-TIME survey, 2026-11-04, run with the same instrument "
+                        "as the arms above. It is a record of how the fourth arm was "
+                        "chosen, not something this build recomputes, so these "
+                        "medians are fixed text and the live numbers for whatever was "
+                        "shipped are in `per_arm`.",
+                "constraints": "a licence that permits redistribution, and pixel-level "
+                               "crack annotations. Collections failing either were not "
+                               "measured.",
+                "measured": {
+                    "weld (Zenodo 16919145, CC BY 4.0, 14-frame sample)": {
+                        "d_core": 1.6595, "bg_cv": 0.5913,
+                        "bg_sobel_p995_over_mean": 1.1778,
+                        "crack_largest_component_share": 0.6495,
+                        "crack_components": 12.5, "crack_area_fraction": 0.0008,
+                        "verdict": "SHIPPED. Between the existing arms on separation, "
+                                   "background Sobel and component count; its "
+                                   "solidification ripples run through the cracks "
+                                   "rather than beside them."},
+                    "EBC_crack (Zenodo 23045328, 24 whole fields)": {
+                        "d_core": 1.3224, "bg_cv": 0.6031,
+                        "bg_sobel_p995_over_mean": 0.6551,
+                        "crack_largest_component_share": 0.2690,
+                        "crack_components": 8.5, "crack_area_fraction": 0.0025,
+                        "verdict": "not shipped. Intermediate on separation, but its "
+                                   "largest component holds a SMALLER share than any "
+                                   "existing arm rather than falling between them, and "
+                                   "its texture is a porous top coat in a different "
+                                   "band of the image from the cracks."},
+                },
+                "not_measured": {
+                    "MetalDAM": "CC BY-NC-ND 4.0 -- redistribution of it or any "
+                                "derivative is not permitted. Removed from this "
+                                "release once already for exactly that.",
+                    "Ti-6Al-4V fractography (Zenodo 18666995)": "the right imagery and "
+                                                                "16 GB of it, but no "
+                                                                "masks at all.",
+                    "road/pavement/concrete crack sets": "not microscopy.",
+                },
+            },
+        },
+        "weld": weld,
         "no_absolute_paths": paths,
         "zenodo": None if zen is None else {
             k: v for k, v in zen.items() if k != "files"},
@@ -2715,8 +3577,8 @@ def main():
     say("=" * 90)
     say(f"tree size before: {human(size_before)}")
     say(f"tree size after:  {human(size_after)}   ({n_manifest:,} files in MANIFEST.sha256)")
-    for sub in ("images/sem", "images/txm", "images/inconel718",
-                "masks/sem", "masks/txm", "masks/inconel718",
+    for sub in ("images/sem", "images/txm", "images/inconel718", "images/weld",
+                "masks/sem", "masks/txm", "masks/inconel718", "masks/weld",
                 "previews", "evidence"):
         p = os.path.join(out, *sub.split("/"))
         if os.path.isdir(p):
@@ -2726,8 +3588,11 @@ def main():
         say(f"  (the Zenodo cache is inside the tree)")
     else:
         say(f"  zenodo cache (outside the tree): {human(tree_bytes(cache))} at {cache}")
-    say(f"SEM {len(sem_rows)} frames, TXM {len(txm_rows)} frames, "
-        f"{'Inconel 718 ' + format(zen['extracted'], ',') + ' files' if zen else 'no Inconel subtree'}")
+    say("  ".join(
+        [f"SEM {len(sem_rows)}", f"TXM {len(txm_rows)}",
+         f"Inconel 718 {zen['extracted'] // 2}" if zen else "no Inconel arm",
+         f"weld {weld['pairs_shipped']}" if weld else "no weld arm"])
+        + f"   -- {len(rows)} frames indexed")
     say(f"built in {(time.time() - t0) / 60:.1f} min")
 
     # The console log, beside the tree and NOT in it: it names the absolute path of
