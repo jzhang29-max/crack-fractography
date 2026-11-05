@@ -12,12 +12,12 @@ This value characterises rejection of non-crack background pixels. Together, the
 and specificity quantify two aspects of the output: the total marked area and the
 classification of the background population. Figure {fig_areabars}(a) places the pixel accuracy of every collection scored in this work beside the accuracy an all-background prediction reaches on the same pixels. The two are indistinguishable at this prevalence, which is the point, and it is why panel (b) plots the difference between them instead. Averaged over images, the detector sits {wf_margin_img} points BELOW an all-background prediction on the whole fields and {crop_margin_img} points above it on the released crops. Pooled over pixels at the selected setting, which is what Table {tbl_endpoints} reports, the whole-field deficit is {wf_margin_pool} points; the all-background value is the same under both aggregations, so the difference between those two figures is the aggregation and nothing else. Table {tbl_endpoints} collects the principal numerical results.
 
-[TABLE endpoints | The principal numerical results at the selected setting, on the 31 whole fields. The two pixel accuracies are the same quantity under two aggregations and are both given because the figures quote different ones: the pooled row is over pixels at the fixed selected multiplier, the per-image row is the mean over images at the leave-one-image-out setting, and the all-background value is identical under both.]
+[TABLE endpoints | The principal numerical results at the selected setting, on the 31 whole fields. Every row is pooled over pixels. The area ratio appears again in Figure {fig_parameters}(a) as a mean over images, where it reads about a quarter higher at every value of k; the two aggregations of that one quantity are named wherever either is used. The two pixel accuracies are the same quantity under two aggregations and are both given because the figures quote different ones: the pooled row is over pixels at the fixed selected multiplier, the per-image row is the mean over images at the leave-one-image-out setting, and the all-background value is identical under both.]
 | Endpoint | Reported or derived value |
 |---|---|
 | Reference crack area | {ag_best_lab}% of image area |
 | Predicted crack area | {ag_best_mark}% of image area |
-| Predicted-to-reference area ratio | {ag_best} |
+| Predicted-to-reference area ratio, pooled over pixels | {ag_best} |
 | Net aggregate area difference | +0.024 percentage points |
 | Absolute relative aggregate area discrepancy | Approximately {ag_best_err_pct}% |
 | Background specificity | {ag_best_spec}% |
