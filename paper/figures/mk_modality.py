@@ -119,11 +119,16 @@ def crop_at(d, um):
 
 
 def stretch(arr):
-    """Display stretch, 2nd-98th percentile, identical for both modalities."""
+    """Display stretch, identical for both modalities and shared with Figure 1.
+
+    The range comes from `both_modalities.display_range`: median plus and minus
+    three robust standard deviations, which tracks the matrix and lets a crack
+    saturate. A 2nd-to-98th percentile pair, which this used to be, puts its low
+    end inside the crack on a frame with a large dark tail and washes the matrix
+    out. DISPLAY ONLY: the detector ran on the unstretched array.
+    """
     from skimage import exposure
-    lo, hi = np.percentile(arr, [2, 98])
-    if hi <= lo:
-        return arr.astype(np.float32) / 255.0
+    lo, hi = BM.display_range(arr)
     return exposure.rescale_intensity(arr.astype(np.float32), in_range=(lo, hi),
                                       out_range=(0.0, 1.0))
 
@@ -293,12 +298,15 @@ def combined_schematic(ax, data, crops):
            + [(BW + DGAP, yy, zz) for zz, yy in zip(zg[::-1], ylo[::-1])])
     _poly(ax, sil, facecolor=J.ACCENT2, edgecolor="none", zorder=8)
     # and from that detector plane to the image it produces
-    dtop = _p(BW + DGAP + DTHICK, BH * 0.72, BD)
+    # TO THE IMAGE IT PRODUCES. Drawn at the same weight as the fan on the electron
+    # side, so the two instruments read symmetrically: each one has its output attached
+    # to it. At the lighter weight it was a stub a reader could miss entirely.
+    dtop = _p(BW + DGAP + DTHICK, BH * 0.62, BD * 0.5)
     tx0, ty0 = TXM_BOX
-    ax.add_patch(FancyArrowPatch((dtop[0] + 0.4, dtop[1]),
-                                 (tx0 - 0.4, ty0 + 0.52 * IMSIDE),
-                                 arrowstyle="-|>", mutation_scale=7, color=J.INK,
-                                 lw=0.7, zorder=8))
+    ax.add_patch(FancyArrowPatch((dtop[0] + 0.3, dtop[1]),
+                                 (tx0 - 0.5, ty0 + 0.52 * IMSIDE),
+                                 arrowstyle="-|>", mutation_scale=9, color=J.INK,
+                                 lw=1.0, zorder=8))
 
     # --- the two measurands, named rather than described ------------------------------
     t0 = _p(x[18], BH, z[18])

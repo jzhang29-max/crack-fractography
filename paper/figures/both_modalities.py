@@ -12,18 +12,23 @@ SEM arm" shows the same pixels of the same field, and likewise for TXM.
 WHICH FIELDS, AND WHY THESE. Both are chosen by the rules the single-modality figures
 already used and recorded, not re-picked to suit a new layout:
 
-  SEM  260622_316_H_b2_back_CBS_01 at 42.194 nm/px. The paper is now restricted to
-       specimen series b2 and b3, so the previous choice -- MAR_H_HIP_CBS_0007, of a
-       different alloy -- is out of scope whatever its merits. Of the eleven b2 frames
-       that carry a hand correction, exactly TWO have a recoverable pixel size: the
-       2026-06-22 session was saved uncropped and its 280 databar rows survive, while the
-       2026-07-08 session was saved already cropped and nothing in those files records a
-       scale (`analysis/research/improve/sem_databar_scale.py`, and `scale.from_tiff`
-       finds no FEI block in any b2 or b3 original). Of those two the sharper is taken:
-       0.869 against 0.431 on the gradient measure of `frame_legibility.json`, with
-       recall 0.991 against 0.520. A frame with no pixel size could carry no scale bar
-       and no micrometre axis, which rules out nine of the eleven before legibility is
-       considered at all.
+  SEM  260622_316_H_b2_front_CBS_04 at 28.137 nm/px. THE RULE GAINED A SECOND CONDITION,
+       because the first one picked the corpus's best frame.
+
+       Only two of the eleven scored b2 frames have a recoverable pixel size -- the
+       2026-06-22 session was saved uncropped and its databar survives, the 2026-07-08
+       session was saved already cropped and records no scale anywhere
+       (`analysis/research/improve/sem_databar_scale.py`). A figure needs a scale bar, so
+       the pool is those two, and taking the sharper of them gave
+       260622_316_H_b2_back_CBS_01. That frame is rank 11 of 11 on recall (0.991 against
+       a corpus median of 0.601) and rank 11 of 11 on F1 (0.986 against 0.683). It is the
+       single most flattering frame in the collection, and it was opening the paper.
+
+       The rule now asks for a recovered pixel size AND closeness to the corpus median in
+       F1. This frame is the median exactly: F1 0.683 against a median of 0.683, rank 6
+       of 11, with recall 0.520 and precision 0.994. It is softer -- sharpness 0.431
+       against 0.869 -- and that is the price of showing a typical frame rather than the
+       best one.
 
   TXM  b2_340_00 at 29.24 nm/px. THE RULE GAINED A CONDITION, because the one it had
        chose a frame on which the thing to show was the edge of the mosaic.
@@ -93,12 +98,12 @@ import detect_cracks as D                           # noqa: E402
 import detector_overrides as DO                     # noqa: E402
 
 #: The two fields, with the pixel size each is reported at and where that size came from.
-SEM_FIELD = "260622_316_H_b2_back_CBS_01"
-SEM_NM_PER_PX = 42.194
+SEM_FIELD = "260622_316_H_b2_front_CBS_04"
+SEM_NM_PER_PX = 28.137
 SEM_SCALE_SOURCE = ("measured from the scale bar in the instrument databar that survives "
-                    "in the uncropped original -- 100 um over 2370 px -- and checked "
-                    "against the printed horizontal field width of 259 um, which gives "
-                    "42.155 nm/px, a disagreement of 0.09%")
+                    "in the uncropped original -- 50 um over 1777 px -- and checked "
+                    "against the printed horizontal field width of 173 um, which gives "
+                    "28.158 nm/px, a disagreement of 0.07%")
 TXM_FIELD = ("Average_mosaic_260618_b2_340_00_idx00000_mosaictileAA_img001of010"
              ".xrm.bim.bim")
 TXM_NM_PER_PX = 29.24
@@ -196,6 +201,42 @@ def _paint(tag, shape):
         else:
             return None, None
     return corr == 1, (corr == 2) | (corr == 3)
+
+
+#: How many robust standard deviations either side of the median a DISPLAY covers.
+DISPLAY_K = 3.0
+
+
+def display_range(arr):
+    """The intensity range a micrograph panel is drawn over: median +/- DISPLAY_K
+    robust standard deviations, the same spread the detector's own criterion uses.
+
+    WHY NOT A PERCENTILE PAIR. Every figure here stretched 2nd to 98th percentile, which
+    works on a unimodal frame and fails on the one the paper now illustrates. The app's
+    stored contrast setting for 260622_316_H_b2_front_CBS_04 is "no stretch", so its
+    8-bit array puts the whole matrix between 194 and 201 with the crack at 1; the 2nd
+    percentile then lands INSIDE the crack, the stretch spans 2 to 209, and the matrix
+    comes out as a near-white wash with no grain structure visible at all. A dark tail
+    large enough to reach the low percentile is exactly the case a percentile pair cannot
+    serve.
+
+    The median absolute deviation does not move when a few per cent of the frame is very
+    dark, so this range tracks the MATRIX and lets the crack saturate -- which is what a
+    microscopist does by hand, and what the panels need. It adapts per frame and per
+    modality with no constant chosen by eye: on the SEM field it gives 185 to 211 where
+    the percentile pair gave 2 to 209, and on the transmission field it is close to what
+    the percentile pair already gave.
+
+    DISPLAY ONLY. The detector runs on the unstretched array and every mask in every
+    figure is that run; nothing here changes a number.
+    """
+    a = arr.astype(np.float32)
+    m = float(np.median(a))
+    sd = 1.4826 * float(np.median(np.abs(a - m)))
+    if not sd > 0:
+        lo, hi = float(a.min()), float(a.max())
+        return (lo, hi) if hi > lo else (lo, lo + 1.0)
+    return m - DISPLAY_K * sd, m + DISPLAY_K * sd
 
 
 def load(tag):

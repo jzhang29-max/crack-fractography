@@ -86,12 +86,18 @@ ROWS = (("sem", "SEM"), ("txm", "TXM"))
 COLS = ("as loaded", "background removed", "proposed, cleaned, filtered")
 
 
-def stretch(a):
-    """Display stretch, 2nd-98th percentile. Identical for both rows and every column."""
-    lo, hi = np.percentile(a, [2, 98])
-    if hi <= lo:
-        return a.astype(np.float32) / 255.0
-    return exposure.rescale_intensity(a.astype(np.float32), in_range=(lo, hi),
+def stretch(arr):
+    """Display stretch, identical for both modalities and shared with Figure 1.
+
+    The range comes from `both_modalities.display_range`: median plus and minus
+    three robust standard deviations, which tracks the matrix and lets a crack
+    saturate. A 2nd-to-98th percentile pair, which this used to be, puts its low
+    end inside the crack on a frame with a large dark tail and washes the matrix
+    out. DISPLAY ONLY: the detector ran on the unstretched array.
+    """
+    from skimage import exposure
+    lo, hi = BM.display_range(arr)
+    return exposure.rescale_intensity(arr.astype(np.float32), in_range=(lo, hi),
                                       out_range=(0.0, 1.0))
 
 

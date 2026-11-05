@@ -218,15 +218,12 @@ def weighted_median(x, w):
 def limits(arr):
     """The display range of a whole frame, used for every panel drawn from that frame.
 
-    ONE RANGE PER ROW, NOT ONE PER PANEL. Stretching each panel to its own percentiles
-    renders the detail under a different convention from the field it was cut out of: on
-    this SEM field the detail window is half crack, so its own 2nd percentile is inside
-    the crack and the panel came out as pure black on washed-out grey. The range is taken
-    from the frame and applied to both, so the detail is the field magnified and nothing
-    else.
+    ONE RANGE PER ROW, NOT ONE PER PANEL, and the rule itself lives in
+    `both_modalities.display_range` so that every figure in the set renders a given
+    frame identically. Stretching each panel to its own percentiles renders the detail
+    under a different convention from the field it was cut out of.
     """
-    lo, hi = np.percentile(arr, [2, 98])
-    return (float(lo), float(hi)) if hi > lo else (0.0, 255.0)
+    return BM.display_range(arr)
 
 
 def stretched(arr, rng=None):
