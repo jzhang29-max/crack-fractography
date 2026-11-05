@@ -228,8 +228,23 @@ ZENODO_RECORD = "23045328"
 ZENODO_API = f"https://zenodo.org/api/records/{ZENODO_RECORD}"
 ZENODO_EXPECT_DOI = f"10.5281/zenodo.{ZENODO_RECORD}"
 ZENODO_EXPECT_LICENCE = "cc-by-4.0"
-#: What makes this record "the Inconel 718 collection". If no member path matches, the
-#: record is not what the ID is being used for here and the build stops.
+#: EXACTLY the Inconel 718 material this paper scores, and nothing else.
+#:
+#: Zenodo 23045328 holds twenty-one class folders across two archives. Twenty of them are
+#: other materials (MetalDAM, UHCS, EBC, Al-Zn, Ni-super) or other targets on this one
+#: (twin grain, carbides, the delta phases, matrix), and several class folders also carry
+#: `*_aug` directories, which are augmented copies rather than new fields. Shipping all
+#: of it made a 13,303-file subtree that buried the laboratory data this release is
+#: actually about, so the release ships the two folders the manuscript scores and names
+#: the DOI for the rest.
+#:
+#: published split -> (archive, class folder, image dir, mask dir, how many pairs)
+INCONEL_KEEP = {
+    "train": ("train.zip", "Inconel718_crack", "image", "mask", 31),
+    "test": ("test.zip", "Inconel718_crack", "image_cropped", "mask_cropped", 26),
+}
+#: A member path matching this is Inconel 718 material. Used only to tell whether the
+#: record is what the ID is being used for at all -- what gets EXTRACTED is INCONEL_KEEP.
 INCONEL_RE = re.compile(r"(^|/)inconel ?718", re.IGNORECASE)
 #: Only image data is taken out of the archives. The deposit also carries the depositor's
 #: own working scripts (`delete.py`, `match.py`) next to the image folders; those are
@@ -237,6 +252,11 @@ INCONEL_RE = re.compile(r"(^|/)inconel ?718", re.IGNORECASE)
 #: downloaded archive into a folder that is about to be published is not something to do
 #: by accident. They are counted and named in checks.json, and left in the zip.
 IMAGE_EXT = (".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp")
+#: The public masks are anti-aliased binary, so they are read at a midpoint threshold.
+#: WHETHER THAT IS SAFE IS CHECKED, NOT ASSUMED: a mask that is not bimodal fails the
+#: build rather than being silently thresholded down the middle of a gradient.
+PUBLIC_MASK_THRESHOLD = 128
+PUBLIC_MASK_MAX_MIDTONE = 0.05
 
 PREVIEW_MAX_SIDE = 1600
 CRACK_RGB = (0, 220, 60)
@@ -438,8 +458,8 @@ def recover_140_row_databar(stem, raw, evidence_dir):
     disagree = abs(from_bar - from_hfw) / from_hfw
     os.makedirs(evidence_dir, exist_ok=True)
     panel8 = (bar.astype(np.float32) / max(float(bar.max()), 1.0) * 255)
-    Image.fromarray(panel8.clip(0, 255).astype(np.uint8)).save(
-        os.path.join(evidence_dir, f"{stem}__databar.png"))
+    panel_path = os.path.join(evidence_dir, f"{stem}__databar.png")
+    Image.fromarray(panel8.clip(0, 255).astype(np.uint8)).save(panel_path)
     if disagree > SEM_SCALE_TOLERANCE:
         die(f"{stem}: the drawn scale bar gives {from_bar:.4f} nm/px and the printed "
             f"horizontal field width gives {from_hfw:.4f}, {100 * disagree:.2f}% apart "
@@ -464,6 +484,7 @@ def recover_140_row_databar(stem, raw, evidence_dir):
         "printed_hfw_um": spec["hfw_um"],
         "nm_per_px_from_printed_hfw": round(from_hfw, 4),
         "disagreement_pct": round(100 * disagree, 3),
+        "_panel_path": panel_path,
     }
 
 
@@ -601,78 +622,6 @@ def zenodo_fetch(rec, cache):
     return got
 
 
-def zenodo_extract(zips, dest):
-    """Extract only the Inconel 718 members, and report every top-level folder seen.
-
-    The census is the answer to "what did the download actually contain", and it is also
-    the evidence for LICENSING.md: the directory names are how a reader learns that this
-    record re-publishes other people's collections.
-    """
-    census: dict = {}
-    extracted, extracted_bytes, skipped_unsafe, not_image = 0, 0, [], []
-    for key, path, _size, _md5 in zips:
-        split = os.path.splitext(os.path.basename(key))[0]
-        with zipfile.ZipFile(path) as zf:
-            members = zf.infolist()
-            say(f"  {key}: {len(members):,} entries")
-            for m in members:
-                parts = [p for p in m.filename.replace("\\", "/").split("/") if p]
-                if not parts:
-                    continue
-                # Two levels is enough to separate the class folders from the split
-                # folder above them whichever way round the archive is arranged.
-                top = "/".join(parts[:2]) if len(parts) > 1 else parts[0]
-                if top.split("/")[0] == split and len(parts) > 2:
-                    top = "/".join(parts[1:3])
-                c = census.setdefault(f"{split}.zip:{top}", {"files": 0, "bytes": 0})
-                if not m.is_dir():
-                    c["files"] += 1
-                    c["bytes"] += m.file_size
-            # These archives wrap everything in a single folder ("testsem/", ...). Keep
-            # the split name, drop the wrapper, so the tree reads inconel718/test/<class>
-            # rather than inconel718/test/testsem/<class>.
-            roots = {m.filename.replace("\\", "/").lstrip("/").split("/")[0]
-                     for m in members if m.filename.strip("/")}
-            wrapper = roots.pop() if len(roots) == 1 else None
-            for m in members:
-                if m.is_dir() or not INCONEL_RE.search(m.filename):
-                    continue
-                if not m.filename.lower().endswith(IMAGE_EXT):
-                    not_image.append(m.filename)
-                    continue
-                rel = m.filename.replace("\\", "/").lstrip("/")
-                if ".." in rel.split("/") or rel.startswith("/"):
-                    skipped_unsafe.append(m.filename)
-                    continue
-                parts = rel.split("/")
-                if wrapper and parts[0] == wrapper and len(parts) > 1:
-                    parts = parts[1:]
-                out = os.path.join(dest, split, *parts)
-                if os.path.exists(out) and os.path.getsize(out) == m.file_size:
-                    extracted += 1
-                    extracted_bytes += m.file_size
-                    continue
-                os.makedirs(os.path.dirname(out), exist_ok=True)
-                with zf.open(m) as fh, open(out, "wb") as o:
-                    shutil.copyfileobj(fh, o, 1 << 20)
-                extracted += 1
-                extracted_bytes += m.file_size
-    if skipped_unsafe:
-        say(f"  !! {len(skipped_unsafe)} archive members had unsafe paths and were not "
-            f"extracted: {skipped_unsafe[:5]}")
-    if not extracted:
-        die(f"Zenodo record {ZENODO_RECORD} contains no path matching Inconel 718. The "
-            f"record is not what this builder is using the ID for. Nothing is "
-            f"substituted. What it does contain: "
-            f"{', '.join(sorted(census)[:25])}")
-    say(f"  extracted {extracted:,} Inconel 718 image files, {human(extracted_bytes)}")
-    if not_image:
-        say(f"  left in the archives: {len(not_image)} non-image member(s) under the "
-            f"Inconel 718 folders, the depositor's own scripts -- "
-            f"{', '.join(sorted({os.path.basename(x) for x in not_image}))}")
-    return census, extracted, extracted_bytes, sorted(not_image)
-
-
 def zenodo_class_list(zips):
     """The record's own declared class list, read out of the archive.
 
@@ -697,54 +646,183 @@ def zenodo_class_list(zips):
     return None
 
 
-def inconel_sanity(dest):
-    """Images and masks both present, and the masks look like masks.
+def zenodo_extract(zips, out, written):
+    """Extract the two Inconel 718 crack folders the paper scores, and index them.
 
-    `--skip-zenodo` aside, a tree with images and no masks is not the collection the
-    paper benchmarks on, and finding that out at build time is cheaper than finding it
-    out in a reviewer's hands.
+    Everything else in the archives is left in them. The census of what the download
+    actually contained is still taken over every member, so `README.md` can show the
+    whole record and name what was not taken -- the point is that this release ships
+    what the manuscript scores, not that the rest does not exist.
+
+    Returns (census, rows, report). `rows` are frame rows in the same shape as the two
+    laboratory arms, so `metadata.csv`, `frames.json` and `loader.py` cover the whole
+    folder rather than two thirds of it.
     """
-    img, msk = [], []
-    for root, _d, files in os.walk(dest):
-        low = root.lower()
-        for f in files:
-            if not f.lower().endswith((".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp")):
-                continue
-            (msk if "mask" in low else img).append(os.path.join(root, f))
-    say(f"  Inconel subtree: {len(img):,} image files, {len(msk):,} mask files")
-    if not img or not msk:
-        die(f"the extracted Inconel 718 subtree has {len(img)} images and {len(msk)} "
-            f"masks. A crack benchmark with no masks is not what the record ID is being "
-            f"used for here.")
-    folders = {}
-    for root, _d, files in os.walk(dest):
-        n = sum(1 for f in files if f.lower().endswith(IMAGE_EXT))
-        if n:
-            folders[os.path.relpath(root, dest)] = n
-    pairs = {}
-    for rel, n in folders.items():
-        parent, leaf = os.path.split(rel)
-        kind = ("mask" if leaf.startswith("mask") else
-                "image" if leaf.startswith(("image", "img")) else "other")
-        variant = (leaf.replace("mask", "", 1).replace("image", "", 1)
-                      .replace("img", "", 1).strip("_") or "base")
-        pairs.setdefault((parent, variant), {})[kind] = n
-    unbalanced = {f"{par}/{var}": v for (par, var), v in sorted(pairs.items())
-                  if v.get("image") != v.get("mask")}
-    augmented = {k: v for k, v in sorted(folders.items()) if "_aug" in k}
-    sample = sorted(msk)[: min(8, len(msk))]
-    polarity = []
-    for p in sample:
-        a = np.array(Image.open(p).convert("L"))
-        polarity.append({"file": os.path.basename(p), "shape": list(a.shape),
-                         "frac_zero": round(float((a == 0).mean()), 5),
-                         "frac_ge_246": round(float((a >= 246).mean()), 5),
-                         "frac_between": round(float(((a > 0) & (a < 246)).mean()), 5)})
-    return {"n_images": len(img), "n_masks": len(msk),
-            "files_per_folder": dict(sorted(folders.items())),
-            "image_mask_counts_that_do_not_match": unbalanced,
-            "augmented_folders": augmented,
-            "mask_polarity_sample": polarity}
+    census: dict = {}
+    members_by_zip: dict = {}
+    inconel_seen = 0
+    for key, path, _size, _md5 in zips:
+        with zipfile.ZipFile(path) as zf:
+            members = zf.infolist()
+            say(f"  {key}: {len(members):,} entries")
+            members_by_zip[os.path.basename(key)] = path
+            for m in members:
+                parts = [p for p in m.filename.replace("\\", "/").split("/") if p]
+                if not parts:
+                    continue
+                split = os.path.splitext(os.path.basename(key))[0]
+                top = "/".join(parts[:2]) if len(parts) > 1 else parts[0]
+                if top.split("/")[0] == split and len(parts) > 2:
+                    top = "/".join(parts[1:3])
+                c = census.setdefault(f"{split}.zip:{top}", {"files": 0, "bytes": 0})
+                if not m.is_dir():
+                    c["files"] += 1
+                    c["bytes"] += m.file_size
+                if INCONEL_RE.search(m.filename) and not m.is_dir():
+                    inconel_seen += 1
+    if not inconel_seen:
+        die(f"Zenodo record {ZENODO_RECORD} contains no path matching Inconel 718. The "
+            f"record is not what this builder is using the ID for. Nothing is "
+            f"substituted. What it does contain: {', '.join(sorted(census)[:25])}")
+
+    rows, report, problems = [], {}, []
+    for split, (zipname, cls, imgdir, mskdir, expect) in sorted(INCONEL_KEEP.items()):
+        path = members_by_zip.get(zipname)
+        if path is None:
+            die(f"the record does not carry {zipname}, which is where this release "
+                f"takes its Inconel 718 {split} split from.")
+        with zipfile.ZipFile(path) as zf:
+            picked = {"image": {}, "mask": {}}
+            for m in zf.infolist():
+                if m.is_dir() or not m.filename.lower().endswith(IMAGE_EXT):
+                    continue
+                parts = [q for q in m.filename.replace("\\", "/").split("/") if q]
+                if len(parts) < 3 or parts[-3] != cls:
+                    continue
+                kind = ("image" if parts[-2] == imgdir else
+                        "mask" if parts[-2] == mskdir else None)
+                if kind:
+                    picked[kind][os.path.splitext(parts[-1])[0]] = m
+
+            # PAIRING IS CHECKED, NOT ASSUMED. The train split pairs a .tif image with a
+            # .png mask of the same stem, the test split pairs .png with .png, and an
+            # unpaired file on either side would quietly become an image with no label
+            # or a label with no image.
+            only_img = sorted(set(picked["image"]) - set(picked["mask"]))
+            only_msk = sorted(set(picked["mask"]) - set(picked["image"]))
+            if only_img or only_msk:
+                die(f"Inconel 718 {split}: {len(only_img)} image(s) with no mask and "
+                    f"{len(only_msk)} mask(s) with no image in {cls}/{imgdir} and "
+                    f"{cls}/{mskdir}. A published pair that is not a pair is not "
+                    f"publishable. First few: {(only_img + only_msk)[:5]}")
+            pairs = sorted(picked["image"])
+            if len(pairs) != expect:
+                die(f"Inconel 718 {split}: {len(pairs)} image/mask pairs in "
+                    f"{cls}/{imgdir}, and this builder records {expect}. The archive is "
+                    f"not the one these counts were taken from; check the record before "
+                    f"publishing a count that is no longer true.")
+
+            midtone = []
+            for stem in pairs:
+                mi, mm = picked["image"][stem], picked["mask"][stem]
+                di = os.path.join(out, "images", "inconel718", split,
+                                  os.path.basename(mi.filename))
+                dm = os.path.join(out, "masks", "inconel718", split,
+                                  os.path.basename(mm.filename))
+                for member, dst in ((mi, di), (mm, dm)):
+                    if not (os.path.exists(dst)
+                            and os.path.getsize(dst) == member.file_size):
+                        os.makedirs(os.path.dirname(dst), exist_ok=True)
+                        with zf.open(member) as fh, open(dst, "wb") as o:
+                            shutil.copyfileobj(fh, o, 1 << 20)
+                    written.add(dst)
+
+                mask = np.array(Image.open(dm).convert("L"))
+                with Image.open(di) as im:
+                    iw, ih = im.size
+                mid = float(((mask > 0) & (mask < 246)).mean())
+                midtone.append(mid)
+                crack = int((mask >= PUBLIC_MASK_THRESHOLD).sum())
+                if (ih, iw) != mask.shape:
+                    problems.append(f"inconel718/{split}/{stem}: image {(ih, iw)} vs "
+                                    f"mask {mask.shape}")
+                rows.append(frame_row(
+                    frame_id=f"inconel718_{split}_{stem}",
+                    modality="SEM-public", series="inconel718",
+                    session={"date": None, "instrument": None, "detector": None,
+                             "beam": None,
+                             "source": "third-party collection; the record states no "
+                                       "instrument, no acquisition parameters and no "
+                                       "pixel size for these frames"},
+                    raw_shape=(ih, iw), box=(0, 0, ih, iw), mask_shape=mask.shape,
+                    status="ok" if (ih, iw) == mask.shape else "unresolved",
+                    nm=None, scale_source="none",
+                    scale_note="Zenodo record 23045328 publishes no pixel size "
+                               "anywhere: no TIFF resolution tag, no databar, nothing "
+                               "in the record metadata, and its subsets come from "
+                               "different microscopes. Area fractions and IoU on these "
+                               "frames are dimensionless and comparable; lengths and "
+                               "widths in physical units are not available",
+                    # The public masks are binary and cover the whole field, so there is
+                    # no unreviewed state and no erasure state on them. Mapping them
+                    # onto the same columns keeps one index for the whole folder;
+                    # `annotation_kind` is what tells the two apart.
+                    hist={0: 0, 1: crack, 2: int(mask.size - crack), 3: 0},
+                    image_file=os.path.relpath(di, out),
+                    mask_file=os.path.relpath(dm, out),
+                    source_repo=f"zenodo:{ZENODO_RECORD}",
+                    source_image=mi.filename, source_mask=mm.filename,
+                    source_image_sha=f"crc32:{mi.CRC:08x}",
+                    source_mask_sha=f"crc32:{mm.CRC:08x}",
+                    extra={"annotation_kind": "binary_full",
+                           "mask_threshold": PUBLIC_MASK_THRESHOLD,
+                           "inconel_split": split}))
+
+            worst = max(midtone) if midtone else 0.0
+            # MASK POLARITY AND TYPE ARE CHECKED, NOT ASSUMED, which is this project's
+            # own rule for this collection. A midpoint threshold is only safe on a mask
+            # that is actually bimodal; one that is not fails the build here rather than
+            # being silently cut down the middle of a gradient.
+            if worst > PUBLIC_MASK_MAX_MIDTONE:
+                die(f"Inconel 718 {split}: a mask carries {100 * worst:.2f}% of its "
+                    f"pixels strictly between 0 and 246, against a limit of "
+                    f"{100 * PUBLIC_MASK_MAX_MIDTONE:g}%. These masks are supposed to "
+                    f"be anti-aliased binary, and a threshold at "
+                    f"{PUBLIC_MASK_THRESHOLD} is not safe on one that is not.")
+            report[split] = {"class": cls, "image_dir": f"{cls}/{imgdir}",
+                             "mask_dir": f"{cls}/{mskdir}", "pairs": len(pairs),
+                             "worst_midtone_fraction": round(worst, 5)}
+            say(f"  {split}: {len(pairs)} image/mask pairs from {cls}/{imgdir} + "
+                f"{cls}/{mskdir}; worst anti-aliased fraction {100 * worst:.2f}%")
+
+    # DO THE TWO SPLITS SHARE SOURCE FIELDS? Measured, because a test score on crops of
+    # fields that are also in train is not a held-out score, and nothing in the record
+    # says one way or the other. The test files are named `<field>_full.png` and
+    # `<field>_random_N.png`, so the field is recoverable from the name.
+    def field_of(fid):
+        return re.sub(r"(_full|_random_\d+)$", "",
+                      fid.split("_", 2)[2] if fid.count("_") >= 2 else fid)
+    tr = {field_of(r["frame_id"]) for r in rows if r["inconel_split"] == "train"}
+    te = {field_of(r["frame_id"]) for r in rows if r["inconel_split"] == "test"}
+    shared = sorted(te & tr)
+    say(f"  train/test field overlap: {len(shared)} of {len(te)} test source field(s) "
+        f"are also in the train split"
+        + ("  <-- a test score on these is not held out" if shared else ""))
+    overlap = {"train_fields": len(tr), "test_fields": len(te),
+               "test_fields_also_in_train": shared}
+
+    kept = {f"{v[1]}/{v[2]}" for v in INCONEL_KEEP.values()}
+    # Class FOLDERS only. The census also has a row per loose file at the archive root
+    # (`class_id.txt`, the depositor's scripts), and counting those as class folders
+    # turned "20 other classes" into "32" the first time this was written.
+    folders = {k.split(":", 1)[1].split("/")[-1] for k, v in census.items()
+               if v["files"] and "." not in k.split(":", 1)[1].split("/")[-1]}
+    not_taken = sorted(folders - {v[1] for v in INCONEL_KEEP.values()})
+    say(f"  not taken: {len(not_taken)} other class folder(s) in the record -- "
+        f"{', '.join(not_taken[:6])}{' ...' if len(not_taken) > 6 else ''}")
+    return census, rows, {"kept": sorted(kept), "per_split": report,
+                          "class_folders_not_taken": not_taken,
+                          "split_field_overlap": overlap}, problems
 
 
 # ========================================================================= preview making
@@ -884,7 +962,7 @@ def audit_all_txm_state3():
     return {"corrections_examined": n, "with_state_3": with3}
 
 
-def build_sem(out, scale_rows):
+def build_sem(out, scale_rows, written):
     say("")
     say("SEM -- this laboratory's hand-corrected b2/b3 frames")
     stems = sorted(f[: -len("_correction_mask.png")] for f in os.listdir(SEM_PAINT)
@@ -910,7 +988,7 @@ def build_sem(out, scale_rows):
                 f"mask; without one: {', '.join(missing[s])}")
 
     rows, problems, darkness = [], [], {}
-    evidence = os.path.join(out, "evidence", "sem_databar")
+    evidence = os.path.join(out, "evidence")
     for stem in stems:
         src_tif = os.path.join(SEM_ORIG, stem + ".tif")
         src_png = os.path.join(SEM_PAINT, stem + "_correction_mask.png")
@@ -969,6 +1047,7 @@ def build_sem(out, scale_rows):
         elif stem in SEM_DATABAR_140:
             got = recover_140_row_databar(stem, raw, evidence)
             nm, src, note = got["nm_per_px"], got["scale_source"], got["scale_note"]
+            written.add(got.pop("_panel_path"))
             sc = {**sc, **got}
         else:
             src = "none"
@@ -980,10 +1059,11 @@ def build_sem(out, scale_rows):
                     "over from the 2026-06-22 session: the two were acquired at "
                     "different magnifications")
 
-        dst_tif = os.path.join(out, "sem", "images", stem + ".tif")
-        dst_png = os.path.join(out, "sem", "masks", stem + "_paint.png")
+        dst_tif = os.path.join(out, "images", "sem", stem + ".tif")
+        dst_png = os.path.join(out, "masks", "sem", stem + ".png")
         copy_verbatim(src_tif, dst_tif)
         copy_verbatim(src_png, dst_png)
+        written.update((dst_tif, dst_png))
 
         hist = {int(k): int(v) for k, v in zip(*np.unique(paint, return_counts=True))}
         unexpected = sorted(k for k in hist if k not in (0, 1, 2, 3))
@@ -1003,6 +1083,7 @@ def build_sem(out, scale_rows):
             extra={"contrast_percentiles": [ck["low_pct"], ck["high_pct"]],
                    "databar_rows": int(raw.shape[0] - crop_h) if status.startswith(
                        "ok_databar") else 0,
+                   "annotation_kind": "four_state_partial",
                    **{k: v for k, v in sc.items()
                       if k in ("tick_span_px", "bar_annotation_um", "printed_hfw_um",
                                "nm_per_px_from_printed_hfw", "disagreement_pct")}}))
@@ -1020,7 +1101,7 @@ def build_sem(out, scale_rows):
                                       "no_correction_mask": missing}
 
 
-def build_txm(out, txm_group):
+def build_txm(out, txm_group, written):
     say("")
     say("TXM -- the transmission X-ray collection")
     stems = sorted(f[: -len("_correction.npy")] for f in os.listdir(TXM_CORR)
@@ -1050,22 +1131,27 @@ def build_txm(out, txm_group):
             problems.append(f"{stem}: image {raw.shape} vs correction {paint.shape}")
 
         fid = txm_frame_id(stem)
-        dst_tif = os.path.join(out, "txm", "images", fid + ".tif")
-        dst_npy = os.path.join(out, "txm", "masks", fid + "_paint.npy")
-        dst_png = os.path.join(out, "txm", "masks", fid + "_paint.png")
+        dst_tif = os.path.join(out, "images", "txm", fid + ".tif")
+        dst_png = os.path.join(out, "masks", "txm", fid + ".png")
         copy_verbatim(src_tif, dst_tif)
-        copy_verbatim(src_npy, dst_npy)
-        # A PNG beside the .npy so both arms have one loadable mask format. It is
-        # written from the .npy and then READ BACK and compared: a convenience copy
-        # that silently differed from the research data would be worse than none.
+        # ONE MASK FORMAT FOR BOTH ARMS. The source correction is a .npy; it is written
+        # out as an 8-bit PNG so that every mask in this release opens the same way and
+        # a human browsing the folder sees one kind of file. PNG is lossless and the
+        # four state values are small integers, so nothing is approximated -- and the
+        # PNG is READ BACK and compared against the source array before the build
+        # continues. The .npy itself is not shipped: it would be a second copy of the
+        # same numbers, and `source_mask_sha256` in the index identifies the original
+        # for anyone who wants to go back to it.
         if paint.dtype != np.uint8:
             problems.append(f"{stem}: correction dtype is {paint.dtype}, expected uint8")
         os.makedirs(os.path.dirname(dst_png), exist_ok=True)
         Image.fromarray(paint.astype(np.uint8), mode="L").save(dst_png, optimize=True)
         back = np.array(Image.open(dst_png))
         if back.shape != paint.shape or not np.array_equal(back, paint.astype(np.uint8)):
-            die(f"{fid}: the PNG written beside the .npy does not read back equal to it. "
-                f"A published mask that is not the research data is not publishable.")
+            die(f"{fid}: the PNG written for this frame does not read back equal to the "
+                f"source .npy. A published mask that is not the research data is not "
+                f"publishable.")
+        written.update((dst_tif, dst_png))
 
         hist = {int(k): int(v) for k, v in zip(*np.unique(paint, return_counts=True))}
         unexpected = sorted(k for k in hist if k not in (0, 1, 2, 3))
@@ -1088,8 +1174,8 @@ def build_txm(out, txm_group):
             source_image=os.path.basename(src_tif),
             source_mask=os.path.basename(src_npy),
             source_image_sha=sha256_file(src_tif), source_mask_sha=sha256_file(src_npy),
-            extra={"mask_npy_file": os.path.relpath(dst_npy, out),
-                   "txm_group": txm_group(stem)}))
+            extra={"txm_group": txm_group(stem),
+                   "annotation_kind": "four_state_partial"}))
         say(f"  {fid:<34} {txm_group(stem):<4} {status:<12} {TXM_NM_PER_PX:7.2f} nm/px  "
             f"crack {hist.get(1, 0):>9,}  notcrack {hist.get(2, 0) + hist.get(3, 0):>10,}"
             f"  unreviewed {hist.get(0, 0):>11,}")
@@ -1215,6 +1301,45 @@ def all_files(out, exclude=()):
                 yield p
 
 
+def prune(out, written, keep_names):
+    """Remove anything under `out` that this build did not produce.
+
+    WHY THIS EXISTS. The release changed shape once -- `sem/images/` became
+    `images/sem/`, and twenty Inconel class folders were dropped -- and without a prune
+    the old tree simply stayed beside the new one, so the folder got bigger instead of
+    smaller and `MANIFEST.sha256` listed files no current run can account for. Every
+    path this build wrote is recorded as it is written; everything else under the
+    output directory goes.
+
+    It will not run on a directory that does not already look like one of ours: the
+    guard is there so that a mistyped `--out` cannot empty an unrelated folder.
+    """
+    keep = {os.path.abspath(x) for x in written}
+    keep |= {os.path.abspath(os.path.join(out, n)) for n in keep_names}
+    entries = [os.path.join(r, f) for r, _d, fs in os.walk(out) for f in fs]
+    if not entries:
+        return []
+    looks_like_ours = (os.path.exists(os.path.join(out, "MANIFEST.sha256"))
+                       or os.path.exists(os.path.join(out, "frames.json"))
+                       or all(os.path.abspath(e) in keep for e in entries))
+    if not looks_like_ours:
+        die(f"{out} holds files this build did not write and does not look like a "
+            f"dataset directory this builder produced (no MANIFEST.sha256, no "
+            f"frames.json). Refusing to delete anything in it. Point --out at a new or "
+            f"an existing release directory.")
+    removed = []
+    for e in sorted(entries):
+        if os.path.abspath(e) not in keep:
+            os.remove(e)
+            removed.append(os.path.relpath(e, out))
+    for root, dirs, files in os.walk(out, topdown=False):
+        for d in dirs:
+            pth = os.path.join(root, d)
+            if not os.listdir(pth):
+                os.rmdir(pth)
+    return removed
+
+
 def write_manifest(out):
     entries = []
     for root, dirs, files in os.walk(out):
@@ -1234,15 +1359,16 @@ def write_manifest(out):
 
 # ============================================================================ the writing
 def write_tables(out, rows):
-    cols = ["frame_id", "modality", "specimen_series", "session_date", "instrument",
+    cols = ["frame_id", "modality", "annotation_kind", "specimen_series",
+            "session_date", "instrument",
             "detector", "beam", "instrument_source", "image_file", "mask_file",
             "image_px_h", "image_px_w", "crop_row0", "crop_col0", "crop_row1",
             "crop_col1", "frame_px_h", "frame_px_w", "mask_px_h", "mask_px_w",
             "shape_status", "nm_per_px", "scale_source", "scale_note",
             "px_state_0_unreviewed", "px_state_1_crack", "px_state_2_not_crack",
             "px_state_3_not_crack_erased", "px_total", "px_reviewed", "px_crack",
-            "px_not_crack", "source_repo", "source_image_file", "source_mask_file",
-            "source_image_sha256", "source_mask_sha256"]
+            "px_not_crack", "mask_threshold", "source_repo", "source_image_file",
+            "source_mask_file", "source_image_sha256", "source_mask_sha256"]
     with open(os.path.join(out, "metadata.csv"), "w", newline="", encoding="utf-8") as fh:
         w = csv.DictWriter(fh, fieldnames=cols, extrasaction="ignore")
         w.writeheader()
@@ -1277,6 +1403,20 @@ verdict, and every rate computed over it is wrong. 3 is not-crack by ERASURE, wh
 not-crack verdict and not the absence of one, so it is a negative exactly like 2. This
 module hands out `crack`, `not_crack` and `reviewed` so that nobody has to decide.
 
+TWO ANNOTATION SCHEMES, ONE INTERFACE. The laboratory arms carry the four states above
+and are refereed in part (`annotation_kind = four_state_partial`). The Inconel 718
+frames are a third-party binary mask over the whole field (`binary_full`), read at the
+threshold recorded per frame; on those `reviewed` is true everywhere, because every
+pixel carries a verdict. The three arrays mean the same thing either way, which is the
+point -- but do not pool scores across the two schemes without saying so: a
+fully-labelled frame and a partly-refereed one are not the same measurement.
+`frames(kind="four_state_partial")` gives this laboratory's frames alone.
+
+WHERE THE FILES ARE. Every image is under `images/<arm>/` and every mask under
+`masks/<arm>/` at the same relative path. `metadata.csv` and `frames.json` carry
+`image_file` and `mask_file` per frame, and this module reads those rather than
+reconstructing a path.
+
 WHY `image` IS CROPPED. Some frames were saved with the instrument databar still in the
 file and the annotation was painted on the field of view alone. The crop that reconciles
 them is not re-derived here: it was resolved once, at build time, by the project's own
@@ -1308,9 +1448,18 @@ class Frame:
         self.meta = meta
         self.image = image
         self.paint = paint
-        self.crack = paint == 1
-        self.not_crack = (paint == 2) | (paint == 3)
-        self.reviewed = self.crack | self.not_crack
+        if meta.get("annotation_kind") == "binary_full":
+            # The public collection's masks are anti-aliased binary and label the whole
+            # field: every pixel carries a verdict, so `reviewed` is true everywhere.
+            # The threshold is the one recorded in the index, not one chosen here, and
+            # the build refuses to ship a mask that is not bimodal enough for it.
+            self.crack = paint >= meta["mask_threshold"]
+            self.not_crack = ~self.crack
+            self.reviewed = np.ones(paint.shape, bool)
+        else:
+            self.crack = paint == 1
+            self.not_crack = (paint == 2) | (paint == 3)
+            self.reviewed = self.crack | self.not_crack
 
     def __repr__(self):
         s = self.meta.get("nm_per_px")
@@ -1335,13 +1484,20 @@ def _meta():
     return _META
 
 
-def frames(modality=None, series=None):
-    """Frame ids, optionally filtered by modality ("SEM"/"TXM") or series ("b2"/"b3")."""
+def frames(modality=None, series=None, kind=None):
+    """Frame ids, filtered.
+
+    modality  "SEM", "TXM" or "SEM-public"
+    series    "b2", "b3" or "inconel718"
+    kind      "four_state_partial" (this laboratory) or "binary_full" (the public set)
+    """
     out = []
     for fid, r in sorted(_meta().items()):
         if modality and r["modality"].lower() != modality.lower():
             continue
         if series and r["specimen_series"].lower() != series.lower():
+            continue
+        if kind and r.get("annotation_kind") != kind:
             continue
         out.append(fid)
     return out
@@ -1362,7 +1518,15 @@ def load(frame_id):
             f"{frame_id}: shape_status is {m['shape_status']!r}. Its annotation could "
             f"not be aligned with its image at build time and this loader will not "
             f"guess an offset. See README.md, 'Frames whose annotation does not fit'.")
-    img = tifffile.imread(os.path.join(ROOT, m["image_file"]))
+    # The laboratory arms are TIFF; the public test split is PNG. Dispatch on the
+    # extension rather than assuming -- assuming is what this line used to do, and it
+    # raised `not a TIFF file: header=b'\x89PNG'` the first time a public frame was
+    # loaded.
+    ip = os.path.join(ROOT, m["image_file"])
+    if os.path.splitext(ip)[1].lower() in (".tif", ".tiff"):
+        img = tifffile.imread(ip)
+    else:
+        img = np.array(Image.open(ip))
     if img.ndim == 3:
         img = img[..., 0]
     if (img.shape[0], img.shape[1]) != (m["image_px_h"], m["image_px_w"]):
@@ -1378,27 +1542,43 @@ def load(frame_id):
         raise FrameShapeError(
             f"{frame_id}: image {img.shape} and annotation {paint.shape} disagree after "
             f"the recorded crop. Nothing is resized here.")
-    bad = sorted(set(np.unique(paint).tolist()) - {0, 1, 2, 3})
-    if bad:
-        raise ValueError(f"{frame_id}: the annotation holds values outside 0-3: {bad}")
+    kind = m.get("annotation_kind", "four_state_partial")
+    if kind == "four_state_partial":
+        bad = sorted(set(np.unique(paint).tolist()) - {0, 1, 2, 3})
+        if bad:
+            raise ValueError(
+                f"{frame_id}: a four-state annotation holding values outside 0-3: "
+                f"{bad}")
+    elif kind != "binary_full":
+        raise ValueError(f"{frame_id}: unknown annotation_kind {kind!r}")
     return Frame(m, img, paint)
 
 
 if __name__ == "__main__":
     import sys
-    ids = sys.argv[1:] or (frames("SEM")[:1] + frames("TXM")[:1])
+    ids = sys.argv[1:] or (frames("SEM")[:1] + frames("TXM")[:1]
+                           + frames("SEM-public")[:1])
     for fid in ids:
         fr = load(fid)
         n = fr.paint.size
         print(fr)
+        four = fr.meta.get("annotation_kind") == "four_state_partial"
         print(f"   crack      {fr.crack.sum():>12,}  {100 * fr.crack.mean():6.3f}% of frame")
         print(f"   not-crack  {fr.not_crack.sum():>12,}  {100 * fr.not_crack.mean():6.3f}%"
-              f"   (state 2 {int((fr.paint == 2).sum()):,} + erased state 3 "
-              f"{int((fr.paint == 3).sum()):,})")
-        print(f"   reviewed   {fr.reviewed.sum():>12,}  {100 * fr.reviewed.mean():6.3f}%"
-              f"   -- the denominator; the other {100 * (1 - fr.reviewed.mean()):.3f}% "
-              f"({n - int(fr.reviewed.sum()):,} px) is state 0 and is excluded")
-        print(f"   scale      {fr.nm_per_px}  ({fr.scale_source})")
+              + (f"   (state 2 {int((fr.paint == 2).sum()):,} + erased state 3 "
+                 f"{int((fr.paint == 3).sum()):,})" if four else
+                 f"   (everything at or below the threshold of "
+                 f"{fr.meta['mask_threshold']})"))
+        if four:
+            print(f"   reviewed   {fr.reviewed.sum():>12,}  "
+                  f"{100 * fr.reviewed.mean():6.3f}%   -- the denominator; the other "
+                  f"{100 * (1 - fr.reviewed.mean()):.3f}% "
+                  f"({n - int(fr.reviewed.sum()):,} px) is state 0 and is excluded")
+        else:
+            print(f"   reviewed   {fr.reviewed.sum():>12,}  100.000%   -- this mask "
+                  f"labels the whole field, so nothing is excluded")
+        print(f"   scale      {fr.nm_per_px}  ({fr.scale_source})"
+              f"   annotation: {fr.meta.get('annotation_kind')}")
 '''
 
 SCORE_PY = '''\
@@ -1425,9 +1605,11 @@ partly-refereed annotation can support. A single precision is not the answer; th
 ends are.
 
 AND WHY A FRAME CAN STILL NOT SUPPORT ONE. Restricting to reviewed pixels means the
-denominator of precision is `crack + not-crack`. __N_NO_NEG__ of the __N_FRAMES__ frames
-in this dataset carry painted crack and **no not-crack verdict at all**, and
-__N_NO_POS__ carry a not-crack verdict and no crack. On a frame with no refereed
+denominator of precision is `crack + not-crack`. Of the __N_FRAMES__ four-state
+laboratory frames in this dataset, __N_NO_NEG__ carry painted crack and **no not-crack
+verdict at all**, and __N_NO_POS__ carry a not-crack verdict and no crack. (The Inconel
+718 frames label the whole field, so neither applies to them.) On a frame with no
+refereed
 negative, every reviewed pixel is positive, so a detector that marks the whole frame
 scores precision 1.0 -- not because it is precise but because there is nothing on that
 frame it can be wrong about. The same holds for recall where there is no painted crack.
@@ -1531,56 +1713,6 @@ if __name__ == "__main__":
 '''
 
 
-def _inconel_contents(zen):
-    """What the extracted subtree holds, and the two things not to assume about it."""
-    s = (zen or {}).get("sanity")
-    if not s:
-        return ""
-    rows = "\n".join(f"| `{k}` | {v:,} |"
-                      for k, v in sorted(s["files_per_folder"].items()) if v)
-    aug = s.get("augmented_folders") or {}
-    unb = s.get("image_mask_counts_that_do_not_match") or {}
-    out = [
-        "### What the subtree holds",
-        "",
-        "Only image data was taken out of the archives. The deposit also carries the "
-        "depositor's own working scripts beside the image folders (" +
-        (", ".join("`" + os.path.basename(x) + "`"
-                   for x in sorted({os.path.basename(y)
-                                    for y in s.get('not_extracted_non_image_members', [])}))
-         or "none found") + "); those are somebody else's code, not data, and they were "
-        "left in the zip.",
-        "",
-        "| folder | image files |",
-        "|---|---|",
-        rows,
-        "",
-    ]
-    if aug:
-        out += [
-            "**The `*_aug` folders are augmented copies, not new fields.** They hold " +
-            f"{sum(aug.values()):,} files across {len(aug)} folders and are derived from "
-            "the originals beside them. Counting them as independent samples inflates "
-            "n by several-fold; score on the base `image`/`mask` or "
-            "`image_cropped`/`mask_cropped` folders unless you mean to train on "
-            "augmentations.",
-            "",
-        ]
-    if unb:
-        out += [
-            "**Image and mask counts do not match in every folder pair**, which is the "
-            "depositor's structure rather than a fault in this build -- several classes "
-            "share one pool of source images and carry only the masks that class needs:",
-            "",
-        ] + [f"- `{k}`: {v.get('image', 0):,} images, {v.get('mask', 0):,} masks"
-             for k, v in unb.items()] + [""]
-    out += [
-        "This release makes no claim about the annotation protocol behind these masks; "
-        "see the caveat above and `LICENSING.md`.",
-    ]
-    return "\n".join(out)
-
-
 def _undeclared_note(zen):
     """The 'present but undeclared' paragraph, written only if the archive says so."""
     c = (zen or {}).get("classes")
@@ -1602,21 +1734,6 @@ def _undeclared_note(zen):
         "behind them is undocumented. Say so rather than letting a reader discover it.")
 
 
-def _undeclared_bullet(zen):
-    c = (zen or {}).get("classes")
-    if not c:
-        return ("- The record's own class list was not read on this build, so nothing is "
-                "claimed here about whether the Inconel 718 folders are declared in it.")
-    if c["declares_inconel"]:
-        return ("- The Inconel 718 material **is** declared in the record's own class "
-                "list (`" + c["path"] + "`, " + str(c["n_declared"]) + " classes).")
-    return ("- The Inconel 718 folders are **not in the record's own declared class "
-            "list**: `" + c["path"] + "` declares " + str(c["n_declared"]) + " classes "
-            "and none of them names Inconel (read from the archive on this build). The "
-            "material is present in the archive but undeclared, so its provenance and "
-            "annotation protocol are not documented by the record either.")
-
-
 def build_readme(out, rows, zen, darkness, mask_audit, s3_audit, sem_series):
     nocrack = [r for r in rows if r["px_crack"] == 0]
     nonotcrack = [r for r in rows if r["px_not_crack"] == 0]
@@ -1624,6 +1741,7 @@ def build_readme(out, rows, zen, darkness, mask_audit, s3_audit, sem_series):
             and r["px_not_crack"] >= MIN_VERDICT_PX]
     sem = [r for r in rows if r["modality"] == "SEM"]
     txm = [r for r in rows if r["modality"] == "TXM"]
+    pub = [r for r in rows if r["modality"] == "SEM-public"]
     scaled = [r for r in sem if r["nm_per_px"]]
     unscaled = [r for r in sem if not r["nm_per_px"]]
     unresolved = [r for r in rows if not r["shape_status"].startswith("ok")]
@@ -1644,34 +1762,80 @@ def build_readme(out, rows, zen, darkness, mask_audit, s3_audit, sem_series):
                    f"{('%.4f' % r['nm_per_px']) if r['nm_per_px'] else '--'} | "
                    f"{r['scale_source']} |"))
 
-    zen_block = "The Zenodo stage was skipped (`--skip-zenodo`); `inconel718/` is absent."
+    zen_block = ("The Zenodo stage was skipped (`--skip-zenodo`); the Inconel 718 "
+                 "frames are absent from this build.")
     if zen:
+        rep = zen["report"]
         lines = [
-            f"Downloaded from the Zenodo API on {zen['when']}, each archive's bytes "
-            f"checked against the md5 its record entry declares before anything was "
-            f"extracted from it:",
+            f"{sum(v['pairs'] for v in rep['per_split'].values())} image/mask pairs "
+            f"from Zenodo record {ZENODO_RECORD} "
+            f"(doi:`{zen['doi']}`, licence `{zen['licence']}`), downloaded from the "
+            f"Zenodo API on {zen['when']}. Each archive's bytes were checked against "
+            f"the md5 its record entry declares before anything was taken out of it:",
             "",
         ]
-        lines += [f"- `{k}` -- {human(s)}, md5 `{m}`" for k, _p, s, m in zen["files"]]
+        lines += [f"- `{k}` -- {human(sz)}, md5 `{m}`" for k, _pp, sz, m in zen["files"]]
         lines += [
             "",
-            f"Record title: *{zen['title']}* DOI `{zen['doi']}`, licence "
-            f"`{zen['licence']}`, published {zen['publication_date']}, deposited by "
-            f"{zen['creators']}.",
+            f"Record title: *{zen['title']}* Published {zen['publication_date']}, "
+            f"deposited by {zen['creators']}.",
             "",
-            f"**Only the Inconel 718 members were extracted: {zen['extracted']:,} files, "
-            f"{human(zen['extracted_bytes'])}.** Everything else the archives hold was "
-            f"left in them. What the download actually contained, by archive and folder:",
+            "**This release ships the two folders the manuscript scores, not the whole "
+            "record.**",
             "",
-            "| archive : folder | files | size |",
+            "| published as | taken from | pairs |",
             "|---|---|---|",
         ]
-        lines += [f"| `{k}` | {v['files']:,} | {human(v['bytes'])} |"
-                  for k, v in sorted(zen["census"].items()) if v["files"]]
+        lines += [f"| `images/inconel718/{k}/` + `masks/inconel718/{k}/` | "
+                  f"`{v['image_dir']}` + `{v['mask_dir']}` in `{k}.zip` | {v['pairs']} |"
+                  for k, v in sorted(rep["per_split"].items())]
+        nt = rep["class_folders_not_taken"]
         lines += [
             "",
-            f"What was extracted: {zen['sanity']['n_images']:,} image files and "
-            f"{zen['sanity']['n_masks']:,} mask files.",
+            f"**The record holds {len(nt)} further class folders and none of them is "
+            f"here.** They are other materials and other targets -- "
+            + ", ".join("`" + x + "`" for x in nt) +
+            " -- and several of them also carry `*_aug` directories of augmented "
+            "copies rather than new fields. Shipping all of it made a 13,303-file "
+            "subtree that buried the laboratory data this release is about. Nothing "
+            "about this says the rest does not exist: it is at "
+            f"doi:10.5281/zenodo.{ZENODO_RECORD}, one download away, and the full "
+            "census of what the archives contain is in `checks.json` under "
+            "`zenodo.census`.",
+            "",
+            "The masks are anti-aliased binary and are read at a midpoint threshold of "
+            f"{PUBLIC_MASK_THRESHOLD}. That is checked rather than assumed: the worst "
+            "fraction of pixels lying strictly between 0 and 246 on any shipped mask "
+            "is "
+            + ", ".join(f"{100 * v['worst_midtone_fraction']:.2f}% ({k})"
+                        for k, v in sorted(rep["per_split"].items()))
+            + f", against a limit of {100 * PUBLIC_MASK_MAX_MIDTONE:g}% that fails the "
+              "build.",
+            "",
+            "",
+            (lambda o: (
+                f"**The two splits are not independent: {len(o['test_fields_also_in_train'])} "
+                f"of the {o['test_fields']} source fields behind the test crops are also "
+                f"among the {o['train_fields']} train fields.** The test files are "
+                f"`<field>_full` and `<field>_random_N` crops, and the field is "
+                f"recoverable from the name, so this is counted rather than assumed. The "
+                f"pixels are not identical -- they are crops -- but a model fitted on the "
+                f"train split and scored on the test split is being scored on crops of "
+                f"fields it has already seen. That is the record's own split, carried "
+                f"here as received; it is not a held-out test set and this release does "
+                f"not present it as one."
+                if o["test_fields_also_in_train"] else
+                f"The {o['test_fields']} source fields behind the test crops are "
+                f"disjoint from the {o['train_fields']} train fields."))(
+                    rep["split_field_overlap"]),
+            "",
+            "Unlike the laboratory arms these masks label the whole field, so there is "
+            "no unreviewed state and no erasure state on them. `metadata.csv` records "
+            "that as `annotation_kind = binary_full`, and `loader.py` returns the same "
+            "`crack` / `not_crack` / `reviewed` arrays for them, with `reviewed` true "
+            "everywhere. Do not pool their scores with the laboratory arms' without "
+            "saying so: a fully-labelled frame and a partly-refereed one are not the "
+            "same measurement.",
         ]
         zen_block = "\n".join(lines)
 
@@ -1679,9 +1843,9 @@ def build_readme(out, rows, zen, darkness, mask_audit, s3_audit, sem_series):
 # {DATASET_NAME}
 
 SEM and transmission X-ray microscopy (TXM) of fatigue cracks in 316L stainless steel,
-specimen series b2 and b3, with the hand annotations made on them -- assembled beside the
-public Inconel 718 crack collection so that a method can be tried on both without
-stitching three sources together first.
+specimen series b2 and b3, with the hand annotations made on them -- beside the public
+Inconel 718 crack frames the manuscript scores against, so that a method can be tried on
+both without stitching three sources together first.
 
 Built by `tools/build_release.py` in the `crack-fractography` repository. Re-running that
 script against the same sources reproduces this tree; nothing in it was edited by hand.
@@ -1692,33 +1856,47 @@ Built {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}.
 
 ## What is here
 
-| | frames | annotation | pixel size |
+| arm | frames | annotation | pixel size |
 |---|---|---|---|
-| `sem/` | {len(sem)} | 4-state hand correction masks | {len(scaled)} of {len(sem)} recovered, {len(unscaled)} null |
-| `txm/` | {len(txm)} (B2 {len(txm_b2)}, B3 {len(txm_b3)}) | 4-state hand correction masks | all {TXM_NM_PER_PX} nm/px, **derived, not instrument metadata** |
-| `inconel718/` | public collection, Zenodo {ZENODO_RECORD} | binary masks | **none published anywhere in that record** |
+| `sem` | {len(sem)} | 4-state hand correction masks | {len(scaled)} of {len(sem)} recovered, {len(unscaled)} null |
+| `txm` | {len(txm)} (B2 {len(txm_b2)}, B3 {len(txm_b3)}) | 4-state hand correction masks | all {TXM_NM_PER_PX} nm/px, **derived, not instrument metadata** |
+| `inconel718` | {len(pub)} (train {sum(1 for r in pub if r.get('inconel_split') == 'train')}, test {sum(1 for r in pub if r.get('inconel_split') == 'test')}) | binary masks, third-party | **none published anywhere in that record** |
+
+**{len(rows)} frames in all, one row each in `metadata.csv`.** Images and masks are
+separated at the top so the folder can be read without descending into it: every image
+is under `images/`, every mask is under `masks/`, and a mask sits at the same relative
+path as the image it belongs to.
 
 ```
 {DATASET_NAME}/
-  README.md  LICENSING.md  CITATION.cff  DATA_AVAILABILITY.md
+  README.md  LICENSING.md  CITATION.cff
   loader.py  score.py
   metadata.csv  frames.json  checks.json  MANIFEST.sha256
-  sem/images/*.tif          sem/masks/*_paint.png
-  txm/images/*.tif          txm/masks/*_paint.npy  *_paint.png
-  inconel718/{{train,test}}/...
-  previews/sem/*.png        previews/txm/*.png
-  evidence/sem_databar/*.png
+
+  images/sem/<frame>.tif               masks/sem/<frame>.png
+  images/txm/<frame>.tif               masks/txm/<frame>.png
+  images/inconel718/train/<name>.tif   masks/inconel718/train/<name>.png
+  images/inconel718/test/<name>.png    masks/inconel718/test/<name>.png
+
+  previews/<frame>.png                 evidence/<frame>__databar.png
 ```
 
-**Read `LICENSING.md` before redistributing `inconel718/`.** The two laboratory arms and
-that subtree are not under the same terms, and the difference is not cosmetic.
+Every mask is an 8-bit PNG, in both arms and in both annotation schemes, so one call
+opens any of them. The TXM source annotation is a `.npy`; it is written out as a PNG and
+then read back and compared against the source array before the build continues, and
+`source_mask_sha256` in the index identifies the original file. Shipping both would have
+been two copies of the same numbers.
+
+The laboratory arms and the Inconel 718 frames are not under the same terms --
+`LICENSING.md` states each separately in about a page.
 
 ---
 
 ## The four paint states
 
-Every value in every `*_paint.png` and `*_paint.npy` in `sem/` and `txm/` is one of four
-numbers, and they are preserved here exactly as the annotator left them:
+Every value in every mask under `masks/sem/` and `masks/txm/` is one of four numbers,
+and they are preserved here exactly as the annotator left them. (The Inconel 718 masks
+use a different scheme -- see that section.)
 
 | value | meaning |
 |---|---|
@@ -1810,7 +1988,7 @@ pixel size is recovered here by the same two-route method
 (**{next((r['nm_per_px'] for r in sem if r['frame_id'] == '260708_316_H_b2_front_CBS_001'), None)} nm/px**
 from a 1 mm bar over a measured tick span, against 843.09 nm/px from the printed
 2.59 mm field width, 0.18% apart). The panel crop it was read from is in
-`evidence/sem_databar/` so the transcription can be checked against the pixels.
+`evidence/` so the transcription can be checked against the pixels.
 
 The other fifteen carry nothing, and that was established rather than assumed. Every TIFF
 tag of all sixteen was dumped: `Software` is `tifffile.py` on every one of them, so the
@@ -1850,7 +2028,8 @@ Every TXM frame: {TXM_NM_PER_PX} nm/px, `{TXM_SCALE_SOURCE}`.
 
 ## Previews
 
-`previews/` holds an 8-bit PNG per frame: the greyscale micrograph with crack painted
+`previews/<frame_id>.png` holds an 8-bit PNG per four-state frame, flat and named by
+frame id so `metadata.csv` and the preview sort together: the greyscale micrograph with crack painted
 green and both not-crack verdicts (states 2 and 3) painted red. Unreviewed area is left as
 the greyscale, because it is not a verdict and colouring it would make it look like one.
 States 2 and 3 are drawn the same red on purpose: they are the same verdict.
@@ -1939,8 +2118,6 @@ tables score. `score.py` returns `precision_supported`, `recall_supported` and
 
 {_undeclared_note(zen)}
 
-{_inconel_contents(zen)}
-
 ---
 
 ## Reproducing the paper's numbers
@@ -1977,7 +2154,11 @@ repository, run with `SCOPE_B2B3=1`. The frame set it enumerates is the frame se
 
 - Every frame's annotation lines up with its image at the recorded crop ({len(rows)}/{len(rows)}).
 - Every annotation value is one of `0 1 2 3` -- no other value anywhere.
-- The TXM `*_paint.png` reads back bit-equal to the `*_paint.npy` beside it.
+- Every TXM mask PNG reads back bit-equal to the `.npy` correction it was written from.
+- Every Inconel 718 image is paired with a mask of the same stem, the pair counts are
+  the ones this builder records, and the masks are bimodal enough for the threshold
+  they are read at.
+- No two frames share an id (the index, the previews and the loader are all keyed by it).
 - Each Zenodo archive matches the md5 its record entry declares, before anything is
   extracted from it.
 - No absolute path and no personal directory name anywhere in the tree -- every file is
@@ -1994,8 +2175,10 @@ repository, run with `SCOPE_B2B3=1`. The frame set it enumerates is the frame se
   scale with them; ratios do not.
 - **The TXM acquisition parameters are unrecorded.** Not missing from this release --
   missing from the source.
-- **The Inconel 718 annotation protocol is undocumented** (above), and that record
-  publishes no pixel size.
+- **The Inconel 718 annotation protocol is undocumented** (above), that record publishes
+  no pixel size, and **its train and test splits share source fields**, so a score on
+  its test split is not a held-out score. All three are the record's, carried here as
+  received.
 - **Nothing here establishes that a score on one arm predicts a score on the other.** The
   two arms are different instruments at pixel sizes that differ by one to two orders of
   magnitude, on overlapping but not identical specimens.
@@ -2004,12 +2187,18 @@ repository, run with `SCOPE_B2B3=1`. The frame set it enumerates is the frame se
 
 ---
 
+{_data_availability(rows, zen)}
+
+---
+
 ## Files
 
-- `metadata.csv` / `frames.json` -- the same content in two formats: one row per frame
-  with modality, specimen series, session date, instrument and detector where recoverable,
-  pixel dimensions of image and mask, the resolved crop box, `nm_per_px`, `scale_source`,
-  a one-line `scale_note`, and the full four-state pixel histogram.
+- `metadata.csv` / `frames.json` -- the same content in two formats, **one row for
+  every frame in the folder, all three arms**: modality, `annotation_kind`, specimen
+  series, session date, instrument and detector where recoverable, pixel dimensions of
+  image and mask, the resolved crop box, `nm_per_px`, `scale_source`, a one-line
+  `scale_note`, and the full four-state pixel histogram. Start here: it is the index of
+  the whole release, and `image_file` and `mask_file` give the path of every file in it.
 - `checks.json` -- what every check actually found, including the `txm_group()` source
   text the scope was decided with.
 - `MANIFEST.sha256` -- sha256 and byte size for every file.
@@ -2019,8 +2208,12 @@ repository, run with `SCOPE_B2B3=1`. The frame set it enumerates is the frame se
   precision bracket beside them. No balanced accuracy and no MCC, by the author's
   instruction and because both are dominated by the not-crack coverage rather than by the
   detector.
-- `evidence/sem_databar/` -- the panel crops the hand-transcribed scale-bar annotation and
-  printed field width were read from.
+- `evidence/` -- the instrument panel a hand-transcribed scale-bar annotation and
+  printed field width were read from, so the transcription can be checked against the
+  pixels rather than taken on trust.
+- `previews/` -- one PNG per four-state frame, named by frame id. The Inconel frames
+  have no preview: their masks are binary and their images are 1024 px fields that open
+  as they are.
 
 Run either file directly for a demonstration:
 
@@ -2034,109 +2227,92 @@ python score.py <frame_id> <prediction.png>
 
 
 def build_licensing(out, zen):
-    zen_files, upstream = "", []
-    if zen:
-        zen_files = "\n".join(f"- `{k}`, {human(s)}, md5 `{m}`"
-                              for k, _p, s, m in zen["files"])
-        seen = set()
-        for key in zen["census"]:
-            for part in key.replace(":", "/").split("/"):
-                if re.match(r"(MetalDAM|UHCS|EBC|Al-Zn|Ni-super|Inconel|inconel)", part):
-                    seen.add(part)
-        upstream = sorted(seen)
+    """Each subtree's licence, stated separately, because they are not the same.
+
+    This file used to carry a long warning: the release shipped 13,303 files out of a
+    record that re-publishes MetalDAM, whose own licence is CC BY-NC-ND and forbids
+    redistributing it or any derivative, under a deposit marked CC BY 4.0. Cutting the
+    release down to the two folders the manuscript scores removed that exposure rather
+    than documenting it. What is left is short, and it is still exact.
+    """
+    rep = (zen or {}).get("report")
+    pairs = sum(v["pairs"] for v in rep["per_split"].values()) if rep else 0
+    taken = "\n".join(
+        f"- `{k}` -- {v['pairs']} image/mask pairs from `{v['image_dir']}` and "
+        f"`{v['mask_dir']}`" for k, v in sorted(rep["per_split"].items())) if rep else \
+        "(the Zenodo stage was skipped on this build)"
+    files = "\n".join(f"- `{k}`, {human(sz)}, md5 `{m}`"
+                       for k, _pp, sz, m in zen["files"]) if zen else ""
+    nt = (rep or {}).get("class_folders_not_taken", [])
     body = f"""\
 # Licensing
 
-**This file states the licence of each subtree separately, because they are not the same
-and the difference matters for redistribution.** It exists so that the decision to publish
-the `inconel718/` subtree is made with the facts in front of whoever makes it.
+The laboratory data and the Inconel 718 frames are not under the same terms. This file
+states each separately.
 
 ---
 
-## 1. The laboratory data -- `sem/`, `txm/`, `previews/`, `evidence/`, and the tables
+## 1. The laboratory data
+
+`images/sem/`, `images/txm/`, `masks/sem/`, `masks/txm/`, `previews/`, `evidence/`, and
+every table in this folder.
 
 **Creative Commons Attribution 4.0 International (CC BY 4.0).**
 Copyright (c) 2026 Jiaming Zhang.
 
 This is the licence the two source repositories place on their experimental data:
+`sem-crack-detector/LICENSE-DATA` (the original micrographs and the human correction
+labels) and `TXM_Crack_Detection_Pipeline/LICENSE-DATA` (`images/`, `dataset_cache/`,
+`paint/corrections/`). You may share and adapt it for any purpose, including
+commercially, with attribution, a link to the licence, and an indication of changes.
+Full text: https://creativecommons.org/licenses/by/4.0/
 
-- `sem-crack-detector/LICENSE-DATA` -- CC BY 4.0, covering the original micrographs and
-  the human correction labels.
-- `TXM_Crack_Detection_Pipeline/LICENSE-DATA` -- CC BY 4.0, covering `images/`,
-  `dataset_cache/` and `paint/corrections/`.
-
-You may share and adapt it for any purpose, including commercially, with attribution, a
-link to the licence, and an indication of changes. Full text:
-https://creativecommons.org/licenses/by/4.0/
-
-`loader.py`, `score.py` and the builder that produced this tree are software, and follow
-the MIT licence of the repositories they came from.
+`loader.py`, `score.py` and the builder that produced this folder are software, and
+follow the MIT licence of the repositories they came from.
 
 ---
 
-## 2. The Inconel 718 subtree -- `inconel718/`
+## 2. The Inconel 718 frames
 
-**As received: Zenodo record {ZENODO_RECORD}, marked CC BY 4.0, DOI
-`10.5281/zenodo.{ZENODO_RECORD}`.**
+`images/inconel718/` and `masks/inconel718/` -- **{pairs} image/mask pairs**, third-party
+data, redistributed under the terms of the record they came from.
 
-Tian, Jiayi (Zhejiang University). *Cross-Material Few-Shot Segmentation for Generalizable
-Microstructure Analysis.* Zenodo, 2026-09-29. The record's own `metadata.license.id` is
-`cc-by-4.0` and its access right is `open`. The files received:
+**Zenodo record {ZENODO_RECORD}, marked CC BY 4.0, DOI `10.5281/zenodo.{ZENODO_RECORD}`.**
+Tian, Jiayi (Zhejiang University), *Cross-Material Few-Shot Segmentation for
+Generalizable Microstructure Analysis*, {(zen or {{}}).get("publication_date", "2026")}.
+The record's own `metadata.license.id` is `cc-by-4.0` and its access right is `open`.
+Attribution for these frames belongs to that depositor, not to this laboratory.
 
-{zen_files or "(the Zenodo stage was skipped on this build)"}
+What is here, and only this:
 
-### What the record's own directory names show
+{taken}
 
-The archives are organised by target class, and the class names are not one collection.
-The folder names observed in this download:
+Both come from the record's `Inconel718_crack` class. Archives the pairs were taken from:
 
-{chr(10).join('- `' + d + '`' for d in upstream) or "- `MetalDAM_*`, `UHCS_*`, `EBC_*` (the Zenodo stage was skipped on this build; these are the names recorded on earlier reads of the record)"}
+{files}
 
-The `MetalDAM_`, `UHCS_` and `EBC_` prefixes identify **at least three upstream datasets
-that this record re-publishes**:
+### Why the rest of the record is not here, and why that matters for licensing
 
-- **MetalDAM** -- a metallographic damage-segmentation dataset, published separately by
-  its own authors.
-- **UHCS** -- the ultrahigh-carbon-steel micrograph collection, published separately by
-  its own authors.
-- **EBC** -- environmental barrier coating SEM, whose upstream is NASA MicroNet EBC-1
-  (identical filenames).
+The record is one deposit covering several collections: its class folders carry the
+prefixes `MetalDAM_`, `UHCS_` and `EBC_`, which are three upstream datasets published
+separately by their own authors ({len(nt)} class folders in all are not shipped here).
+**MetalDAM's own licence is CC BY-NC-ND 4.0** -- NoDerivatives forbids distributing a
+modified or adapted form of the work, and NonCommercial restricts the purposes for which
+it may be shared at all. A CC BY-NC-ND work cannot be relicensed as CC BY by a third
+party who re-publishes it, so the deposit's blanket CC BY 4.0 marking does not hold for
+every part of the deposit.
 
-### The specific conflict
+**None of that material is in this folder.** This release takes only the Inconel 718
+crack frames, so it does not redistribute MetalDAM, UHCS or the EBC coating in any form,
+and the conflict above is recorded here as the reason the rest was left out rather than
+as a risk being passed along. If you go to the record yourself for the other classes,
+that paragraph is the thing to read first.
 
-**MetalDAM's own licence is Creative Commons Attribution-NonCommercial-NoDerivatives 4.0
-(CC BY-NC-ND 4.0).** NoDerivatives forbids distributing a modified or adapted form of the
-work, and NonCommercial restricts the purposes for which it may be shared at all. A
-CC BY-NC-ND work cannot be relicensed as CC BY by a third party who re-publishes it, and
-it cannot be redistributed as part of a derivative collection.
-
-**Zenodo record {ZENODO_RECORD} is nonetheless marked CC BY 4.0 in its entirety.**
-
-### What follows from that
-
-The depositor has applied a permissive licence to an archive that contains at least one
-upstream work whose own licence does not permit that. Whether or not that was intended,
-the consequence for anyone downstream is concrete:
-
-> **Redistributing the `inconel718/` subtree publicly carries a risk that the depositor
-> has passed on.** A recipient who relies on the record's CC BY 4.0 marking inherits the
-> depositor's licensing assumption rather than a clean grant from each upstream author.
-
-Two further facts, stated because they bear on the same decision:
-
-- This build extracts **only the Inconel 718 members** of the archives. The MetalDAM, UHCS
-  and EBC members were not extracted and are not in this tree. The conflict above is about
-  the record's licence marking, which covers the whole deposit; it is not a claim that
-  MetalDAM files are present here.
-{_undeclared_bullet(zen)}
-
-### What this file does not do
-
-It does not tell you whether to publish. The author has decided to assemble this folder;
-this file records the facts so that the separate decision to publish the `inconel718/`
-subtree is made by the author, with those facts visible. If that subtree is removed before
-publication, nothing else in this release depends on it: `sem/`, `txm/`, `loader.py`,
-`score.py` and every number in `metadata.csv` stand alone.
+One fact about the frames that *are* here, because a reviewer will find it: the record's
+own `class_id.txt` declares 15 target classes and **not one of them names Inconel**. The
+Inconel 718 folders are present in the archive but undeclared, so their annotation
+protocol is not documented by the record. The masks are real and this release ships them
+as received; nothing here vouches for how they were drawn.
 
 ---
 
@@ -2147,7 +2323,7 @@ If you use the laboratory arms:
 > Jiaming Zhang, *Crack fractography: SEM and TXM of fatigue cracks in 316L stainless
 > steel, specimen series b2 and b3, with hand annotations.* 2026. CC BY 4.0.
 
-If you use the Inconel 718 subtree, cite the Zenodo record as well:
+If you use the Inconel 718 frames, cite the Zenodo record:
 
 > Tian, Jiayi. *Cross-Material Few-Shot Segmentation for Generalizable Microstructure
 > Analysis.* Zenodo, 2026. doi:10.5281/zenodo.{ZENODO_RECORD}.
@@ -2220,35 +2396,42 @@ references:
 """)
 
 
-def build_data_availability(out, rows, zen):
+def _data_availability(rows, zen):
+    """The paragraph the manuscript can paste, as a README section.
+
+    It used to be its own file. It is four sentences, and a four-sentence file at the
+    top level of a folder somebody has just complained is hard to navigate is four
+    sentences in the wrong place.
+    """
     sem = [r for r in rows if r["modality"] == "SEM"]
     txm = [r for r in rows if r["modality"] == "TXM"]
+    pub = [r for r in rows if r["modality"] == "SEM-public"]
     scaled = [r for r in sem if r["nm_per_px"]]
-    series = _series_phrase(rows)
-    write_text(os.path.join(out, "DATA_AVAILABILITY.md"), f"""\
-# Data availability
+    series = _series_phrase([r for r in rows if r["modality"] in ("SEM", "TXM")])
+    return f"""\
+## Data availability
 
 A paragraph the manuscript can use as written.
 
----
-
-The laboratory data supporting this study are available as
-*{DATASET_NAME}* under CC BY 4.0: {len(sem)} scanning electron micrographs and
-{len(txm)} transmission X-ray mosaics of fatigue cracks in 316L stainless steel, specimen
-series {series}, each with the four-state hand annotation used in the analysis
-(0 unreviewed, 1 crack, 2 not-crack, 3 not-crack by erasure), together with per-frame
-metadata, a loader and the scoring script. The unreviewed state is preserved and is
-excluded from every denominator reported here. Pixel size is given per frame where it
-could be recovered from the instrument databar ({len(scaled)} of the {len(sem)} SEM
-frames) and is recorded as null, with the reason, where it could not; the TXM pixel size
-of {TXM_NM_PER_PX} nm/px is derived from mosaic geometry rather than read from an
-instrument header and is labelled as such. The public Inconel 718 collection used for
-external evaluation is third-party data, obtained from Zenodo record {ZENODO_RECORD}
-(doi:10.5281/zenodo.{ZENODO_RECORD}) and redistributed subject to the terms recorded in
-that record{'' if zen else ' (not included in this build)'}; that record publishes no
-pixel size. Code to rebuild the dataset folder from its sources is in the
-`crack-fractography` repository at `tools/build_release.py`.
-""")
+> The laboratory data supporting this study are available as
+> *{DATASET_NAME}* under CC BY 4.0: {len(sem)} scanning electron micrographs and
+> {len(txm)} transmission X-ray mosaics of fatigue cracks in 316L stainless steel,
+> specimen series {series}, each with the four-state hand annotation used in the
+> analysis (0 unreviewed, 1 crack, 2 not-crack, 3 not-crack by erasure), together with
+> per-frame metadata, a loader and the scoring script. The unreviewed state is preserved
+> and is excluded from every denominator reported here. Pixel size is given per frame
+> where it could be recovered from the instrument databar ({len(scaled)} of the
+> {len(sem)} SEM frames) and is recorded as null, with the reason, where it could not;
+> the TXM pixel size of {TXM_NM_PER_PX} nm/px is derived from mosaic geometry rather
+> than read from an instrument header and is labelled as such. The
+> {len(pub)} Inconel 718 frames used for external evaluation are third-party data from
+> Zenodo record {ZENODO_RECORD} (doi:10.5281/zenodo.{ZENODO_RECORD}), redistributed
+> under that record's CC BY 4.0 terms{'' if zen else ' (not included in this build)'};
+> they are the two folders that record's Inconel 718 crack class holds and not the whole
+> record, and the record publishes no pixel size. Code to rebuild the dataset folder
+> from its sources is in the `crack-fractography` repository at
+> `tools/build_release.py`.
+"""
 
 
 # ===================================================================================== main
@@ -2291,8 +2474,10 @@ def main():
         f"{scale_doc['n_recovered']} of {scale_doc['n_frames_examined']} b2/b3 frames "
         f"recovered from the 280-row databar")
 
-    sem_rows, sem_problems, darkness, sem_series = build_sem(out, scale_rows)
-    txm_rows, txm_problems = build_txm(out, txm_group)
+    written: set = set()
+    sem_rows, sem_problems, darkness, sem_series = build_sem(
+        out, scale_rows, written)
+    txm_rows, txm_problems = build_txm(out, txm_group, written)
     rows = sem_rows + txm_rows
     problems = sem_problems + txm_problems
 
@@ -2320,7 +2505,6 @@ def main():
         say(f"Inconel 718 -- public collection, Zenodo record {ZENODO_RECORD}")
         rec = zenodo_record()
         files = zenodo_fetch(rec, cache)
-        dest = os.path.join(out, "inconel718")
         classes = zenodo_class_list(files)
         if classes:
             say(f"  the record's own class_id.txt ({classes['path']}) declares "
@@ -2331,9 +2515,12 @@ def main():
         else:
             say("  the record carries no class_id.txt; the undeclared-class note is "
                 "not made")
-        census, n_ex, b_ex, not_image = zenodo_extract(files, dest)
-        sanity = inconel_sanity(dest)
-        sanity["not_extracted_non_image_members"] = not_image
+        census, inconel_rows, report, inc_problems = zenodo_extract(files, out, written)
+        problems += inc_problems
+        rows += inconel_rows
+        n_ex = sum(1 for r in inconel_rows) * 2
+        b_ex = sum(os.path.getsize(os.path.join(out, r[k]))
+                   for r in inconel_rows for k in ("image_file", "mask_file"))
         md = rec.get("metadata", {})
         zen = {"when": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
                "record": ZENODO_RECORD, "doi": rec.get("doi"),
@@ -2341,13 +2528,22 @@ def main():
                "publication_date": md.get("publication_date"),
                "creators": ", ".join(c.get("name", "?") for c in md.get("creators", [])),
                "files": files, "census": census, "extracted": n_ex,
-               "extracted_bytes": b_ex, "sanity": sanity, "classes": classes}
+               "extracted_bytes": b_ex, "report": report, "classes": classes}
+
+    ids = [r["frame_id"] for r in rows]
+    dupes = sorted({i for i in ids if ids.count(i) > 1})
+    if dupes:
+        die(f"{len(dupes)} frame id(s) occur twice across the arms: {dupes[:5]}. The "
+            f"index, the previews and the loader are all keyed by frame id, so a "
+            f"collision would silently serve one frame's annotation for another.")
 
     # ------------------------------------------------------------------------ previews
     if not args.no_previews:
         say("")
         say("previews")
         for r in rows:
+            if r.get("annotation_kind") != "four_state_partial":
+                continue
             if not r["shape_status"].startswith("ok"):
                 say(f"  {r['frame_id']}: no preview, shape unresolved")
                 continue
@@ -2358,10 +2554,10 @@ def main():
             paint = np.array(Image.open(os.path.join(out, r["mask_file"])))
             while paint.ndim > 2:
                 paint = paint[..., 0]
-            p = os.path.join(out, "previews", r["modality"].lower(),
-                             r["frame_id"] + ".png")
+            p = os.path.join(out, "previews", r["frame_id"] + ".png")
             make_preview(stretch8(img), paint, r["nm_per_px"], p)
             r["preview_file"] = os.path.relpath(p, out)
+            written.add(p)
         say(f"  wrote {sum(1 for r in rows if r.get('preview_file'))} previews "
             f"({sum(1 for r in rows if r['nm_per_px'])} with a scale bar, "
             f"{sum(1 for r in rows if not r['nm_per_px'])} without, by design)")
@@ -2369,9 +2565,10 @@ def main():
     # -------------------------------------------------------------------------- checks
     say("")
     say("checks")
-    nocrack = [r["frame_id"] for r in rows if r["px_crack"] == 0]
-    nonotcrack = [r["frame_id"] for r in rows if r["px_not_crack"] == 0]
-    both = [r["frame_id"] for r in rows
+    lab = [r for r in rows if r.get("annotation_kind") == "four_state_partial"]
+    nocrack = [r["frame_id"] for r in lab if r["px_crack"] == 0]
+    nonotcrack = [r["frame_id"] for r in lab if r["px_not_crack"] == 0]
+    both = [r["frame_id"] for r in lab
             if r["px_crack"] >= MIN_VERDICT_PX and r["px_not_crack"] >= MIN_VERDICT_PX]
     say(f"  paint states: every value in every published annotation is one of 0 1 2 3")
     say(f"  frames with ZERO crack pixels: {len(nocrack)}  -- recall is 0/0 on these")
@@ -2386,24 +2583,37 @@ def main():
         say(f"    {f:<34} {r['modality']:<4} crack     {r['px_crack']:>11,}  "
             f"unreviewed {r['px_state_0_unreviewed']:>12,}")
     say(f"  frames carrying at least {MIN_VERDICT_PX} px of BOTH verdicts, the only "
-        f"ones an F1 is defined on: {len(both)} of {len(rows)}")
+        f"ones an F1 is defined on: {len(both)} of {len(lab)} four-state frames")
     s3_txm = sum(r["px_state_3_not_crack_erased"] for r in rows if r["modality"] == "TXM")
     s3_sem = sum(r["px_state_3_not_crack_erased"] for r in rows if r["modality"] == "SEM")
+    say(f"  frames: {len(lab)} four-state (SEM + TXM) and "
+        f"{len(rows) - len(lab)} binary public, {len(rows)} indexed in total")
     say(f"  state 3 (erase = not-crack): SEM {s3_sem:,} px, TXM {s3_txm:,} px "
         f"-- {'absent from every TXM frame, as documented' if s3_txm == 0 else 'PRESENT ON TXM, which contradicts the README'}")
 
+    TOP_LEVEL = ("README.md", "LICENSING.md", "CITATION.cff", "metadata.csv",
+                 "frames.json", "checks.json", "MANIFEST.sha256", "loader.py",
+                 "score.py")
+    removed = prune(out, written, TOP_LEVEL)
+    if removed:
+        say("")
+        say(f"pruned {len(removed):,} file(s) left by an earlier build of a different "
+            f"shape")
+        for r in removed[:6]:
+            say(f"  - {r}")
+        if len(removed) > 6:
+            say(f"  ... and {len(removed) - 6:,} more (full list in checks.json)")
     write_text(os.path.join(out, "loader.py"), LOADER_PY)
     write_text(os.path.join(out, "score.py"),
                SCORE_PY.replace("__N_NO_NEG__", str(len(nonotcrack)))
                        .replace("__N_NO_POS__", str(len(nocrack)))
-                       .replace("__N_FRAMES__", str(len(rows)))
+                       .replace("__N_FRAMES__", str(len(lab)))
                        .replace("MIN_PX = 200", f"MIN_PX = {MIN_VERDICT_PX}"))
     write_tables(out, rows)
     build_readme(out, rows, zen, darkness, mask_audit, s3_audit,
                  sem_series)
     build_licensing(out, zen)
     build_citation(out, rows)
-    build_data_availability(out, rows, zen)
 
     # Everything except the two files that do not exist yet. They are scanned
     # separately below, after they are written, so nothing in the tree goes unscanned.
@@ -2476,6 +2686,7 @@ def main():
         "sem_series_coverage": sem_series,
         "all_sem_masks_vs_originals": mask_audit,
         "txm_state_3_across_source": s3_audit,
+        "pruned_files": removed,
         "no_absolute_paths": paths,
         "zenodo": None if zen is None else {
             k: v for k, v in zen.items() if k != "files"},
@@ -2485,6 +2696,9 @@ def main():
     }
     write_text(os.path.join(out, "checks.json"), json.dumps(checks, indent=1) + "\n")
     n_manifest = write_manifest(out)
+    say(f"  MANIFEST.sha256: {n_manifest:,} files"
+        + (f"; pruned {len(removed):,} file(s) this build did not write"
+           if removed else "; nothing to prune"))
     # The last two files the build writes, scanned in their turn. A hit here would be a
     # bug in this builder rather than in the data, and it is still a failure.
     late = scan_for_paths([os.path.join(out, "checks.json"),
@@ -2501,10 +2715,13 @@ def main():
     say("=" * 90)
     say(f"tree size before: {human(size_before)}")
     say(f"tree size after:  {human(size_after)}   ({n_manifest:,} files in MANIFEST.sha256)")
-    for sub in ("sem", "txm", "inconel718", "previews", "evidence"):
-        p = os.path.join(out, sub)
+    for sub in ("images/sem", "images/txm", "images/inconel718",
+                "masks/sem", "masks/txm", "masks/inconel718",
+                "previews", "evidence"):
+        p = os.path.join(out, *sub.split("/"))
         if os.path.isdir(p):
-            say(f"    {sub + '/':<14} {human(tree_bytes(p)):>12}")
+            n = sum(len(f) for _r, _d, f in os.walk(p))
+            say(f"    {sub + '/':<22} {human(tree_bytes(p)):>12}  {n:>5} files")
     if cache.startswith(out):
         say(f"  (the Zenodo cache is inside the tree)")
     else:
