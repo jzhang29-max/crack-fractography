@@ -103,14 +103,45 @@ def stretch(a):
 #: line the detector drew, so the window is the one containing the most mask-BOUNDARY
 #: pixels. A solid block has almost none, an empty region has none, and the maximiser is
 #: therefore a window where mask meets matrix across the panel. No cap is needed.
+#: A marked region whose own outline is more than this fraction frame border is a region
+#: the FIELD cut off, not one the detector drew a boundary around, and its edge is the
+#: limit of the image rather than a decision. Measured, not guessed: on the SEM field the
+#: main crack runs out of both sides and 2.3% of its perimeter is on the border, while on
+#: the TXM field the two largest marked objects sit at 37.9% and 50.1%. Any cut between
+#: those separates them, and the panels either side of it are a crack and a frame edge.
+MAX_EDGE_PERIMETER = 0.15
+
+
 def boundary_window(final, H):
-    """Top-left corner of the H x H window holding the most mask-boundary pixels."""
-    edge = final & ~ndi.binary_erosion(final, np.ones((3, 3), bool))
+    """Top-left corner of the H x H window holding the most mask-boundary pixels.
+
+    Boundary pixels belonging to a region the field of view cut off are not counted; see
+    MAX_EDGE_PERIMETER. Without that exclusion both TXM rows of this figure set landed on
+    the same object: a wedge flush with the right-hand edge of the mosaic holding 57.6% of
+    that frame's marked area, which is the largest thing the detector marks there and is
+    not a crack. The exclusion is on the WINDOW CHOICE only -- no pixel is removed from
+    any mask, and nothing here changes a number.
+    """
+    lab, n = ndi.label(final, np.ones((3, 3), bool))
+    per = final & ~ndi.binary_erosion(final, np.ones((3, 3), bool))
+    on = np.zeros_like(final)
+    on[0, :] = on[-1, :] = on[:, 0] = on[:, -1] = True
+    pc = np.bincount(lab[per].ravel(), minlength=n + 1).astype(float)
+    ec = np.bincount(lab[per & on].ravel(), minlength=n + 1).astype(float)
+    cut = np.zeros(n + 1, bool)
+    cut[1:] = ec[1:] > MAX_EDGE_PERIMETER * np.maximum(pc[1:], 1.0)
+    edge = per & ~cut[lab]
+    if not edge.any():
+        raise SystemExit(
+            f"every marked region on this frame has more than "
+            f"{MAX_EDGE_PERIMETER:.0%} of its outline on the frame border, so there is no "
+            f"detector boundary to show. Choose a different field rather than relaxing "
+            f"the bound -- a panel of the field's own edge is not a detection.")
     ii = np.pad(np.cumsum(np.cumsum(edge.astype(np.int64), 0), 1), ((1, 0), (1, 0)))
     box = ii[H:, H:] - ii[:-H, H:] - ii[H:, :-H] + ii[:-H, :-H]
     if not box.size or box.max() <= 0:
-        raise SystemExit(f"no {H} px window contains any mask boundary -- the field or "
-                         f"the window size needs revisiting, not a silent fallback")
+        raise SystemExit(f"no {H} px window contains any usable mask boundary -- the "
+                         f"field or the window size needs revisiting, not a fallback")
     y0, x0 = np.unravel_index(int(box.argmax()), box.shape)
     return int(y0), int(x0)
 

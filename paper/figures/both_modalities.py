@@ -25,24 +25,38 @@ already used and recorded, not re-picked to suit a new layout:
        and no micrometre axis, which rules out nine of the eleven before legibility is
        considered at all.
 
-  TXM  b2_336_25 at 29.24 nm/px -- of the frames whose annotation is a TRACE rather than
-       a filled region, the SHARPEST one on which the shipped rule reaches at least a
-       quarter of the painted crack. Sharpness is the 99.5th percentile of Sobel gradient
-       magnitude over the frame's own intensity standard deviation, measured for every
-       frame of both collections by `analysis/research/improve/frame_legibility.py`; this
-       frame scores 0.22 against a corpus range of 0.07 to 0.22, with recall 0.286 and
-       precision 0.450.
+  TXM  b2_340_00 at 29.24 nm/px. THE RULE GAINED A CONDITION, because the one it had
+       chose a frame on which the thing to show was the edge of the mosaic.
 
-       WHY SHARPNESS AND NOT THE MEDIAN SCORE. Two earlier choices failed in the two
-       different ways available here. The frame typical by accuracy margin
-       (b2_341_88_take2) reproduces as a grey smudge: these mosaic averages differ by a
-       factor of three in high-frequency content, and on a soft one no panel is readable
-       at any magnification. The frame with the strongest painted-crack CONTRAST
-       (b2_342_81) is readable but the rule reaches only 15% of its paint, so the last
-       column of a stage figure is nearly empty. The rule above asks for both: a frame a
-       reader can see, on which the thing being illustrated actually happens. It is a
-       legibility choice, the captions say so, and the distribution these frames sit in
-       is itself plotted in Figure 2(d).
+       On every b2 and b3 frame a large share of the marked area sits in regions the
+       field of view cuts off: 36.5% at best and 98.9 to 99.8% on all six B3 frames.
+       Those regions are the largest objects the detector marks, so any window rule that
+       maximises mask -- or mask boundary -- lands on one, and both narrative figures
+       did. They are not cracks; a region whose outline is substantially the border of
+       the image is the limit of the field, not a decision the detector made.
+
+       So: among the trace-annotated frames whose sharpness is at or above the corpus
+       median, the one with the LARGEST INTERIOR marked object -- largest region that
+       the field does not cut off. b2_340_00 wins it at 34,792 px against 9,694 for the
+       next, and it carries the least edge-bounded mask in the collection at 36.5%. It
+       is also, independently, the frame whose agreement with the operator is closest to
+       the restricted corpus median on both scoring conventions, which is the rule
+       Figure 12 uses; the two rules agreeing on one frame is a coincidence worth
+       recording rather than a design.
+
+       WHAT THE PREVIOUS CHOICE WAS AND WHY IT FAILED. b2_336_25 was the sharpest trace
+       frame reaching a quarter of the painted crack. It is sharper (0.22 against 0.20)
+       and has higher recall (0.29 against 0.18), and neither mattered: 64.6% of what it
+       marks is edge-bounded and its largest interior object is 7,954 px, so every
+       detail panel cut from it showed a wedge against the right-hand border. Sharpness
+       and recall are properties of a frame; having something to show is a property of
+       the frame AND the window, and the rule now asks for both.
+
+       Two earlier failures are kept on the record because they are different: the frame
+       typical by accuracy margin (b2_341_88_take2) reproduces as a grey smudge, these
+       mosaic averages differing by a factor of three in high-frequency content; and the
+       frame with the strongest painted-crack contrast (b2_342_81) is readable but the
+       rule reaches only 15% of its paint.
 
 The TXM pixel size is derived from operator-supplied mosaic geometry, not read from
 instrument metadata; the SEM one is read from the databar. The caption of every figure
@@ -85,7 +99,7 @@ SEM_SCALE_SOURCE = ("measured from the scale bar in the instrument databar that 
                     "in the uncropped original -- 100 um over 2370 px -- and checked "
                     "against the printed horizontal field width of 259 um, which gives "
                     "42.155 nm/px, a disagreement of 0.09%")
-TXM_FIELD = ("Average_mosaic_260618_b2_336_25_idx00000_mosaictileAA_img001of010"
+TXM_FIELD = ("Average_mosaic_260618_b2_340_00_idx00000_mosaictileAA_img001of010"
              ".xrm.bim.bim")
 TXM_NM_PER_PX = 29.24
 TXM_SCALE_SOURCE = "derived from operator-supplied mosaic geometry, not instrument metadata"
