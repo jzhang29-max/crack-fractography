@@ -109,6 +109,7 @@ def main():
             regimes.append([i])
         else:
             regimes[-1].append(i)
+    _SHADE = []
     for grp in regimes:
         dep = [i for i in grp if R[i]["deployed"]]
         if len(dep) > 1:
@@ -116,9 +117,21 @@ def main():
                     color=J.ACCENT2, lw=1.2, zorder=3)
     if len(regimes) > 1:
         cut = regimes[1][0] - 0.5
+        #: A DASHED LINE WAS NOT ENOUGH. The rounds left of it are scored against a
+        #: different reference -- ground truth plus corrections, rather than
+        #: corrections alone -- so their heights cannot be compared with the rounds on
+        #: the right, which is the one thing a shared y-axis invites a reader to do.
+        #: Shading the earlier regime says "different measurement" before the caption
+        #: gets a chance to, and the connecting line already stops at the boundary.
+        #: SHADED AFTER THE LIMITS ARE SET. Reading get_xlim() here, before
+        #: ax.set_xlim() runs further down, returns matplotlib's autoscale default and
+        #: puts the band in the wrong place -- which is exactly what the first version
+        #: of this did, shading a sliver on the wrong side of the divider.
         ax.axvline(cut, color=J.G_MID, lw=0.7, dashes=(3.0, 2.0), zorder=2)
-        ax.text(cut + 0.08, ax.get_ylim()[1], "reference changes:\ncorrections only", fontsize=J.TICK, color=J.G_MID, ha="left",
-                va="top", linespacing=1.15, zorder=6)
+        ax.text(cut + 0.10, ax.get_ylim()[1], "reference changes:\ncorrections only",
+                fontsize=J.TICK, color=J.G_MID, ha="left", va="top",
+                linespacing=1.15, zorder=6)
+        _SHADE.append(cut)
     for i, r in enumerate(R):
         ax.errorbar(i, r["iou"], yerr=r["std"], color=J.ACCENT2, lw=0.9, capsize=2.2,
                     zorder=4)
@@ -144,26 +157,53 @@ def main():
     ax.set_ylabel("held-out IoU\n(5-fold, grouped by image)", fontsize=J.LABEL)
     ax.set_xlabel("retraining round", fontsize=J.LABEL, labelpad=3)
     ax.set_xlim(-0.45, len(R) - 0.30)
+    #: the earlier regime is scored against a different reference, so its heights
+    #: cannot be read against the rounds on the right -- which a shared y-axis is an
+    #: open invitation to do. The band says so before the caption can.
+    for _c in _SHADE:
+        ax.axvspan(-0.45, _c, color=J.G_LIGHT, alpha=0.5, lw=0, zorder=0)
+        ax.text((-0.45 + _c) / 2.0, ax.get_ylim()[1] - 0.004,
+                "different reference:\nnot comparable with the rounds on the right",
+                fontsize=J.TICK, color=J.G_DARK, ha="center", va="top",
+                linespacing=1.15, zorder=6)
     lo = min(r["iou"] - r["std"] for r in R)
     hi = max(r["iou"] + r["std"] for r in R)
+    #: the side panel's bars must fit this range too, or sharing the axis clips them
+    lo = min(lo, min(v for v in (best["m17"], best["mhy"], best["iou"])
+                     if v is not None))
     ax.set_ylim(lo - 0.055, hi + 0.055)
     ax.tick_params(labelsize=J.TICK)
     for sp in ax.spines.values():
         sp.set_linewidth(0.6)
 
     # the side panel: what the deployed model is made of, on the same held-out folds
-    bx = fig.add_axes([0.825, 0.345, 0.160, 0.615])
+    bx = fig.add_axes([0.825, 0.345, 0.160, 0.575])
     parts = [("17-ch", best["m17"]), ("hybrid", best["mhy"]), ("both", best["iou"])]
     parts = [(n, v) for n, v in parts if v is not None]
+    #: POINTS, NOT BARS. Sharing the main panel's zoomed y-axis is right -- one
+    #: quantity, one scale -- but it leaves a bar standing on a baseline of 0.66
+    #: rather than zero, and a truncated bar exaggerates the very differences this
+    #: panel is there to let a reader judge. A marker has no baseline to truncate.
     for i, (n, v) in enumerate(parts):
-        bx.bar(i, v, 0.66, color=J.ACCENT2 if i == len(parts) - 1 else J.G_MID,
-               edgecolor=J.INK, lw=0.5)
+        last = i == len(parts) - 1
+        bx.plot(i, v, "o", ms=6.5 if last else 5.5,
+                color=J.ACCENT2 if last else J.G_MID,
+                mec="white" if last else J.G_DARK, mew=0.8, zorder=5)
+        bx.text(i, v + 0.006, f"{v:.3f}", fontsize=J.TICK, ha="center",
+                va="bottom", color=J.ACCENT2 if last else J.G_DARK, zorder=6)
     bx.set_xticks(range(len(parts)))
     bx.set_xticklabels([n for n, _ in parts], fontsize=J.TICK, linespacing=1.1)
-    bx.set_ylim(0, 1.0)
-    bx.set_yticks([0, 0.5, 1.0])
-    bx.set_yticklabels(["0", "0.5", "1"], fontsize=J.TICK)
-    bx.set_title("the deployed model", fontsize=J.TICK, color=J.G_DARK, pad=3)
+    #: THE SIDE PANEL SHARES THE MAIN PANEL'S Y-AXIS. It used to run 0 to 1 beside a
+    #: main panel running 0.70 to 0.85, so the same quantity -- held-out IoU -- was
+    #: drawn at two scales a centimetre apart and the bars towered over the points
+    #: they are meant to be read against. One quantity, one scale: a bar and a point
+    #: at the same height on this sheet are now the same number.
+    bx.set_ylim(*ax.get_ylim())
+    bx.set_yticks(ax.get_yticks())
+    bx.set_yticklabels([])
+    bx.set_xlim(-0.6, len(parts) - 0.4)
+    bx.set_title("what the deployed\nmodel is made of", fontsize=J.TICK,
+                 color=J.G_DARK, pad=2, linespacing=1.15)
     bx.tick_params(labelsize=J.TICK)
     for sp in bx.spines.values():
         sp.set_linewidth(0.6)
@@ -203,7 +243,32 @@ def main():
     if off:
         raise SystemExit(f"{len(off)} string(s) off the sheet: "
                          + "; ".join(repr(o) for o in off))
-    print(f"  CONTROL every string on the sheet: PASS")
+
+    #: AND NO TWO STRINGS MAY PRINT THROUGH EACH OTHER. This check measured only
+    #: whether a string had left the sheet, so it reported PASS on a plate where a
+    #: new annotation was printing straight through "rejected by the deployment gate".
+    #: Off-sheet and overlapping are two different faults and only one was being
+    #: looked for. 1 pt of real overlap in BOTH directions, so labels that merely
+    #: touch are allowed.
+    items = []
+    for t in fig.findobj(plt.Text):
+        if not t.get_text().strip() or not t.get_visible():
+            continue
+        try:
+            items.append((t.get_text().strip().replace("\n", " ")[:40],
+                          t.get_window_extent(renderer=rend)))
+        except Exception:
+            continue
+    bad = []
+    for i in range(len(items)):
+        for k in range(i + 1, len(items)):
+            a, b = items[i][1], items[k][1]
+            if (min(a.x1, b.x1) - max(a.x0, b.x0) > tol
+                    and min(a.y1, b.y1) - max(a.y0, b.y0) > tol):
+                bad.append(f"{items[i][0]!r} x {items[k][0]!r}")
+    if bad:
+        raise SystemExit(f"{len(bad)} overlapping label(s): " + "; ".join(bad[:6]))
+    print(f"  CONTROL {len(items)} strings, none off the sheet, none overlapping: PASS")
 
     J.save(fig, os.path.join(OUT, NAME + ".png"))
     json.dump({"figure": NAME + ".png",

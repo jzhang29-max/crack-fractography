@@ -1027,7 +1027,16 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
         ax.axhline(union_iou, color=J.ACCENT2, lw=1.0, zorder=5,
                    dashes=(3.0, 1.8))
         ax.set_xlim(xs[0] * 0.7, xs[-1] * 1.4)
-        ax.set_ylim(0.23, max(union_iou, max(sing.values())) * 1.06)
+        #: LIMITS FROM THE DATA, NOT A TYPED FLOOR. This read set_ylim(0.23, ...),
+        #: which was inside the range while the region classifier was off. With it on
+        #: every single-radius point falls to 0.128-0.216 and the union to 0.229, so
+        #: the floor sat above the entire series and the panel rendered EMPTY -- an
+        #: axis frame with nothing in it, and no check caught it because an empty axis
+        #: draws no text and overlaps nothing.
+        _vals = list(sing.values()) + [union_iou]
+        _lo, _hi = min(_vals), max(_vals)
+        _pad = max((_hi - _lo) * 0.12, 0.004)
+        ax.set_ylim(_lo - _pad, _hi + _pad)
 
     def p_g(ax):
         xs = [int(v) for v in CLOSE_GRID]
@@ -1388,6 +1397,36 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
         raise SystemExit(f"{len(panel_axes)} axes drawn for {len(PANELS)} panels")
     print(f"  CONTROL {len(drawn)} panels, every one of them a row of its table, and "
           f"every lettered row a panel: PASS")
+
+    #: AND EVERY PANEL MUST HAVE SOMETHING VISIBLE INSIDE ITS OWN AXES. Panel (f)
+    #: shipped EMPTY: its y-limits were a typed floor of 0.23 chosen while the region
+    #: classifier was off, and with it on the entire series fell below that floor and
+    #: was clipped away. Nothing caught it -- an empty axis draws no text, so the
+    #: label and overlap checks see a clean sheet, and the caption still described a
+    #: curve that was not there. A panel with a frame and no data is the one failure
+    #: this plate had no way to notice.
+    import numpy as _np
+    _bare = []
+    for _lt, _ax in panel_axes.items() if isinstance(panel_axes, dict) \
+            else enumerate(panel_axes):
+        _x0, _x1 = sorted(_ax.get_xlim())
+        _y0, _y1 = sorted(_ax.get_ylim())
+        _seen = 0
+        for _ln in _ax.get_lines():
+            _xd, _yd = _np.asarray(_ln.get_xdata(), float), \
+                _np.asarray(_ln.get_ydata(), float)
+            if _xd.size == 0:
+                continue
+            _in = ((_xd >= _x0) & (_xd <= _x1) & (_yd >= _y0) & (_yd <= _y1))
+            _seen += int(_in.sum())
+        _seen += sum(1 for _c in _ax.collections)
+        _seen += sum(1 for _pt in _ax.patches)
+        if _seen == 0:
+            _bare.append(str(_lt))
+    if _bare:
+        raise SystemExit(f"{len(_bare)} panel(s) have an axis frame and nothing "
+                         f"visible inside it: " + ", ".join(_bare))
+    print(f"  CONTROL every panel has data inside its own limits: PASS")
     n_rows = len(ROWS)
     tally = {"total": n_rows,
              "swept": len([1 for _a, r in ROWS if r[2] == SWEEP]),

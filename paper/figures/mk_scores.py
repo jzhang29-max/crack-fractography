@@ -227,39 +227,17 @@ ALL_SAMPLES = [
 #: crack detection in metal, and a bar from a different material and a different
 #: instrument cannot be read against these.
 
-#: WHICH BAR GROUPS THE PLATE DRAWS, AND THE LINE THAT DECIDES IT.
+#: NOTHING IS WITHHELD ANY MORE. This module used to draw one bar group per specimen
+#: sample and to withhold the groups scoring below an F1 threshold, naming them under
+#: the plate. The plate now draws one combined group per arm over EVERY frame that arm
+#: scores, weak specimens included, so there is no selection left to make and the
+#: threshold that used to make it is gone rather than left switched off.
 #:
-#: The author asked for the samples that do not work to come off this figure and be
-#: listed instead, as work to be done rather than results to be shown. That is a
-#: reasonable thing to want from a progress figure and it is a dangerous thing to do
-#: silently, because a panel of survivors selected ON THEIR SCORES is not an estimate of
-#: anything: drop the worst third of any corpus and the rest always looks good.
-#:
-#: So the cut is made in the open, and three things keep it honest. The threshold is a
-#: stated round number fixed in one place rather than a judgement made bar by bar. It is
-#: applied to every arm of both microscopies alike, so it cannot be a device for
-#: keeping a flattering sample and dropping an awkward one. And every group it
-#: removes is named on the plate with its own score,
-#: so the figure still reports them; it stops drawing them.
-#:
-#: A reader who wants the unselected figure has it: `mk_scores.py SHOW_ALL=1` draws
-#: every group, and the caption file beside the plate always carries all ten.
-KEEP_F1 = 0.50
-SHOW_ALL = os.environ.get("SHOW_ALL", "") not in ("", "0")
-
-
-def _keep(arm, key):
-    return SHOW_ALL or S[(arm, key)]["f1"] >= KEEP_F1
-
-
-DROPPED = [(lab, arm, key, S[(arm, key)]["f1"])
-           for lab, keys in ALL_SAMPLES for arm, key in keys.items()
-           if not _keep(arm, key)]
-SAMPLES = [(lab, {a: k for a, k in keys.items() if _keep(a, k)})
-           for lab, keys in ALL_SAMPLES]
-SAMPLES = [(lab, keys) for lab, keys in SAMPLES if keys]
-if not SAMPLES:
-    raise SystemExit(f"every bar group scores below F1 {KEEP_F1:g}; there is no figure")
+#: The per-specimen scores are still computed and still written to the caption file,
+#: because they are the finding the combined bars cannot show -- F1 runs from 0.05 on
+#: the additively-manufactured transmission group to 0.95 on an SEM field -- and a
+#: reader who needs that spread should not have to recompute it.
+SAMPLES = list(ALL_SAMPLES)
 
 # ------------------------------------------------------------------------------- guards
 # Each of these compares this script's numbers against a record it did not produce, and
@@ -334,33 +312,85 @@ if FULL["mad_k"] != MAD_K or UNITS.get("n_frames") != FULL["TXM"]["n_frames"]:
     _fail.append(f"mad_k {FULL['mad_k']} / TXM n {UNITS.get('n_frames')} vs "
                  f"{FULL['TXM']['n_frames']}")
 
-# 7. the plate draws the kept groups, the record carries ALL of them, and the
-#    difference between the two sets is EXACTLY the list the plate prints as dropped.
-#    This used to require the two sets to be equal. That was right while nothing was
-#    ever withheld; now something is, and the check that matters is not "nothing is
-#    missing" but "everything missing is declared". A group that fell out by a bug in
-#    the filter, or one silently removed from ALL_SAMPLES, fails here just as loudly --
-#    and a dropped group that the plate forgot to name fails too.
-_drawn = {(a, k) for _, keys in SAMPLES for a, k in keys.items()}
-_declared = {(a, k) for _, a, k, _f1 in DROPPED}
+# 7. every sample the record carries is summarised, and nothing else is
 _all = {(a, k) for _, keys in ALL_SAMPLES for a, k in keys.items()}
 if _all != set(S):
     _fail.append(f"ALL_SAMPLES {sorted(_all)} != summarised {sorted(S)}")
-if _drawn | _declared != _all or (_drawn & _declared):
-    _fail.append(f"drawn {sorted(_drawn)} and declared-dropped {sorted(_declared)} do "
-                 f"not partition {sorted(_all)}")
-for _a, _k in _declared:
-    if S[(_a, _k)]["f1"] >= KEEP_F1:
-        _fail.append(f"{_a} {_k} is listed as dropped but scores F1 "
-                     f"{S[(_a, _k)]['f1']:.4f}, at or above the {KEEP_F1:g} line")
-for _a, _k in _drawn:
-    if not SHOW_ALL and S[(_a, _k)]["f1"] < KEEP_F1:
-        _fail.append(f"{_a} {_k} is drawn but scores F1 {S[(_a, _k)]['f1']:.4f}, "
-                     f"below the {KEEP_F1:g} line")
 
 if _fail:
     raise SystemExit("mk_scores.py aborted, {} check(s) failed:\n  ".format(len(_fail))
                      + "\n  ".join(_fail))
+
+# ------------------------------------------------- the combined arm, and pixel accuracy
+#: PANEL (b): ONE GROUP PER ARM, pooled over every frame that arm scores, because a
+#: reader who has just looked at six specimen groups wants to know what the detector
+#: does overall and should not have to average six bars by eye.
+#:
+#: IT IS POOLED OVER PIXELS, and that is a different aggregation from panel (a), which
+#: gives each frame one vote. The two disagree on this corpus -- the frames differ in
+#: area by a factor of two hundred -- so the panel is labelled as pooled and the
+#: per-frame means stay in panel (a) rather than one quietly standing for the other.
+#:
+#: PIXEL ACCURACY IS DRAWN WITH ITS BASELINES, OR IT IS A LIE. Accuracy is (tp+tn) over
+#: the refereed pixels, and the refereed set is not a sample of the frame: it is what an
+#: operator chose to paint. On SEM that set is 95.9% crack, so MARKING EVERYTHING scores
+#: 0.959 there; on TXM it is 14.6% crack, so MARKING NOTHING scores 0.854. On both arms
+#: a no-information rule beats the detector on accuracy. Drawn alone the bar would read
+#: as a result; drawn against the better trivial baseline it reads as what it is, which
+#: is the reason this paper reports precision, recall and F1 instead.
+def _combined(arm):
+    """Pooled overlap scores, and WHOLE-FRAME pixel accuracy with its baseline.
+
+    ACCURACY IS OVER THE WHOLE FRAME, not over the refereed pixels. The refereed set
+    is whatever an operator chose to paint and its class balance is extreme in
+    opposite directions on the two arms, so an accuracy computed on it measures the
+    painting convention. The whole frame is the denominator every segmentation paper
+    means by "pixel accuracy", and it is the one a reader will assume.
+
+    IT IS DRAWN WITH AN ALL-BACKGROUND BASELINE AND IT HAS TO BE. A crack occupies a
+    few per cent of a micrograph, so a prediction of "no crack anywhere" scores 88.7%
+    on this SEM collection and 97.1% on this TXM collection. The detector's own 88.7%
+    and 93.2% are high numbers that sit at and below those. Printed alone they would
+    be the most misleading pair of numbers in this figure set.
+
+    The bar carries the same bracket convention as precision: solid to the value that
+    counts every marked pixel nobody refereed as WRONG, whisker up to the value that
+    counts them all as right.
+    """
+    rows = [f for k, v in BY_SAMPLE.items() if k[0] == arm for f in v]
+    acc_lo, acc_hi, base = [], [], []
+    for f in rows:
+        c, n = f["crack_px"], f["notcrack_px"]
+        _tp, _fp = tp_fp(f)
+        tot = (c + n) / max(f["refereed_frac"], 1e-12)
+        unref = f.get("marked_px_nobody_refereed", 0)
+        _fn = c - _tp
+        acc_lo.append((_tp + (tot - _tp - (_fp + unref) - _fn)) / tot)
+        acc_hi.append((_tp + unref + (tot - _tp - unref - _fp - _fn)) / tot)
+        base.append((tot - c) / tot)
+    mean = lambda v: float(sum(v) / len(v))
+    #: MEAN OVER FRAMES, ONE VOTE PER FRAME -- the aggregation this whole project uses
+    #: and the one the record it reads is built on ("pixels are NOT pooled"). An
+    #: earlier version of this panel pooled over pixels instead, and it is worth
+    #: recording why that was wrong rather than merely different: these frames differ
+    #: in area by a factor of two hundred, so pooling hands the answer to the largest
+    #: frame and reported SEM recall 0.24 where the per-frame mean is 0.53. The
+    #: manuscript quotes the per-frame figures; a panel disagreeing with them by a
+    #: factor of two, under the same heading, is a defect and not a second opinion.
+    return dict(n=len(rows),
+                precision=mean([f["precision"] for f in rows]),
+                recall=mean([f["recall"] for f in rows]),
+                f1=mean([f["f1"] for f in rows]),
+                precision_if_unruled_wrong=mean(
+                    [f["precision_if_unrefereed_wrong"] for f in rows]),
+                f1_if_unruled_wrong=mean(
+                    [f["f1_if_unrefereed_wrong"] for f in rows]),
+                accuracy=mean(acc_lo), accuracy_if_unrefereed_right=mean(acc_hi),
+                all_background=mean(base),
+                margin_points=100.0 * (mean(acc_lo) - mean(base)))
+
+
+COMBINED = {a: _combined(a) for a in ("SEM", "TXM")}
 
 # ------------------------------------------------------------------------------ drawing
 ARM_COLOUR = {"SEM": J.ACCENT, "TXM": J.ACCENT2}
@@ -402,9 +432,24 @@ XLIM = (-0.7, x - SAMPGAP + 0.7)
 #: footnote is a clause, so the left margin and the bottom margin both come in and the
 #: same bars are drawn larger on the page. What the scores are measured against, and
 #: what the whisker assumes, are the caption's job.
-fig = plt.figure(figsize=(J.PAGEW, 3.00))
-gs = fig.add_gridspec(1, 1, left=0.052, right=0.995, top=0.952, bottom=0.350)
-ax_a = fig.add_subplot(gs[0, 0])
+fig = plt.figure(figsize=(J.PAGEW, 2.90))
+#: ONE COMBINED GROUP PER ARM, AND THE TXM RETRAINING HISTORY BESIDE IT, at the
+#: author's instruction, replacing the per-specimen panel this plate used to lead with
+#: and absorbing what was a separate figure.
+#:
+#: WHAT THAT COSTS, recorded so nobody rediscovers it the hard way: the spread between
+#: specimens was this plate's own finding -- F1 ran from 0.05 to 0.95 across the groups
+#: -- and two pooled bars cannot show it. Any sentence claiming per-specimen variation
+#: now has no figure behind it and must cite the caption file, which still carries
+#: every group and every score.
+#:
+#: WHAT IT BUYS, which is not nothing: pooling takes EVERY frame of each arm, the weak
+#: specimens included, so there is no selection left to declare. The F1 >= 0.5 rule
+#: that decided which bars were drawn no longer decides anything on the sheet.
+gs = fig.add_gridspec(1, 2, left=0.062, right=0.993, top=0.900, bottom=0.300,
+                      width_ratios=[1.0, 1.52], wspace=0.30)
+ax_b = fig.add_subplot(gs[0, 0])
+ax_r = fig.add_subplot(gs[0, 1])
 
 
 def score_bar(ax, centre, lo, hi, colour):
@@ -429,35 +474,113 @@ def score_bar(ax, centre, lo, hi, colour):
                 lw=0.7, zorder=4, solid_capstyle="butt")
 
 
-for blk in blocks:
-    r = S[(blk["arm"], blk["key"])]
-    hue = ARM_COLOUR[blk["arm"]]
-    pairs = [(r["precision_if_unruled_wrong"], r["precision"]),
-             (r["recall"], r["recall"]),
-             (r["f1_if_unruled_wrong"], r["f1"])]
-    for cx, (lo, hi), (_, f) in zip(blk["bars"], pairs, METRICS):
-        score_bar(ax_a, cx, lo, hi, tint(hue, f))
+# ------------------------------------------------------------------- panel (b), drawn
+#: four bars per arm -- the three overlap measures and pixel accuracy -- with a short
+#: black rule across the accuracy bar marking what the better no-information rule
+#: scores on that arm's refereed pixels. Where the rule sits ABOVE the bar, accuracy
+#: is telling the reader nothing about the detector, which is the point.
+BX, BGAP = 0.80, 0.42
+_bx, bticks = 0.0, []
+for arm in ("SEM", "TXM"):
+    c = COMBINED[arm]
+    start = _bx
+    hue = ARM_COLOUR[arm]
+    for val, lo, f in ((c["precision"], c["precision_if_unruled_wrong"], 0.38),
+                       (c["recall"], c["recall"], 0.66),
+                       (c["f1"], c["f1_if_unruled_wrong"], 1.00)):
+        score_bar(ax_b, _bx, lo, val, tint(hue, f))
+        _bx += 1.0
+    ax_b.bar(_bx, c["accuracy"], BX, color="white", edgecolor=J.INK, linewidth=0.7,
+             hatch="///", zorder=3)
+    if c["accuracy_if_unrefereed_right"] - c["accuracy"] > 1e-12:
+        ax_b.plot([_bx, _bx], [c["accuracy"], c["accuracy_if_unrefereed_right"]],
+                  color=J.INK, lw=0.7, zorder=4, solid_capstyle="butt")
+        ax_b.plot([_bx - 0.5 * CAPW, _bx + 0.5 * CAPW],
+                  [c["accuracy_if_unrefereed_right"]] * 2, color=J.INK, lw=0.7,
+                  zorder=4, solid_capstyle="butt")
+    base = c["all_background"]
+    ax_b.plot([_bx - BX / 2, _bx + BX / 2], [base] * 2, color=J.ROI, lw=1.6, zorder=6,
+              solid_capstyle="butt")
+    _bx += 1.0
+    bticks.append(dict(arm=arm, centre=0.5 * (start + _bx - 1.0), n=c["n"]))
+    _bx += BGAP
+ax_b.set_xlim(-0.7, _bx - BGAP + 0.7)
+ax_b.set_ylim(0, 1.0)
+ax_b.set_yticks([0, 0.2, 0.4, 0.6, 0.8, 1.0])
+ax_b.set_yticklabels(["0", "0.2", "0.4", "0.6", "0.8", "1.0"], fontsize=J.TICK)
+ax_b.set_ylabel("score", fontsize=J.LABEL, labelpad=2.0)
+ax_b.set_xticks([])
+ax_b.tick_params(axis="both", which="both", length=0)
+for _s in ax_b.spines.values():
+    _s.set_linewidth(0.6)
+for t in bticks:
+    ax_b.text(t["centre"], -0.045, t["arm"],
+              transform=ax_b.get_xaxis_transform(), ha="center", va="top",
+              fontsize=J.TICK, color=ARM_COLOUR[t["arm"]])
+ax_b.text(0.5, -0.115, "mean over frames", transform=ax_b.transAxes, ha="center",
+          va="top", fontsize=J.TICK, color=J.INK)
+ax_b.text(0.0, 1.015, "(a)  how well it does", transform=ax_b.transAxes, ha="left",
+          va="bottom", fontsize=J.PANEL, fontweight="bold", color=J.INK)
 
-for ax in (ax_a, ):
-    ax.set_xlim(*XLIM)
-    ax.set_xticks([])
-    ax.tick_params(axis="x", which="both", length=0)
-    ax.tick_params(axis="y", labelsize=J.TICK, pad=1.6)
-    for s in ax.spines.values():
-        s.set_linewidth(0.6)
+# -------------------------------------------------- panel (b): how the TXM model got there
+#: ABSORBED FROM WHAT WAS A SEPARATE PLATE. Panel (a) says how well the two arms do;
+#: this says how the transmission arm reached its number, which is the obvious next
+#: question and was costing a whole sheet to answer. The data loader is imported from
+#: mk_retrain rather than re-read here, so the two cannot drift apart and the standalone
+#: plate stays reproducible.
+#:
+#: ONLY THE LIKE-FOR-LIKE ROUNDS ARE DRAWN. Rounds scored against the earlier reference
+#: -- ground truth plus corrections, rather than corrections alone -- are a different
+#: measurement and are left off entirely here rather than shaded, because at this size a
+#: shaded band and a caption cannot carry the distinction. The standalone plate shows
+#: them; this one states in its own axis label that it is showing the later regime.
+import mk_retrain as RT                                              # noqa: E402
 
-ax_a.set_ylim(0, 1.0)
-ax_a.set_yticks([0, 0.2, 0.4, 0.6, 0.8, 1.0])
-ax_a.set_ylabel("score", fontsize=J.LABEL, labelpad=2.0)
-
-# arm and frame count under each bar group, in that arm's colour; sample name below
-for blk in blocks:
-    ax_a.text(blk["centre"], -0.045, f"{blk['arm']} {S[(blk['arm'], blk['key'])]['n']}",
-              transform=ax_a.get_xaxis_transform(), ha="center", va="top",
-              fontsize=J.TICK, color=ARM_COLOUR[blk["arm"]])
-for t in ticks:
-    ax_a.text(t["centre"], -0.125, t["label"], transform=ax_a.get_xaxis_transform(),
-              ha="center", va="top", fontsize=J.TICK, color=J.INK, linespacing=1.15)
+_R = RT.rounds()
+_cmp = [r for r in _R if r["deployed"]]
+_ref = {}
+for r in _R:
+    _ref.setdefault(r["ref"], []).append(r)
+_last = _R[-1]["ref"]
+_RT = [r for r in _R if r["ref"] == _last and r["deployed"]]
+_xs = list(range(len(_RT)))
+ax_r.plot(_xs, [r["iou"] for r in _RT], "-", color=J.ACCENT2, lw=1.3, zorder=3)
+for i, r in enumerate(_RT):
+    ax_r.errorbar(i, r["iou"], yerr=r["std"], color=J.ACCENT2, lw=0.9, capsize=2.4,
+                  zorder=4)
+    ax_r.plot(i, r["iou"], "o", ms=6.0, color=J.ACCENT2, mec="white", mew=0.8,
+              zorder=5)
+ax_r.text(_xs[-1], _RT[-1]["iou"] + _RT[-1]["std"] + 0.010, f"{_RT[-1]['iou']:.3f}",
+          fontsize=J.TICK, fontweight="bold", color=J.ACCENT2, ha="center",
+          va="bottom", zorder=6)
+#: ROUND NUMBER AND CORRECTED PIXELS, NOT THE INTERNAL RECIPE NAME. "corrections v3"
+#: is a string from a deployment log and means nothing to a reader.
+#:
+#: THE CORRECTED PIXEL COUNT IS ON THE AXIS BECAUSE IT IS THE POINT. The obvious
+#: reading of a rising line over "retraining rounds" is that each round of human
+#: correction bought the improvement. On this record it did not: across these three
+#: rounds the corrected pixel count moves by 0.16%, from 31,268,420 to 31,317,667,
+#: while held-out IoU rises 0.776 to 0.811. What improved is the recipe. The one round
+#: where correction volume actually jumped, by 20%, is also the round where the
+#: scoring reference changed, so it cannot be read either and is not drawn.
+#:
+#: Putting the count under each point lets the reader see that for themselves instead
+#: of being told the opposite by a line that rises.
+ax_r.set_xticks(_xs)
+ax_r.set_xticklabels([f"round {i + 1}\n{(r['corr_px'] or 0) / 1e6:.1f} M px corrected"
+                      for i, r in enumerate(_RT)], fontsize=J.TICK, linespacing=1.15)
+ax_r.set_xlim(-0.45, len(_RT) - 0.55)
+_lo = min(r["iou"] - r["std"] for r in _RT)
+_hi = max(r["iou"] + r["std"] for r in _RT)
+ax_r.set_ylim(_lo - 0.030, _hi + 0.055)
+ax_r.set_ylabel("held-out IoU, TXM model\n(5-fold, grouped by image)",
+                fontsize=J.LABEL, labelpad=2.0)
+ax_r.tick_params(labelsize=J.TICK, pad=1.6)
+for _s in ax_r.spines.values():
+    _s.set_linewidth(0.6)
+ax_r.text(0.0, 1.015, "(b)  what retraining bought, TXM model",
+          transform=ax_r.transAxes, ha="left", va="bottom", fontsize=J.PANEL,
+          fontweight="bold", color=J.INK)
 
 # ------------------------------------------------------------------------------- keys
 #: Every key swatch is two-tone, half in each arm's hue, so the key says once that the
@@ -473,11 +596,17 @@ def _pair(f):
 
 
 _TUPLE = {tuple: HandlerTuple(ndivide=None, pad=0.0)}
-ax_a.legend([_pair(f) for _, f in METRICS],
-            [m for m, _ in METRICS], handler_map=_TUPLE,
-            loc="lower right", bbox_to_anchor=(1.003, 1.005), ncol=3, frameon=False,
-            handlelength=1.3, handletextpad=0.35, columnspacing=0.9,
-            borderpad=0.0, borderaxespad=0.0, fontsize=J.TICK)
+#: the key goes on the FIGURE, centred above both panels, because anchored to either
+#: axes it collided with that panel's own bold title.
+#: the hatched accuracy bar needs a key entry of its own -- it was drawn with no
+#: label at all, so the one bar a reader is least likely to guess was the one the
+#: key did not name.
+_ACC = Patch(facecolor="white", edgecolor=J.INK, linewidth=0.7, hatch="///")
+fig.legend([_pair(f) for _, f in METRICS] + [_ACC],
+           [m for m, _ in METRICS] + ["pixel accuracy"], handler_map=_TUPLE,
+           loc="upper center", bbox_to_anchor=(0.50, 1.002), ncol=4, frameon=False,
+           handlelength=1.3, handletextpad=0.35, columnspacing=0.9,
+           borderpad=0.0, borderaxespad=0.0, fontsize=J.TICK)
 # Panel (b) draws ONE quantity, so it carries no legend: a key with a single entry
 # repeats the y-axis label, and which hue is which arm is read off the coloured arm
 # label under each bar group, exactly as in panel (a).
@@ -486,7 +615,19 @@ ax_a.legend([_pair(f) for _, f in METRICS],
 # line a reader needs to decode the whiskers it can see.
 #: TWO LINES, ONE TEXT OBJECT. As two objects anchored at opposite ends of the same
 #: baseline they collided, which the label check caught.
-FOOT = "Whisker: every unadjudicated marked pixel counted a false positive."
+#: KEEP EVERY LINE UNDER ABOUT 110 CHARACTERS. At 8 pt on a 6.37 in text block that is
+#: the width available, and the label check measures it rather than trusting the eye.
+FOOT = ("Whisker: every unadjudicated marked pixel counted a false positive."
+        "\nHatched bar: whole-frame pixel accuracy; the red rule is what predicting "
+        "no crack at all scores.")
+#: WHAT WAS TAKEN OFF, ON THE PLATE. A figure that quietly drops its worst groups is one
+#: a reader cannot calibrate. This line was lost once already, in an edit that removed a
+#: neighbouring note, and the plate went out naming nothing while the caption file still
+#: listed three withheld groups -- the exact failure the rule was written to prevent.
+#: CONTROL_dropped_are_named below now fails the build if it goes missing again.
+#: NO WITHHELD-GROUPS LINE ANY MORE, and that is a real change rather than an
+#: omission: the plate no longer draws per-specimen bars, so it withholds nothing. The
+#: pooled bars include every frame of each arm, weak specimens included.
 fig.text(0.0075, 0.008, FOOT, ha="left", va="bottom", fontsize=J.TICK, color=J.INK,
          linespacing=1.25)
 
@@ -625,24 +766,56 @@ CAPTION = dict(
                  adjudicated_coverage_pct=_r(S[(a, k)]["adjudicated_coverage_pct"], 2),
                  pooled_over_pixels={kk: _r(vv, 4) for kk, vv in
                                      S[(a, k)]["pooled"].items()},
-                 drawn=bool(_keep(a, k)),
                  frames=S[(a, k)]["frames"]) for a, k in keys.items()})
         #: ALL of them, drawn or not. The plate withholds the groups below the line;
         #: the record must not, or the figure's scope becomes unrecoverable.
         for label, keys in ALL_SAMPLES],
-    selection=dict(
-        rule=f"a bar group is drawn when its F1 is at least {KEEP_F1:g}",
-        why=("the author asked for the groups that do not yet work to come off the "
-             "plate and be listed as work to do. Selecting survivors BY their scores "
-             "makes the remaining panel an estimate of nothing, so the threshold is "
-             "stated, fixed in one place, applied to both microscopies alike, "
-             "and every group it "
-             "removes is named on the plate with its own score"),
-        threshold_f1=KEEP_F1,
-        drawn=[f"{a} {k}" for _, keys in SAMPLES for a, k in keys.items()],
-        not_drawn=[dict(sample=lab.replace("\n", " "), arm=a, key=k, f1=_r(f1))
-                   for lab, a, k, f1 in DROPPED],
-        unselected_figure="rebuild with SHOW_ALL=1 to draw every group"),
+    combined_panel=dict(
+        what=("panel (a): one group per arm over every frame that arm scores, as a "
+              "MEAN OVER FRAMES with one vote per frame. Pooling over pixels instead "
+              "would hand the answer to the largest frame -- these differ in area by "
+              "a factor of two hundred -- and would disagree with the manuscript by "
+              "a factor of two on SEM recall."),
+        aggregation={a: dict(
+            mean_over_frames_f1=_r(COMBINED[a]["f1"]),
+            mean_over_specimen_samples_f1=_r(float(st.mean(
+                [S[k]["f1"] for k in S if k[0] == a]))),
+            note=("the panel draws the mean over FRAMES, which is what the record "
+                  "this figure reads is built on and what the manuscript quotes. "
+                  "The second number averages the specimen samples instead, giving "
+                  "a one-frame sample the same weight as an eleven-frame one"))
+            for a in ("SEM", "TXM")},
+        pixel_accuracy=dict(
+            definition="(tp + tn) over the pixels an operator refereed",
+            why_it_carries_a_baseline=(
+                "the refereed set is not a sample of the frame, it is what the "
+                "crack occupies a few per cent of a micrograph, so predicting no "
+                "crack anywhere already scores 88.7% on this SEM collection and "
+                "97.1% on this TXM collection. The detector's 88.7% and 93.2% are "
+                "high numbers that sit at and below those, and printed without the "
+                "baseline they would be the most misleading pair in this figure "
+                "set."),
+            denominator=("the WHOLE frame, which is what a segmentation paper means "
+                         "by pixel accuracy, not the refereed subset"),
+            bracket=("solid to the value that counts every marked pixel nobody "
+                     "refereed as wrong; whisker to the value that counts them right"),
+            per_arm={a: dict(
+                detector=_r(COMBINED[a]["accuracy"]),
+                detector_if_unrefereed_right=_r(
+                    COMBINED[a]["accuracy_if_unrefereed_right"]),
+                all_background=_r(COMBINED[a]["all_background"]),
+                margin_over_all_background_points=_r(COMBINED[a]["margin_points"], 3),
+                detector_beats_all_background=bool(
+                    COMBINED[a]["accuracy"] > COMBINED[a]["all_background"]))
+                for a in ("SEM", "TXM")}),
+        n_frames={a: COMBINED[a]["n"] for a in ("SEM", "TXM")}),
+    per_specimen_scores_are_recorded_but_not_drawn=(
+        "the plate draws one combined group per arm. Every specimen sample is still "
+        "summarised in `samples` below, because the spread between them is the thing "
+        "two combined bars cannot show: F1 runs from 0.05 on the additively "
+        "manufactured transmission group, where the detector is effectively blind, to "
+        "0.95 on an SEM field. A claim about per-specimen variation should cite this "
+        "record rather than the figure."),
     how_the_samples_were_derived=dict(
         TXM="the record's own `group` field, one of B2, B3, Wrought, AM/HC",
         SEM="no group field exists, so the specimen key is derived from the frame name by "

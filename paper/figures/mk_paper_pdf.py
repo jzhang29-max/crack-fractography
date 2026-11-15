@@ -96,17 +96,12 @@ def _score_facts():
     #: drawn or not, so reading the minimum off all of them would quote a bar that is
     #: not on the sheet -- which is what this bullet did the moment the plate started
     #: withholding its worst groups.
-    f1 = {k: v["f1"] for k, v in by.items()
-          if v.get("f1") is not None and v.get("drawn", True)}
+    f1 = {k: v["f1"] for k, v in by.items() if v.get("f1") is not None}
     lo, hi = min(f1, key=f1.get), max(f1, key=f1.get)
     return dict(
         b2=by[("b2", "SEM")], f1_lo=f1[lo], f1_hi=f1[hi],
         f1_lo_name=f"{lo[1]} {lo[0]}", f1_hi_name=f"{hi[1]} {hi[0]}",
         txm_b2=by.get(("b2", "TXM")),
-        sel=d.get("selection", {}),
-        drawn_pairs=[{"sample": x["sample"], "arm": a}
-                     for x in d["samples"] for a, v in x["arms"].items()
-                     if v is not None and v.get("drawn", True)],
         in_sample=d.get("the_sem_bars_are_in_sample", ""))
 
 
@@ -237,67 +232,33 @@ FIGURES = [
    "the electron arm is therefore read off the two-sided fields and off Figure 4, not "
    "off this plate."]),
  ("F8 - scores by sample.png",
-  "How well it does, by specimen",
-  ["Precision, recall and F1 per sample. SEM blue, TXM orange, mean over frames with "
-   "one vote per frame.",
-   "Every bar is the score over the pixels an operator actually ruled on. The whisker "
-   "beneath the precision and F1 bars is where that score would fall if every marked "
-   "pixel nobody ruled on were counted a false positive — an assumption about "
-   "unadjudicated pixels, not a second measurement of them. SEM b2 precision is "
-   f"{SC['b2']['precision']:.3f} with the whisker at "
-   f"{SC['b2']['precision_if_unruled_wrong']:.3f}. Recall carries none: an unruled pixel is not in its "
-   "denominator. The scores are measured against the operator's own marking, on a 0 "
-   "to 1 scale; the arm and the number of frames scored are printed under each group.",
-   f"F1 runs from {SC['f1_lo']:.2f} on {SC['f1_lo_name']} to {SC['f1_hi']:.2f} on "
-   f"{SC['f1_hi_name']}, the best sample anywhere" +
-   "." +
-   " Per-specimen spread, not any pooled average, is what a user of this measurement "
-   "has to plan for.",
-   "The SEM bars are IN SAMPLE. The region classifier is enabled and the frames scored "
-   "here are the images its bundle was fitted on — 45 of 48 overlap — so these bars say "
-   "what the software does to these frames, not what it will do to a new specimen. The "
-   "leave-one-frame-out refit that answers the second question is a separate record and "
-   "is deliberately not drawn beside these bars.",
-   "THIS PLATE WITHHOLDS ITS WORST GROUPS, by request and by a stated rule: a bar group "
-   f"is drawn when its F1 reaches {SC['sel'].get('threshold_f1', 0.5):g}. "
-   + "Not drawn: "
-   + ", ".join(f"{x['arm']} {x['sample']} {x['f1']:.2f}"
-               for x in SC["sel"].get("not_drawn", []))
-   + ". A panel of survivors chosen by their own scores is not an estimate of "
-   "performance, so the rule is applied to both microscopies alike, and "
-   "every withheld group is named here and on the plate with its score, and the "
-   "caption file carries all ten either way.",
-   ("b2 is the only sample both arms cover; elsewhere the axis carries two different "
-    "specimen sets, and no labelled SEM b3 frame exists."
-    if ("b2", "TXM") in {(x["sample"], a) for x in SC["drawn_pairs"] for a in [x["arm"]]}
-    else "b2 was the only sample both arms covered, and its transmission group is one "
-         "of the four withheld, so no bar group on this plate now carries both a blue "
-         "and an orange bar. Blue and orange are therefore two different specimen "
-         "sets throughout, and must not be read against each other.")]),
- ("F10 - retraining rounds.png",
-  "What retraining on the operator's corrections did",
-  ["The transmission model is refitted whenever the operator's corrections grow, and "
-   "every candidate is scored by five-fold cross-validation GROUPED BY IMAGE, so no "
-   "frame ever scores a model that was fitted on it. Those are the points plotted.",
-   "Across the three like-for-like rounds the held-out IoU rises 0.776 to 0.789 to "
-   "0.811. The deployed model reaches precision 0.935 and recall 0.860, with a worst "
-   "fold of 0.778, and the two averaged members beat either member alone — 0.811 "
-   "against 0.786 for the hybrid and 0.726 for the 17-channel model.",
-   "The open marker is a candidate the deployment gate REFUSED, because its held-out "
-   "IoU regressed. A figure that dropped it would be claiming the process only ever "
-   "improves.",
-   "Three recorded rounds are not on the axis and the plate says so: one was scored IN "
-   "SAMPLE and reports 0.936, and one used a four-fold split over 60,000 rows where "
-   "the others use five folds over 250,000 and reports 0.815 — plotting either beside "
-   "the rest would show a decline that is an artefact of the test changing.",
-   "The dashed line marks where the reference itself changed, from ground truth plus "
-   "corrections to corrections only. The rise across it is partly a change of ruler, "
-   "so the two regimes are drawn as separate segments.",
-   "This is NOT a curve of 'more corrections, better model'. Across the three "
-   "comparable rounds the corrected pixel count is flat at about 31.3 million, so what "
-   "improved over them is the recipe, not the amount of correction. The circular "
-   "version of this figure — scoring a mask with the corrections pasted into it "
-   "against those corrections — rises by construction and is not drawn."]),
+  "How well it does, and what retraining bought",
+  ["(a) precision, recall and F1 for each arm over every frame it scores, as a mean "
+   "over frames with one vote per frame — the aggregation the manuscript quotes. "
+   "Pooling over pixels instead would hand the answer to the largest frame; these "
+   "differ in area by a factor of two hundred.",
+   "The hatched bar is whole-frame pixel accuracy and the red rule across it is what "
+   "predicting no crack at all would score. Accuracy is high on both arms — and on "
+   "both it sits at or below that rule, because crack is a few per cent of a "
+   "micrograph. That is why this paper does not lead with it.",
+   "The whisker under precision and F1 is where each would fall if every marked pixel "
+   "nobody ruled on were counted a false positive. It is an assumption about "
+   "unadjudicated pixels, not a second measurement of them. Recall carries none: an "
+   "unruled pixel is not in its denominator.",
+   "The SEM bars are IN SAMPLE. The region classifier is enabled and 45 of the 48 "
+   "hand-painted frames are the images its bundle was fitted on. Refitting it without "
+   "each frame in turn moves precision by 0.006, because at frame scale the model "
+   "decides little: 72% of the retained area sits in components kept regardless of "
+   "what it says.",
+   "(b) is the transmission model, and it does NOT show that each round of human "
+   "correction improved it. Across these three rounds the corrected pixel count moves "
+   "0.16%, from 31,268,420 to 31,317,667, while held-out IoU rises 0.776 to 0.811 — "
+   "so the gain is the recipe, not more labelling. The round where correction volume "
+   "did jump, by 20%, is also the round the scoring reference changed, so it cannot "
+   "be read and is not drawn. The counts are printed under each point rather than "
+   "left for a rising line to imply otherwise.",
+   "Per-specimen scores are not on this plate; every sample, including the four that "
+   "score below F1 0.5, is in the caption file beside it."]),
  ("F4 - what is measured.png",
   "The measurement the application returns",
   ["Every quantity the shipped measurement functions return, drawn on the largest "

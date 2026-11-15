@@ -259,17 +259,10 @@ def specimen(ax):
         ax.add_patch(FancyArrowPatch((xt, DB_Y), (xp, DB_Y), arrowstyle="-|>",
                                      mutation_scale=11, lw=1.5, color=J.INK,
                                      zorder=5, shrinkA=0, shrinkB=0))
-    ax.text(DB_CX, DB_Y + DB_WGRIP + 2.6,
-            "316L dogbone, pulled to failure in the micro-tensile stage while it is "
-            "imaged", fontsize=J.TICK, ha="center", va="bottom", color=J.G_DARK,
-            zorder=6)
 
     rx0, ry0 = DB_CX - ROI_W / 2.0, DB_Y - ROI_H / 2.0
     ax.add_patch(Rectangle((rx0, ry0), ROI_W, ROI_H, fill=False, edgecolor=J.ROI,
                            lw=1.4, zorder=7))
-    ax.text(DB_CX + ROI_W / 2.0 + 1.4, DB_Y + 1.0,
-            f"one {FOV_UM:g} {MU}m field\nof the gauge", fontsize=J.TICK, ha="left",
-            va="center", color=J.ROI, zorder=7, linespacing=1.2)
     return rx0, ry0
 
 

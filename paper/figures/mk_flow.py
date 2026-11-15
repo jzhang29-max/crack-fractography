@@ -457,9 +457,10 @@ def main():
         "title": ("SEM  —  a threshold rule, then a trained classifier"
                   if BM.DO.USE_REGION_CLASSIFIER else
                   "SEM  —  a threshold rule, nothing trained"),
-        "sub": ("eight shape and darkness features per region, nine fitted numbers"
-                if BM.DO.USE_REGION_CLASSIFIER else
-                "a trained classifier exists and is overridden; see the caption"),
+        #: NO SUB-LINE. The author explains the model in the caption; the plate's job
+        #: is the chain of arrays, and a second line of prose beside the title was
+        #: competing with it.
+        "sub": "",
         "stages": ["full field", "detail", "background\nremoved", "proposed",
                    "cleaned", "detected"],
         "panels": [("field", sem["img"], None),
@@ -481,7 +482,7 @@ def main():
         "tag": "txm", "nm": txm_nm, "whole": txm["img"], "field": txm["img"],
         "sl": tsl, "H": tH, "letters": "ghijkl",
         "title": "TXM  —  a trained pixel model",
-        "sub": "17 channels + frozen SAM ViT-H, fitted on 71 labelled frames",
+        "sub": "",
         "stages": ["full field", "detail", "crack\nprobability", "thresholded",
                    "cleaned", "detected"],
         "panels": [("field", txm["img"], None),
@@ -540,8 +541,9 @@ def main():
                                   transform=fig.transFigure, color=J.INK, lw=0.9))
         txt(MX, top + 0.15, ch["title"], maxw=2.9, fontsize=J.LABEL,
             fontweight="bold", ha="left", va="baseline")
-        txt(W - MX, top + 0.15, ch["sub"], maxw=AVAIL - 3.0, ha="right", va="baseline",
-            color=J.G_DARK)
+        if ch["sub"]:
+            txt(W - MX, top + 0.15, ch["sub"], maxw=AVAIL - 3.0, ha="right",
+                va="baseline", color=J.G_DARK)
         for c, name in enumerate(ch["stages"]):
             txt(xs[c] + IMW / 2.0, ytop - 0.045, name, maxw=PITCH - 0.06,
                 fontweight="bold", ha="center", va="bottom", linespacing=1.15)
