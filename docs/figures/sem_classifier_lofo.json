@@ -1,0 +1,1142 @@
+{
+ "generated": "2026-11-14",
+ "question": "what the region classifier is worth on a frame it was not fitted on, at the mask level, scored on refereed pixels",
+ "aggregation": "mean over frames, one vote per frame; pixels are NOT pooled",
+ "scoring": "refereed pixels only: 1 = crack, 2 or 3 = not-crack, 0 excluded",
+ "mad_k": 6.0,
+ "min_px_each_verdict": 200,
+ "deployed_threshold": 0.5537592016924066,
+ "training_keep_rate_at_deployed_threshold": 0.45206391478029295,
+ "n_training_images": 45,
+ "training_csv_drift": {
+  "rows_now": 7510,
+  "rows_in_bundle": 7505,
+  "pos_now": 6410,
+  "pos_in_bundle": 6408,
+  "neg_now": 1100,
+  "neg_in_bundle": 1097
+ },
+ "refit_all_vs_shipped_max_abs_coef_delta": 0.03743184722833348,
+ "refit_all_vs_shipped_intercept_delta": 0.003939269320006433,
+ "frames_scored": 18,
+ "frames_excluded_too_little_paint": [
+  "260622_316_H_b2_front_CBS_01",
+  "260622_316_H_b2_front_CBS_03",
+  "260622_316_H_b4_CBS_02",
+  "260708_316_H_b2_front_CBS_001",
+  "260708_316_H_b2_front_CBS_004",
+  "260708_316_H_b2_front_CBS_005",
+  "260708_316_H_b2_front_CBS_006",
+  "260708_316_H_b2_front_CBS_008",
+  "260708_316_H_b2_front_CBS_009",
+  "260708_316_H_b2_front_CBS_010",
+  "Cast_24hr_SE_Side_006",
+  "HIP_24hr_SE_Side_006",
+  "MAR_AmbB_AS_CBS_0004",
+  "MAR_Amb_AS_CBS_0001",
+  "MAR_Amb_AS_CBS_0004",
+  "MAR_Amb_AS_CBS_0005",
+  "MAR_Amb_AS_ETD_0001",
+  "MAR_Amb_AS_ETD_0004",
+  "MAR_Amb_Cast_CBS_0005",
+  "MAR_Amb_Cast_ETD_0004",
+  "MAR_Amb_HIP_CBS_0003",
+  "MAR_Amb_HIP_CBS_0005",
+  "MAR_Amb_HIP_CBS_0007",
+  "MAR_Amb_HIP_CBS_0008",
+  "MAR_Amb_HIP_CBS_0010",
+  "MAR_Amb_HIP_ETD_0003",
+  "MAR_Amb_HIP_ETD_0006",
+  "MAR_Amb_HIP_ETD_0007",
+  "MAR_Amb_HIP_ETD_0008",
+  "MAR_Amb_HIP_ETD_0010"
+ ],
+ "arms": {
+  "floor": "the area floor alone: clean_mask(13) then a 40 px component floor",
+  "shipped": "models/crack_classifier.joblib, the deployed bundle and what a user's run emits today. IN-SAMPLE on every frame whose in_training_set is true",
+  "refit_all": "the same recipe fitted on all of today's rows; the in-sample reference the folds are read against, so the five-row CSV drift never enters the leakage comparison",
+  "lofo_fixed": "refitted without this frame, applied at the deployed threshold 0.5537592, which was itself calibrated on the whole corpus and is the one thing not refolded",
+  "lofo_matched": "refitted without this frame, at the quantile of that fold's OWN training probabilities matching the keep-rate the shipped bundle shows on its training rows"
+ },
+ "controls": {
+  "corpus": "PASS: the CSV holds 7,510 rows for the bundle's 45 images against the 7,505 it records, 0.07% drift",
+  "recipe": "PASS: refitting on all of today's rows lands within 0.03743 of the shipped coefficients, which is the size five added rows explain; the leakage comparison uses refit_all, not shipped",
+  "held_out_frames_are_untouched": "the frames absent from the bundle's image list get shipped == lofo by construction and are reported apart, in never_fitted_frames. On this corpus that group is EMPTY: all three such frames carry painted crack but no painted not-crack, so none of them reaches the 200-px-of-each threshold every score here requires. The out-of-sample estimate is therefore the per-fold refit, not those three frames, and the record should not be read as if a natural held-out set existed"
+ },
+ "fitted_frames": {
+  "floor": {
+   "n_frames": 18,
+   "mean_precision": 0.9485558626714199,
+   "mean_recall": 0.5525487090542442,
+   "mean_f1": 0.6469897418361096,
+   "sd_precision": 0.08788656683565522,
+   "sd_recall": 0.2854797391648835,
+   "sd_f1": 0.243369922191465
+  },
+  "shipped": {
+   "n_frames": 18,
+   "mean_precision": 0.9612870032982896,
+   "mean_recall": 0.5334962322224841,
+   "mean_f1": 0.6375716116260777,
+   "sd_precision": 0.08059324679290181,
+   "sd_recall": 0.28044445806341123,
+   "sd_f1": 0.25315505611840117
+  },
+  "refit_all": {
+   "n_frames": 18,
+   "mean_precision": 0.9647574919668445,
+   "mean_recall": 0.5326315250071255,
+   "mean_f1": 0.6387436906633376,
+   "sd_precision": 0.06650767043169199,
+   "sd_recall": 0.28020014105898206,
+   "sd_f1": 0.2535792668622532
+  },
+  "lofo_fixed": {
+   "n_frames": 18,
+   "mean_precision": 0.9586201361289999,
+   "mean_recall": 0.5340942423013962,
+   "mean_f1": 0.6363333517478855,
+   "sd_precision": 0.08059175571758177,
+   "sd_recall": 0.28260243233361293,
+   "sd_f1": 0.25258353429248714
+  },
+  "lofo_matched": {
+   "n_frames": 18,
+   "mean_precision": 0.9577189592099091,
+   "mean_recall": 0.534665060085151,
+   "mean_f1": 0.6362046949460738,
+   "sd_precision": 0.08032832949062102,
+   "sd_recall": 0.28367457782592737,
+   "sd_f1": 0.25243270025996034
+  }
+ },
+ "never_fitted_frames": {
+  "floor": null,
+  "shipped": null,
+  "refit_all": null,
+  "lofo_fixed": null,
+  "lofo_matched": null
+ },
+ "all_frames": {
+  "floor": {
+   "n_frames": 18,
+   "mean_precision": 0.9485558626714199,
+   "mean_recall": 0.5525487090542442,
+   "mean_f1": 0.6469897418361096,
+   "sd_precision": 0.08788656683565522,
+   "sd_recall": 0.2854797391648835,
+   "sd_f1": 0.243369922191465
+  },
+  "shipped": {
+   "n_frames": 18,
+   "mean_precision": 0.9612870032982896,
+   "mean_recall": 0.5334962322224841,
+   "mean_f1": 0.6375716116260777,
+   "sd_precision": 0.08059324679290181,
+   "sd_recall": 0.28044445806341123,
+   "sd_f1": 0.25315505611840117
+  },
+  "refit_all": {
+   "n_frames": 18,
+   "mean_precision": 0.9647574919668445,
+   "mean_recall": 0.5326315250071255,
+   "mean_f1": 0.6387436906633376,
+   "sd_precision": 0.06650767043169199,
+   "sd_recall": 0.28020014105898206,
+   "sd_f1": 0.2535792668622532
+  },
+  "lofo_fixed": {
+   "n_frames": 18,
+   "mean_precision": 0.9586201361289999,
+   "mean_recall": 0.5340942423013962,
+   "mean_f1": 0.6363333517478855,
+   "sd_precision": 0.08059175571758177,
+   "sd_recall": 0.28260243233361293,
+   "sd_f1": 0.25258353429248714
+  },
+  "lofo_matched": {
+   "n_frames": 18,
+   "mean_precision": 0.9577189592099091,
+   "mean_recall": 0.534665060085151,
+   "mean_f1": 0.6362046949460738,
+   "sd_precision": 0.08032832949062102,
+   "sd_recall": 0.28367457782592737,
+   "sd_f1": 0.25243270025996034
+  }
+ },
+ "per_frame": [
+  {
+   "frame": "260622_316_H_b2_back_CBS_01",
+   "in_training_set": true,
+   "rows_dropped_for_this_fold": 44,
+   "matched_threshold": 0.5595848272661783,
+   "crack_px": 2455992,
+   "notcrack_px": 55660,
+   "candidate_regions": 777,
+   "floor": {
+    "precision": 0.9813660464084834,
+    "recall": 0.9910191075540963,
+    "f1": 0.986168955431185,
+    "tp": 2433935,
+    "fp": 46215,
+    "fn": 22057,
+    "marked_px": 2708760
+   },
+   "shipped": {
+    "precision": 0.981661740648363,
+    "recall": 0.9909987491815935,
+    "f1": 0.9863081479224144,
+    "tp": 2433885,
+    "fp": 45467,
+    "fn": 22107,
+    "marked_px": 2631033
+   },
+   "refit_all": {
+    "precision": 0.981661740648363,
+    "recall": 0.9909987491815935,
+    "f1": 0.9863081479224144,
+    "tp": 2433885,
+    "fp": 45467,
+    "fn": 22107,
+    "marked_px": 2630755
+   },
+   "lofo_fixed": {
+    "precision": 0.981661740648363,
+    "recall": 0.9909987491815935,
+    "f1": 0.9863081479224144,
+    "tp": 2433885,
+    "fp": 45467,
+    "fn": 22107,
+    "marked_px": 2637171
+   },
+   "lofo_matched": {
+    "precision": 0.981661740648363,
+    "recall": 0.9909987491815935,
+    "f1": 0.9863081479224144,
+    "tp": 2433885,
+    "fp": 45467,
+    "fn": 22107,
+    "marked_px": 2634405
+   }
+  },
+  {
+   "frame": "260622_316_H_b2_front_CBS_04",
+   "in_training_set": true,
+   "rows_dropped_for_this_fold": 172,
+   "matched_threshold": 0.5545409787192191,
+   "crack_px": 1212455,
+   "notcrack_px": 10469,
+   "candidate_regions": 572,
+   "floor": {
+    "precision": 0.9935474106876824,
+    "recall": 0.519793311916731,
+    "f1": 0.6825155649797972,
+    "tp": 630226,
+    "fp": 4093,
+    "fn": 582229,
+    "marked_px": 1416806
+   },
+   "shipped": {
+    "precision": 0.9936869033970087,
+    "recall": 0.5068171602245032,
+    "f1": 0.6712645260239496,
+    "tp": 614493,
+    "fp": 3904,
+    "fn": 597962,
+    "marked_px": 1323014
+   },
+   "refit_all": {
+    "precision": 0.9936662242974279,
+    "recall": 0.5051519437834806,
+    "f1": 0.6697976250428552,
+    "tp": 612474,
+    "fp": 3904,
+    "fn": 599981,
+    "marked_px": 1316319
+   },
+   "lofo_fixed": {
+    "precision": 0.9936688024727997,
+    "recall": 0.505358961775901,
+    "f1": 0.6699801649350168,
+    "tp": 612725,
+    "fp": 3904,
+    "fn": 599730,
+    "marked_px": 1316570
+   },
+   "lofo_matched": {
+    "precision": 0.9936683404045515,
+    "recall": 0.5053218469963834,
+    "f1": 0.6699474423454065,
+    "tp": 612680,
+    "fp": 3904,
+    "fn": 599775,
+    "marked_px": 1316525
+   }
+  },
+  {
+   "frame": "260708_316_H_b2_front_CBS_002",
+   "in_training_set": true,
+   "rows_dropped_for_this_fold": 33,
+   "matched_threshold": 0.5537876089743715,
+   "crack_px": 141662,
+   "notcrack_px": 293,
+   "candidate_regions": 342,
+   "floor": {
+    "precision": 0.9965731394954445,
+    "recall": 0.6014880490180853,
+    "f1": 0.7501925929838927,
+    "tp": 85208,
+    "fp": 293,
+    "fn": 56454,
+    "marked_px": 322957
+   },
+   "shipped": {
+    "precision": 0.9964593000773395,
+    "recall": 0.5820827039008344,
+    "f1": 0.7348828504460506,
+    "tp": 82459,
+    "fp": 293,
+    "fn": 59203,
+    "marked_px": 249937
+   },
+   "refit_all": {
+    "precision": 0.9964640857308361,
+    "recall": 0.582873318179893,
+    "f1": 0.7355139271175721,
+    "tp": 82571,
+    "fp": 293,
+    "fn": 59091,
+    "marked_px": 250049
+   },
+   "lofo_fixed": {
+    "precision": 0.9964640857308361,
+    "recall": 0.582873318179893,
+    "f1": 0.7355139271175721,
+    "tp": 82571,
+    "fp": 293,
+    "fn": 59091,
+    "marked_px": 250049
+   },
+   "lofo_matched": {
+    "precision": 0.9964640857308361,
+    "recall": 0.582873318179893,
+    "f1": 0.7355139271175721,
+    "tp": 82571,
+    "fp": 293,
+    "fn": 59091,
+    "marked_px": 250049
+   }
+  },
+  {
+   "frame": "260708_316_H_b2_front_CBS_003",
+   "in_training_set": true,
+   "rows_dropped_for_this_fold": 71,
+   "matched_threshold": 0.5567048515266246,
+   "crack_px": 456639,
+   "notcrack_px": 12459,
+   "candidate_regions": 418,
+   "floor": {
+    "precision": 0.9556552756633341,
+    "recall": 0.5297992506115334,
+    "f1": 0.6816842117127271,
+    "tp": 241927,
+    "fp": 11226,
+    "fn": 214712,
+    "marked_px": 1382298
+   },
+   "shipped": {
+    "precision": 0.9561361785832332,
+    "recall": 0.519456288227681,
+    "f1": 0.6731817375572032,
+    "tp": 237204,
+    "fp": 10882,
+    "fn": 219435,
+    "marked_px": 1320578
+   },
+   "refit_all": {
+    "precision": 0.9561489051330201,
+    "recall": 0.5196139620137571,
+    "f1": 0.6733172814299722,
+    "tp": 237276,
+    "fp": 10882,
+    "fn": 219363,
+    "marked_px": 1321074
+   },
+   "lofo_fixed": {
+    "precision": 0.9561489051330201,
+    "recall": 0.5196139620137571,
+    "f1": 0.6733172814299722,
+    "tp": 237276,
+    "fp": 10882,
+    "fn": 219363,
+    "marked_px": 1320928
+   },
+   "lofo_matched": {
+    "precision": 0.9561287513505669,
+    "recall": 0.5193643118524699,
+    "f1": 0.6731026575069925,
+    "tp": 237162,
+    "fp": 10882,
+    "fn": 219477,
+    "marked_px": 1320493
+   }
+  },
+  {
+   "frame": "260708_316_H_b2_front_CBS_007",
+   "in_training_set": true,
+   "rows_dropped_for_this_fold": 49,
+   "matched_threshold": 0.5549722171805263,
+   "crack_px": 488756,
+   "notcrack_px": 2575,
+   "candidate_regions": 295,
+   "floor": {
+    "precision": 0.9930312170953909,
+    "recall": 0.3994242525922955,
+    "f1": 0.5696997287505453,
+    "tp": 195221,
+    "fp": 1370,
+    "fn": 293535,
+    "marked_px": 689911
+   },
+   "shipped": {
+    "precision": 0.9961795131229024,
+    "recall": 0.3686420217859218,
+    "f1": 0.5381416110259056,
+    "tp": 180176,
+    "fp": 691,
+    "fn": 308580,
+    "marked_px": 644075
+   },
+   "refit_all": {
+    "precision": 0.996185629040004,
+    "recall": 0.36923536488554615,
+    "f1": 0.5387744378747688,
+    "tp": 180466,
+    "fp": 691,
+    "fn": 308290,
+    "marked_px": 645434
+   },
+   "lofo_fixed": {
+    "precision": 0.9961733563707248,
+    "recall": 0.3680466326756091,
+    "f1": 0.537506050808866,
+    "tp": 179885,
+    "fp": 691,
+    "fn": 308871,
+    "marked_px": 644037
+   },
+   "lofo_matched": {
+    "precision": 0.9961733563707248,
+    "recall": 0.3680466326756091,
+    "f1": 0.537506050808866,
+    "tp": 179885,
+    "fp": 691,
+    "fn": 308871,
+    "marked_px": 643983
+   }
+  },
+  {
+   "frame": "260708_316_H_b2_front_CBS_011",
+   "in_training_set": true,
+   "rows_dropped_for_this_fold": 48,
+   "matched_threshold": 0.5544639068195844,
+   "crack_px": 286833,
+   "notcrack_px": 358,
+   "candidate_regions": 242,
+   "floor": {
+    "precision": 0.9983279595660319,
+    "recall": 0.6390512946557753,
+    "f1": 0.7792730650602306,
+    "tp": 183301,
+    "fp": 307,
+    "fn": 103532,
+    "marked_px": 376998
+   },
+   "shipped": {
+    "precision": 0.9982879195154868,
+    "recall": 0.6240809111922269,
+    "f1": 0.768028111303945,
+    "tp": 179007,
+    "fp": 307,
+    "fn": 107826,
+    "marked_px": 325489
+   },
+   "refit_all": {
+    "precision": 0.9982879195154868,
+    "recall": 0.6240809111922269,
+    "f1": 0.768028111303945,
+    "tp": 179007,
+    "fp": 307,
+    "fn": 107826,
+    "marked_px": 325489
+   },
+   "lofo_fixed": {
+    "precision": 0.998286600884047,
+    "recall": 0.623599795002667,
+    "f1": 0.7676632854730274,
+    "tp": 178869,
+    "fp": 307,
+    "fn": 107964,
+    "marked_px": 325351
+   },
+   "lofo_matched": {
+    "precision": 0.998286600884047,
+    "recall": 0.623599795002667,
+    "f1": 0.7676632854730274,
+    "tp": 178869,
+    "fp": 307,
+    "fn": 107964,
+    "marked_px": 325351
+   }
+  },
+  {
+   "frame": "260708_316_H_b2_front_CBS_012",
+   "in_training_set": true,
+   "rows_dropped_for_this_fold": 60,
+   "matched_threshold": 0.5763073112195517,
+   "crack_px": 96885,
+   "notcrack_px": 43861,
+   "candidate_regions": 236,
+   "floor": {
+    "precision": 0.631833536725562,
+    "recall": 0.7374619394127058,
+    "f1": 0.6805736139488586,
+    "tp": 71449,
+    "fp": 41633,
+    "fn": 25436,
+    "marked_px": 313787
+   },
+   "shipped": {
+    "precision": 0.6488996031054933,
+    "recall": 0.730691025442535,
+    "f1": 0.6873707411327205,
+    "tp": 70793,
+    "fp": 38304,
+    "fn": 26092,
+    "marked_px": 253967
+   },
+   "refit_all": {
+    "precision": 0.7112301076997267,
+    "recall": 0.730691025442535,
+    "f1": 0.7208292392361305,
+    "tp": 70793,
+    "fp": 28743,
+    "fn": 26092,
+    "marked_px": 240057
+   },
+   "lofo_fixed": {
+    "precision": 0.6480738950529129,
+    "recall": 0.730691025442535,
+    "f1": 0.686907204991243,
+    "tp": 70793,
+    "fp": 38443,
+    "fn": 26092,
+    "marked_px": 257567
+   },
+   "lofo_matched": {
+    "precision": 0.6490959409594096,
+    "recall": 0.7262424523920111,
+    "f1": 0.6855055167206566,
+    "tp": 70362,
+    "fp": 38038,
+    "fn": 26523,
+    "marked_px": 253943
+   }
+  },
+  {
+   "frame": "260708_316_H_b2_front_CBS_013",
+   "in_training_set": true,
+   "rows_dropped_for_this_fold": 42,
+   "matched_threshold": 0.5555887688525726,
+   "crack_px": 222132,
+   "notcrack_px": 19497,
+   "candidate_regions": 270,
+   "floor": {
+    "precision": 0.8964649404356045,
+    "recall": 0.728017575135505,
+    "f1": 0.8035078566548662,
+    "tp": 161716,
+    "fp": 18677,
+    "fn": 60416,
+    "marked_px": 774605
+   },
+   "shipped": {
+    "precision": 0.9219515565356071,
+    "recall": 0.7208821781643348,
+    "f1": 0.8091122457486882,
+    "tp": 160131,
+    "fp": 13556,
+    "fn": 62001,
+    "marked_px": 718710
+   },
+   "refit_all": {
+    "precision": 0.9219906315098921,
+    "recall": 0.7212738371778942,
+    "f1": 0.8093739422994347,
+    "tp": 160218,
+    "fp": 13556,
+    "fn": 61914,
+    "marked_px": 718962
+   },
+   "lofo_fixed": {
+    "precision": 0.920065730882598,
+    "recall": 0.7208821781643348,
+    "f1": 0.8083851833154541,
+    "tp": 160131,
+    "fp": 13912,
+    "fn": 62001,
+    "marked_px": 718457
+   },
+   "lofo_matched": {
+    "precision": 0.920065730882598,
+    "recall": 0.7208821781643348,
+    "f1": 0.8083851833154541,
+    "tp": 160131,
+    "fp": 13912,
+    "fn": 62001,
+    "marked_px": 718457
+   }
+  },
+  {
+   "frame": "260708_316_H_b2_front_CBS_014",
+   "in_training_set": true,
+   "rows_dropped_for_this_fold": 87,
+   "matched_threshold": 0.5553437192755721,
+   "crack_px": 519097,
+   "notcrack_px": 4609,
+   "candidate_regions": 232,
+   "floor": {
+    "precision": 0.9748061263518495,
+    "recall": 0.338772907568335,
+    "f1": 0.5028062982310171,
+    "tp": 175856,
+    "fp": 4545,
+    "fn": 343241,
+    "marked_px": 316857
+   },
+   "shipped": {
+    "precision": 0.9724236828913889,
+    "recall": 0.2952299859178535,
+    "f1": 0.45294489696998363,
+    "tp": 153253,
+    "fp": 4346,
+    "fn": 365844,
+    "marked_px": 266627
+   },
+   "refit_all": {
+    "precision": 0.972374777523519,
+    "recall": 0.2946925141158589,
+    "f1": 0.4523067870854812,
+    "tp": 152974,
+    "fp": 4346,
+    "fn": 366123,
+    "marked_px": 266348
+   },
+   "lofo_fixed": {
+    "precision": 0.9723528102038869,
+    "recall": 0.29445171133718745,
+    "f1": 0.4520207247756886,
+    "tp": 152849,
+    "fp": 4346,
+    "fn": 366248,
+    "marked_px": 266223
+   },
+   "lofo_matched": {
+    "precision": 0.9723332739171399,
+    "recall": 0.29423787846972727,
+    "f1": 0.45176661278562996,
+    "tp": 152738,
+    "fp": 4346,
+    "fn": 366359,
+    "marked_px": 265990
+   }
+  },
+  {
+   "frame": "260708_316_H_b2_front_CBS_015",
+   "in_training_set": true,
+   "rows_dropped_for_this_fold": 68,
+   "matched_threshold": 0.5507450675539919,
+   "crack_px": 809711,
+   "notcrack_px": 4416,
+   "candidate_regions": 162,
+   "floor": {
+    "precision": 0.991935499330035,
+    "recall": 0.6390699891689751,
+    "f1": 0.7773317910739233,
+    "tp": 517462,
+    "fp": 4207,
+    "fn": 292249,
+    "marked_px": 964103
+   },
+   "shipped": {
+    "precision": 0.9961333258614993,
+    "recall": 0.63664443239625,
+    "f1": 0.7768145206862515,
+    "tp": 515498,
+    "fp": 2001,
+    "fn": 294213,
+    "marked_px": 920016
+   },
+   "refit_all": {
+    "precision": 0.9972771462323528,
+    "recall": 0.6359849378358451,
+    "f1": 0.7766705050445636,
+    "tp": 514964,
+    "fp": 1406,
+    "fn": 294747,
+    "marked_px": 907809
+   },
+   "lofo_fixed": {
+    "precision": 0.9961346404597479,
+    "recall": 0.6368617938993049,
+    "f1": 0.7769767045908275,
+    "tp": 515674,
+    "fp": 2001,
+    "fn": 294037,
+    "marked_px": 923153
+   },
+   "lofo_matched": {
+    "precision": 0.9961346404597479,
+    "recall": 0.6368617938993049,
+    "f1": 0.7769767045908275,
+    "tp": 515674,
+    "fp": 2001,
+    "fn": 294037,
+    "marked_px": 923344
+   }
+  },
+  {
+   "frame": "260708_316_H_b2_front_CBS_016",
+   "in_training_set": true,
+   "rows_dropped_for_this_fold": 345,
+   "matched_threshold": 0.5496917992929155,
+   "crack_px": 5322088,
+   "notcrack_px": 2063,
+   "candidate_regions": 648,
+   "floor": {
+    "precision": 0.9988525596025958,
+    "recall": 0.28018608485992713,
+    "f1": 0.4376170950565343,
+    "tp": 1491175,
+    "fp": 1713,
+    "fn": 3830913,
+    "marked_px": 2286377
+   },
+   "shipped": {
+    "precision": 0.9988087348318841,
+    "recall": 0.2698666388079265,
+    "f1": 0.42492376171495644,
+    "tp": 1436254,
+    "fp": 1713,
+    "fn": 3885834,
+    "marked_px": 2220253
+   },
+   "refit_all": {
+    "precision": 0.9988041550898454,
+    "recall": 0.26883189454965795,
+    "f1": 0.42363959809005725,
+    "tp": 1430747,
+    "fp": 1713,
+    "fn": 3891341,
+    "marked_px": 2213350
+   },
+   "lofo_fixed": {
+    "precision": 0.9988027961314869,
+    "recall": 0.2685263753624517,
+    "f1": 0.4232600346931298,
+    "tp": 1429121,
+    "fp": 1713,
+    "fn": 3892967,
+    "marked_px": 2211724
+   },
+   "lofo_matched": {
+    "precision": 0.9988040799514092,
+    "recall": 0.2688149838935395,
+    "f1": 0.4236185938235163,
+    "tp": 1430657,
+    "fp": 1713,
+    "fn": 3891431,
+    "marked_px": 2213260
+   }
+  },
+  {
+   "frame": "AS_24hr_BSE_Side_008",
+   "in_training_set": true,
+   "rows_dropped_for_this_fold": 1295,
+   "matched_threshold": 0.5199032588393299,
+   "crack_px": 916151,
+   "notcrack_px": 133346,
+   "candidate_regions": 1634,
+   "floor": {
+    "precision": 0.8718594534235742,
+    "recall": 0.9903138238128868,
+    "f1": 0.9273191487621975,
+    "tp": 907277,
+    "fp": 133346,
+    "fn": 8874,
+    "marked_px": 1187388
+   },
+   "shipped": {
+    "precision": 0.9904374642200019,
+    "recall": 0.9177744716755207,
+    "f1": 0.9527224972791741,
+    "tp": 840820,
+    "fp": 8118,
+    "fn": 75331,
+    "marked_px": 960387
+   },
+   "refit_all": {
+    "precision": 0.9902298222931499,
+    "recall": 0.9204279643857836,
+    "f1": 0.9540538614103348,
+    "tp": 843251,
+    "fp": 8320,
+    "fn": 72900,
+    "marked_px": 963415
+   },
+   "lofo_fixed": {
+    "precision": 0.9693436406295498,
+    "recall": 0.9483644071774194,
+    "f1": 0.9587392701909103,
+    "tp": 868845,
+    "fp": 27478,
+    "fn": 47306,
+    "marked_px": 1022666
+   },
+   "lofo_matched": {
+    "precision": 0.9521110982804933,
+    "recall": 0.9629733526460158,
+    "f1": 0.9575114204066305,
+    "tp": 882229,
+    "fp": 44374,
+    "fn": 33922,
+    "marked_px": 1060040
+   }
+  },
+  {
+   "frame": "MAR_Amb_AS_CBS_0003",
+   "in_training_set": true,
+   "rows_dropped_for_this_fold": 842,
+   "matched_threshold": 0.552367290877124,
+   "crack_px": 12780833,
+   "notcrack_px": 37212,
+   "candidate_regions": 1721,
+   "floor": {
+    "precision": 0.9898147102513095,
+    "recall": 0.08915263973795762,
+    "f1": 0.16357231619889834,
+    "tp": 1139445,
+    "fp": 11725,
+    "fn": 11641388,
+    "marked_px": 1259519
+   },
+   "shipped": {
+    "precision": 0.9899411715966526,
+    "recall": 0.07945851416726907,
+    "f1": 0.14710917845816573,
+    "tp": 1015546,
+    "fp": 10319,
+    "fn": 11765287,
+    "marked_px": 1073415
+   },
+   "refit_all": {
+    "precision": 0.9898268925341676,
+    "recall": 0.07855685149786402,
+    "f1": 0.14556133905958707,
+    "tp": 1004022,
+    "fp": 10319,
+    "fn": 11776811,
+    "marked_px": 1062117
+   },
+   "lofo_fixed": {
+    "precision": 0.9898931924250364,
+    "recall": 0.07907747484064614,
+    "f1": 0.14645538257685867,
+    "tp": 1010676,
+    "fp": 10319,
+    "fn": 11770157,
+    "marked_px": 1066969
+   },
+   "lofo_matched": {
+    "precision": 0.9898947958051504,
+    "recall": 0.07909015007081306,
+    "f1": 0.14647713844163052,
+    "tp": 1010838,
+    "fp": 10319,
+    "fn": 11769995,
+    "marked_px": 1067131
+   }
+  },
+  {
+   "frame": "MAR_Amb_AS_ETD_0002",
+   "in_training_set": true,
+   "rows_dropped_for_this_fold": 576,
+   "matched_threshold": 0.5505415194421042,
+   "crack_px": 4957080,
+   "notcrack_px": 9678,
+   "candidate_regions": 1291,
+   "floor": {
+    "precision": 0.9920192896029766,
+    "recall": 0.242682385597973,
+    "f1": 0.3899656290996367,
+    "tp": 1202996,
+    "fp": 9678,
+    "fn": 3754084,
+    "marked_px": 1364820
+   },
+   "shipped": {
+    "precision": 0.9910487867730816,
+    "recall": 0.2141262598142455,
+    "f1": 0.35216389620093075,
+    "tp": 1061441,
+    "fp": 9587,
+    "fn": 3895639,
+    "marked_px": 1150769
+   },
+   "refit_all": {
+    "precision": 0.9910417022914816,
+    "recall": 0.21395539309432166,
+    "f1": 0.35193232879744213,
+    "tp": 1060594,
+    "fp": 9587,
+    "fn": 3896486,
+    "marked_px": 1150329
+   },
+   "lofo_fixed": {
+    "precision": 0.9910107829348336,
+    "recall": 0.2132128188368959,
+    "f1": 0.3509251973079132,
+    "tp": 1056913,
+    "fp": 9587,
+    "fn": 3900167,
+    "marked_px": 1141352
+   },
+   "lofo_matched": {
+    "precision": 0.9910227357854521,
+    "recall": 0.2134992778006407,
+    "f1": 0.3513138589211618,
+    "tp": 1058333,
+    "fp": 9587,
+    "fn": 3898747,
+    "marked_px": 1144213
+   }
+  },
+  {
+   "frame": "MAR_Amb_AS_ETD_0003",
+   "in_training_set": true,
+   "rows_dropped_for_this_fold": 120,
+   "matched_threshold": 0.547940386711579,
+   "crack_px": 12388443,
+   "notcrack_px": 53619,
+   "candidate_regions": 666,
+   "floor": {
+    "precision": 0.9547007354163463,
+    "recall": 0.08669225018834086,
+    "f1": 0.15895085938503634,
+    "tp": 1073982,
+    "fp": 50959,
+    "fn": 11314461,
+    "marked_px": 1210510
+   },
+   "shipped": {
+    "precision": 0.9529769793807292,
+    "recall": 0.08328827117338312,
+    "f1": 0.1531882016466575,
+    "tp": 1031812,
+    "fp": 50913,
+    "fn": 11356631,
+    "marked_px": 1157425
+   },
+   "refit_all": {
+    "precision": 0.952998684483833,
+    "recall": 0.08332863137038286,
+    "f1": 0.15325674593524719,
+    "tp": 1032312,
+    "fp": 50913,
+    "fn": 11356131,
+    "marked_px": 1157941
+   },
+   "lofo_fixed": {
+    "precision": 0.9529889630757497,
+    "recall": 0.08331055000212698,
+    "f1": 0.15322603872309457,
+    "tp": 1032088,
+    "fp": 50913,
+    "fn": 11356355,
+    "marked_px": 1157717
+   },
+   "lofo_matched": {
+    "precision": 0.9530035870614711,
+    "recall": 0.08333775277490481,
+    "f1": 0.15327223623958852,
+    "tp": 1032425,
+    "fp": 50913,
+    "fn": 11356018,
+    "marked_px": 1158134
+   }
+  },
+  {
+   "frame": "MAR_Amb_Cast_ETD_0003",
+   "in_training_set": true,
+   "rows_dropped_for_this_fold": 33,
+   "matched_threshold": 0.5662504251009276,
+   "crack_px": 26983,
+   "notcrack_px": 2865,
+   "candidate_regions": 378,
+   "floor": {
+    "precision": 0.9023051217349792,
+    "recall": 0.9806544861579513,
+    "f1": 0.9398497575875969,
+    "tp": 26461,
+    "fp": 2865,
+    "fn": 522,
+    "marked_px": 87205
+   },
+   "shipped": {
+    "precision": 0.9675119469708648,
+    "recall": 0.9304006226142386,
+    "f1": 0.9485934518524117,
+    "tp": 25105,
+    "fp": 843,
+    "fn": 1878,
+    "marked_px": 42633
+   },
+   "refit_all": {
+    "precision": 0.9675119469708648,
+    "recall": 0.9304006226142386,
+    "f1": 0.9485934518524117,
+    "tp": 25105,
+    "fp": 843,
+    "fn": 1878,
+    "marked_px": 42521
+   },
+   "lofo_fixed": {
+    "precision": 0.9441519368183527,
+    "recall": 0.9304006226142386,
+    "f1": 0.9372258413753197,
+    "tp": 25105,
+    "fp": 1485,
+    "fn": 1878,
+    "marked_px": 43073
+   },
+   "lofo_matched": {
+    "precision": 0.9441519368183527,
+    "recall": 0.9304006226142386,
+    "f1": 0.9372258413753197,
+    "tp": 25105,
+    "fp": 1485,
+    "fn": 1878,
+    "marked_px": 40260
+   }
+  },
+  {
+   "frame": "MAR_Amb_HIP_CBS_0006",
+   "in_training_set": true,
+   "rows_dropped_for_this_fold": 134,
+   "matched_threshold": 0.553641010940774,
+   "crack_px": 603912,
+   "notcrack_px": 18344,
+   "candidate_regions": 1490,
+   "floor": {
+    "precision": 0.9661900975109822,
+    "recall": 0.7524357853462094,
+    "f1": 0.8460200815849297,
+    "tp": 454405,
+    "fp": 15901,
+    "fn": 149507,
+    "marked_px": 1162957
+   },
+   "shipped": {
+    "precision": 0.9661587925259851,
+    "recall": 0.739423955808131,
+    "f1": 0.8377206641028047,
+    "tp": 446547,
+    "fp": 15641,
+    "fn": 157365,
+    "marked_px": 887560
+   },
+   "refit_all": {
+    "precision": 0.9654720250775395,
+    "recall": 0.7242015392971162,
+    "f1": 0.8276111332406731,
+    "tp": 437354,
+    "fp": 15641,
+    "fn": 166558,
+    "marked_px": 859512
+   },
+   "lofo_fixed": {
+    "precision": 0.9654720250775395,
+    "recall": 0.7242015392971162,
+    "f1": 0.8276111332406731,
+    "tp": 437354,
+    "fp": 15641,
+    "fn": 166558,
+    "marked_px": 866265
+   },
+   "lofo_matched": {
+    "precision": 0.9654720250775395,
+    "recall": 0.7242015392971162,
+    "f1": 0.8276111332406731,
+    "tp": 437354,
+    "fp": 15641,
+    "fn": 166558,
+    "marked_px": 866265
+   }
+  },
+  {
+   "frame": "MAR_Amb_HIP_ETD_0005",
+   "in_training_set": true,
+   "rows_dropped_for_this_fold": 39,
+   "matched_threshold": 0.5507814009163468,
+   "crack_px": 696681,
+   "notcrack_px": 4333,
+   "candidate_regions": 322,
+   "floor": {
+    "precision": 0.9847224087833778,
+    "recall": 0.39986162964111266,
+    "f1": 0.5687667865480988,
+    "tp": 278576,
+    "fp": 4322,
+    "fn": 418105,
+    "marked_px": 310150
+   },
+   "shipped": {
+    "precision": 0.9844624593316916,
+    "recall": 0.39306798951026367,
+    "f1": 0.5618179691971861,
+    "tp": 273843,
+    "fp": 4322,
+    "fn": 422838,
+    "marked_px": 285959
+   },
+   "refit_all": {
+    "precision": 0.9844624593316916,
+    "recall": 0.39306798951026367,
+    "f1": 0.5618179691971861,
+    "tp": 273843,
+    "fp": 4322,
+    "fn": 422838,
+    "marked_px": 285757
+   },
+   "lofo_fixed": {
+    "precision": 0.9844685453905144,
+    "recall": 0.3932244456214537,
+    "f1": 0.5619787579939587,
+    "tp": 273952,
+    "fp": 4322,
+    "fn": 422729,
+    "marked_px": 285588
+   },
+   "lofo_matched": {
+    "precision": 0.9844685453905144,
+    "recall": 0.3932244456214537,
+    "f1": 0.5619787579939587,
+    "tp": 273952,
+    "fp": 4322,
+    "fn": 422729,
+    "marked_px": 285866
+   }
+  }
+ ],
+ "seconds": 479.4
+}

@@ -41,6 +41,7 @@ REPO = "/Users/jiamingzhang/Desktop/APP/crack-fractography"
 sys.path.insert(0, os.path.join(REPO, "analysis"))
 sys.path.insert(0, os.path.join(SEM, "code"))
 sys.path.insert(0, os.path.join(SEM, "interior_active_learning", "code"))
+sys.path.insert(0, os.path.join(REPO, "paper", "figures"))
 sys.dont_write_bytecode = True
 import numpy as np
 import tifffile
@@ -49,6 +50,7 @@ from skimage import exposure, measure as skm, morphology as morph
 from PIL import Image
 import detect_cracks as D
 import detector_overrides as DO
+import both_modalities as BM
 from common import contrast_kwargs_for
 Image.MAX_IMAGE_PIXELS = None
 
@@ -106,12 +108,39 @@ DO.install(u)
 
 
 def clean(m):
+    """The area floor alone: `clean_mask(13)` then a 40 px component floor.
+
+    This is what the SEM arm emitted while `USE_REGION_CLASSIFIER` was False, and it is
+    still exactly what the TXM frames get here, because the region classifier belongs to
+    the SEM application and the TXM pipeline runs a model of its own. Keep it: `sem()`
+    below is checked against it, and `frame_legibility.py` imports it for its TXM arm.
+    """
     lab = skm.label(D.clean_mask(m, min_area_px=13), connectivity=2)
     if not lab.max():
         return np.zeros(lab.shape, bool)
     sz = np.bincount(lab.ravel())
     k = np.where(sz >= 40)[0]
     return np.isin(lab, k[k > 0])
+
+
+def sem(img8):
+    """The SEM mask the APPLICATION would write for this frame, classifier included.
+
+    WHY THIS IS NOT `clean(segment_dark_regions(...))` ANY MORE. That composition was the
+    shipped emission only while `USE_REGION_CLASSIFIER` was False. It is now True, so the
+    app keeps the regions the production model calls crack and drops the rest, and a
+    score computed from the area floor alone would describe a detector this project no
+    longer ships -- a higher recall and a lower precision than anything a user can run.
+
+    The emission itself is NOT re-implemented here. `both_modalities.emit` is the one
+    staging copy of it in this project and branches on the live flag, so this file
+    follows the detector wherever it is set. `CONTROL_emit_matches_area_floor` below
+    checks that with the flag off the two agree pixel for pixel, which is the only
+    evidence that the swap changed the classifier and nothing else.
+    """
+    flat = D.flatten_background(img8)
+    proposed = u.segment_dark_regions(flat, img8=img8, mad_k=MADK)
+    return BM.emit(D.clean_mask(proposed, min_area_px=13), flat, img8)
 
 
 def prf(m, pos, neg):
@@ -219,7 +248,31 @@ def txm_frames():
         yield stem, img8, corr
 
 
-def run(label, it, grouper=None):
+def CONTROL_emit_matches_area_floor():
+    """With the classifier off, `sem()` must equal `clean(segment_dark_regions(...))`.
+
+    Without this, swapping the emission could have changed the area floor, the flattening
+    or the `mad_k` as well, and every score difference would be unattributable. Run on the
+    first SEM frame that loads, with the flag forced off and restored afterwards.
+    """
+    was = DO.USE_REGION_CLASSIFIER
+    DO.USE_REGION_CLASSIFIER = False
+    try:
+        for nm, img8, _corr in sem_frames():
+            a = sem(img8)
+            b = clean(u.segment_dark_regions(D.flatten_background(img8), img8=img8,
+                                             mad_k=MADK))
+            d = int((a ^ b).sum())
+            print(f"  CONTROL [{nm}] classifier-off emission == the area floor: "
+                  f"{'PASS' if d == 0 else f'FAIL, {d:,} px differ'}", flush=True)
+            assert d == 0, f"the emission swap changed more than the classifier: {d} px"
+            return
+        raise AssertionError("no SEM frame loaded, so the control never ran")
+    finally:
+        DO.USE_REGION_CLASSIFIER = was
+
+
+def run(label, it, mask_fn, grouper=None):
     rows = []
     for nm, img8, corr in it:
         pos, neg = (corr == 1), ((corr == 2) | (corr == 3))
@@ -228,8 +281,7 @@ def run(label, it, grouper=None):
                   f"notcrack {int(neg.sum()):>10,}  excluded, needs {MIN_PX} of both",
                   flush=True)
             continue
-        m = clean(u.segment_dark_regions(D.flatten_background(img8), img8=img8,
-                                         mad_k=MADK))
+        m = mask_fn(img8)
         p, r, f1, tp, fp, fn = prf(m, pos, neg)
         cp, cr, cf1, *_ = prf(trace_3px(pos), pos, neg)
         p_hi, p_lo, unref_marked = precision_bracket(m, pos, neg)
@@ -297,10 +349,19 @@ def main():
     if SCOPE_ON:
         print(f"SCOPE_B2B3 is set: specimen series {SCOPE} only, in both microscopies; "
               f"output gains the '{SUFFIX}' suffix\n")
-    print("SEM -- this laboratory's hand-corrected frames")
-    semr = summarise("SEM", run("SEM", sem_frames()))
+    print("SEM emission: region classifier "
+          + ("ON -- only the regions the production model calls crack are kept"
+             if DO.USE_REGION_CLASSIFIER else "OFF -- area floor only"))
+    CONTROL_emit_matches_area_floor()
+    print("\nSEM -- this laboratory's hand-corrected frames")
+    semr = summarise("SEM", run("SEM", sem_frames(), sem))
     print("\nTXM -- the transmission X-ray collection")
-    txmr = summarise("TXM", run("TXM", txm_frames(), txm_group))
+    #: the area floor, NOT `sem()`: the region classifier is the SEM application's, and
+    #: the TXM pipeline runs a model of its own. Scoring TXM through the SEM classifier
+    #: would report a detector nobody ships, on either modality.
+    txm_mask = (lambda img8: clean(u.segment_dark_regions(D.flatten_background(img8),
+                                                          img8=img8, mad_k=MADK)))
+    txmr = summarise("TXM", run("TXM", txm_frames(), txm_mask, txm_group))
 
     if txmr:
         print("\nTXM by specimen group, mean over frames:")
@@ -316,6 +377,11 @@ def main():
     out = os.path.join(REPO, f"docs/figures/overlap_means_sem_txm{SUFFIX}.json")
     assert SCOPE_ON == out.endswith("_b2b3.json"), "a scoped run must not write the full file"
     payload = {"mad_k": MADK, "min_px_each_verdict": MIN_PX,
+               "use_region_classifier": bool(DO.USE_REGION_CLASSIFIER),
+               "sem_emission": ("both_modalities.emit -- the application's own emission, "
+                                "region classifier included when the flag is set"),
+               "txm_emission": ("clean_mask(13) then a 40 px component floor; the SEM "
+                                "region classifier is NOT applied to the TXM frames"),
                "aggregation": "mean over frames, one vote per frame; pixels are NOT pooled",
                "scoring": "refereed pixels only: 1 = crack, 2 or 3 = not-crack, 0 excluded",
                "ceiling": "the frame's own paint skeletonised and redrawn 3 px wide, scored "

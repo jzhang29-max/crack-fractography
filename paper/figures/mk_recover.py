@@ -1,5 +1,12 @@
 """Figure 6 -- what deleting the SEM region classifier recovers, and what it costs.
 
+NOT PART OF THE SHIPPED FIGURE PROGRAMME, AND IT DESCRIBES THE PREVIOUS CONFIGURATION.
+`USE_REGION_CLASSIFIER` is True as of 2026-11-14. Everything below that says the
+classifier is off, ignored, or decides nothing was written while it was False and has
+not been re-measured. The eight plates the paper ships are the FIGURES list in
+mk_paper_pdf.py; this module is not one of them. Do not quote a number from here.
+
+
 Replaces `mk_spec.py`, which drew what the region classifier REJECTS. v1.49.2 sets
 USE_REGION_CLASSIFIER = False, so nothing is rejected and that figure had no subject.
 

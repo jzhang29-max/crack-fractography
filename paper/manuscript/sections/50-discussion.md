@@ -25,9 +25,14 @@ Figure {fig_workflow} separates the operations that lead to the final area estim
 lower row of Figure {fig_stages} is the same three stages on a frame of the second
 modality, which is where the inspectability earns something: the transfer there fails at the
 candidate stage rather than at the filters, and Figure {fig_modality}(b) measures by how
-much in the criterion's own units. Disabling the learned region
-classifier gives the reported configuration an inspectable processing path without a learned
-region-classification step.
+much in the criterion's own units. The reported configuration retains the learned region classifier, so the
+processing path is not free of fitted parameters; what it offers instead is a small and
+inspectable one. Nine fitted numbers act on eight named geometric and intensity features
+of each candidate region, every feature is readable off the mask, and the stage before it
+is a rule that could be reproduced by hand. The cost is stated rather than set aside:
+enabling the classifier lowers recall, intersection over union and F1 on every unit set
+measured here, and its training images overlap the laboratory collection, so the
+corresponding scores are in sample.
 
 The reported specificity of {ag_best_spec}% indicates high background rejection in the
 reference background population. This observation is consistent with the intended use of a

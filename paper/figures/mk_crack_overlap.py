@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Plate P8: precision, recall and F1 for the CRACK class, and the curve they sit on.
-
 WHY THIS PLATE EXISTS. The paper leads with measures computed over every pixel of the
 frame -- area agreement, pixel accuracy against an all-background prediction, the four-way
 pixel budget -- because at 1.80% crack prevalence the overlap measures throw away the 98%

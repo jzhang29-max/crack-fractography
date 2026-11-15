@@ -13,6 +13,69 @@ variable with a default that assumes the three repositories sit as siblings; see
     PAPER_DIR=/path/to/paper \
         python mk_fig1.py && python mkpdf.py
 
+## 2026-11-14: the region classifier is ON
+
+`analysis/detector_overrides.py` now sets `USE_REGION_CLASSIFIER = True`, by the author's
+decision. **Everything below this section that says the classifier is off describes the
+previous configuration.** Those passages are kept rather than rewritten, because the
+evidence that justified switching it off is still true and a setting whose
+counter-evidence has been deleted cannot be reviewed. What changed is the decision, not
+the measurements that argued against it.
+
+Three things follow, and no figure is correct until all three are respected.
+
+**1. The SEM arm is a trained detector now.** The candidate stage is still a rule with no
+fitted parameters, but the mask is no longer the candidate stage: an eight-feature
+logistic model scores every surviving region and the app keeps the ones it calls crack.
+Any plate or caption calling the SEM arm "a threshold rule, nothing trained" is wrong.
+`mk_flow.py` branches on the live flag for exactly this reason.
+
+**2. It is a trade, not an upgrade.** On the 25 hand-labelled tiles that exclude the
+off-specimen flood tile, precision rises 0.784 → 0.860 while recall falls 0.625 → 0.434,
+IoU 0.533 → 0.405 and F1 0.695 → 0.577. On 4 of the 26 tiles the classifier returns an
+empty mask for a tile that contains real crack. A figure that shows only the precision is
+a sales pitch.
+
+**3. Every score on this corpus is in-sample — and it was measured how much that is
+worth.** The bundle records the 45 images it was fitted on, and 45 of the 48 hand-painted
+SEM frames here are those images. `analysis/research/improve/sem_classifier_lofo.py`
+refits the deployed recipe without each frame in turn (two controls: the CSV is within
+0.07% of the bundle's corpus, and refitting on all of today's rows lands within 0.037 of
+the shipped coefficients). `sem_deadzone.py` does the same per parent micrograph on the
+26 tiles, as arm `shipped_lofo`.
+
+The answer is that the leakage is small: 0.006 in precision and 0.002 in F1 over the 18
+scorable frames, and 0.004 in pooled precision on the 25 tiles, with 11 of 13 specimens
+tied. **This is not evidence that the model generalises well.** At frame scale the model
+barely acts at all — `docs/figures/sem_force_keep_share.json` measures 0.13 to 0.23% of
+the proposed regions holding 21.6 to 90.3% of the retained area, and any region of 50,000
+px is retained whatever the model says. There is little for leakage to inflate. On the
+512 px crops the model does most of the deciding, and there the refit still agrees.
+
+What DOES differ by training overlap is how much the classifier helps: with the flood
+tile excluded it raises pooled precision 0.806 to 0.955 on the 10 tiles whose parent it
+was fitted on, and 0.770 to 0.810 on the 16 it was not. Training overlap is confounded
+with specimen family there — every hydrogen-charged field is in the never-trained group —
+so that split is "where does it help", not a second leakage estimate. Both groups and the
+clean estimate are in `sem_deadzone.json`.
+
+**4. The public Inconel 718 collection was NOT recomputed, and cannot be here.** Every
+producer under `analysis/research/improve/` that reads `pub_ebc_download/...` — among
+them `madk_above_five.py` and `pixel_accounting.py`, which supply the paper's headline
+area agreement and the MAD-multiplier selection — scores that collection at the
+candidate stage with the classifier bypassed. The source images were a public download
+kept in a session scratchpad and are no longer on this machine, so those numbers cannot
+be repeated at the present setting without re-obtaining the collection. The abstract and
+Section 2 say so. The direction is known even though the value is not: the classifier
+only removes candidate regions, so the retained set with it on is a subset of the set
+with it off and the predicted area fraction there can only fall or stay equal.
+
+Records that follow the flag and were recomputed for it:
+`parameters_tiles.json`, `parameters_frames.json`, `overlap_means_sem_txm.json` (and its
+`_b2b3` scope), `frame_legibility.json` (and its `_b2b3` scope), `sem_deadzone.json`.
+`txm_background_units.json` is unchanged on purpose: the SEM region classifier is not
+part of the TXM pipeline, which runs a model of its own.
+
 ## Which SEM figures draw the app, and which draw the archive
 
 Read this before quoting any SEM panel as "what the detector does", because the two are

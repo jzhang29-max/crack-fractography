@@ -74,7 +74,7 @@ NAME = "F3 - detection stages, both modalities"
 #: few micrometres wide and the same 60 um field would reduce it to a smudge. Matching
 #: the field of view between the two matters where their appearances are being compared,
 #: which is Figure 2's job; here each row has to be legible on its own terms.
-FOV_UM = {"sem": 60.0, "txm": 14.0}
+FOV_UM = {"sem": 60.0, "txm": 30.0}
 #: The side of the magnified inset, as a fraction of that row's own field.
 INSET_FRAC = 4.0 / 27.0
 #: The colour the pixels that cleaning removed are drawn in. Red is this figure set's
@@ -86,7 +86,7 @@ ROWS = (("sem", "SEM"), ("txm", "TXM"))
 COLS = ("as loaded", "background removed", "proposed, cleaned, filtered")
 
 
-def stretch(arr):
+def stretch(arr, whole):
     """Display stretch, identical for both modalities and shared with Figure 1.
 
     The range comes from `both_modalities.display_range`: median plus and minus
@@ -94,9 +94,17 @@ def stretch(arr):
     saturate. A 2nd-to-98th percentile pair, which this used to be, puts its low
     end inside the crack on a frame with a large dark tail and washes the matrix
     out. DISPLAY ONLY: the detector ran on the unstretched array.
+
+    THE RANGE IS TAKEN FROM `whole`, THE FULL FRAME, NEVER FROM THE WINDOW. A detail
+    window is chosen to be full of crack, so it is bimodal, and on such an array the
+    median falls BETWEEN the two populations and the MAD measures the gap between them
+    rather than the spread of the matrix. On this figure's SEM window -- 40% crack at
+    intensity 0 -- a per-window range came out as -279 to 441, which renders a crack
+    that is pure black as 39% grey and flattens the matrix with it. Computing it on the
+    frame is also what Figure 1 states it does, so the two figures agree.
     """
     from skimage import exposure
-    lo, hi = BM.display_range(arr)
+    lo, hi = BM.display_range(whole)
     return exposure.rescale_intensity(arr.astype(np.float32), in_range=(lo, hi),
                                       out_range=(0.0, 1.0))
 
@@ -116,18 +124,40 @@ def stretch(arr):
 #: the TXM field the two largest marked objects sit at 37.9% and 50.1%. Any cut between
 #: those separates them, and the panels either side of it are a crack and a frame edge.
 MAX_EDGE_PERIMETER = 0.15
+#: How much operator-confirmed mask a frame needs before rule 1 is used at all.
+MIN_CONFIRMED = 500
 
 
-def boundary_window(final, H):
-    """Top-left corner of the H x H window holding the most mask-boundary pixels.
+def boundary_window(final, H, confirm=None):
+    """Top-left corner of the H x H window the detail panels are cut from.
 
-    Boundary pixels belonging to a region the field of view cut off are not counted; see
-    MAX_EDGE_PERIMETER. Without that exclusion both TXM rows of this figure set landed on
-    the same object: a wedge flush with the right-hand edge of the mosaic holding 57.6% of
-    that frame's marked area, which is the largest thing the detector marks there and is
-    not a crack. The exclusion is on the WINDOW CHOICE only -- no pixel is removed from
-    any mask, and nothing here changes a number.
+    TWO RULES, AND THE FIRST ONE WINS WHERE IT APPLIES.
+
+    1. CONFIRMED DETECTIONS, when `confirm` (the mask intersected with the operator's
+       painted crack) holds at least MIN_CONFIRMED pixels. The window then sits where
+       the detector is demonstrably RIGHT. This exists because of what the transmission
+       frames turned out to be: on every b2 frame the obvious dark horizontal bands are
+       painted NOT crack by the operator, and the confirmed crack is elsewhere. Rule 2
+       maximises mask boundary, so on those frames it put the panel squarely on the
+       bands -- a TXM detail that showed the detector marking what the operator had
+       explicitly rejected, which is the opposite of what the panel is for.
+
+    2. MASK BOUNDARY, otherwise, discounting any region more than MAX_EDGE_PERIMETER of
+       whose own outline lies on the frame border. Such a region is the FIELD cut off,
+       not a boundary the detector drew. Without that discount both TXM rows landed on
+       the same object: a wedge flush with the edge of the mosaic, which is the largest
+       thing the detector marks there and is not a crack.
+
+    Both are WINDOW CHOICES only. No pixel is removed from any mask by either, and
+    nothing here changes a number that the paper reports.
     """
+    if confirm is not None and int(confirm.sum()) >= MIN_CONFIRMED:
+        cc = np.pad(np.cumsum(np.cumsum(confirm.astype(np.int64), 0), 1), ((1, 0), (1, 0)))
+        cbox = cc[H:, H:] - cc[:-H, H:] - cc[H:, :-H] + cc[:-H, :-H]
+        if cbox.size and cbox.max() > 0:
+            cy, cx = np.unravel_index(int(cbox.argmax()), cbox.shape)
+            return int(cy), int(cx)
+
     lab, n = ndi.label(final, np.ones((3, 3), bool))
     per = final & ~ndi.binary_erosion(final, np.ones((3, 3), bool))
     on = np.zeros_like(final)
@@ -164,7 +194,8 @@ def window(d, um):
     nm = float(d["nm_per_px"])
     f = d["final"]
     H = min(int(round(um * 1000.0 / nm)), f.shape[0], f.shape[1])
-    y0, x0 = boundary_window(f, H)
+    pc = d.get("paint_crack")
+    y0, x0 = boundary_window(f, H, confirm=None if pc is None else (f & pc))
     return (slice(int(y0), int(y0) + H), slice(int(x0), int(x0) + H)), H, nm
 
 
@@ -217,8 +248,8 @@ def main():
         lx.text(0.55, 0.5, rowname, fontsize=J.BODY, fontweight="bold", rotation=90,
                 ha="center", va="center", color=J.INK, transform=lx.transAxes)
 
-        img = stretch(d["img"][sl])
-        flat = stretch(d["flat"][sl])
+        img = stretch(d["img"][sl], d["img"])
+        flat = stretch(d["flat"][sl], d["flat"])
         final = d["final"][sl]
         removed = d["proposed"][sl] & ~final
 

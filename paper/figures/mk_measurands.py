@@ -165,15 +165,18 @@ def straight_floor(chord_px, n_angles=46):
             "chord_px": L, "n_angles": len(vals)}
 
 
-def main():
-    d = BM.load("sem")
+def prepare(tag):
+    """Measure one modality's largest interior region with the SHIPPED functions.
+
+    Everything drawn for that modality comes out of this one call, so the panel and the
+    table row cannot drift apart: the route drawn is checked against the geodesic the
+    software reports, and the skeleton drawn is the one the numbers were taken from.
+    """
+    d = BM.load(tag)
     nm = float(d["nm_per_px"])
     um = nm / 1000.0
     region_full = largest_interior(d["final"])
 
-    # The shipped measurement, on the region exactly as the application hands it over:
-    # cropped to its own bounding box, which is what `_local_crop` inside
-    # `skeleton_stats` then re-crops with a 2 px margin.
     ys, xs = np.where(region_full)
     by0, by1, bx0, bx1 = ys.min(), ys.max() + 1, xs.min(), xs.max() + 1
     bbox = region_full[by0:by1, bx0:bx1]
@@ -181,173 +184,177 @@ def main():
     net_len, n_branch, n_end, skel_local, _loc, skel_px = EF.skeleton_stats(bbox)
     geo, geo_info = geodesic.longest_tip_geodesic(skel_local, net_len)
 
-    # the display crop, with context around the region, and the MEASURED skeleton placed
-    # back into it: drawing a freshly skeletonised copy would risk showing an axis that is
-    # not the one the numbers came from
     y0 = max(by0 - PAD, 0)
     y1 = min(by1 + PAD, region_full.shape[0])
     x0 = max(bx0 - PAD, 0)
     x1 = min(bx1 + PAD, region_full.shape[1])
     sl = (slice(y0, y1), slice(x0, x1))
     region, img = region_full[sl], d["img"][sl]
-    sy = (by0 - 2 if by0 >= 2 else 0) - y0          # _local_crop's own margin
+    sy = (by0 - 2 if by0 >= 2 else 0) - y0
     sx = (bx0 - 2 if bx0 >= 2 else 0) - x0
     skel = np.zeros(region.shape, bool)
     skel[sy:sy + skel_local.shape[0], sx:sx + skel_local.shape[1]] = skel_local
     if int(skel.sum()) != skel_px:
-        raise SystemExit(f"the measured skeleton does not fit the display crop: "
+        raise SystemExit(f"{tag}: the measured skeleton does not fit the display crop: "
                          f"{int(skel.sum())} px placed of {skel_px}")
 
     path, path_len = axis_path(skel)
     if geo is not None and abs(path_len - geo) > 1.0:
         raise SystemExit(
-            f"the drawn route is {path_len:.2f} px and the shipped longest tip-to-tip "
-            f"geodesic is {geo:.2f} px; the figure would draw a different route from the "
-            f"one it reports")
+            f"{tag}: the drawn route is {path_len:.2f} px and the shipped longest "
+            f"tip-to-tip geodesic is {geo:.2f} px; the figure would draw a different "
+            f"route from the one it reports")
     dt = ndi.distance_transform_edt(region)
-    width_px = np.array([2.0 * dt[y, x] for y, x in path])
     (py0, px0), (py1, px1) = path[0], path[-1]
     chord_px = float(np.hypot(py1 - py0, px1 - px0))
     floor = straight_floor(chord_px)
 
-    lo, hi = np.percentile(img, [2, 98])
+    lo, hi = BM.display_range(d["img"])
     grey = exposure.rescale_intensity(img.astype(np.float32), in_range=(lo, hi),
                                       out_range=(0.0, 1.0))
     rgb = np.dstack([grey] * 3)
     rgb[region] = 0.72 * rgb[region] + 0.28 * np.array(J.rgb(J.MASK))
 
-    # the three circles, at the 10th, 50th and 90th percentile of the width along the
-    # whole SKELETON -- the population MeanWidth_px averages over -- so the panel shows
-    # the spread of the quantity the table reports rather than of a different one
     sk_pts = np.argwhere(skel)
     sk_w = np.array([2.0 * dt[y, x] for y, x in sk_pts])
     order = np.argsort(sk_w)
     picks = [int(order[int(round(q * (len(order) - 1)))]) for q in (0.10, 0.50, 0.90)]
     circles = [(sk_pts[k][0], sk_pts[k][1], sk_w[k] / 2.0) for k in picks]
 
+    return dict(d=d, nm=nm, um=um, region=region, rgb=rgb, skel=skel, circles=circles,
+                shape=shape, net_len=net_len, n_branch=n_branch, n_end=n_end,
+                skel_px=skel_px, geo=geo, geo_info=geo_info, path_len=path_len,
+                floor=floor, chord_px=chord_px, ends=(py0, px0, py1, px1),
+                crop=(int(y0), int(x0), int(y1 - y0), int(x1 - x0)))
+
+
+def draw_region(ax, P, letter):
+    """One micrograph panel: the region, its whole medial axis, route, chord, circles."""
+    ax.imshow(P["rgb"], interpolation="nearest")
+    J.micrograph(ax)
+    ax.add_patch(Rectangle((0, 0), 1, 1, transform=ax.transAxes, fill=False,
+                           edgecolor=J.INK, linewidth=0.7, zorder=40))
+    ays, axs_ = np.where(P["skel"])
+    ax.plot(axs_, ays, ".", color=J.SKELETON, ms=1.1, mew=0, zorder=20)
+    py0, px0, py1, px1 = P["ends"]
+    ax.plot([px0, px1], [py0, py1], color=J.ROI, lw=1.0, linestyle=(0, (4, 2)),
+            zorder=21)
+    ax.plot([px0, px1], [py0, py1], "o", ms=3.4, mfc="white", mec=J.ROI, mew=1.0,
+            linestyle="none", zorder=22)
+    for yy, xx, r in P["circles"]:
+        ax.add_patch(Circle((xx, yy), r, fill=False, edgecolor=J.ROI, linewidth=1.0,
+                            zorder=25))
+        ax.plot([xx, xx + r], [yy, yy], color=J.ROI, lw=0.9, zorder=26)
+    J.panel_label(ax, letter, inside=True)
+    scalebar(ax, P["nm"], P["region"].shape[1], fontsize=J.TICK)
+
+
+def values(P):
+    """The table's value column for one modality, formatted from the shipped numbers."""
+    sh, um, geo = P["shape"], P["um"], P["geo"]
+    field = P["d"]["img"].shape[0] * P["d"]["img"].shape[1] * um * um / 1e3
+    return [
+        f"{sh['Area_px'] * um * um:.1f} \u00b5m\u00b2 of a {field:.0f} \u00d7 10\u00b3 \u00b5m\u00b2 field",
+        f"{P['net_len'] * um:.1f} \u00b5m, {P['n_branch']} branch pts",
+        (f"{geo * um:.1f} \u00b5m" if geo is not None
+         else f"not defined: {P['geo_info'].get('reason')}"),
+        f"{sh['MeanWidth_px'] * um:.2f} \u00b5m",
+        f"{sh['MaxWidth_px'] * um:.2f} \u00b5m",
+        f"{sh['Orientation_deg']:+.1f}\u00b0 from the image rows",
+    ]
+
+
+def main():
+    P = {t: prepare(t) for t in ("sem", "txm")}
+
     W = J.PAGEW
     Mg = 0.03
-    GAP = 0.18
-    LW = 3.22                                  # the micrograph column
-    RW = W - 2 * Mg - LW - GAP
-    IMH = LW * region.shape[0] / region.shape[1]
-    ROWH = 0.215                               # one definition row
-    NROWS = 7
-    # +0.12 of slack below the last row: the closing rule is drawn from the row pitch,
-    # and without it the rule for a seven-row table lands BELOW the axes and overprints
-    # the footnote. The table grew from five rows to seven when the measurands were taken
-    # from the shipped code instead of recomputed.
+    GAP = 0.20
+    LW = (W - 2 * Mg - GAP) / 2.0
+    IMH = max(LW * P[t]["region"].shape[0] / P[t]["region"].shape[1]
+              for t in ("sem", "txm"))
+    IMH = min(IMH, 2.30)
+    ROWH = 0.215
+    NROWS = len(['Area', 'Network length', 'Longest crack',
+                  'Mean width', 'Max width', 'Orientation'])
     TABH = 0.26 + NROWS * ROWH + 0.12
-    FOOT = 0.06        # no footnote: the colour key and the caveats are in the caption
-    Htot = Mg + max(IMH, 1.80) + 0.26 + TABH + FOOT + Mg
+    FOOT = 0.06
+    TITLE = 0.17          # room above the panels for the SEM / TXM headings
+    Htot = Mg + TITLE + IMH + 0.30 + TABH + FOOT + Mg
 
     fig = plt.figure(figsize=(W, Htot))
 
     def ax_at(xin, yin, win, hin):
         return fig.add_axes([xin / W, 1.0 - (yin + hin) / Htot, win / W, hin / Htot])
 
-    ax = ax_at(Mg, Mg, LW, IMH)
-    ax.imshow(rgb, interpolation="nearest")
-    J.micrograph(ax)
-    ax.add_patch(Rectangle((0, 0), 1, 1, transform=ax.transAxes, fill=False,
-                           edgecolor=J.INK, linewidth=0.7, zorder=40))
+    for i, (tag, letter) in enumerate((("sem", "a"), ("txm", "b"))):
+        hh = min(LW * P[tag]["region"].shape[0] / P[tag]["region"].shape[1], IMH)
+        ax = ax_at(Mg + i * (LW + GAP), Mg + TITLE + (IMH - hh) / 2.0, LW, hh)
+        draw_region(ax, P[tag], letter)
+        ax.set_title("SEM" if tag == "sem" else "TXM", fontsize=J.LABEL,
+                     fontweight="bold", pad=2.0)
 
-    # the WHOLE medial axis, which is what the network length sums over
-    ays, axs_ = np.where(skel)
-    ax.plot(axs_, ays, ".", color=J.SKELETON, ms=1.1, mew=0, zorder=20)
-    # the two tips of the longest route, and the straight chord between them
-    ax.plot([px0, px1], [py0, py1], color=J.ROI, lw=1.0, linestyle=(0, (4, 2)),
-            zorder=21)
-    ax.plot([px0, px1], [py0, py1], "o", ms=3.4, mfc="white", mec=J.ROI, mew=1.0,
-            linestyle="none", zorder=22)
-    for yy, xx, r in circles:
-        ax.add_patch(Circle((xx, yy), r, fill=False, edgecolor=J.ROI, linewidth=1.0,
-                            zorder=25))
-        ax.plot([xx, xx + r], [yy, yy], color=J.ROI, lw=0.9, zorder=26)
-    J.panel_label(ax, "a", inside=True)
-    scalebar(ax, nm, region.shape[1], fontsize=J.TICK)
+    #: TORTUOSITY IS OFF THE TABLE. It had a row that said "no value" in both value
+    #: columns on both arms, because the definition needs an unbranched medial axis
+    #: and both regions branch. A row that is empty on every column it has is a row
+    #: about the software's limits, not about the crack, and the author asked for it
+    #: off the plate. The withholding itself is NOT dropped: it is still in this
+    #: figure's caption file, in the manuscript caption, and in the application, which
+    #: is where a reader who wonders why the quantity is missing will look.
+    names = ["Area  A", "Network length", "Longest crack", "Mean width", "Max width",
+             "Orientation  \u03b8"]
+    rules = ["marked pixels, as area",
+             "every branch of the axis, summed",
+             "the longest tip-to-tip route through it",
+             "twice the medial-axis radius",
+             "the largest circle that fits inside",
+             "the region's second-moment major axis"]
+    vs, vt = values(P["sem"]), values(P["txm"])
 
-    # --- (b) the width profile -----------------------------------------------------
-    PROFH = min(IMH, 1.80)   # fill the row beside the micrograph rather than leaving it empty
-    pax = ax_at(Mg + LW + GAP + 0.30, Mg + 0.22, RW - 0.36, PROFH - 0.58)
-    s_um = np.concatenate([[0.0], np.cumsum(
-        [np.hypot(path[i + 1][0] - path[i][0], path[i + 1][1] - path[i][1])
-         for i in range(len(path) - 1)])]) * um
-    pax.plot(s_um, width_px * um, color=J.ACCENT, lw=1.0)
-    pax.axhline(shape["MeanWidth_px"] * um, color=J.G_MID, lw=0.8,
-                linestyle=(0, (4, 2)), zorder=4)
-    pax.set_xlabel("along the longest tip-to-tip route, \u00b5m", fontsize=J.TICK,
-                   labelpad=1.5)
-    pax.set_ylabel("width, \u00b5m", fontsize=J.TICK, labelpad=1.5)
-    pax.tick_params(labelsize=J.TICK)
-    pax.set_xlim(0, s_um[-1])
-    pax.set_ylim(0, None)
-    J.panel_label(pax, "b")
-
-    # --- (c) the definitions, as a three-column table ------------------------------
-    tort = shape["Tortuosity"]
-    rows = [
-        ("Area  A", "marked pixels as a fraction of the field",
-         f"{shape['Area_px'] * um * um:.1f} \u00b5m\u00b2 of a "
-         f"{d['img'].shape[0] * d['img'].shape[1] * um * um / 1e3:.0f}"
-         f" \u00d7 10\u00b3 \u00b5m\u00b2 field"),
-        ("Network length", "every branch of the medial axis, summed",
-         f"{net_len * um:.1f} \u00b5m over {n_branch} branch points"),
-        ("Longest crack", "the longest tip-to-tip route through it",
-         f"{geo * um:.1f} \u00b5m" if geo is not None
-         else f"not defined: {geo_info.get('reason')}"),
-        ("Mean width", "twice the medial-axis radius, over the skeleton",
-         f"{shape['MeanWidth_px'] * um:.2f} \u00b5m"),
-        ("Max width", "the largest circle that fits inside",
-         f"{shape['MaxWidth_px'] * um:.2f} \u00b5m"),
-        ("Orientation  \u03b8", "the region's second-moment major axis",
-         f"{shape['Orientation_deg']:+.1f}\u00b0 from the image rows"),
-        ("Tortuosity  L/C", "length over the chord, for an UNBRANCHED axis",
-         f"{tort:.3f}" if isinstance(tort, (int, float))
-         else f"no value: the axis has {n_branch} branch points"),
-    ]
-    ytab = Mg + max(IMH, 1.80) + 0.26
+    ytab = Mg + TITLE + IMH + 0.30
     dax = ax_at(Mg, ytab, W - 2 * Mg, TABH)
     dax.set_axis_off()
-    C1, C2 = 0.175, 0.585
+    C1, C2, C3 = 0.160, 0.515, 0.775
     dax.plot([0, 1], [1.0, 1.0], transform=dax.transAxes, color=J.INK, lw=0.8,
              clip_on=False)
     for xx, head in ((0.0, "measurand"), (C1, "how it is measured"),
-                     (C2, "on the crack in (a)")):
+                     (C2, "on the SEM crack in (a)"), (C3, "on the TXM crack in (b)")):
         dax.text(xx, 0.955, head, fontsize=J.TICK, fontweight="bold", va="top",
                  ha="left", color=J.G_DARK, transform=dax.transAxes)
     hline = 0.955 - 0.26 / TABH + 0.02
     dax.plot([0, 1], [hline, hline], transform=dax.transAxes, color=J.G_MID, lw=0.6,
              clip_on=False)
-    for i, (name, rule, val) in enumerate(rows):
+    for i in range(NROWS):
         top = hline - 0.035 - i * (ROWH / TABH)
-        dax.text(0.0, top, name, fontsize=J.BODY, fontweight="bold", va="top",
+        dax.text(0.0, top, names[i], fontsize=J.BODY, fontweight="bold", va="top",
                  ha="left", color=J.INK, transform=dax.transAxes)
-        dax.text(C1, top, rule, fontsize=J.TICK, va="top", ha="left", color=J.G_DARK,
+        dax.text(C1, top, rules[i], fontsize=J.TICK, va="top", ha="left",
+                 color=J.G_DARK, transform=dax.transAxes)
+        dax.text(C2, top, vs[i], fontsize=J.TICK, va="top", ha="left", color=J.ACCENT,
                  transform=dax.transAxes)
-        dax.text(C2, top, val, fontsize=J.TICK, va="top", ha="left", color=J.ACCENT,
+        dax.text(C3, top, vt[i], fontsize=J.TICK, va="top", ha="left", color=J.ACCENT2,
                  transform=dax.transAxes)
-    if len(rows) != NROWS:
-        raise SystemExit(f"the table has {len(rows)} rows and was laid out for {NROWS}")
-    dax.plot([0, 1], [hline - 0.035 - len(rows) * (ROWH / TABH) + 0.03] * 2,
+    dax.plot([0, 1], [hline - 0.035 - NROWS * (ROWH / TABH) + 0.03] * 2,
              transform=dax.transAxes, color=J.INK, lw=0.8, clip_on=False)
     dax.text(0.0, 1.0 + 0.055 / TABH, "(c)", fontsize=J.PANEL, fontweight="bold",
              va="bottom", ha="left", color=J.INK, transform=dax.transAxes)
 
-
     J.save(fig, os.path.join(OUT, NAME + ".png"))
     json.dump({
         "figure": NAME + ".png",
-        "what": "every measurand the paper reports, drawn on the largest marked region "
-                "the SEM frame contains -- the same region Figures 1 and 3 show",
-        "field": str(d["field"]), "nm_per_px": nm,
-        "crop": [int(y0), int(x0)], "crop_px": [int(y1 - y0), int(x1 - x0)],
-        "shipped_measurements": {k: (v if v != "" else None)
-                                 for k, v in shape.items()},
-        "network_length_px": net_len, "branch_points": n_branch,
-        "endpoints": n_end, "skeleton_px": skel_px,
-        "longest_tip_geodesic_px": geo, "geodesic_info": geo_info,
-        "drawn_route_px": path_len,
+        "what": "every measurand the paper reports, drawn on the largest interior "
+                "marked region of BOTH modalities' illustrated frames",
+        "arms": {t: {
+            "field": str(P[t]["d"]["field"]), "nm_per_px": P[t]["nm"],
+            "crop_yx": P[t]["crop"][:2], "crop_px": P[t]["crop"][2:],
+            "shipped_measurements": {k: (v if v != "" else None)
+                                     for k, v in P[t]["shape"].items()},
+            "network_length_px": P[t]["net_len"], "branch_points": P[t]["n_branch"],
+            "endpoints": P[t]["n_end"], "skeleton_px": P[t]["skel_px"],
+            "longest_tip_geodesic_px": P[t]["geo"], "geodesic_info": P[t]["geo_info"],
+            "drawn_route_px": P[t]["path_len"],
+            "tortuosity_digitisation_floor": P[t]["floor"],
+        } for t in ("sem", "txm")},
         "source": "analysis/_vendor/extended_features.crack_shape_measurements and "
                   "analysis/geodesic.longest_tip_geodesic -- the functions the "
                   "application calls; this script recomputes nothing but the route it "
@@ -355,28 +362,23 @@ def main():
         "width_circle_positions_pct": [10, 50, 90],
         "width_circle_population": "the whole skeleton, which is the population "
                                    "MeanWidth_px averages over",
-        "tortuosity_digitisation_floor": floor,
         "tortuosity_floor_note": "a straight rasterised line of the same chord swept over "
                                  "angle, measured by the same code. It is 1.000 at 0, 45 "
                                  "and 90 degrees and rises in between with no waviness "
                                  "involved, so where a tortuosity IS reported it has to "
                                  "be read against this range and not against 1",
-        "tortuosity_here": "not emitted: the shipped definition requires an unbranched "
-                           "medial axis and this region has %d branch points" % n_branch,
         "length_note": "summed step lengths along the medial axis, diagonal steps counted "
                        "as sqrt(2); a pixel count understates length by up to 41% and can "
                        "put the tortuosity below 1",
-        "scale_provenance": BM.SEM_SCALE_SOURCE,
+        "scale_provenance": {"sem": BM.SEM_SCALE_SOURCE, "txm": BM.TXM_SCALE_SOURCE},
     }, open(os.path.join(OUT, NAME + ".caption.json"), "w"), indent=1)
-    print(f"  region {shape['Area_px']:,} px; network {net_len * um:.2f} um over "
-          f"{n_branch} branch points and {n_end} tips; longest route "
-          f"{(geo or float('nan')) * um:.2f} um (drawn {path_len * um:.2f})")
-    print(f"  width mean {shape['MeanWidth_px'] * um:.2f}, max "
-          f"{shape['MaxWidth_px'] * um:.2f} um; orientation "
-          f"{shape['Orientation_deg']:+.1f} deg; tortuosity "
-          f"{shape['Tortuosity'] if shape['Tortuosity'] != '' else 'not emitted'} "
-          f"(straight-line floor {floor['min']:.3f}-{floor['max']:.3f} over "
-          f"{floor['n_angles']} angles)")
+    for t in ("sem", "txm"):
+        q = P[t]
+        print(f"  {t.upper()}  region {q['shape']['Area_px']:,} px; network "
+              f"{q['net_len'] * q['um']:.2f} um over {q['n_branch']} branch points; "
+              f"longest route {(q['geo'] or float('nan')) * q['um']:.2f} um; width mean "
+              f"{q['shape']['MeanWidth_px'] * q['um']:.2f}, max "
+              f"{q['shape']['MaxWidth_px'] * q['um']:.2f} um")
 
 
 if __name__ == "__main__":

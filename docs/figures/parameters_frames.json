@@ -11,6 +11,7 @@
   160,
   320
  ],
+ "use_region_classifier": true,
  "clean_min": 13,
  "cand_min": 40,
  "paint_states": "1 = crack, 2 = not crack, 3 = erase (also a not-crack verdict), 0 = unreviewed and counted as neither",
@@ -4726,5 +4727,5 @@
    "union_crack": 79609
   }
  ],
- "key": "e5c633eef72b"
+ "key": "f3b72fff1c64"
 }

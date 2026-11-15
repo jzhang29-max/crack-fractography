@@ -60,6 +60,14 @@ MK = load(os.path.join(REPO, "docs/figures/madk_above_five.json"),
 # carry the sweep, the classical arms and the constant-width construction in those units.
 BC = load(os.path.join(REPO, "docs/figures/background_counting_table.json"),
           "background-counting table")
+TXMM = load(os.path.join(REPO, "docs/figures/txm_model_scores.json"),
+            "the TXM model comparison")
+#: THE WHOLE CORPUS, not the published b2/b3 subset: see mk_txm_plates.load.
+#: The example micrographs stay b2/b3; every score is over everything measured.
+TXB4 = load(_paths.scoped("txm_background_units.json", scope=False),
+            "the arms carried over to the TXM data")
+#: The operating point the paper reports at, named once.
+BM_K = 6.0
 AB = load(os.path.join(REPO, "docs/figures/arms_background_units.json"),
           "arms in background units")["sets"]
 WBG = load(os.path.join(REPO, "docs/figures/width_ceiling_background_units.json"),
@@ -257,29 +265,25 @@ def plate_width():
 
 
 def plate_baselines():
-    """Seven arms on BOTH framings of the same images, as a dot plot rather than bars.
+    """Seven classical arms on the SEM whole fields, and the three TXM models.
 
-    WHAT CHANGED. This was two panels of horizontal bars showing one collection, and the
-    review's note was that it reads as too simple for what it carries. Two things were
-    wrong with it beyond that.
+    WHOLE FIELDS ONLY. This plate used to draw each arm twice, once on the 31 whole
+    fields and once on the 26 released crops cut from them, because the two framings
+    disagree and that disagreement is a real result. It is no longer drawn here: the
+    paper reports whole fields, the crops are not an independent collection (every
+    source image behind a crop also appears among the originals) and they are cut
+    around cracks, so a reader comparing the two marker types was comparing a corpus
+    with itself under a selection. The reversal that pairing showed -- this detector
+    moving from below an all-background mask on whole fields to above it on the crops
+    -- is kept in the caption record rather than drawn.
 
-    First, bars from zero are the wrong form for panel (a). The quantity is reported area
-    divided by annotated area and its meaningful reference is ONE, not zero; a bar from
-    zero spends most of its length on the part of the scale where nothing is at issue and
-    encodes the interesting part -- the deviation from agreement -- as the small
-    difference between long bars. A dot on a rule drawn from unity encodes exactly the
-    deviation, and the arms order by it.
-
-    Second, and more useful, the plate showed one of the two collections when the paper's
-    own argument is that the two disagree. Both are drawn now, one marker each, joined by
-    a rule: the same seven arms, the same images, cut two ways. Every arm is BELOW an
-    all-background mask on the whole fields and several are above it on the crops cut
-    from those same fields, and this detector is one of them -- it moves from -0.41 to
-    +1.07 points. That reversal is the paper's point about the framing, and it was not
-    visible anywhere in the figure set.
-
-    Panel (b) keeps zero as its origin because the difference from an all-background mask
-    is signed and zero IS its reference. Neither axis is cropped.
+    PANEL (c) IS THE OTHER ARM'S MODEL CHOICE, which the plate had no counterpart for.
+    Three transmission models under one cross-validation: seventeen hand-built channels
+    alone, those channels concatenated with a frozen SAM ViT-H encoder, and the mean of
+    the two, which is what the application ships. Its caveats are on the panel because
+    they are not small: the folds are grouped by IMAGE and not by specimen, so no whole
+    specimen is ever held out, and the artefact covers all 71 labelled frames rather
+    than the b2 and b3 series the rest of the paper reports.
     """
     WF, CR = AB["whole_fields"], AB["crops"]
     short = {"DETECTOR (shipped)": "this detector",
@@ -293,59 +297,116 @@ def plate_baselines():
     y = list(range(len(rank)))
     HERO = names.index("this detector")
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(J.PAGEW, 2.75), layout="constrained",
-                                   gridspec_kw={"width_ratios": [1.0, 0.82]})
+    fig, (ax1, ax2, ax3) = plt.subplots(
+        1, 3, figsize=(J.PAGEW, 2.75), layout="constrained",
+        gridspec_kw={"width_ratios": [1.0, 0.80, 0.78]})
 
-    def dots(ax, wf, cr, ref, label):
-        # the band marks the row this paper's own detector is on, so the eye finds it
-        # without giving that row a colour the other rows do not have
+    def dots(ax, wf, ref, label):
         ax.axhspan(HERO - 0.5, HERO + 0.5, color="#eef2f8", zorder=0)
-        for i, (a, b) in enumerate(zip(wf, cr)):
-            ax.plot([a, b], [i, i], color=J.G_LIGHT, lw=1.6, solid_capstyle="round",
-                    zorder=2)
         ax.axvline(ref, color=J.INK, lw=0.9, zorder=3)
+        for i, a in enumerate(wf):
+            ax.plot([ref, a], [i, i], color=J.G_LIGHT, lw=1.6,
+                    solid_capstyle="round", zorder=2)
         ax.plot(wf, y, "o", ms=5.0, mfc=J.ACCENT, mec="white", mew=0.6,
-                linestyle="none", zorder=4, label="whole fields ($n$ = 31)")
-        ax.plot(cr, y, "s", ms=4.6, mfc="white", mec=J.ACCENT2, mew=1.3,
-                linestyle="none", zorder=5, label="released crops ($n$ = 26)")
+                linestyle="none", zorder=4)
         ax.set_ylim(len(rank) - 0.5, -0.5)
         ax.set_xlabel(label)
 
     a_wf = [WF["arms"][k]["area_agreement"] for k in keys]
-    a_cr = [CR["arms"][k]["area_agreement"] for k in keys]
-    dots(ax1, a_wf, a_cr, 1.0, "Reported / annotated crack area")
+    dots(ax1, a_wf, 1.0, "Reported / annotated area")
     ax1.set_yticks(y, names)
     for t, n in zip(ax1.get_yticklabels(), names):
         if n == "this detector":
             t.set_fontweight("bold")
-    ax1.legend(loc="lower right", handletextpad=0.3, borderpad=0.25, labelspacing=0.25)
     J.panel_label(ax1, "a")
+    ax1.set_title(f"SEM, {WF['n']} whole fields" if "n" in WF else "SEM, whole fields",
+                  fontsize=J.TICK, pad=2.0)
 
     m_wf = [WF["arms"][k]["accuracy_pct"] - WF["empty_mask_accuracy_pct"] for k in keys]
     m_cr = [CR["arms"][k]["accuracy_pct"] - CR["empty_mask_accuracy_pct"] for k in keys]
-    dots(ax2, m_wf, m_cr, 0.0, "Pixel accuracy relative to an\nall-background mask (points)")
+    dots(ax2, m_wf, 0.0, "Pixel accuracy relative to an\nall-background mask (points)")
     ax2.set_yticks(y, ["" for _ in rank])
     J.panel_label(ax2, "b")
 
+    # --- (c) everything that has been tried on the transmission data -------------
+    # TWO CONVENTIONS IN ONE PANEL, and the divider says so. The carried-over arms are
+    # scored pooled over the refereed pixels of the 18 b2/b3 frames, where IoU is
+    # tp/(tp+fp+fn) and every term is in the record. The three TXM models come from a
+    # 5-fold cross-validation grouped by image over all 71 labelled frames. They are
+    # drawn on one axis because the question is which to deploy, but they are NOT
+    # interchangeable numbers and the panel must not let a reader read them as a
+    # single ranking.
+    cv = TXMM["cross_validated"]
+    pooled = TXB4["pooled"]
+
+    def iou_of(a):
+        return a["tp_pct"] / max(a["tp_pct"] + a["fp_pct"] + a["fn_pct"], 1e-9)
+
+    carried = [("mark everything", iou_of(pooled["control: mark everything"])),
+               ("Otsu, no model", iou_of(pooled["control: Otsu, no model"])),
+               (f"SEM detector, k = {BM_K:g}",
+                iou_of(pooled[f"SEM detector, mad_k={BM_K:g}"]))]
+    models = [("17 channels", cv["f17_mean_iou"], None),
+              ("+ frozen SAM", cv["hybrid_mean_iou"], None),
+              ("mean of the two\n(shipped)", cv["ens_mean_iou"], cv["ens_std_iou"])]
+
+    rows3 = [(n, v, None, J.G_LIGHT) for n, v in carried] + \
+            [(n, v, sd, J.ACCENT2 if "shipped" in n else J.G_MID)
+             for n, v, sd in models]
+    yy = list(range(len(rows3)))
+    ax3.barh(yy, [r[1] for r in rows3], height=0.60,
+             color=[r[3] for r in rows3], edgecolor=J.INK, linewidth=0.6, zorder=3)
+    for i, (_, v, sd, _c) in enumerate(rows3):
+        if sd:
+            ax3.errorbar(v, i, xerr=sd, color=J.INK, lw=0.9, capsize=2.0, zorder=4)
+        ax3.text(0.025, i, f"{v:.3f}", va="center", ha="left", fontsize=J.TICK,
+                 color="white" if v > 0.45 else J.INK, fontweight="bold", zorder=5)
+    ax3.axhline(len(carried) - 0.5, color=J.INK, lw=0.8, ls=(0, (3, 2)), zorder=6)
+    bb = dict(boxstyle="square,pad=0.12", fc="white", ec="none", alpha=0.9)
+    ax3.text(0.98, -0.55, f"carried over, {TXB4['n_frames']} b2/b3 frames",
+             fontsize=J.TICK, ha="right", va="center", color=J.G_DARK, zorder=7,
+             bbox=bb)
+    ax3.text(0.98, len(carried) - 0.44,
+             f"TXM models, {cv['labelled_images_used']} frames",
+             fontsize=J.TICK, ha="right", va="center", color=J.G_DARK, zorder=7,
+             bbox=bb)
+    ax3.set_yticks(yy, [r[0] for r in rows3], fontsize=J.TICK)
+    ax3.set_ylim(len(rows3) - 0.5, -0.95)
+    ax3.set_xlim(0, 1.0)
+    ax3.set_xticks([0.0, 0.5, 1.0])
+    ax3.set_xlabel("IoU on transmission data")
+    J.panel_label(ax3, "c")
+
     J.save(fig, os.path.join(OUT, "P4 - baselines.png"))
     json.dump({
-        "what": "seven arms on the whole fields and on the released crops cut from them, "
-                "ranked by agreement in total marked area on the whole fields; (a) "
-                "reported over annotated area against unity, (b) pixel accuracy against "
-                "an all-background mask on the same pixels",
-        "why a dot plot": "the reference of the ratio in (a) is one, not zero, so a bar "
-                          "from zero encodes the quantity at issue as the difference "
-                          "between the long ends of long bars; and the two collections "
-                          "disagree, which is the paper's own point and which the "
-                          "single-collection version of this plate could not show",
-        "reversal": {"this detector, whole fields": round(m_wf[HERO], 3),
-                     "this detector, released crops": round(m_cr[HERO], 3)},
-        "arms_whole_fields": WF["arms"], "arms_crops": CR["arms"],
+        "what": "(a, b) seven arms on the SEM whole fields, ranked by agreement in "
+                "total marked area; (c) the three transmission models under one "
+                "cross-validation",
+        "crops_not_drawn": "the 26 released crops are cut from the same 31 fields and "
+                           "around cracks, so they are not an independent collection; "
+                           "the plate reports whole fields only",
+        "reversal_kept_for_the_record": {
+            "this detector, whole fields": round(m_wf[HERO], 3),
+            "this detector, released crops": round(m_cr[HERO], 3)},
+        "arms_whole_fields": WF["arms"],
         "all_background_accuracy_pct": {"whole_fields": WF["empty_mask_accuracy_pct"],
                                         "crops": CR["empty_mask_accuracy_pct"]},
+        "txm_carried_over_arms": {n: round(v, 4) for n, v in carried},
+        "txm_two_conventions": "the carried-over arms are pooled over the refereed "
+                               "pixels of the b2/b3 frames; the three models are a "
+                               "5-fold cross-validation grouped by image over all 71 "
+                               "labelled frames. One axis, two corpora: the panel "
+                               "answers which to deploy, not which scores higher",
+        "txm_models": {k: cv[k] for k in
+                       ("f17_mean_iou", "hybrid_mean_iou", "ens_mean_iou",
+                        "ens_std_iou", "ens_min_iou", "mean_precision", "mean_recall",
+                        "labelled_images_used", "convention", "grouped_by",
+                        "model_version", "not_specimen_independent", "not_restricted")},
         "omitted": "Otsu on the flattened image, which marks 55x the annotated area on "
                    "the whole fields and would set the axis alone",
-        "source": "docs/figures/arms_background_units.json"},
+        "source": ["docs/figures/arms_background_units.json",
+                   "docs/figures/txm_model_scores.json",
+                   os.path.basename(_paths.scoped("txm_background_units.json", scope=False))]},
         open(os.path.join(OUT, "P4 - baselines.caption.json"), "w"), indent=1)
 
 
@@ -369,13 +430,20 @@ def plate_budget_both():
     """
     PA = load(os.path.join(REPO, "docs/figures/pixel_accounting.json"),
               "pixel accounting")["sets"]
-    TXB = load(_paths.scoped("txm_background_units.json"), "the TXM budget")
+    TXB = load(_paths.scoped("txm_background_units.json", scope=False),
+               "the TXM budget")
     K6 = "SEM detector, mad_k=6"
     # EBC is out of the paper, so it is out of this plate: 20.29% marked against 0.27%
     # labelled is 76.65x and would set the axis by itself.
-    sem = [k for k in ("Inconel 718, whole fields", "Inconel 718, released crops")
+    sem = [k for k in ("Inconel 718, whole fields",)
            if PA.get(k)]
-    txm = [g for g in ("B3", "B2") if g in TXB["by_group"]]
+    # All four specimen groups, not just the two whose images are published: the plate
+    # reports what the detector does on everything measured. B3 and B2 lead because the
+    # example micrographs elsewhere in the paper are cut from them.
+    txm = [g for g in ("B3", "B2", "Wrought", "AM/HC") if g in TXB["by_group"]]
+    _missing = sorted(set(TXB["by_group"]) - set(txm))
+    if _missing:
+        raise SystemExit(f"specimen groups {_missing} are in the record and not drawn")
 
     fig = plt.figure(figsize=(J.PAGEW, 2.78), layout="constrained")
     gs = fig.add_gridspec(1, 3, width_ratios=[1.30, 1.00, 1.15], wspace=0.06)
@@ -404,7 +472,7 @@ def plate_budget_both():
         return {"labelled_pct": r["tp_pct"] + r["fn_pct"], "tp_pct": r["tp_pct"],
                 "fp_pct": r["fp_pct"]}
 
-    budget(ax1, sem, _sem, ["Inconel 718\nwhole fields", "Inconel 718\nreleased crops"],
+    budget(ax1, sem, _sem, ["Inconel 718\nwhole fields"],
            "Percent of all image pixels")
     budget(ax2, txm, _txm, [f"TXM {g}" for g in txm], "Percent of reviewed area")
     J.panel_label(ax1, "a")
@@ -419,7 +487,7 @@ def plate_budget_both():
                columnspacing=1.6)
 
     # (c) the one quantity both arms share: dimensionless, reference one
-    names = ["Inconel 718, whole fields", "Inconel 718, released crops"] + \
+    names = ["Inconel 718, whole fields"] + \
             [f"TXM {g}" for g in txm]
     ratios = [PA[k]["detector"]["marked_pct"] / PA[k]["detector"]["labelled_pct"]
               for k in sem] + \
@@ -430,7 +498,7 @@ def plate_budget_both():
     ax3.barh(range(len(names)), ratios, 0.55, color=J.G_MID, edgecolor=J.INK,
              linewidth=0.5, zorder=2)
     ax3.axvline(1.0, color=J.INK, lw=0.9, zorder=3)
-    short = ["IN-718 fields", "IN-718 crops"] + [f"TXM {g}" for g in txm]
+    short = ["IN-718 fields"] + [f"TXM {g}" for g in txm]
     ax3.set_yticks(range(len(names)), short)
     ax3.tick_params(axis="y", labelsize=J.TICK)
     ax3.set_ylim(len(names) - 0.5, -0.5)
@@ -456,7 +524,7 @@ def plate_budget_both():
         "omitted": "the EBC coating, 20.29% marked against 0.27% labelled, which would "
                    "set the axis by itself",
         "sources": ["docs/figures/pixel_accounting.json",
-                    os.path.basename(_paths.scoped("txm_background_units.json"))],
+                    os.path.basename(_paths.scoped("txm_background_units.json", scope=False))],
     }, open(os.path.join(OUT, "P5 - the pixel budget in both arms.caption.json"), "w"),
         indent=1)
 

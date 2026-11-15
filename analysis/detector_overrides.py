@@ -136,7 +136,13 @@ fitted on itself. See analysis/tilebench.py for the instrument that enforces the
 # Full record and the gate to re-run:
 # analysis/research/improve/fullframe_lever4_safety.py, guarded by
 # tests/test_region_rules_rejected.py.
-USE_REGION_CLASSIFIER = False
+#: THE REGION CLASSIFIER IS ON, BY THE AUTHOR'S DECISION, AND IT IS A TRADE NOT AN
+#: UPGRADE. Measured on the shipped candidate stage over the 25 hand-labelled tiles
+#: that exclude the off-specimen flood tile: precision rises 0.784 -> 0.860, and recall
+#: falls 0.625 -> 0.434, IoU 0.533 -> 0.405, F1 0.695 -> 0.577. On 4 of the 26 tiles the
+#: classifier returns an EMPTY mask on a tile that contains real crack. Everything
+#: downstream is measured at this setting; flipping it back means recomputing all of it.
+USE_REGION_CLASSIFIER = True
 
 # SECOND CHANGE: union the darkness cut across a ladder of flattening radii.
 #

@@ -1,11 +1,14 @@
 {
- "generated": "2026-10-13",
+ "generated": "2026-11-14",
  "app_version": "1.49.2",
  "what_is_drawn": "arm C is the v1.49.2 CANDIDATE STAGE, not the mask the application emits. detect_one.py runs unified_pipeline.run_unified_pipeline, which adds PASS 2 (concavity, bridge-corridor, interior-fill) and with the classifier off keeps every Pass-2 row too, so the app's mask is a superset of every arm-C mask here. Pass 2 is defined on a whole micrograph resolved from ORIGINAL_DIR, not on a 512 px crop.",
  "arms": {
   "v147": "A: single flattening radius sigma=40, logistic region classifier at threshold 0.5538 (analysis/research/crackpipe.py)",
   "ablation": "B: arm A's candidate stage with the classifier bypassed, every region kept. One variable differs from A. This is the arm whose numbers analysis/detector_overrides.py publishes.",
-  "v1492": "C: what the app runs -- darkness cut unioned over flattening radii (5,10,20,40,80,160,320) at mad_k 5.0, background for sigma>64 estimated on a decimated copy, every candidate region kept. Bound out of detector_overrides.install() by analysis/research/improve/angle4_shipped.py."
+  "v1492": "C: the v1.49.2 CANDIDATE STAGE -- darkness cut unioned over flattening radii (5,10,20,40,80,160,320) at mad_k 5.0, background for sigma>64 estimated on a decimated copy, cleaned, and stopping there. Bound out of detector_overrides.install() by analysis/research/improve/angle4_shipped.py. This was the whole emission while USE_REGION_CLASSIFIER was False except for the area floor, which arm D adds.",
+  "v1492_floor": "D: arm C with the 40 px component floor the application applies, classifier still bypassed. C -> D is the floor's own effect.",
+  "shipped_lofo": "F: arm E with every tile scored out of sample. For the 9 tiles whose parent micrograph is in the bundle's training image list the classifier is refitted without that micrograph's rows, by the same recipe (sem_classifier_lofo.fit); the other 17 are already out of sample and are unchanged. E -> F is the leakage, and nothing else.",
+  "shipped": "E: arm D with the region classifier ON, which is what the application emits today. D -> E is the classifier's own effect, one variable, and it is the comparison every classifier claim in the paper rests on. Both arms call both_modalities.emit, so neither is a transcription."
  },
  "classifier_threshold": 0.5537592016924066,
  "scorer": {
@@ -21,7 +24,8 @@
  "controls": {
   "ladder_collapse": "PASS: SCALE_LADDER=(40,) reproduces the stock single-radius cut exactly; the full ladder is a strict superset",
   "tilebench": "PASS: oracle 1.0, empty 0.0, mark-everything precision == prevalence",
-  "parameter_free": "PASS: all three arms single-variant, overfit gap 0.0000",
+  "parameter_free": "PASS: every arm is single-variant here, overfit gap 0.0000 -- no knob in THIS script was chosen on these tiles. This is NOT a claim that any arm is out of sample: arms A, D and E run a classifier fitted on these specimens' own regions, and their scores here are in-sample. See docs/figures/sem_classifier_lofo.json.",
+  "leakage": "arms v147, v1492_floor(no) and shipped(yes) use fitted weights; the classifier's training images overlap this corpus, so read sem_classifier_lofo.json before quoting arm E as an accuracy",
   "record_attribution": "PASS: the four values detector_overrides.py publishes (+0.1753, p 0.0061, recalls 0.3792/0.3537/0.6827) reproduce as arm B to 4 dp, NOT as arm C"
  },
  "pooled_26": {
@@ -42,6 +46,24 @@
    "recall": 0.6320966086304236,
    "iou": 0.33408366502689196,
    "f1": 0.5008436483931576
+  },
+  "v1492_floor": {
+   "precision": 0.4181172256142816,
+   "recall": 0.6255477910695251,
+   "iou": 0.3344176659147572,
+   "f1": 0.5012188828982723
+  },
+  "shipped": {
+   "precision": 0.36138342317225564,
+   "recall": 0.43243416637056337,
+   "iou": 0.2451199794113204,
+   "f1": 0.3937290919180504
+  },
+  "shipped_lofo": {
+   "precision": 0.36041815060174,
+   "recall": 0.4320048166133681,
+   "iou": 0.24453799588237102,
+   "f1": 0.39297795116169976
   }
  },
  "pooled_25_no_flood": {
@@ -63,7 +85,212 @@
    "recall": 0.6315599201691701,
    "iou": 0.5291747580872712,
    "f1": 0.6921050132284106
+  },
+  "v1492_floor": {
+   "precision": 0.7833038512863483,
+   "recall": 0.6249882383237506,
+   "iou": 0.5328576254011147,
+   "f1": 0.6952473818456266
+  },
+  "shipped": {
+   "precision": 0.8585972407305793,
+   "recall": 0.43394395004135156,
+   "iou": 0.40500004621969143,
+   "f1": 0.5765125023438811
+  },
+  "shipped_lofo": {
+   "precision": 0.8543293254216114,
+   "recall": 0.43351310126927056,
+   "iou": 0.4036743784960319,
+   "f1": 0.5751681225791826
   }
+ },
+ "pooled_by_training_overlap": {
+  "parent_in_training_set": {
+   "v147": {
+    "precision": 0.9577831132452981,
+    "recall": 0.2632620961976308,
+    "iou": 0.2602422476405863,
+    "f1": 0.4130035286911058
+   },
+   "ablation": {
+    "precision": 0.8073144216766148,
+    "recall": 0.4329113367137059,
+    "iou": 0.3923697301392669,
+    "f1": 0.5635999140831961
+   },
+   "v1492": {
+    "precision": 0.7938667944417824,
+    "recall": 0.5466964374099453,
+    "iou": 0.47873785192105794,
+    "f1": 0.647495228852254
+   },
+   "v1492_floor": {
+    "precision": 0.8057181265266644,
+    "recall": 0.5405809694556574,
+    "iou": 0.47824225439825624,
+    "f1": 0.6470417862502963
+   },
+   "shipped": {
+    "precision": 0.9546157662784929,
+    "recall": 0.3597567011669985,
+    "iou": 0.35370706808547453,
+    "f1": 0.5225754912925388
+   },
+   "shipped_lofo": {
+    "precision": 0.9408727755184448,
+    "recall": 0.35879978441875554,
+    "iou": 0.35088794948745256,
+    "f1": 0.5194923081823104
+   }
+  },
+  "parent_never_trained_on": {
+   "v147": {
+    "precision": 0.25908113411862793,
+    "recall": 0.4561697175849259,
+    "iou": 0.19794292550484943,
+    "f1": 0.330471379379665
+   },
+   "ablation": {
+    "precision": 0.31330701537955424,
+    "recall": 0.6138029807993555,
+    "iou": 0.2617153805638039,
+    "f1": 0.4148564479682494
+   },
+   "v1492": {
+    "precision": 0.3183200867492192,
+    "recall": 0.7015978158707425,
+    "iou": 0.2803625658617199,
+    "f1": 0.4379424599516122
+   },
+   "v1492_floor": {
+    "precision": 0.3204823257350512,
+    "recall": 0.6946963254710647,
+    "iou": 0.2809166494731546,
+    "f1": 0.4386181561285765
+   },
+   "shipped": {
+    "precision": 0.2637602781833551,
+    "recall": 0.49158125587432305,
+    "iou": 0.2072292702806729,
+    "f1": 0.3433138598975379
+   },
+   "shipped_lofo": {
+    "precision": 0.2637602781833551,
+    "recall": 0.49158125587432305,
+    "iou": 0.2072292702806729,
+    "f1": 0.3433138598975379
+   }
+  }
+ },
+ "pooled_by_training_overlap_no_flood": {
+  "parent_in_training_set": {
+   "v147": {
+    "precision": 0.9577831132452981,
+    "recall": 0.2632620961976308,
+    "iou": 0.2602422476405863,
+    "f1": 0.4130035286911058
+   },
+   "ablation": {
+    "precision": 0.8073144216766148,
+    "recall": 0.4329113367137059,
+    "iou": 0.3923697301392669,
+    "f1": 0.5635999140831961
+   },
+   "v1492": {
+    "precision": 0.7938667944417824,
+    "recall": 0.5466964374099453,
+    "iou": 0.47873785192105794,
+    "f1": 0.647495228852254
+   },
+   "v1492_floor": {
+    "precision": 0.8057181265266644,
+    "recall": 0.5405809694556574,
+    "iou": 0.47824225439825624,
+    "f1": 0.6470417862502963
+   },
+   "shipped": {
+    "precision": 0.9546157662784929,
+    "recall": 0.3597567011669985,
+    "iou": 0.35370706808547453,
+    "f1": 0.5225754912925388
+   },
+   "shipped_lofo": {
+    "precision": 0.9408727755184448,
+    "recall": 0.35879978441875554,
+    "iou": 0.35088794948745256,
+    "f1": 0.5194923081823104
+   }
+  },
+  "parent_never_trained_on": {
+   "v147": {
+    "precision": 0.8648451421298261,
+    "recall": 0.45906675074317627,
+    "iou": 0.42833728377628727,
+    "f1": 0.5997705004854796
+   },
+   "ablation": {
+    "precision": 0.8485727084940644,
+    "recall": 0.6142960093685254,
+    "iou": 0.5536089755558983,
+    "f1": 0.7126747904604646
+   },
+   "v1492": {
+    "precision": 0.7484036619609955,
+    "recall": 0.7010629673002432,
+    "iou": 0.5673492596939631,
+    "f1": 0.7239602228857942
+   },
+   "v1492_floor": {
+    "precision": 0.7696472092372848,
+    "recall": 0.6941176470588235,
+    "iou": 0.5747210454084373,
+    "f1": 0.7299337836173659
+   },
+   "shipped": {
+    "precision": 0.8100688861681885,
+    "recall": 0.49470317989370327,
+    "iou": 0.44328656991104726,
+    "f1": 0.6142738097235505
+   },
+   "shipped_lofo": {
+    "precision": 0.8100688861681885,
+    "recall": 0.49470317989370327,
+    "iou": 0.44328656991104726,
+    "f1": 0.6142738097235505
+   }
+  }
+ },
+ "the_split_is_confounded": "the 16 never-trained tiles are also the hydrogen-charged specimen families; training overlap and specimen family cannot be separated on this corpus. The clean leakage estimate is shipped vs shipped_lofo, which is paired_steps.leakage_in_sample_over_held_out",
+ "n_tiles_by_training_overlap": {
+  "parent_in_training_set": 10,
+  "parent_never_trained_on": 16,
+  "parents_in_training": [
+   "260622_316_H_b2_front_CBS_03",
+   "260622_316_H_b2_front_CBS_04",
+   "260708_316_H_b2_front_CBS_005",
+   "AS_24hr_BSE_Side_008",
+   "Cast_24hr_SE_Side_006",
+   "HIP_24hr_SE_Side_006",
+   "MAR_Amb_Cast_ETD_0003",
+   "MAR_Amb_HIP_ETD_0006"
+  ],
+  "parents_never_trained": [
+   "260622_316_H_b4_CBS_02",
+   "260622_316_amb_b3_CBS_02",
+   "MAR_AmbB_HIP_ETD_0003",
+   "MAR_Amb_AS_ETD_0006",
+   "MAR_H_AS_CBS_0001",
+   "MAR_H_AS_CBS_0006",
+   "MAR_H_AS_ETD_0003",
+   "MAR_H_AS_ETD_0006",
+   "MAR_H_AS_ETD_0007",
+   "MAR_H_HIP_CBS_0002",
+   "MAR_H_HIP_CBS_0003",
+   "MAR_H_HIP_CBS_0005",
+   "MAR_H_HIP_ETD_0002",
+   "MAR_H_HIP_ETD_0009"
+  ]
  },
  "paired": {
   "ablation": {
@@ -89,8 +316,84 @@
    "wilcoxon_stat": 5.0,
    "wilcoxon_p": 0.00244140625,
    "test": "two-sided Wilcoxon signed-rank on the per-specimen IoU difference, one pair per specimen, 13 pairs"
+  },
+  "v1492_floor": {
+   "arm": "v1492_floor",
+   "baseline": "v147",
+   "n_specimens": 13,
+   "median_delta_iou": 0.23133330903613003,
+   "n_better": 11,
+   "n_worse": 2,
+   "n_tied": 0,
+   "wilcoxon_stat": 5.0,
+   "wilcoxon_p": 0.00244140625,
+   "test": "two-sided Wilcoxon signed-rank on the per-specimen IoU difference, one pair per specimen, 13 pairs"
+  },
+  "shipped": {
+   "arm": "shipped",
+   "baseline": "v147",
+   "n_specimens": 13,
+   "median_delta_iou": 0.0,
+   "n_better": 6,
+   "n_worse": 1,
+   "n_tied": 6,
+   "wilcoxon_stat": 3.0,
+   "wilcoxon_p": 0.078125,
+   "test": "two-sided Wilcoxon signed-rank on the per-specimen IoU difference, one pair per specimen, 13 pairs"
+  },
+  "shipped_lofo": {
+   "arm": "shipped_lofo",
+   "baseline": "v147",
+   "n_specimens": 13,
+   "median_delta_iou": 0.0,
+   "n_better": 6,
+   "n_worse": 1,
+   "n_tied": 6,
+   "wilcoxon_stat": 2.0,
+   "wilcoxon_p": 0.046875,
+   "test": "two-sided Wilcoxon signed-rank on the per-specimen IoU difference, one pair per specimen, 13 pairs"
   }
  },
+ "paired_steps": {
+  "floor_over_candidates": {
+   "arm": "v1492_floor",
+   "baseline": "v1492",
+   "n_specimens": 13,
+   "median_delta_iou": 0.0006731724692387031,
+   "n_better": 7,
+   "n_worse": 6,
+   "n_tied": 0,
+   "wilcoxon_stat": 43.0,
+   "wilcoxon_p": 0.892578125,
+   "test": "two-sided Wilcoxon signed-rank on the per-specimen IoU difference, one pair per specimen, 13 pairs"
+  },
+  "classifier_over_floor": {
+   "arm": "shipped",
+   "baseline": "v1492_floor",
+   "n_specimens": 13,
+   "median_delta_iou": -0.15338107648617005,
+   "n_better": 2,
+   "n_worse": 11,
+   "n_tied": 0,
+   "wilcoxon_stat": 9.0,
+   "wilcoxon_p": 0.008056640625,
+   "test": "two-sided Wilcoxon signed-rank on the per-specimen IoU difference, one pair per specimen, 13 pairs"
+  },
+  "leakage_in_sample_over_held_out": {
+   "arm": "shipped",
+   "baseline": "shipped_lofo",
+   "n_specimens": 13,
+   "median_delta_iou": 0.0,
+   "n_better": 1,
+   "n_worse": 1,
+   "n_tied": 11,
+   "wilcoxon_stat": 1.0,
+   "wilcoxon_p": 1.0,
+   "test": "two-sided Wilcoxon signed-rank on the per-specimen IoU difference, one pair per specimen, 13 pairs"
+  }
+ },
+ "classifier_is_on": true,
+ "what_the_classifier_costs_and_buys": "read arm D against arm E. Every other difference in this record is a candidate-stage difference. The 26-tile pooled row is dominated by one off-specimen flooded tile; pooled_25_no_flood is the row to quote for precision.",
  "v1491_committed_pooled": {
   "value": {
    "precision": 0.4182,
@@ -120,6 +423,24 @@
     "iou": 0.19459492735779366,
     "f1": 0.32579232156660654
    },
+   "v1492_floor": {
+    "precision": 0.39179474467030245,
+    "recall": 0.2802056555269923,
+    "iou": 0.19526809982703236,
+    "f1": 0.32673523179492475
+   },
+   "shipped": {
+    "precision": 0.9758036640165918,
+    "recall": 0.25024377271518483,
+    "iou": 0.2487005550171791,
+    "f1": 0.3983349795400028
+   },
+   "shipped_lofo": {
+    "precision": 0.9758036640165918,
+    "recall": 0.25024377271518483,
+    "iou": 0.2487005550171791,
+    "f1": 0.3983349795400028
+   },
    "delta_iou_ablation": -0.053396260917704275,
    "delta_iou_v1492": -0.05410562765938545
   },
@@ -141,6 +462,24 @@
     "recall": 0.7688808007279345,
     "iou": 0.7348577859627583,
     "f1": 0.8471677527791703
+   },
+   "v1492_floor": {
+    "precision": 0.9541867308721241,
+    "recall": 0.7636353904619172,
+    "iou": 0.7366274266831888,
+    "f1": 0.8483425003716366
+   },
+   "shipped": {
+    "precision": 0.9943333689725222,
+    "recall": 0.4977787293261254,
+    "iou": 0.49637062339880444,
+    "f1": 0.6634327293479813
+   },
+   "shipped_lofo": {
+    "precision": 0.9943333689725222,
+    "recall": 0.4977787293261254,
+    "iou": 0.49637062339880444,
+    "f1": 0.6634327293479813
    },
    "delta_iou_ablation": 0.18098141928327127,
    "delta_iou_v1492": 0.22956366831569952
@@ -164,6 +503,24 @@
     "iou": 0.16038471536262022,
     "f1": 0.2764336917562724
    },
+   "v1492_floor": {
+    "precision": 0.1640521137995214,
+    "recall": 0.9167904903417533,
+    "iou": 0.16164527115535762,
+    "f1": 0.2783040144339197
+   },
+   "shipped": {
+    "precision": 0.1961220597584234,
+    "recall": 0.9167904903417533,
+    "iou": 0.19269206745783884,
+    "f1": 0.32312123592563496
+   },
+   "shipped_lofo": {
+    "precision": 0.1961220597584234,
+    "recall": 0.9167904903417533,
+    "iou": 0.19269206745783884,
+    "f1": 0.32312123592563496
+   },
    "delta_iou_ablation": -0.031046796302481222,
    "delta_iou_v1492": -0.03230735209521862
   },
@@ -185,6 +542,24 @@
     "recall": 0.7207277452891488,
     "iou": 0.6761765423067545,
     "f1": 0.8068082630200757
+   },
+   "v1492_floor": {
+    "precision": 0.9216954824316788,
+    "recall": 0.7158761100281568,
+    "iou": 0.6748335987586264,
+    "f1": 0.8058515177374131
+   },
+   "shipped": {
+    "precision": 0.9634116192830655,
+    "recall": 0.675243664717349,
+    "iou": 0.6583604341766272,
+    "f1": 0.7939895581306508
+   },
+   "shipped_lofo": {
+    "precision": 0.9681445218230711,
+    "recall": 0.6082304526748972,
+    "iou": 0.596296768165796,
+    "f1": 0.7471001383420242
    },
    "delta_iou_ablation": 0.0422095178624009,
    "delta_iou_v1492": 0.2682823687548045
@@ -208,6 +583,24 @@
     "iou": 0.696071385794706,
     "f1": 0.8208043501288795
    },
+   "v1492_floor": {
+    "precision": 0.7839607201309329,
+    "recall": 0.8913009768956427,
+    "iou": 0.7155483630026143,
+    "f1": 0.8341920034830563
+   },
+   "shipped": {
+    "precision": 0.9043876114500234,
+    "recall": 0.5976895642735308,
+    "iou": 0.5621672865164442,
+    "f1": 0.7197273830641396
+   },
+   "shipped_lofo": {
+    "precision": 0.8642661890847394,
+    "recall": 0.7108854085904791,
+    "iou": 0.6394894685451249,
+    "f1": 0.7801080529204066
+   },
    "delta_iou_ablation": 0.17534501167443672,
    "delta_iou_v1492": 0.137403542830436
   },
@@ -229,6 +622,24 @@
     "recall": 0.3442653556537432,
     "iou": 0.34338919925512107,
     "f1": 0.5112281674521763
+   },
+   "v1492_floor": {
+    "precision": 0.9987268097489996,
+    "recall": 0.3417138589831352,
+    "iou": 0.3415650659368002,
+    "f1": 0.5092038762924839
+   },
+   "shipped": {
+    "precision": 0.9987108655616943,
+    "recall": 0.3374821084074927,
+    "iou": 0.33733515799950237,
+    "f1": 0.5044885808642262
+   },
+   "shipped_lofo": {
+    "precision": 0.9987108655616943,
+    "recall": 0.3374821084074927,
+    "iou": 0.33733515799950237,
+    "f1": 0.5044885808642262
    },
    "delta_iou_ablation": 0.006158248320477733,
    "delta_iou_v1492": 0.10912694496300859
@@ -252,6 +663,24 @@
     "iou": 0.30658605306409953,
     "f1": 0.46929331955613457
    },
+   "v1492_floor": {
+    "precision": 0.9313993796752418,
+    "recall": 0.308776386620698,
+    "iou": 0.3019102253237921,
+    "f1": 0.46379576633051695
+   },
+   "shipped": {
+    "precision": 0.9425566343042071,
+    "recall": 0.07046513034536987,
+    "iou": 0.07016381594796435,
+    "f1": 0.1311272440767629
+   },
+   "shipped_lofo": {
+    "precision": 0.9425566343042071,
+    "recall": 0.07046513034536987,
+    "iou": 0.07016381594796435,
+    "f1": 0.1311272440767629
+   },
    "delta_iou_ablation": 0.21304078387892378,
    "delta_iou_v1492": 0.2933398182609785
   },
@@ -273,6 +702,24 @@
     "recall": 0.5904477611940299,
     "iou": 0.26802168021680217,
     "f1": 0.4227399016883949
+   },
+   "v1492_floor": {
+    "precision": 0.34602649006622516,
+    "recall": 0.5614925373134328,
+    "iou": 0.2724112961622013,
+    "f1": 0.42818119735943544
+   },
+   "shipped": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "iou": 0.0,
+    "f1": 0.0
+   },
+   "shipped_lofo": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "iou": 0.0,
+    "f1": 0.0
    },
    "delta_iou_ablation": 0.19691056910569105,
    "delta_iou_v1492": 0.26802168021680217
@@ -296,6 +743,24 @@
     "iou": 0.3892174704276615,
     "f1": 0.5603405927624038
    },
+   "v1492_floor": {
+    "precision": 0.8584905660377359,
+    "recall": 0.4070576540755467,
+    "iou": 0.3814625058220773,
+    "f1": 0.5522589345920432
+   },
+   "shipped": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "iou": 0.0,
+    "f1": 0.0
+   },
+   "shipped_lofo": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "iou": 0.0,
+    "f1": 0.0
+   },
    "delta_iou_ablation": 0.3561260210035006,
    "delta_iou_v1492": 0.3892174704276615
   },
@@ -317,6 +782,24 @@
     "recall": 0.40086830680173663,
     "iou": 0.39424992883575294,
     "f1": 0.5655369538587178
+   },
+   "v1492_floor": {
+    "precision": 0.9745830023828436,
+    "recall": 0.35513748191027494,
+    "iou": 0.3518784055061658,
+    "f1": 0.5205770046669494
+   },
+   "shipped": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "iou": 0.0,
+    "f1": 0.0
+   },
+   "shipped_lofo": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "iou": 0.0,
+    "f1": 0.0
    },
    "delta_iou_ablation": 0.35064562410329986,
    "delta_iou_v1492": 0.39424992883575294
@@ -340,6 +823,24 @@
     "iou": 0.6387271214642263,
     "f1": 0.7795405508313239
    },
+   "v1492_floor": {
+    "precision": 0.7583652302753426,
+    "recall": 0.8085834649815693,
+    "iou": 0.6429393907672982,
+    "f1": 0.7826696400127429
+   },
+   "shipped": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "iou": 0.0,
+    "f1": 0.0
+   },
+   "shipped_lofo": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "iou": 0.0,
+    "f1": 0.0
+   },
    "delta_iou_ablation": 0.6170136823319453,
    "delta_iou_v1492": 0.6387271214642263
   },
@@ -361,6 +862,24 @@
     "recall": 0.8437424469473582,
     "iou": 0.6744136625323597,
     "f1": 0.8055520300908032
+   },
+   "v1492_floor": {
+    "precision": 0.7950005733287467,
+    "recall": 0.837869193213129,
+    "iou": 0.6890068173235545,
+    "f1": 0.8158721566504668
+   },
+   "shipped": {
+    "precision": 0.8263978772974372,
+    "recall": 0.6172717165369556,
+    "iou": 0.5464173388390852,
+    "f1": 0.7066880655247793
+   },
+   "shipped_lofo": {
+    "precision": 0.8263978772974372,
+    "recall": 0.6172717165369556,
+    "iou": 0.5464173388390852,
+    "f1": 0.7066880655247793
    },
    "delta_iou_ablation": 0.1548134562288902,
    "delta_iou_v1492": 0.14941309148231285
@@ -384,6 +903,24 @@
     "iou": 0.12873903338005502,
     "f1": 0.22811124551002857
    },
+   "v1492_floor": {
+    "precision": 0.14225672181706456,
+    "recall": 0.5626791405837976,
+    "iou": 0.12809416923317848,
+    "f1": 0.22709836240045536
+   },
+   "shipped": {
+    "precision": 0.11958411935676144,
+    "recall": 0.4462406273646557,
+    "iou": 0.10413132929171862,
+    "f1": 0.18862127453355948
+   },
+   "shipped_lofo": {
+    "precision": 0.11958411935676144,
+    "recall": 0.4462406273646557,
+    "iou": 0.10413132929171862,
+    "f1": 0.18862127453355948
+   },
    "delta_iou_ablation": 0.01788094648468075,
    "delta_iou_v1492": 0.03060140729038273
   }
@@ -403,7 +940,10 @@
    "px": {
     "v147": 0,
     "ablation": 1787,
-    "v1492": 2083
+    "v1492": 2083,
+    "v1492_floor": 1908,
+    "shipped": 0,
+    "shipped_lofo": 0
    },
    "v147": {
     "precision": 0.0,
@@ -422,6 +962,24 @@
     "recall": 0.42519880715705766,
     "iou": 0.3892174704276615,
     "f1": 0.5603405927624038
+   },
+   "v1492_floor": {
+    "precision": 0.8584905660377359,
+    "recall": 0.4070576540755467,
+    "iou": 0.3814625058220773,
+    "f1": 0.5522589345920432
+   },
+   "shipped": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "iou": 0.0,
+    "f1": 0.0
+   },
+   "shipped_lofo": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "iou": 0.0,
+    "f1": 0.0
    }
   },
   {
@@ -438,7 +996,10 @@
    "px": {
     "v147": 0,
     "ablation": 1252,
-    "v1492": 1443
+    "v1492": 1443,
+    "v1492_floor": 1259,
+    "shipped": 0,
+    "shipped_lofo": 0
    },
    "v147": {
     "precision": 0.0,
@@ -457,6 +1018,24 @@
     "recall": 0.40086830680173663,
     "iou": 0.39424992883575294,
     "f1": 0.5655369538587178
+   },
+   "v1492_floor": {
+    "precision": 0.9745830023828436,
+    "recall": 0.35513748191027494,
+    "iou": 0.3518784055061658,
+    "f1": 0.5205770046669494
+   },
+   "shipped": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "iou": 0.0,
+    "f1": 0.0
+   },
+   "shipped_lofo": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "iou": 0.0,
+    "f1": 0.0
    }
   },
   {
@@ -473,7 +1052,10 @@
    "px": {
     "v147": 0,
     "ablation": 5995,
-    "v1492": 8162
+    "v1492": 8162,
+    "v1492_floor": 8099,
+    "shipped": 0,
+    "shipped_lofo": 0
    },
    "v147": {
     "precision": 0.0,
@@ -492,9 +1074,27 @@
     "recall": 0.8085834649815693,
     "iou": 0.6387271214642263,
     "f1": 0.7795405508313239
+   },
+   "v1492_floor": {
+    "precision": 0.7583652302753426,
+    "recall": 0.8085834649815693,
+    "iou": 0.6429393907672982,
+    "f1": 0.7826696400127429
+   },
+   "shipped": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "iou": 0.0,
+    "f1": 0.0
+   },
+   "shipped_lofo": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "iou": 0.0,
+    "f1": 0.0
    }
   }
  ],
  "crop_choice": "Each dead-zone specimen contributes exactly one hand-labelled 512 px tile, so the panel is that tile and there was no crop to select. Asserted in the runner, which raises if a specimen ever gains a second tile.",
- "seconds": 12.9
+ "seconds": 23.1
 }

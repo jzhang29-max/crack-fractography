@@ -31,3 +31,10 @@ _smoke.log
 # redistributed collections -- the BUILDER is the reproducible artifact, never the
 # bytes it assembles.
 release/
+
+# Scratch caches written by the classifier tuning and leave-one-out runners.
+# Regenerable, and large: per-frame label maps for every scorable SEM frame.
+docs/figures/_tunecache/
+docs/figures/_lofo_folds/
+paper/figures/dz_fold_*.joblib
+.DS_Store

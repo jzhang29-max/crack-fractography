@@ -83,7 +83,7 @@ def sharpness(img8):
     return float(np.percentile(g, 99.5) / sd)
 
 
-def run(label, it, grouper=None):
+def run(label, it, mask_fn, grouper=None):
     deep = {r["frame"]: r["deep_share"]
             for r in json.load(open(TRACES))[label]["frames"]}
     rows = []
@@ -91,8 +91,7 @@ def run(label, it, grouper=None):
         pos, neg = (corr == 1), ((corr == 2) | (corr == 3))
         if pos.sum() < OV.MIN_PX or neg.sum() < OV.MIN_PX:
             continue
-        m = OV.clean(OV.u.segment_dark_regions(OV.D.flatten_background(img8), img8=img8,
-                                               mad_k=OV.MADK))
+        m = mask_fn(img8)
         tp, fp, fn = int((m & pos).sum()), int((m & neg).sum()), int((~m & pos).sum())
         lab, n = ndi.label(m & neg, np.ones((3, 3), bool))
         sz = np.bincount(lab.ravel())
@@ -126,8 +125,18 @@ def main():
                             "tendency",
         "trace": "deep share at most 0.25 in paint_region_vs_trace.json",
         "mad_k": OV.MADK,
-        "SEM": run("SEM", OV.sem_frames()),
-        "TXM": run("TXM", OV.txm_frames(), OV.txm_group),
+        "use_region_classifier": bool(OV.DO.USE_REGION_CLASSIFIER),
+        "emission": ("SEM through the application's own emission (`overlap_means_sem_txm"
+                     ".sem`), region classifier included when the flag is set; TXM "
+                     "through the area floor alone, because the SEM region classifier is "
+                     "not part of the TXM pipeline"),
+        #: both arms take their mask from overlap_means_sem_txm, so this file and the
+        #: score record can never describe two different detectors.
+        "SEM": run("SEM", OV.sem_frames(), OV.sem),
+        "TXM": run("TXM", OV.txm_frames(),
+                   lambda img8: OV.clean(OV.u.segment_dark_regions(
+                       OV.D.flatten_background(img8), img8=img8, mad_k=OV.MADK)),
+                   OV.txm_group),
     }
     if SCOPE_ON:
         res["specimen_scope"] = list(SCOPE)   # only on a filtered run

@@ -100,13 +100,32 @@ def test_detect_one_actually_branches_on_the_switch():
     assert ifs[0].orelse, "the flag has no else branch, so one setting does nothing"
 
 
-def test_the_shipped_default_is_classifier_off_and_says_why():
+def test_the_shipped_classifier_setting_states_the_trade_it_makes():
+    """The flag is ON. This test pins that, and pins that both directions are recorded.
+
+    It used to assert the flag was OFF, with the four numbers that justified switching it
+    off. Those numbers are still true and are still required here: a setting whose
+    counter-evidence has been deleted from the file cannot be reviewed. What is required
+    in addition is the measurement of the setting actually shipped -- the classifier on
+    raises precision and lowers recall -- so that the file states a trade rather than an
+    upgrade.
+    """
     import detector_overrides as DO
-    assert DO.USE_REGION_CLASSIFIER is False
+    assert DO.USE_REGION_CLASSIFIER is True
     src = open(os.path.join(HERE, "analysis", "detector_overrides.py"),
                encoding="utf-8").read()
     for ev in ("0.2979", "0.2143", "p = 0.0061", "0.6827", "exactly 0"):
-        assert ev in src, f"the default is set but {ev!r} (its evidence) is not recorded"
+        assert ev in src, f"the counter-evidence {ev!r} has been deleted from the record"
+    for ev in ("0.784", "0.860", "0.625", "0.434"):
+        assert ev in src, (f"the flag is ON but {ev!r} -- the measured cost of having it "
+                           f"on -- is not recorded beside it")
+    #: whitespace-normalised, because the phrase is wrapped across a comment line break
+    #: and a contiguous-substring test would pass or fail on where the line happened to
+    #: break rather than on what the file says.
+    low = " ".join(src.lower().replace("#:", " ").replace("#", " ").split())
+    assert "trade" in low and "not an upgrade" in low, (
+        "the record must say in words that turning the classifier on is a trade, because "
+        "every pooled metric except precision falls")
 
 
 def test_switch_changes_which_regions_survive():
@@ -127,7 +146,7 @@ def test_switch_changes_which_regions_survive():
     assert m_on.sum() == 2 and m_off.sum() == 6, "the fixture does not exercise the branch"
     assert m_off.sum() > m_on.sum(), "classifier-off must only ever ADD regions"
     assert not (m_on & ~m_off).any(), "classifier-off dropped a region the classifier kept"
-    assert DO.USE_REGION_CLASSIFIER is False      # the branch this build takes
+    assert DO.USE_REGION_CLASSIFIER is True       # the branch this build takes
 
 
 # ------------------------------------------------------- the multi-scale union override

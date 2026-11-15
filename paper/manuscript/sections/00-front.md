@@ -9,11 +9,20 @@
 ## Abstract
 
 Quantifying crack area in scanning electron microscopy supports the characterisation of
-defects in metallic microstructures. This study examines a deterministic multiscale
-darkness detector for measuring the two-dimensional crack area fraction in Inconel 718
-micrographs. The evaluated pipeline combines background correction, multiscale candidate
-detection, morphological cleanup and connected-component filtering without a learned region
-classifier. The primary collection comprises {in_n} whole fields. At the reported MAD
+defects in metallic microstructures. This study examines a multiscale darkness
+detector for measuring the two-dimensional crack area fraction in Inconel 718
+micrographs. The pipeline combines background correction, multiscale candidate
+detection, morphological cleanup and connected-component filtering, followed by an
+eight-feature logistic region classifier that decides which candidates are retained and
+carries the only fitted parameters in the chain, nine of them. **The two collections in
+this study were scored at different settings of that classifier, and the results must be
+read accordingly.** The laboratory collections were scored with it enabled, which is a
+trade and not an improvement: it raises precision and lowers recall, intersection over
+union and F1. The public collection reported below, including the aggregate area
+agreement, was scored with it bypassed, at the candidate stage; those measurements were
+not repeated at the present setting because the source images are a public download no
+longer held on the machine this analysis runs on. Because the classifier only ever
+removes candidate regions, repeating them could only lower the predicted area fraction. The primary collection comprises {in_n} whole fields. At the reported MAD
 multiplier of {mk_best}, the predicted crack area fraction was {ag_best_mark}%, compared
 with a reference value of {ag_best_lab}%. The predicted-to-reference area ratio was
 {ag_best}, corresponding to a net difference of 0.024 percentage points and an aggregate
@@ -36,7 +45,7 @@ that collection's labels, a reconstruction of the reference annotation that is e
 correct about position scores {tm_ld_ceil} where the deployed model scores {tm_ld_iou}, and
 the two move in opposite directions with the width of the annotator's stroke — so a higher
 overlap score there is evidence of resemblance to the brush rather than of crack found. The
-SEM detector itself, carried across unchanged to the {tx_n} frames of the two specimen
+SEM detector itself, its candidate stage carried across unchanged to the {tx_n} frames of the two specimen
 series reported here, returns {tx_area} times the annotated crack area pooled and stands
 {tx_margin} points above an all-background prediction — but that pooled figure is the
 area-weighted average of {tx_b3_margin} points on one series and {tx_b2_margin} on the

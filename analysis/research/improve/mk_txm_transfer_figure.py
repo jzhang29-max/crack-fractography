@@ -79,6 +79,17 @@ NM_PER_PX = 29.24          # derived from mosaic geometry; see the docstring
 #: 73.2% (the B3 frame the old rule chose); the four frames above 36% are the two B3 and
 #: two Wrought region annotations. 25% sits in the empty part of that range.
 DEEP_PX, MAX_DEEP_SHARE = 50, 0.25
+#: A frame is also ineligible to be SHOWN if the detector marks more operator-REJECTED
+#: area on it than there is painted crack. Such a panel is not a picture of crack
+#: detection: it is a picture of one enormous false positive, and the B2 frame the
+#: length rule used to choose, b2_343_75_LARGE, is exactly that -- 1,169,632 rejected
+#: pixels against 258,927 painted ones, rendering as a sheet of flat red across the
+#: lower half of the panel, and 85.3% of its marked area lies at an optical density
+#: below 0.10, which is the gap where the beam missed the specimen rather than material.
+#: The bound separates cleanly: that frame sits at 4.52 and the next highest of the
+#: eighteen at 0.35, so nothing else in either group is touched. It is a choice of
+#: PANEL only and changes no number; the bars in (g) and (h) are over all frames.
+MAX_FP_RATIO = 1.0
 #: The eligibility floor, named rather than repeated as a literal in the loop below.
 MIN_PX = 5000
 # The width this plate is printed at on the page (PAGE[0] - ML - MR in make_paper.py).
@@ -147,26 +158,38 @@ for f in sorted(os.listdir(cdir)):
         skel = int(morph.skeletonize(crack).sum())
         wid = float(2 * np.percentile(dt[crack], 90))
         deep = float((dt[crack] > DEEP_PX).mean())
+        # How much operator-REJECTED area the detector marks here, relative to the
+        # painted crack. See MAX_FP_RATIO: this is what keeps the panel from being one
+        # enormous false positive over the gap where the beam missed the specimen.
+        img8 = D.load_as_uint8(tif)
+        if img8.shape != corr.shape:
+            continue
+        final = cand(u.segment_dark_regions(D.flatten_background(img8), img8=img8,
+                                            mad_k=MADK))
+        fp_ratio = float((final & ((corr == 2) | (corr == 3))).sum() / max(c, 1))
         cands.append((group_of(stem), skel, stem, tif, os.path.join(cdir, f), c, wid,
-                      deep))
+                      deep, fp_ratio))
 
 # the LONGEST TRACE-PAINTED crack in each of the two groups that disagree most
 pick = {}
 for g in PANEL_GROUPS:
     rows = [c for c in cands if c[0] == g]
-    ok = [r for r in rows if r[7] <= MAX_DEEP_SHARE]
+    ok = [r for r in rows if r[7] <= MAX_DEEP_SHARE and r[8] <= MAX_FP_RATIO]
     if not ok:
         raise SystemExit(
-            f"mk_txm_transfer_figure: no {g} frame has trace-like paint at "
-            f"MAX_DEEP_SHARE={MAX_DEEP_SHARE}. Do not fall back to the widest region -- "
-            f"that is the behaviour this rule exists to stop. Raise the bound "
-            f"deliberately, or drop the row.")
+            f"mk_txm_transfer_figure: no {g} frame is both trace-painted at "
+            f"MAX_DEEP_SHARE={MAX_DEEP_SHARE} and below MAX_FP_RATIO={MAX_FP_RATIO}. "
+            f"Do not fall back to the widest region or to a frame that is one huge "
+            f"false positive -- that is the behaviour these rules exist to stop. Raise "
+            f"a bound deliberately, or drop the row.")
     pick[g] = max(ok, key=lambda r: r[1])
     for r in sorted(rows, key=lambda r: -r[1]):
         tag = ("<- shown" if r is pick[g]
-               else "excluded" if r[7] > MAX_DEEP_SHARE else "        ")
+               else "excl:paint" if r[7] > MAX_DEEP_SHARE
+               else "excl:fp" if r[8] > MAX_FP_RATIO else "        ")
         print(f"  {g:<7} skeleton {r[1]:>7,} px  area {r[5]:>9,} px  paint p90 "
-              f"{r[6]:6.1f} px  deep {100 * r[7]:5.1f}%  {tag}  {r[2][:52]}")
+              f"{r[6]:6.1f} px  deep {100 * r[7]:5.1f}%  fp/crack {r[8]:5.2f}  "
+              f"{tag}  {r[2][:52]}")
 
 fig = plt.figure(figsize=(J.PAGEW, 6.9))
 # Panels on top (2 rows x 3), bars underneath (1 row x 2). Side by side they needed

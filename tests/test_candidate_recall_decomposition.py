@@ -49,10 +49,16 @@ def _detector_importable():
 # --------------------------------------------------------- nothing changed in what ships
 def test_this_work_changed_no_shipped_constant():
     """The whole point: a 100-line measurement record and zero behaviour change. A future
-    edit that quietly ships the absolute-threshold lever has to break this."""
+    edit that quietly ships the absolute-threshold lever has to break this.
+
+    `USE_REGION_CLASSIFIER` is the one constant here that HAS since been changed, by the
+    author's decision and with the trade recorded beside it. It is pinned at its new
+    value for the same reason it was pinned at the old one: so that it can only move
+    deliberately.
+    """
     import detector_overrides as DO
 
-    assert DO.USE_REGION_CLASSIFIER is False
+    assert DO.USE_REGION_CLASSIFIER is True
     assert DO.USE_MULTISCALE_UNION is True
     assert DO.SCALE_LADDER == (5, 10, 20, 40, 80, 160, 320)
     assert DO.DECIMATE_ABOVE_SIGMA == 64

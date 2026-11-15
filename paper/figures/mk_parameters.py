@@ -1,98 +1,126 @@
 #!/usr/bin/env python3
-"""Figure 6: how every constant in Table 1 was determined -- and which ones were not.
+"""Figure 6: every constant of BOTH detectors, what it is set to, and how it was fixed.
 
-WHY. A reviewer asked for "a figure on how you determined all of the parameters to
-include in the algorithm". The honest answer is that the seven rows of Table 1 do not
-share one provenance. ONE was selected by a sweep on labelled data. TWO were decided by a
-measurement that spends no free parameter at all, so their fitted and held-out scores are
-the same number by construction. The rest were inherited from the archived pipeline with
-no recorded provenance, and are swept here -- several of them for the first time. Drawing
-seven selection curves would be fiction, and a reviewer who spots one fabricated optimum
-stops reading. So each panel is the evidence that exists for one constant, and the panels
-for the untuned constants show the SENSITIVITY instead of an optimum: where the shipped
-value is not the best value on the instrument, the marker simply sits off the peak.
+WHAT THE PLATE IS. Per arm: a row of sweep panels over a printed table. Nine panels,
+because nine of the fifty constants have evidence worth plotting; fifty table rows,
+because fifty is how many constants the two detectors read. A constant with a panel
+names its letter in its row.
 
-ONE PROBLEM TABLE 1 HIDES. Its row "morphological opening size 13 px" is two constants,
-not one: unified_pipeline calls clean_mask(dark, min_area_px=13), and inside clean_mask
-the 13 is remove_small_objects' area floor while the opening is a disk of radius 1. They
-are drawn in two separate panels here, (e) and (f), because they do different things.
+WHY IT WAS REDRAWN, FOUR TIMES, AND WHERE THIS ONE CAME FROM. The first edition was six
+curves in a two-by-three grid and left the TXM arm out entirely. The second was
+wordless by request: nine panels over loose name/value strips, twenty-one constants of
+fifty. The third carried all fifty in a ruled block with colour swatches. The fourth
+made the constants into stage boxes joined by arrows. Every one of those was built from
+a description of what a scientific figure ought to look like, and every one was
+rejected.
 
-NO TWIN AXES. (a) and (c) each carry two measurands against one x, and each is drawn as
-a STACKED PAIR of sub-panels sharing the x axis under a single panel letter, not as one
-axes with two y scales. A dual-scale chart makes the reader guess which scale a series
-belongs to, and both of the specific failures it caused here were real: in (c) a third
-series on the left-hand scale had to be drawn in a third colour, which left no way to
-tell; and in (a) a reference rule at an area ratio of 1 landed at 0.155 on the F1 scale,
-where it reads as an F1 reference. Only the lower sub-panel of each pair carries x tick
-labels and the x label; the vertical rules marking the constants run through both.
+This edition is built from two REAL PUBLISHED FIGURES of this kind, opened and
+measured; what they do is written down, with their citations, in
+docs/FIGURE_CONVENTIONS_FROM_PUBLISHED_WORK.md. Two things follow from them and they
+are the whole of this revision:
 
-WHAT EACH PANEL IS, AND ON WHICH UNIT SET. The unit sets differ and may never be compared
-across panels -- that is how this project has produced false rankings before -- so each
-panel carries its own n in its axis label and the sidecar names the set.
+  * A DATA PANEL IN THESE JOURNALS CARRIES A FULL AXIS TITLE WITH ITS UNIT AND SEVERAL
+    NUMERIC TICK LABELS on each axis, and its letter is lowercase, bold and inside the
+    axes at the top left. Earlier editions had no y tick labels at all and set the x
+    ends as loose figure text beside an axes whose ticks were switched off. That is a
+    sparkline, and a sparkline with no scale is a shape rather than a measurement.
+  * AN INVENTORY OF SETTINGS IS A TABLE, and in these journals a table is plain: a top
+    rule, a header, a header rule, the rows, a bottom rule. No boxes, no arrows, no
+    colour, no legend. How each value was settled is ONE LETTER in its own narrow
+    column with a single footnote under the plate, which is the ordinary way a printed
+    table carries a flag. Three editions tried to make the inventory into artwork and
+    each one read as a figure that had been filled with words.
 
-  (a) MAD multiplier k. SELECTED. 31 public Inconel 718 whole fields, from
-      docs/figures/madk_above_five.json, which is where the paper's k = 6.0 was chosen.
-      Both the accuracy axis (F1) and the axis a user of the tool actually feels (the
-      ratio of marked area to annotated area) are drawn, because the two do not peak in
-      the same place and the paper reports an area fraction. The app's own default, 5.0,
-      is marked beside it: analysis/detector_overrides.py defines SHIPPED_MAD_K = 5.0 and
-      PAPER_MAD_K = 6.0, and they are not the same number.
+WHAT IS ON THE PLATE IS UNCHANGED. The content was never what was wrong: the same nine
+sweeps and the same fifty constants, including the eight settings the SEM chain applies
+before the detector runs -- a contrast window with a three-frame exception, a databar
+probe, a field-of-view finder -- and the twelve the TXM mask path applies after it, a
+nine-constant width clip and a three-constant straight-artefact rejector that
+`_narrow_to_image` runs on every exported mask. A constant applied to the data and not
+declared is an undeclared degree of freedom.
 
-  (b) The learned region classifier. DECIDED BY MEASUREMENT, with zero free parameters:
-      deleting it raises all four pooled tile metrics, so fitted and held-out agree by
-      construction. What the deletion recovers per specimen is a separate plate
-      (mk_recover.py) and is not repeated here; this panel is only the decision.
+HOW EACH CONSTANT WAS FIXED IS THE ref. COLUMN, AND THAT IS THE RESULT.
+Of the fifty, exactly ONE -- the SEM MAD multiplier -- was selected by a sweep on
+labelled data. Four were settled by a test that had no value to choose. NINE were
+inherited from archived code with no recorded provenance and are swept HERE, after the
+fact: their panels show SENSITIVITY, not selection, and where the shipped value is not
+the best value on the instrument the marker simply sits off the peak. Thirty-six are
+fixed by construction with no sweep on record.
 
-  (c) The absolute intensity gate. INHERITED. Swept here in both directions it can be
-      swept: pooled IoU over the 26 hand-labelled 512 px tiles, and recall on
-      hand-painted crack over all 48 full frames that carry a correction mask. t = 0 is
-      the gate switched off. The two tile curves are the whole corpus and the corpus
-      without the one crop holding an off-specimen void, and they disagree about the sign.
+THREE OF THOSE NINE WERE SWEPT FOR THE FIRST TIME IN THIS REVISION, because the author's
+standing objection was that the plate did not show how each setting was chosen and for
+most of them the honest answer was that nothing had ever been measured. The closing
+radius, the denoise sigma and the flattening radius can all be swept on the SAME 26
+tiles and the SAME scorer as the rest, so they were, and the shipped value is not the
+best on its own grid for either of the first two. Panel (f) also gives the seven-rung
+ladder the evidence it never had, by scoring one radius at a time against the union.
 
-  (d) The scale ladder. STRUCTURAL, NOT TUNED. Which term of the union supplies the
-      hand-painted crack the darkness stage proposes, over the same 48 frames: a pixel is
-      credited to a term only when that term and no other reaches it, so the bars are a
-      true leave-one-out marginal. Pooled bars with the per-frame median overlaid,
-      because two frames hold almost half of this corpus's painted crack and a pooled bar
-      alone would be them.
+NO IoU IS QUOTED IN THIS DOCSTRING, DELIBERATELY. An earlier revision wrote the numbers
+out here, the region classifier was then switched on, every one of them moved, and the
+prose went on asserting the old values with nothing to catch it. The figures, the
+printed controls and the caption file all read the current record; a docstring cannot,
+so it no longer pretends to. Drawing fifty selection curves would be
+fiction, and a reviewer who spots one fabricated optimum stops reading. The key at the
+foot says which kind each swatch is.
 
-  (e) The two size floors and (f) the opening radius with the connectivity. INHERITED.
-      Pooled IoU over the 26 tiles as each constant moves over a wide range with
-      everything else at its shipped value. All four are flat near their shipped setting
-      and not one of them sits at the maximum.
+PANEL (f) AGAINST PANEL (i) IS THE ONE CROSS-PANEL COMPARISON THE PLATE MAKES, and it is
+safe only because it was made safe: both are the same 31 TXM frames and the same
+refereed pixels, asserted against the record rather than assumed. The TXM model clears
+the do-nothing baseline at every threshold above 0.47; the SEM detector's one swept
+constant, carried onto the same frames, never clears it at any k. They are not drawn on
+one axis: on a shared accuracy axis the TXM model's 2.8 point margin and the SEM rule's
+9.5 point shortfall are each under a point of ink, so both curves sit ON the baseline
+and a reader cannot see which side either is on. (f) shows the two rates the threshold
+was decided on and (i) shows the margin itself, hanging below zero.
 
-EVERYTHING IS COMPUTED BY CALLING THE SHIPPED CODE. The darkness cut is
-analysis/detector_overrides.install()'s own segment_dark_regions; the per-rung
-decomposition is analysis/research/improve/fullframe_recall_decomposition.rung_maps, not
-a second copy of the criterion -- an earlier attempt in this project to re-express that
-union as a single scale disagreed with the installed detector on 11.7 M of 25.2 M pixels;
-the cleaning chain is detect_cracks.clean_mask and skimage.measure.label exactly as
-both_modalities.stages runs them. Four controls run before anything is drawn and every
-one of them ABORTS rather than warns:
+AND THE TWO ARE NOT ON EQUAL TERMS. The TXM members were fitted on this very paint, so
+(f) is IN-SAMPLE; the SEM rule was fitted to nothing at all. The asymmetry runs in the
+trained model's favour, so the pair is evidence that the darkness rule does not transfer
+-- which is why the TXM arm has a trained model -- and is NOT a measurement of how much
+better the trained model is.
+
+WHAT IS COMPUTED VERSUS READ. Everything on the SEM side is computed by calling the
+SHIPPED code: the darkness cut is detector_overrides.install()'s own segment_dark_regions,
+the per-rung decomposition is fullframe_recall_decomposition.rung_maps, and the cleaning
+chain is detect_cracks.clean_mask exactly as both_modalities.stages runs it. The TXM
+threshold sweep is computed here from the deployed model's own cached probability maps.
+Every constant quoted in the table is PARSED out of the deployed source with ast --
+never retyped, and never matched with a regular expression, which would hit the
+constant's name inside the prose that explains it. `_sem_constants` reads the SEM
+stages' defaulted arguments and `_txm_constants` the TXM modules' module-level literals;
+either aborts on a name that is no longer there, rather than letting a row quote a value
+the code has stopped using.
+
+SEVEN CONTROLS RUN BEFORE ANYTHING IS DRAWN, AND EVERY ONE ABORTS RATHER THAN WARNS:
 
   * the rung union OR the absolute term must BE the installed detector's own output,
-    pixel for pixel, on the first frame of the corpus pass (rung_maps' documented
-    identity, checked by fullframe_recall_decomposition._control_union);
-  * (k_max > k) OR the absolute term must reproduce that same mask, which is what makes
-    the k and t sweeps readable off one pass instead of one pass per setting;
-  * the tile chain used for the sweeps in (e) and (f) must reproduce
-    both_modalities.stages' final mask on every one of the 26 tiles at the shipped
-    settings;
+    pixel for pixel, on the first frame of the corpus pass;
+  * (k_max > k) OR the absolute term must reproduce that same mask;
+  * the tile chain used for the sweeps in (c)-(e) must reproduce both_modalities.stages'
+    final mask on every one of the 26 tiles at the shipped settings;
   * tilebench's own three controls -- a perfect predictor scores 1.0, an empty one 0.0,
-    and mark-everything scores precision == prevalence.
+    and mark-everything scores precision == prevalence;
+  * the TXM pass must recover txm_background_units.json's own frame count and both of
+    its refereed pixel counts, group by group, or rows (g) and (j) would be two
+    different pixel sets drawn as if they were one;
+  * every TXM probability map read must carry the registry's CURRENT model key, and
+    txm_stats.json and pipeline.py must agree with it on the threshold;
+  * and after the draw, every string is measured at the renderer's own extents: no pair
+    may overlap by more than 1 pt, and no string may leave the column it was placed in.
 
-COST, AND THE TWO CACHES. The 48-frame pass is about 20 s per frame and is written to
-docs/figures/parameters_frames.json; the tile sweeps take about 65 s and go to
-docs/figures/parameters_tiles.json. With both present the plate redraws in a second;
-PARAM_RECOMPUTE=1, or deleting the file, forces the pass again.
+COST, AND THE THREE CACHES. The 48-frame SEM pass is about 20 s per frame and is written
+to docs/figures/parameters_frames.json; the tile sweeps take about 65 s and go to
+docs/figures/parameters_tiles.json; the TXM pass is a few seconds and goes to
+docs/figures/parameters_txm.json. With all three present the plate redraws in a second;
+PARAM_RECOMPUTE=1, or deleting a file, forces that pass again.
 
-THE CACHE IS CHECKED, NOT TRUSTED, because the controls above run inside the pass and
+THE CACHES ARE CHECKED, NOT TRUSTED, because the controls above run inside the pass and
 cannot run again off a file. A cached record has to clear three things before it is
 allowed to answer, and failing any of them ABORTS rather than redraws: its settings hash
 has to match, the settings it states in plain text have to equal the constants this
-module has just read out of detector_overrides, and every control it recorded has to say
-PASS. A plate quoting an evidence file written under different constants is a failure
-this project has had before, and a hash alone does not catch a file edited by hand.
+module has just read, and every control it recorded has to say PASS. A plate quoting an
+evidence file written under different constants is a failure this project has had before,
+and a hash alone does not catch a file edited by hand.
 
     <sem-crack-detector>/.venv/bin/python -B paper/figures/mk_parameters.py
 """
@@ -119,6 +147,7 @@ import numpy as np                                  # noqa: E402
 import matplotlib                                   # noqa: E402
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt                     # noqa: E402
+from matplotlib.patches import Rectangle            # noqa: E402
 from skimage import measure as skm                  # noqa: E402
 
 import detect_cracks as D                           # noqa: E402  -- the shipped stages
@@ -148,6 +177,19 @@ GATE_GRID_DARK = tuple(range(0, 42, 2))  # the darkness stage alone, which is fr
 CLEANMIN_GRID = (0, 1, 3, 6, 13, 25, 50, 100, 200, 400, 800)
 CANDMIN_GRID = (1, 5, 13, 40, 100, 200, 400, 800, 1600, 3200)
 OPEN_GRID = (0, 1, 2, 3, 4, 5, 6)
+#: THREE CONSTANTS THAT HAD NO CURVE AND NOW HAVE ONE. The author's standing objection
+#: to this plate has been that it does not show how each setting was chosen, and the
+#: honest half of the answer was that most of them were never swept. These three can
+#: be swept on the SAME 26 tiles and the SAME scorer as the rest, so they are, and the
+#: plate gains three real graphs instead of three table rows:
+#:   the closing radius, straight off the cached proposals;
+#:   the denoise sigma, which the installed darkness stage already takes per call;
+#:   and the flattening radius, by installing the detector with a ONE-RUNG ladder, so
+#:   the curve is what a single radius scores and the shipped union can be read
+#:   against the best single radius on the same axis.
+CLOSE_GRID = (0, 1, 2, 3, 5, 8, 12)
+DENOISE_GRID = (0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0)
+SINGLE_LADDER_GRID = (5, 10, 20, 40, 80, 160, 320)
 
 
 def _key(**kw):
@@ -194,19 +236,31 @@ def _cached(path, key, build, expect):
 
 
 # ======================================================================= the 26 tiles
-def tile_chain(proposed, open_radius=1, close_radius=3, clean_min=CLEAN_MIN,
-               cand_min=CAND_MIN, conn=2):
-    """The cleaning chain exactly as both_modalities.stages runs it, with the four
-    constants exposed. Checked against both_modalities.stages itself on every tile at the
-    shipped settings before any sweep is read."""
+def tile_chain(proposed, flat=None, img8=None, ves=None, open_radius=1,
+               close_radius=3, clean_min=CLEAN_MIN, cand_min=CAND_MIN, conn=2):
+    """The cleaning chain exactly as both_modalities.stages runs it.
+
+    THE EMISSION STEP IS DELEGATED, not transcribed. With the region classifier on,
+    emission is no longer an area floor: it is features, the production model and a
+    keep-list. Writing that out a second time here is how the project's own comment
+    says two copies of six lines came to differ by one argument, so this calls
+    `both_modalities.emit` and the sweeps vary only what they claim to vary.
+
+    WHAT THE CONTROL BELOW THEREFORE STILL TESTS, honestly: that this function's
+    `clean_mask` arguments and labelling connectivity reproduce the shipped chain's
+    cleaned input. It no longer independently re-derives the emission, because there
+    is now exactly one implementation of it.
+    """
     cleaned = D.clean_mask(proposed, open_radius=open_radius, close_radius=close_radius,
                            min_area_px=clean_min)
-    lab = skm.label(cleaned, connectivity=conn)
-    if not lab.max():
-        return np.zeros(cleaned.shape, bool)
-    sz = np.bincount(lab.ravel())
-    keep = np.where(sz >= cand_min)[0]
-    return np.isin(lab, keep[keep > 0])
+    if not DO.USE_REGION_CLASSIFIER:
+        lab = skm.label(cleaned, connectivity=conn)
+        if not lab.max():
+            return np.zeros(cleaned.shape, bool)
+        sz = np.bincount(lab.ravel())
+        keep = np.where(sz >= cand_min)[0]
+        return np.isin(lab, keep[keep > 0])
+    return BM.emit(cleaned, flat, img8, ves=ves)
 
 
 def tile_evidence():
@@ -239,10 +293,20 @@ def tile_evidence():
         flats.append(flat)
         props.append(proposed)
         finals.append(final)
+    #: VESSELNESS ONCE PER TILE. It is a function of `flat` alone and it is the
+    #: expensive half of the classifier's feature step; recomputing it at every sweep
+    #: point would multiply the pass by the number of grid values. The single-radius
+    #: sweep is the one place `flat` changes, and it passes its own.
+    vess = [D.compute_vesselness(f) for f in flats] if DO.USE_REGION_CLASSIFIER \
+        else [None] * len(flats)
+
+    def chain(i, proposed, **kw):
+        return tile_chain(proposed, flat=flats[i], img8=tiles[i]["img8"],
+                          ves=vess[i], **kw)
 
     # RECONSTRUCTION CHECK 3. The chain this module sweeps must BE the shipped chain.
-    bad = [t["frame"] for t, p, f in zip(tiles, props, finals)
-           if not np.array_equal(tile_chain(p), f)]
+    bad = [t["frame"] for i, (t, p, f) in enumerate(zip(tiles, props, finals))
+           if not np.array_equal(chain(i, p), f)]
     if bad:
         raise SystemExit(f"tile_chain does not reproduce both_modalities.stages on "
                          f"{len(bad)} tiles ({bad[:3]}); every sweep below would be a "
@@ -268,7 +332,8 @@ def tile_evidence():
         n_tiles=len(tiles), n_specimens=len({t["specimen"] for t in tiles}),
         excluded=list(TB.DEFAULT_EXCLUDE), flood_tile=flood,
         tolerance_px=0, aggregation="pooled over every pixel of the named tile set",
-        mad_k=K, scorer="analysis/research/tilebench.py via paper/figures/_paths.tilebench()",
+        mad_k=K, use_region_classifier=bool(DO.USE_REGION_CLASSIFIER),
+        scorer="analysis/research/tilebench.py via paper/figures/_paths.tilebench()",
         shipped=pooled(finals), shipped_25=pooled(finals, drop=(flood,)),
         controls=dict(
             tilebench="PASS: oracle 1.0, empty 0.0, mark-everything precision == prevalence",
@@ -277,21 +342,54 @@ def tile_evidence():
 
     g26, g25 = {}, {}
     for t_dn in GATE_GRID:
-        masks = [tile_chain(u.segment_dark_regions(f, img8=t["img8"], mad_k=K,
-                                                   absolute_dark_thresh=t_dn))
-                 for f, t in zip(flats, tiles)]
+        masks = [chain(i, u.segment_dark_regions(f, img8=t["img8"], mad_k=K,
+                                                 absolute_dark_thresh=t_dn))
+                 for i, (f, t) in enumerate(zip(flats, tiles))]
         g26[str(t_dn)] = pooled(masks)
         g25[str(t_dn)] = pooled(masks, drop=(flood,))
     rec["gate_26"], rec["gate_25"] = g26, g25
 
-    rec["clean_min"] = {str(v): pooled([tile_chain(p, clean_min=v) for p in props])
+    rec["clean_min"] = {str(v): pooled([chain(i, p, clean_min=v)
+                                        for i, p in enumerate(props)])
                         for v in CLEANMIN_GRID}
-    rec["cand_min"] = {str(v): pooled([tile_chain(p, cand_min=v) for p in props])
+    rec["cand_min"] = {str(v): pooled([chain(i, p, cand_min=v)
+                                       for i, p in enumerate(props)])
                        for v in CANDMIN_GRID}
     rec["opening"] = {
-        str(c): {str(v): pooled([tile_chain(p, open_radius=v, conn=c) for p in props])
+        str(c): {str(v): pooled([chain(i, p, open_radius=v, conn=c)
+                                 for i, p in enumerate(props)])
                  for v in OPEN_GRID}
         for c in (2, 1)}
+
+    # ---- the three that had no curve before ----------------------------------------
+    rec["close"] = {str(v): pooled([chain(i, p, close_radius=v)
+                                    for i, p in enumerate(props)])
+                    for v in CLOSE_GRID}
+    rec["denoise"] = {}
+    for dv in DENOISE_GRID:
+        masks = [chain(i, u.segment_dark_regions(f, img8=t["img8"], mad_k=K,
+                                                 denoise_sigma=dv))
+                 for i, (f, t) in enumerate(zip(flats, tiles))]
+        rec["denoise"][str(dv)] = pooled(masks)
+    #: ONE RUNG AT A TIME. A second installed detector whose ladder is the single
+    #: radius under test; the shipped seven-rung union is scored on the same tiles and
+    #: the same scorer, so the two are comparable and the union's value is readable
+    #: off the panel rather than asserted.
+    rec["single_radius"] = {}
+    for sv in SINGLE_LADDER_GRID:
+        class _V:
+            pass
+        v1 = _V()
+        DO.install(v1, scale_ladder=(sv,), use_multiscale_union=True)
+        masks = []
+        for t in tiles:
+            fl = D.flatten_background(t["img8"], sigma=sv)
+            # `flat` changes here, so this sweep cannot reuse the cached vesselness
+            masks.append(tile_chain(v1.segment_dark_regions(fl, img8=t["img8"],
+                                                            mad_k=K),
+                                    flat=fl, img8=t["img8"]))
+        rec["single_radius"][str(sv)] = pooled(masks)
+    rec["union_on_these_tiles"] = rec["shipped"]
     return rec
 
 
@@ -386,6 +484,7 @@ def frame_evidence():
     return dict(what="per-frame evidence for the absolute gate, the scale ladder and the "
                      "two size floors, on every frame carrying a hand-painted correction",
                 mad_k=K, gate=GATE, ladder=list(LADDER),
+                use_region_classifier=bool(DO.USE_REGION_CLASSIFIER),
                 clean_min=CLEAN_MIN, cand_min=CAND_MIN,
                 paint_states="1 = crack, 2 = not crack, 3 = erase (also a not-crack "
                              "verdict), 0 = unreviewed and counted as neither",
@@ -397,54 +496,342 @@ def frame_evidence():
                     kmax="PASS: (k_max > k) OR (img8 < gate) reproduces that same mask"),
                 n_frames=len([r for r in out if "error" not in r]), frames=out)
 
+# ================================================================ the 31 TXM frames
+#: The TXM model's one free operating constant, swept on the SAME refereed pixels that
+#: docs/figures/txm_background_units.json scored the SEM detector over. Same frames, same
+#: paint, same measure -- so the two TXM rows of this plate may be read against each other,
+#: which is the one comparison this plate is allowed to make across its arms.
+TXM_NB = 200                                   # 0.005-wide probability bins
+TXM_EPS = 1e-7                                 # so a bin sum is count(prob > t), not >=
+TXM_GRID = tuple(round(0.05 + 0.005 * i, 3) for i in range(int((0.95 - 0.05) / 0.005) + 1))
+
+
+def _txm_group(name):
+    """The four specimen groups, by the TXM project's own rule.
+
+    Copied from analysis/research/improve/txm_background_units.py, which is the file that
+    wrote the record this sweep has to reproduce. It is four string tests, and the control
+    below asserts that this copy puts every frame in the same group that record did -- a
+    second classifier that disagreed would be caught before a single number is drawn.
+    """
+    n = name.lower()
+    if "_b3_" in n:
+        return "B3"
+    if "wrought" in n:
+        return "Wrought"
+    if "hc_316l" in n:
+        return "AM/HC"
+    if "_b2_" in n or "b2_" in n:
+        return "B2"
+    return "other"
+
+
+def _txm_constants():
+    """The TXM arm's shipped constants, PARSED out of the deployed source, never retyped.
+
+    ast rather than import: the app's modules pull in torch and transformers, which this
+    plate has no use for, and a source scan with a regular expression would match the
+    constant's name inside the prose that explains it. Every name here is a module-level
+    assignment of a literal in one of the two files, and a missing one aborts.
+    """
+    import ast
+    want = {
+        #: EVERY MODULE-LEVEL CONSTANT THE MASK PATH READS, not the handful the first
+        #: edition listed. The width-clip family and the straight-artefact rejector are
+        #: nine and three more numbers that _narrow_to_image applies to every exported
+        #: mask; leaving them off the plate understated the TXM arm's parameter count by
+        #: half, which is what the author noticed.
+        "pipeline.py": ("DEFAULT_THRESHOLD", "MIN_BLOB_PX", "FILL_HOLES_MAX_PX",
+                        "TIGHTEN_WINDOW", "TIGHTEN_MIN_CORE", "CORRECTION_FLOOR",
+                        "RECIPE", "WIDTH_CLIP", "WIDTH_CLIP_RADIUS",
+                        "WIDTH_CLIP_DIRS", "WIDTH_CLIP_PROBES", "WIDTH_CLIP_RECENTRE",
+                        "WIDTH_CLIP_PEAK_SIGMA", "WIDTH_CLIP_BG_WINDOWS",
+                        "WIDTH_CLIP_MIN_MEASURED", "WIDTH_CLIP_IDW_K",
+                        "STRAIGHT_MIN_PX", "STRAIGHT_MIN_ASPECT",
+                        "STRAIGHT_MAX_WANDER"),
+        "model.py": ("TILE", "TILE_STRIDE", "EMB_STRIDE", "SAM_MODEL_ID"),
+    }
+    out = {}
+    for fname, names in want.items():
+        path = _paths.require(os.path.join(_paths.TXM_REPO, "app", "core", fname),
+                              f"the TXM arm's {fname}", "TXM_REPO")
+        tree = ast.parse(open(path).read())
+        found = {}
+        for node in tree.body:
+            if not isinstance(node, ast.Assign):
+                continue
+            for tgt in node.targets:
+                if isinstance(tgt, ast.Name) and tgt.id in names:
+                    try:
+                        found[tgt.id] = ast.literal_eval(node.value)
+                    except ValueError:
+                        pass
+        missing = [n for n in names if n not in found]
+        if missing:
+            raise SystemExit(f"{path} no longer defines {missing} as module-level "
+                             f"literals; the TXM rows would be quoting values that are "
+                             f"not the ones the app runs")
+        out.update(found)
+    return out
+
+
+#: The three frames the SEM chain reads at a gentler stretch, imported rather than
+#: counted here, so a frame joining or leaving that set moves the plate.
+from common import GENTLE_CONTRAST_IMAGES as GENTLE, contrast_kwargs_for  # noqa: E402
+_g = contrast_kwargs_for(sorted(GENTLE)[0])
+GENTLE_PCT = (_g["low_pct"], _g["high_pct"])
+
+
+def _sem_constants():
+    """The SEM chain's own stage defaults, PARSED out of the shipped detect_cracks.py.
+
+    Same discipline as `_txm_constants`, and for the same reason. Eight of these -- the
+    contrast window, the databar probe and the field-of-view finder -- never appeared on
+    the plate at all, although every frame the paper reports passes through them, and a
+    constant that is applied to the data and not declared is an undeclared degree of
+    freedom. A name that stops being a defaulted argument of its function aborts rather
+    than quietly dropping off the table.
+    """
+    import ast
+    want = {
+        "load_as_uint8": ("low_pct", "high_pct"),
+        "_detect_databar_top": ("search_frac", "window", "std_ratio", "mean_ratio"),
+        "find_field_of_view": ("bright_thresh", "shrink_frac", "min_keep_frac"),
+        "flatten_background": ("sigma", "low_pct", "high_pct"),
+        "segment_dark_regions": ("denoise_sigma", "absolute_dark_thresh"),
+        "clean_mask": ("open_radius", "close_radius"),
+    }
+    path = _paths.require(os.path.join(_paths.SEM_REPO, "code", "detect_cracks.py"),
+                          "the SEM arm's detect_cracks.py", "SEM_REPO")
+    tree = ast.parse(open(path).read())
+    fns = {n.name: n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)}
+    out, missing = {}, []
+    for fname, names in want.items():
+        node = fns.get(fname)
+        if node is None:
+            missing.append(fname)
+            continue
+        args = [a.arg for a in node.args.args]
+        defs = node.args.defaults
+        have = {}
+        for i, d in enumerate(defs):
+            try:
+                have[args[len(args) - len(defs) + i]] = ast.literal_eval(d)
+            except ValueError:
+                pass
+        for nm in names:
+            if nm in have:
+                out[f"{fname}.{nm}"] = have[nm]
+            else:
+                missing.append(f"{fname}({nm}=)")
+    if missing:
+        raise SystemExit(f"{path} no longer defines {missing} as defaulted arguments "
+                         f"of literals; the SEM table would be quoting values that are "
+                         f"not the ones the chain runs")
+    return out
+
+
+def txm_evidence():
+    """Sweep the TXM ensemble's probability threshold over the refereed TXM paint.
+
+    WHY THIS UNIT SET AND NO OTHER. docs/figures/txm_background_units.json scored the SEM
+    detector on TXM over the frames in TXM/paint/corrections that carry at least 5000
+    crack AND 5000 not-crack pixels, on refereed pixels only (1 = crack, 2 or 3 = not
+    crack, 0 excluded). This function enumerates by the same rule and ASSERTS that it
+    recovers that record's own totals -- 31 frames, its crack and not-crack pixel counts,
+    and every one of its four by-group counts -- before it sweeps anything. The two TXM
+    rows of the plate are then the same pixels measured two ways.
+
+    WHY ACCURACY AND NOT OVERLAP. The record forbids overlap scores on this set in so many
+    words: the TXM paint is far wider than the feature and a prior measurement puts the
+    IoU ceiling for a correct 3 px crack at 0.0498, so IoU here ranks imitation of the
+    brush. Accuracy against the EMPTY-MASK baseline is what that record reports, so it is
+    what this sweep reports, and the empty-mask accuracy computed here is checked against
+    the one the record states.
+
+    WHAT IS SWEPT. `prob > t` on the deployed model's own cached probability map, before
+    the speck prune and the hole fill that the serving path applies afterwards. A
+    histogram per frame answers every t exactly, which is the trick
+    TXM/research/oppoint/build_hists.py uses and the reason the pass costs seconds; bin
+    edges carry the same +EPS shift so that summing from the edge at t counts prob > t.
+    """
+    R = _paths.require(_paths.TXM_REPO, "the TXM_Crack_Detection_Pipeline checkout",
+                       "TXM_REPO")
+    cdir = _paths.require(os.path.join(R, "paint", "corrections"),
+                          "the TXM correction masks", "TXM_REPO")
+    idir = _paths.require(os.path.join(R, "app_data", "images"),
+                          "the TXM app's image store", "TXM_REPO")
+    reg = json.load(open(_paths.require(
+        os.path.join(R, "app_data", "models", "registry.json"),
+        "the TXM model registry", "TXM_REPO")))
+    deployed = reg["current"].get("created")
+    recipe = reg["current"].get("recipe")
+
+    # the record this pass has to reproduce, read before anything is computed
+    units = json.load(open(_paths.scoped("txm_background_units.json", scope=False)))
+
+    by_stem = {}
+    for iid in sorted(os.listdir(idir)):
+        mp = os.path.join(idir, iid, "meta.json")
+        if os.path.exists(mp):
+            m = json.load(open(mp))
+            by_stem[os.path.splitext(m["filename"])[0]] = (iid, m)
+
+    edges = np.linspace(0.0, 1.0, TXM_NB + 1) + TXM_EPS
+    edges[0], edges[-1] = -1.0, 2.0
+    h1 = np.zeros(TXM_NB, np.int64)
+    h0 = np.zeros(TXM_NB, np.int64)
+    grp = {}
+    used, keys = 0, set()
+    for f in sorted(os.listdir(cdir)):
+        if not f.endswith("_correction.npy"):
+            continue
+        stem = f[: -len("_correction.npy")]
+        if not os.path.exists(os.path.join(R, "images", stem + ".tif")):
+            continue
+        corr = np.load(os.path.join(cdir, f))
+        crack = corr == 1
+        notc = (corr == 2) | (corr == 3)
+        nc, nn = int(crack.sum()), int(notc.sum())
+        if nc < 5000 or nn < 5000:              # the record's own floor
+            continue
+        used += 1
+        g = _txm_group(stem)
+        if stem not in by_stem:
+            raise SystemExit(f"{stem} is in the scored set but has no entry in the TXM "
+                             f"app store, so its probability map cannot be read")
+        iid, meta = by_stem[stem]
+        keys.add(meta.get("model_key"))
+        pp = os.path.join(idir, iid, "probs", str(meta.get("model_key")) + ".npy")
+        if not os.path.exists(pp):
+            pp = os.path.join(idir, iid, "prob.npy")
+        prob = np.load(pp)
+        if prob.shape != corr.shape:
+            raise SystemExit(f"{stem}: probability map {prob.shape} does not fit its "
+                             f"correction mask {corr.shape}")
+        a = np.histogram(prob[crack], bins=edges)[0].astype(np.int64)
+        b = np.histogram(prob[notc], bins=edges)[0].astype(np.int64)
+        h1 += a
+        h0 += b
+        gb = grp.setdefault(g, dict(frames=0, crack_px=0, notcrack_px=0))
+        gb["frames"] += 1
+        gb["crack_px"] += nc
+        gb["notcrack_px"] += nn
+        del prob, corr, crack, notc
+        print(f"  [{used:>2}] {g:<8} {stem[:46]:<48} crack {nc:>9,}", flush=True)
+
+    # ---- CONTROL 1. the same frames, the same pixels, as the record --------------------
+    want = dict(n_frames=units["n_frames"],
+                crack=units["refereed_crack_px"], notc=units["refereed_notcrack_px"])
+    got = dict(n_frames=used, crack=int(h1.sum()), notc=int(h0.sum()))
+    if got != want:
+        raise SystemExit(f"this pass enumerated {got} but txm_background_units.json was "
+                         f"written over {want}; the two TXM rows would be different "
+                         f"pixel sets drawn as if they were one")
+    for g, blk in units["by_group"].items():
+        mine = grp.get(g)
+        if (not mine or mine["frames"] != blk["frames"]
+                or mine["crack_px"] != blk["crack_px"]
+                or mine["notcrack_px"] != blk["notcrack_px"]):
+            raise SystemExit(f"group {g}: this pass has {mine}, the record has "
+                             f"{blk['frames']} frames / {blk['crack_px']} crack / "
+                             f"{blk['notcrack_px']} not-crack")
+
+    # ---- CONTROL 2. the deployed model, not an archived one ----------------------------
+    if keys != {deployed}:
+        raise SystemExit(f"the probability maps carry model keys {sorted(keys)}; the "
+                         f"registry's current model is {deployed}")
+
+    # ---- CONTROL 3. the do-nothing baseline must be the record's own -------------------
+    tot1, tot0 = int(h1.sum()), int(h0.sum())
+    empty = 100.0 * tot0 / (tot1 + tot0)
+    stated = max(v["empty_mask_accuracy_pct"] for v in units["pooled"].values())
+    if abs(empty - stated) > 1e-9:
+        raise SystemExit(f"empty-mask accuracy here is {empty!r}, the record states "
+                         f"{stated!r}")
+
+    cum1 = h1[::-1].cumsum()[::-1]
+    cum0 = h0[::-1].cumsum()[::-1]
+    curve = {}
+    for t in TXM_GRID:
+        i = int(round(t * TXM_NB))
+        tp, fp = int(cum1[i]), int(cum0[i])
+        tn = tot0 - fp
+        acc = 100.0 * (tp + tn) / (tot1 + tot0)
+        curve[f"{t:.3f}"] = dict(
+            accuracy_pct=acc, margin_pp=acc - empty,
+            recall=tp / max(tot1, 1), specificity_pct=100.0 * tn / max(tot0, 1),
+            marked_pct=100.0 * (tp + fp) / (tot1 + tot0),
+            area_agreement=(tp + fp) / max(tot1, 1))
+    return dict(
+        what="the TXM ensemble's probability threshold swept over the refereed TXM paint, "
+             "on the same frames and the same pixels as docs/figures/"
+             "txm_background_units.json scored the SEM detector over",
+        model_key=deployed, recipe=recipe,
+        n_frames=used, crack_px=tot1, notcrack_px=tot0,
+        empty_mask_accuracy_pct=empty,
+        scoring="refereed pixels only: 1 = crack, 2 or 3 = not-crack, 0 excluded. "
+                "prob > t on the deployed model's cached map, BEFORE the speck prune and "
+                "the hole fill the serving path applies after it",
+        by_group={g: dict(v) for g, v in sorted(grp.items())},
+        grid=list(TXM_GRID), curve=curve,
+        controls=dict(
+            unit_set="PASS: 31 frames and both refereed pixel counts reproduce "
+                     "docs/figures/txm_background_units.json exactly, group by group",
+            model="PASS: every probability map carries the registry's current model key",
+            baseline="PASS: the empty-mask accuracy computed here equals the one the "
+                     "record states, to 1e-9"))
 
 # ============================================================================= drawing
-#: ONE convention for the whole plate. A solid neutral rule and a filled square on the
-#: curve mark THE VALUE REPORTED IN TABLE 1, in every panel that has one on an axis; in
-#: (a) it lands on the maximum because that is where it came from, and nowhere else does.
-#: The dotted rule appears once, in (a), and is the value the application itself runs.
-SHIPPED_RULE = dict(color=J.G_MID, lw=0.8, zorder=1)
-APP_RULE = dict(color=J.G_MID, lw=0.7, linestyle=(0, (1, 2)), zorder=1)
+#: ONE CONVENTION, EVERY ROW. A solid neutral rule and a filled square mark THE VALUE THE
+#: PAPER RUNS AT, on every sparkline that has one on an axis. The dotted rule appears
+#: once, in row (a), and is the value the shipped application itself runs.
+SHIPPED_RULE = dict(color=J.G_MID, lw=0.8, zorder=2)
+APP_RULE = dict(color=J.G_MID, lw=0.7, linestyle=(0, (1, 2)), zorder=2)
+
+#: TYPE SIZES. J.FLOOR is 8 pt at the printed width and nothing here is below it.
+#: T_NAME is a panel head or a group head, T_BAND an arm heading, T_TICK everything
+#: inside the table and on the axes.
+T_NAME, T_BAND, T_TICK = 8.5, 9.0, 8.0
+
+#: THE TALLY THIS MODULE'S DOCSTRING STATES, asserted against the tables after they are
+#: built. The docstring is prose and prose does not recompute: "of the fifty, exactly
+#: ONE was selected by a sweep" is the plate's finding, and a constant added to either
+#: table in a later revision would falsify it silently. Changing a table without
+#: changing these numbers now aborts.
+DOCSTRING_TALLY = {"total": 50, "swept": 1, "test": 4, "inherited": 9}
+
+_SCRATCH = None
 
 
-def _no_collisions(fig):
-    """Every visible string, measured where it is actually drawn, must clear every other.
+def _tw(text, size, *, bold=False):
+    """The width of `text`, in inches, MEASURED at the renderer.
 
-    A stacked pair halves the height a rotated y label has to live in, and the first
-    draft of (a) put "F1, 31 whole fields" straight through "marked / annotated area" --
-    at full size, in a plate whose type check passed. Looking at a 2000 px preview is how
-    that survives; measuring the renderer's own extents is how it does not. The threshold
-    is 1 pt of real overlap in BOTH directions, so touching bounding boxes are allowed
-    and crossing glyphs are not.
+    A characters-per-inch estimate is how a box comes out a tenth of an inch too
+    narrow and its longest row prints over its own value. The scratch figure is made
+    once and the text artist removed after each measurement.
     """
-    fig.canvas.draw()
-    r = fig.canvas.get_renderer()
-    items = []
-    for t in fig.findobj(plt.Text):
-        if not t.get_text().strip() or not t.get_visible():
-            continue
-        try:
-            items.append((t.get_text().strip()[:40], t.get_window_extent(renderer=r)))
-        except Exception:                       # an artist with no renderable extent
-            continue
-    tol = fig.dpi / 72.0
-    bad = []
-    for i in range(len(items)):
-        for j in range(i + 1, len(items)):
-            a, b = items[i][1], items[j][1]
-            if (min(a.x1, b.x1) - max(a.x0, b.x0) > tol
-                    and min(a.y1, b.y1) - max(a.y0, b.y0) > tol):
-                bad.append(f"{items[i][0]!r} x {items[j][0]!r}")
-    if bad:
-        raise SystemExit(f"{len(bad)} overlapping label(s) in the plate: "
-                         + "; ".join(bad[:6]))
-    return len(items)
+    global _SCRATCH
+    if _SCRATCH is None:
+        _SCRATCH = plt.figure(figsize=(2.0, 2.0), dpi=100)
+        _SCRATCH.canvas.draw()
+    t = _SCRATCH.text(0.0, 0.0, text, fontsize=size,
+                      fontweight="bold" if bold else "normal")
+    w = t.get_window_extent(renderer=_SCRATCH.canvas.get_renderer()).width
+    t.remove()
+    return w / _SCRATCH.dpi
 
 
-def _box(ax):
-    ax.tick_params(labelsize=J.TICK, pad=1.6)
-    for s in ax.spines.values():
-        s.set_linewidth(0.6)
+def _lines(size, n):
+    """The height, in inches, of `n` lines set at `size` points, at this plate's lead."""
+    return n * size * 1.25 / 72.0
+
+
+#: THE TABLE-BUILDER THAT USED TO LIVE HERE IS GONE. `Plate` laid out a six-column
+#: ruled table whose widest column was a sentence of prose per row, with
+#: `_no_collisions` and `_within_columns` to police it. The plate carries no prose now,
+#: so all three were unreachable: a class with no caller is a second description of the
+#: figure that nothing keeps true. The layout, and its own two controls, are in draw().
 
 
 def _pooled(frames, num, den="crack"):
@@ -484,241 +871,553 @@ def _spread(frames, num, den="crack"):
     return pooled, q(0.5), q(0.25), q(0.75), sum(1 for x in per if x > 0), len(per)
 
 
-def draw(tiles, frames, madk, dead):
+def _best(d):
+    """The key of the maximum of a {setting: score} mapping, read off the record."""
+    return max(d, key=lambda s: d[s])
+
+
+def _mark(ax, x, y, color):
+    ax.axvline(x, **SHIPPED_RULE)
+    ax.plot([x], [y], "s", color=color, ms=3.6, mew=0, zorder=7)
+
+
+def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
+    """The plate: every constant of both detectors, and the evidence where there is any.
+
+    WHY IT WAS REDRAWN AGAIN. The wordless edition before this one was nine line panels
+    over two strips of loose name/value pairs, and it drew twenty-one constants. The
+    author's reading of it was that it looked simple and that it was not the whole set.
+    Both were right. The SEM chain reads eight more numbers before the detector ever
+    runs -- a contrast window, a databar probe, a field-of-view finder -- and the TXM
+    mask path applies twelve more after it: a nine-constant width clip and a
+    three-constant straight-artefact rejector. Forty-seven constants, not twenty-one.
+
+    SO THE PLATE IS A FIGURE AND A TABLE, which is what a methods section with this many
+    settings looks like in print. The panels carry the nine constants that have evidence
+    worth plotting; the ruled table underneath carries EVERY constant, grouped by the
+    stage that reads it, with its value and how it was fixed. A constant with a panel
+    names its letter. Nothing on the plate is a sentence.
+
+    WHAT CHANGED IN THE PANELS. They had no numbers on them: no y tick labels at all and
+    the x ends set as loose figure text beside an axes with its ticks switched off. That
+    is a sparkline, and a sparkline with no scale is a shape, not a measurement. Each
+    panel is now a small axes with real ticks -- two on each axis, labelled, at the
+    plate's own type size -- so a reader can see what the curve moved BY and not only
+    which way it went.
+    """
     wf = madk["sets"]["whole_fields"]
     grid = [float(g) for g in madk["grid"]]
     fr = [r for r in frames["frames"] if "error" not in r]
+    cv = scores["cross_validated"]
 
-    # ---- geometry ------------------------------------------------------------------
-    # NO TWIN AXES ANYWHERE. Two measurands against one x belong in two sub-panels that
-    # share the x axis, not on two y scales: a dual-scale chart makes the reader guess
-    # which scale a series is read against, and in the first draft of (c) a third series
-    # drawn in a third colour made that guess impossible. A reference rule at a ratio of
-    # 1 also lands somewhere arbitrary on the other measurand's scale and reads as a
-    # reference for IT. (a) and (c) are therefore stacked pairs under one panel letter;
-    # only the lower sub-panel carries x tick labels and the x label, and the vertical
-    # rules marking the constants run through both.
-    W = J.PAGEW
-    ML, GX, MR = 0.56, 0.66, 0.12
-    MT, GY, MB = 0.20, 0.52, 0.42
-    CW = (W - ML - GX - MR) / 2.0
-    SUBGAP = 0.11
-    H_SPLIT, H_LAST = 2.18, 1.46
-    SUBH = (H_SPLIT - SUBGAP) / 2.0
-    ROWS = (H_SPLIT, H_SPLIT, H_LAST)
-    Htot = MT + sum(ROWS) + GY * (len(ROWS) - 1) + MB
-    fig = plt.figure(figsize=(W, Htot))
-
-    def cell(col, row, h=None, dy=0.0):
-        x = ML + col * (CW + GX)
-        y = MT + sum(ROWS[:row]) + GY * row + dy
-        hh = ROWS[row] if h is None else h
-        return fig.add_axes([x / W, 1.0 - (y + hh) / Htot, CW / W, hh / Htot])
-
-    def stacked(col, row):
-        """Upper and lower sub-panels of one lettered panel, sharing the x axis."""
-        return cell(col, row, h=SUBH), cell(col, row, h=SUBH, dy=SUBH + SUBGAP)
-
-    # ---- (a) the MAD multiplier: the one constant selected by a sweep ---------------
-    axu, axl = stacked(0, 0)
-    for ax in (axu, axl):
-        ax.set_xscale("log")
-        ax.set_xticks([1, 2, 5, 10, 20, 40])
-        ax.set_xlim(0.9, 44)
-        ax.axvline(K, **SHIPPED_RULE)
-        ax.axvline(float(DO.SHIPPED_MAD_K), **APP_RULE)
-        _box(ax)
-    axu.plot(grid, [wf["per_k"][str(g)]["f1"] for g in grid], "-o", color=J.ACCENT,
-             ms=2.8, lw=1.1, mew=0, zorder=5)
-    axu.plot([K], [wf["per_k"][str(K)]["f1"]], "s", color=J.ACCENT, ms=4.4, mew=0,
-             zorder=6)
-    axu.set_ylim(0, 0.42)
-    axu.set_yticks([0, 0.1, 0.2, 0.3, 0.4])
-    axu.set_ylabel("F1", fontsize=J.LABEL, labelpad=2.0)
-    axu.tick_params(labelbottom=False)
-    J.panel_label(axu, "a")
-
-    axl.plot(grid, [wf["per_k"][str(g)]["area_ratio"] for g in grid], "-o",
-             color=J.ACCENT2, ms=2.8, lw=1.1, mew=0, zorder=5)
-    axl.plot([K], [wf["per_k"][str(K)]["area_ratio"]], "s", color=J.ACCENT2, ms=4.4,
-             mew=0, zorder=6)
-    axl.axhline(1.0, color=J.G_DARK, lw=0.6, dashes=(2.5, 2.0), zorder=2)
-    axl.set_yscale("log")
-    axl.set_ylim(0.08, 70)
-    axl.set_yticks([0.1, 1, 10])
-    axl.set_yticklabels(["0.1", "1", "10"])
-    axl.set_xticklabels(["1", "2", "5", "10", "20", "40"])
-    axl.set_xlabel("MAD multiplier $k$, 31 whole fields", fontsize=J.LABEL,
-                   labelpad=1.5)
-    axl.set_ylabel("marked / annotated area", fontsize=J.LABEL, labelpad=2.0)
-
-    # ---- (b) the region classifier: the other constant decided by measurement -------
-    ax = cell(1, 0)
-    mets = ["precision", "recall", "iou", "f1"]
-    xs = np.arange(len(mets))
-    ax.bar(xs - 0.19, [dead["pooled_26"]["v147"][m] for m in mets], 0.36,
-           color=J.G_LIGHT, edgecolor=J.INK, linewidth=0.5, label="classifier on",
-           zorder=3)
-    ax.bar(xs + 0.19, [dead["pooled_26"]["ablation"][m] for m in mets], 0.36,
-           color=J.ACCENT, edgecolor=J.INK, linewidth=0.5, label="classifier off",
-           zorder=3)
-    ax.set_xticks(xs)
-    ax.set_xticklabels(["P", "R", "IoU", "F1"])
-    ax.set_xlim(-0.6, len(mets) - 0.4)
-    ax.set_ylim(0, 0.62)
-    ax.set_yticks([0, 0.2, 0.4, 0.6])
-    ax.set_xlabel("learned region classifier, 26 tiles", fontsize=J.LABEL, labelpad=1.5)
-    ax.set_ylabel("score", fontsize=J.LABEL, labelpad=2.0)
-    ax.tick_params(axis="x", length=0)
-    ax.minorticks_off()
-    _box(ax)
-    ax.legend(loc="upper left", fontsize=J.TICK, handlelength=1.1, handletextpad=0.45,
-              borderpad=0.0, labelspacing=0.22, borderaxespad=0.3)
-    J.panel_label(ax, "b")
-
-    # ---- (c) the absolute intensity gate: inherited, swept only afterwards ----------
-    axu, axl = stacked(0, 1)
-    gg = [int(g) for g in GATE_GRID]
-    for ax in (axu, axl):
-        ax.set_xlim(-1.5, 41.5)
-        ax.set_xticks([0, 10, 20, 30, 40])
-        ax.axvline(GATE, **SHIPPED_RULE)
-        _box(ax)
-    # BOTH tile sets, in ONE hue, because they are the same measurand on two unit sets.
-    # They disagree about the sign: one 512 px crop holds an off-specimen void that is
-    # pitch black, so the gate claims it at any t >= 2 and it owns most of the corpus's
-    # false positives; dropping that one tile reverses the verdict.
-    axu.plot(gg, [tiles["gate_26"][str(g)]["iou"] for g in gg], "-o", color=J.ACCENT,
-             ms=2.8, lw=1.1, mew=0, zorder=5, label="26 tiles")
-    axu.plot(gg, [tiles["gate_25"][str(g)]["iou"] for g in gg], "--o", color=J.ACCENT,
-             ms=3.6, lw=1.0, mfc="white", mec=J.ACCENT, mew=0.8, dashes=(3.2, 1.8),
-             zorder=4, label="25 tiles")
-    axu.plot([GATE], [tiles["gate_26"][str(GATE)]["iou"]], "s", color=J.ACCENT, ms=4.4,
-             mew=0, zorder=6)
-    axu.set_ylim(0, 0.62)
-    axu.set_yticks([0, 0.2, 0.4, 0.6])
-    axu.set_ylabel("IoU, tiles", fontsize=J.LABEL, labelpad=2.0)
-    axu.tick_params(labelbottom=False)
-    axu.legend(loc="lower left", fontsize=J.TICK, handlelength=1.8, handletextpad=0.45,
-               borderpad=0.0, labelspacing=0.22, borderaxespad=0.3)
-    J.panel_label(axu, "c")
-
-    dk = [int(g) for g in GATE_GRID_DARK]
-    rec_by_t = {g: _pooled(fr, lambda r, g=g: r["dark_crack"][str(g)])[0] for g in dk}
-    axl.plot(dk, [rec_by_t[g] for g in dk], "-", color=J.ACCENT2, lw=1.2, zorder=5)
-    axl.plot([GATE], [rec_by_t[GATE]], "s", color=J.ACCENT2, ms=4.4, mew=0, zorder=6)
-    axl.set_ylim(0, 0.46)
-    axl.set_yticks([0, 0.1, 0.2, 0.3, 0.4])
-    axl.set_xlabel("absolute intensity gate, DN of 255", fontsize=J.LABEL, labelpad=1.5)
-    axl.set_ylabel("painted-crack recall,\n48 frames", fontsize=J.LABEL, labelpad=2.0)
-
-    # ---- (d) the scale ladder: what each radius adds that no other radius does ------
-    # DENOMINATOR: the painted crack the SEVEN-RUNG UNION reaches on its own, which is
-    # dark_crack at threshold 0, i.e. with the absolute gate switched off. The gate is
-    # panel (c)'s subject and including it here would put a 57% bar beside seven bars of
-    # 1% and make the ladder -- this panel's actual subject -- unreadable.
-    #
-    # THE WHISKER IS NOT DECORATION. The pooled bar and the per-frame median differ by
-    # two orders of magnitude at the coarse radii, and without the quartiles that reads
-    # as a contradiction. It is not one: the per-frame distribution is zero-inflated --
-    # only 22 of the 40 frames whose paint the ladder reaches have ANY pixel that
-    # sigma = 320 alone reaches -- so the median sits near zero while the frames that do
-    # have such pixels carry a lot of them. The p25-p75 bar is what shows that.
-    ax = cell(1, 1)
+    # ---- every number a panel or a row quotes, read off a record rather than typed ---
+    f1 = {g: wf["per_k"][str(g)]["f1"] for g in grid}
+    gate26 = {k: v["iou"] for k, v in tiles["gate_26"].items()}
+    cmin = {k: v["iou"] for k, v in tiles["clean_min"].items()}
+    amin = {k: v["iou"] for k, v in tiles["cand_min"].items()}
+    op8 = {k: v["iou"] for k, v in tiles["opening"]["2"].items()}
+    clo = {k: v["iou"] for k, v in tiles["close"].items()}
+    dns = {k: v["iou"] for k, v in tiles["denoise"].items()}
+    sing = {k: v["iou"] for k, v in tiles["single_radius"].items()}
+    union_iou = float(tiles["union_on_these_tiles"]["iou"])
+    best_single = max(sing, key=lambda k: sing[k])
+    best_close = max(clo, key=lambda k: clo[k])
+    best_den = max(dns, key=lambda k: dns[k])
+    op4 = {k: v["iou"] for k, v in tiles["opening"]["1"].items()}
     den = lambda r: r["dark_crack"]["0"]                               # noqa: E731
-    spread = [_spread(fr, lambda r, s_=s_: r["rung_only_crack"][str(s_)], den=den)
+    ladder = [_spread(fr, lambda r, s_=s_: r["rung_only_crack"][str(s_)], den=den)
               for s_ in LADDER]
-    pooled_v = [100 * x[0] for x in spread]
-    med_v = [100 * x[1] for x in spread]
-    lo_v = [100 * x[2] for x in spread]
-    hi_v = [100 * x[3] for x in spread]
-    xs = np.arange(len(LADDER))
-    ax.bar(xs, pooled_v, 0.66, color=J.ACCENT, edgecolor=J.INK, linewidth=0.5, zorder=3,
-           label="pooled")
-    ax.errorbar(xs, med_v,
-                yerr=[np.subtract(med_v, lo_v), np.subtract(hi_v, med_v)],
-                fmt="D", color=J.ACCENT2, ms=3.2, mew=0, elinewidth=0.9, capsize=1.8,
-                capthick=0.9, linestyle="none", zorder=6,
-                label="per frame: median, p25–p75")
-    ax.set_xticks(xs)
-    ax.set_xticklabels([str(s_) for s_ in LADDER])
-    ax.set_xlim(-0.7, len(LADDER) - 0.3)
-    ax.set_ylim(0, 8.0)
-    ax.set_yticks([0, 2, 4, 6, 8])
-    ax.set_xlabel("flattening radius $\\sigma$, px", fontsize=J.LABEL, labelpad=1.5)
-    ax.set_ylabel("% of ladder-proposed painted\ncrack this radius alone reaches",
-                  fontsize=J.LABEL, labelpad=2.0)
-    ax.tick_params(axis="x", length=0)
-    ax.minorticks_off()
-    _box(ax)
-    ax.legend(loc="upper center", fontsize=J.TICK, handlelength=1.1, handletextpad=0.45,
-              borderpad=0.0, labelspacing=0.25, borderaxespad=0.3)
-    J.panel_label(ax, "d")
-    ladder_bars = dict(
-        terms=[str(s_) for s_ in LADDER], pooled=pooled_v, median=med_v,
-        p25=lo_v, p75=hi_v,
-        frames_with_a_nonzero_share=[x[4] for x in spread],
-        frames_with_a_denominator=[x[5] for x in spread],
-        shared_pct=100.0 - sum(pooled_v))
+    lad_pct = [100 * x[0] for x in ladder]
+    tgrid = [float(t) for t in txm["grid"]]
+    THR = float(const["DEFAULT_THRESHOLD"])
+    at_ship = txm["curve"][f"{THR:.3f}"]
+    best_t = max(tgrid, key=lambda t: txm["curve"][f"{t:.3f}"]["accuracy_pct"])
+    trec = [txm["curve"][f"{t:.3f}"]["recall"] for t in tgrid]
+    tfp = [1.0 - txm["curve"][f"{t:.3f}"]["specificity_pct"] / 100.0 for t in tgrid]
+    kgrid = [float(k) for k in units["grid"]]
+    karm = {k: units["pooled"][f"SEM detector, mad_k={k:g}"] for k in kgrid}
+    kmar = [karm[k]["margin_pp"] for k in kgrid]
+    best_k = max(kgrid, key=lambda k: karm[k]["margin_pp"])
+    best_cmin, best_amin = _best(cmin), _best(amin)
 
-    # ---- (e) the two size floors ---------------------------------------------------
-    ax = cell(0, 2)
-    for key, gridv, ship, col, dash, lab in (
-            ("clean_min", CLEANMIN_GRID, CLEAN_MIN, J.ACCENT, None, "small-object floor"),
-            ("cand_min", CANDMIN_GRID, CAND_MIN, J.ACCENT2, (3.5, 2.0),
-             "candidate-region floor")):
-        xs = [max(float(v), 0.5) for v in gridv]
-        ys = [tiles[key][str(v)]["iou"] for v in gridv]
-        kw = dict(dashes=dash) if dash else {}
-        ax.plot(xs, ys, "-o" if dash is None else "--o", color=col, ms=2.4, lw=1.0,
-                mew=0, label=lab, zorder=5, **kw)
-        ax.plot([ship], [tiles[key][str(ship)]["iou"]], "s", color=col, ms=4.2, mew=0,
-                zorder=6)
-        ax.axvline(ship, **SHIPPED_RULE)
-    ax.set_xscale("log")
-    ax.set_xticks([1, 10, 100, 1000])
-    ax.set_xticklabels(["1", "10", "100", "1000"])
-    ax.set_xlim(0.4, 4500)
-    ax.set_ylim(0, 0.42)
-    ax.set_yticks([0, 0.1, 0.2, 0.3, 0.4])
-    ax.set_xlabel("minimum region area, px", fontsize=J.LABEL, labelpad=1.5)
-    ax.set_ylabel("IoU, 26 tiles", fontsize=J.LABEL, labelpad=2.0)
-    _box(ax)
-    ax.legend(loc="lower left", fontsize=J.TICK, handlelength=1.5, handletextpad=0.45,
-              borderpad=0.0, labelspacing=0.22, borderaxespad=0.3)
-    J.panel_label(ax, "e")
+    if const["SAM_MODEL_ID"] != "facebook/sam-vit-huge":
+        raise SystemExit(f"the TXM backbone is now {const['SAM_MODEL_ID']}; the table "
+                         f"row below says 'SAM ViT-H' and would be wrong")
 
-    # ---- (f) the opening radius, and the connectivity ------------------------------
-    ax = cell(1, 2)
-    # The two curves coincide to within 0.0002 IoU, which IS the result for this row of
-    # Table 1. The shipped 8-connected labelling is the line; the 4-connected alternative
-    # is drawn as open markers on top of it, so a reader sees two series landing on the
-    # same points rather than one line with a redundant legend.
-    ax.plot(list(OPEN_GRID), [tiles["opening"]["2"][str(v)]["iou"] for v in OPEN_GRID],
-            "-o", color=J.ACCENT, ms=2.6, lw=1.1, mew=0, label="8-connected", zorder=5)
-    ax.plot(list(OPEN_GRID), [tiles["opening"]["1"][str(v)]["iou"] for v in OPEN_GRID],
-            "o", color=J.ACCENT2, mfc="none", mew=0.9, ms=5.0, linestyle="none",
-            label="4-connected", zorder=6)
-    ax.plot([1], [tiles["opening"]["2"]["1"]["iou"]], "s", color=J.ACCENT, ms=4.2,
-            mew=0, zorder=7)
-    ax.axvline(1, **SHIPPED_RULE)
-    ax.set_xlim(-0.4, max(OPEN_GRID) + 0.4)
-    ax.set_xticks(list(OPEN_GRID))
-    ax.set_ylim(0, 0.42)
-    ax.set_yticks([0, 0.1, 0.2, 0.3, 0.4])
-    ax.set_xlabel("opening radius, px", fontsize=J.LABEL, labelpad=1.5)
-    ax.set_ylabel("IoU, 26 tiles", fontsize=J.LABEL, labelpad=2.0)
-    _box(ax)
-    ax.legend(loc="lower left", fontsize=J.TICK, handlelength=1.5, handletextpad=0.45,
-              borderpad=0.0, labelspacing=0.22, borderaxespad=0.3)
-    J.panel_label(ax, "f")
+    # ---------------------------------------------------------------- the four kinds
+    SWEEP, TEST, INHERIT, FIXED = J.ACCENT, J.G_DARK, J.ACCENT2, J.G_MID
+    #: FOUR WORDS ON THE PLATE, and what each one means in the caption file below.
+    #: The key used to be four phrases -- twenty words of lettering explaining a
+    #: four-colour legend -- and a legend that needs a sentence per entry is a caption
+    #: that has wandered into the artwork.
+    PROV_GLOSS = {
+        SWEEP: "swept on labelled data, and the shipped value is the best on the grid",
+        INHERIT: "inherited from archived code with no recorded provenance, and swept "
+                 "HERE after the fact: the curve shows sensitivity, not selection, and "
+                 "the marker sits wherever the shipped value falls",
+        TEST: "settled by a test that had no value to choose -- on or off, which "
+              "members -- so there is a verdict but no optimum",
+        FIXED: "fixed by construction, with no sweep on record in either repository"}
+    PROV = [(SWEEP, "swept"), (INHERIT, "inherited"), (TEST, "tested"),
+            (FIXED, "fixed")]
 
-    n_text = _no_collisions(fig)
-    print(f"  CONTROL {n_text} drawn strings, no overlapping pair above 1 pt: PASS")
+    MAXDOTS = 14
+
+    def L(ax, xs, ys, *, logx=False, dashed=False, colour=J.ACCENT):
+        kw = dict(color=colour, lw=0.9, zorder=4)
+        if len(xs) <= MAXDOTS:
+            kw |= dict(marker="o", ms=1.9, mfc="white", mec=colour, mew=0.6)
+        if dashed:
+            kw["dashes"] = (2.8, 1.6)
+        ax.plot(xs, ys, "--" if dashed else "-", **kw)
+        if logx:
+            ax.set_xscale("log")
+
+    def S(ax, x, y, colour=J.ACCENT):
+        ax.plot([x], [y], "s", color=colour, ms=3.8, zorder=6,
+                markeredgecolor="white", markeredgewidth=0.5)
+
+    #: THE PLOTTERS DRAW AND SET LIMITS; the axis titles and the tick values live in
+    #: PANELS below, because in both reference figures every axis carries a full title
+    #: with its unit and several numeric tick labels, and those belong where a reader
+    #: of this module can see them against each other rather than buried in nine
+    #: separate closures.
+    def p_a(ax):
+        L(ax, grid, [f1[g] for g in grid], logx=True)
+        ax.axvline(float(DO.SHIPPED_MAD_K), **APP_RULE)
+        S(ax, K, f1[K]); ax.set_ylim(0.0, 0.42); ax.set_xlim(0.9, 44)
+
+    def p_b(ax):
+        gg = [int(g) for g in GATE_GRID]
+        L(ax, gg, [gate26[str(g)] for g in gg])
+        S(ax, GATE, gate26[str(GATE)])
+        ax.set_xlim(-1.5, 41.5); ax.set_ylim(0.15, 0.56)
+
+    def p_c(ax):
+        L(ax, [max(float(v), 0.5) for v in CLEANMIN_GRID],
+          [cmin[str(v)] for v in CLEANMIN_GRID], logx=True)
+        L(ax, [float(v) for v in CANDMIN_GRID], [amin[str(v)] for v in CANDMIN_GRID],
+          dashed=True, colour=J.ACCENT2)
+        S(ax, CLEAN_MIN, cmin[str(CLEAN_MIN)])
+        S(ax, CAND_MIN, amin[str(CAND_MIN)], colour=J.ACCENT2)
+        ax.set_xlim(0.4, 4500); ax.set_ylim(0.15, 0.36)
+
+    def p_d(ax):
+        L(ax, list(OPEN_GRID), [op8[str(v)] for v in OPEN_GRID])
+        L(ax, list(OPEN_GRID), [op4[str(v)] for v in OPEN_GRID], dashed=True,
+          colour=J.ACCENT2)
+        S(ax, 1, op8["1"])
+        ax.set_xlim(-0.4, max(OPEN_GRID) + 0.4); ax.set_ylim(0.15, 0.36)
+
+    def p_e(ax):
+        L(ax, list(LADDER), lad_pct, logx=True)
+        ax.set_xlim(LADDER[0] * 0.7, LADDER[-1] * 1.4)
+        ax.set_ylim(0.0, max(lad_pct) * 1.25)
+
+    def p_f(ax):
+        """One flattening radius at a time, against the seven-rung union.
+
+        The union had no sweep anywhere until this one: it was asserted to be worth
+        having. On the same 26 tiles and the same scorer it scores %.4f, against
+        %.4f for the best single radius on the grid, so the panel now SHOWS what the
+        ladder buys instead of claiming it.
+        """
+        xs = [int(v) for v in SINGLE_LADDER_GRID]
+        L(ax, xs, [sing[str(v)] for v in xs], logx=True)
+        ax.axhline(union_iou, color=J.ACCENT2, lw=1.0, zorder=5,
+                   dashes=(3.0, 1.8))
+        ax.set_xlim(xs[0] * 0.7, xs[-1] * 1.4)
+        ax.set_ylim(0.23, max(union_iou, max(sing.values())) * 1.06)
+
+    def p_g(ax):
+        xs = [int(v) for v in CLOSE_GRID]
+        L(ax, xs, [clo[str(v)] for v in xs])
+        S(ax, int(sem["clean_mask.close_radius"]),
+          clo[str(int(sem["clean_mask.close_radius"]))])
+        ax.set_xlim(-0.5, max(xs) + 0.5)
+        ax.set_ylim(min(clo.values()) * 0.995, max(clo.values()) * 1.005)
+
+    def p_h(ax):
+        xs = [float(v) for v in DENOISE_GRID]
+        L(ax, xs, [dns[str(v)] for v in xs])
+        sig = float(sem["segment_dark_regions.denoise_sigma"])
+        S(ax, sig, dns[str(sig)])
+        ax.set_xlim(-0.2, max(xs) + 0.2)
+        ax.set_ylim(min(dns.values()) * 0.99, max(dns.values()) * 1.01)
+
+    def p_i(ax):
+        L(ax, tgrid, trec)
+        L(ax, tgrid, tfp, dashed=True, colour=J.ACCENT2)
+        S(ax, THR, at_ship["recall"])
+        ax.set_xlim(0.03, 0.97); ax.set_ylim(0.0, 1.0)
+
+    def p_j(ax):
+        ys = [cv["f17_mean_iou"], cv["hybrid_mean_iou"], cv["ens_mean_iou"]]
+        L(ax, [0, 1, 2], ys); S(ax, 2, ys[2])
+        ax.set_xlim(-0.35, 2.35); ax.set_ylim(0.0, 1.0)
+
+    def p_k(ax):
+        """What a SAM tile is: 1024 px squares at stride 896, overlapping by 128."""
+        TILE, STR = int(const["TILE"]), int(const["TILE_STRIDE"])
+        OV = TILE - STR
+        span = 2 * STR + TILE
+        ax.set_xlim(-0.02 * span, 1.02 * span)
+        # HEADROOM FOR THE PANEL LETTER. At a ylim of 1.0 the bold 'h' printed on top
+        # of the stride callout, which the control below now also measures.
+        ax.set_ylim(0.0, 1.34)
+        for i, c in enumerate((J.ACCENT, J.ACCENT2, J.ACCENT)):
+            ax.add_patch(Rectangle((i * STR, 0.30), TILE, 0.40, facecolor=c,
+                                   alpha=0.22, edgecolor=c, lw=0.6, zorder=2 + i))
+        for k_ in (0, 1):
+            ax.add_patch(Rectangle((STR + k_ * STR, 0.30), OV, 0.40, facecolor=J.INK,
+                                   alpha=0.20, edgecolor="none", zorder=6))
+        ax.annotate("", xy=(0, 0.17), xytext=(TILE, 0.17),
+                    arrowprops=dict(arrowstyle="<|-|>", lw=0.6, color=J.INK,
+                                    mutation_scale=4.5), zorder=7)
+        ax.text(TILE / 2.0, 0.08, "%d" % TILE, fontsize=T_TICK, ha="center",
+                va="center", color=J.INK)
+        ax.annotate("", xy=(0, 0.83), xytext=(STR, 0.83),
+                    arrowprops=dict(arrowstyle="<|-|>", lw=0.6, color=J.INK,
+                                    mutation_scale=4.5), zorder=7)
+        ax.text(STR / 2.0, 0.92, "%d" % STR, fontsize=T_TICK, ha="center",
+                va="center", color=J.INK)
+        ax.text(STR + OV / 2.0, 0.50, "%d" % OV, fontsize=T_TICK, ha="center",
+                va="center", color=J.INK, zorder=8)
+
+    def p_l(ax):
+        L(ax, kgrid, kmar, colour=J.ACCENT2)
+        ax.axhline(0.0, color=J.INK, lw=0.7, zorder=5)
+        S(ax, K, karm[K]["margin_pp"], colour=J.ACCENT2)
+        ax.set_xlim(min(kgrid) - 0.4, max(kgrid) + 0.4)
+        ax.set_ylim(min(kmar) * 1.15, abs(min(kmar)) * 0.18)
+
+    _lo_l = round(min(kmar) * 1.15)
+    _hi_e = round(max(lad_pct), 1)
+
+    #: (arm, letter, x title, y title, plotter, x ticks, x labels, y ticks, y labels)
+    #: TWELVE PANELS, NOT NINE. The author's standing objection was that the plate did
+    #: not show how each setting was CHOSEN, and for three of them the honest answer
+    #: used to be that nothing had ever been measured. Three were sweepable on the
+    #: same 26 tiles and the same scorer as the rest, so they were swept, and two of
+    #: the three came back saying the shipped value is not the best one on its own
+    #: grid -- which is the kind of thing this plate exists to report.
+    _c0, _c1 = min(clo.values()), max(clo.values())
+    _d0, _d1 = min(dns.values()), max(dns.values())
+    _s1 = max(max(sing.values()), union_iou)
+    PANELS = [
+        ("SEM", "a", "MAD multiplier $k$", "F1", p_a,
+         [1, 10, 40], ["1", "10", "40"], [0, 0.2, 0.4], ["0", "0.2", "0.4"]),
+        ("SEM", "b", "darkness gate (DN)", "IoU", p_b,
+         [0, 20, 40], ["0", "20", "40"], [0.2, 0.35, 0.5], ["0.2", "0.35", "0.5"]),
+        ("SEM", "c", "area floor (px)", "IoU", p_c,
+         [1, 100, 3200], ["1", "10$^2$", "3200"], [0.2, 0.3], ["0.2", "0.3"]),
+        ("SEM", "d", "opening radius (px)", "IoU", p_d,
+         [0, 3, 6], ["0", "3", "6"], [0.2, 0.3], ["0.2", "0.3"]),
+        ("SEM", "e", "ladder rung (px)", "unique (%)", p_e,
+         [5, 40, 320], ["5", "40", "320"], [0, _hi_e], ["0", "%g" % _hi_e]),
+        ("SEM", "f", "one radius only (px)", "IoU", p_f,
+         [5, 40, 320], ["5", "40", "320"], [0.25, round(_s1, 2)],
+         ["0.25", "%.2f" % round(_s1, 2)]),
+        ("SEM", "g", "closing radius (px)", "IoU", p_g,
+         [0, 6, 12], ["0", "6", "12"], [round(_c0, 3), round(_c1, 3)],
+         ["%.3f" % _c0, "%.3f" % _c1]),
+        ("SEM", "h", "denoise sigma", "IoU", p_h,
+         [0, 2, 4], ["0", "2", "4"], [round(_d0, 2), round(_d1, 2)],
+         ["%.2f" % _d0, "%.2f" % _d1]),
+        ("TXM", "i", "threshold", "rate", p_i,
+         [0.05, 0.5, 0.95], ["0.05", "0.5", "0.95"], [0, 0.5, 1],
+         ["0", "0.5", "1"]),
+        ("TXM", "j", "members", "IoU", p_j,
+         [0, 2], ["17-ch", "mean"], [0, 0.5, 1], ["0", "0.5", "1"]),
+        ("TXM", "k", "SAM tile and stride (px)", "", p_k, [], [], [], []),
+        ("TXM", "l", "$k$ on TXM", "margin (pp)", p_l,
+         [3, 10], ["3", "10"], [_lo_l, 0], ["%d" % _lo_l, "0"]),
+    ]
+
+    # ------------------------------------------- EVERY constant, as a printed table
+    #: A PRINTED TABLE, WHICH IS WHAT THIS IS. Three editions tried to make the
+    #: parameter inventory into artwork -- loose value strips, a ruled block with
+    #: colour swatches, then stage boxes joined by arrows -- and each one read as a
+    #: figure that had been filled with words. Neither reference figure contains
+    #: anything of the sort, because an inventory of settings is a TABLE, and a table
+    #: in these journals is plain: a top rule, a header, a header rule, the rows, a
+    #: bottom rule. No boxes, no arrows, no colour, no key. How each value was settled
+    #: is one letter in its own narrow column, defined in a single footnote, which is
+    #: the normal way a printed table carries that kind of flag.
+    CODE = {SWEEP: "S", TEST: "T", INHERIT: "I", FIXED: "F"}
+
+    def R(name, value, prov, letter=None):
+        return (name, value, prov, letter)
+
+    pct = lambda a, b: "%g/%g" % (a, b)                                # noqa: E731
+    SEM_ROWS = [
+        R("contrast window (%)", pct(sem["load_as_uint8.low_pct"],
+                                     sem["load_as_uint8.high_pct"]), FIXED),
+        R("contrast, %d frames (%%)" % len(GENTLE), pct(*GENTLE_PCT), FIXED),
+        R("databar search depth", "%.2f" % sem["_detect_databar_top.search_frac"],
+          FIXED),
+        R("databar window (rows)", "%d" % sem["_detect_databar_top.window"], FIXED),
+        R("databar sd ratio", "%.2f" % sem["_detect_databar_top.std_ratio"], FIXED),
+        R("databar mean ratio", "%.2f" % sem["_detect_databar_top.mean_ratio"], FIXED),
+        R("field-of-view gate (DN)", "%d" % sem["find_field_of_view.bright_thresh"],
+          FIXED),
+        R("field-of-view shrink", "%.2f" % sem["find_field_of_view.shrink_frac"],
+          FIXED),
+        R("field-of-view floor", "%.2f" % sem["find_field_of_view.min_keep_frac"],
+          FIXED),
+        R("flattening sigma (px)", "%g" % sem["flatten_background.sigma"],
+          INHERIT, "f"),
+        R("flattening clip (%)", pct(sem["flatten_background.low_pct"],
+                                     sem["flatten_background.high_pct"]), FIXED),
+        R("scale ladder (px)", "%d–%d" % (LADDER[0], LADDER[-1]), FIXED, "e"),
+        R("ladder rungs", "%d" % len(LADDER), FIXED, "e"),
+        R("decimate above (px)", "%d" % int(DO.DECIMATE_ABOVE_SIGMA), FIXED),
+        R("multiscale union", "on" if DO.USE_MULTISCALE_UNION else "off",
+          TEST, "f"),
+        R("denoise sigma", "%.1f" % sem["segment_dark_regions.denoise_sigma"],
+          INHERIT, "h"),
+        R("MAD multiplier k", "%.1f" % K, SWEEP, "a"),
+        R("darkness gate (DN)", "%d" % GATE, INHERIT, "b"),
+        R("opening radius (px)", "1", INHERIT, "d"),
+        R("closing radius (px)", "%d" % sem["clean_mask.close_radius"],
+          INHERIT, "g"),
+        R("connectivity", "8", INHERIT, "d"),
+        R("clean area floor (px)", "%d" % CLEAN_MIN, INHERIT, "c"),
+        R("candidate floor (px)", "%d" % CAND_MIN, INHERIT, "c"),
+        R("region classifier", "on" if DO.USE_REGION_CLASSIFIER else "off", TEST),
+    ]
+    TXM_ROWS = [
+        R("recipe", str(const["RECIPE"]), FIXED),
+        R("members averaged", "2", TEST, "j"),
+        R("feature channels", "%d" % stats["n_features"], FIXED),
+        R("backbone", "SAM ViT-H", FIXED),
+        R("SAM tile (px)", "%d" % const["TILE"], FIXED, "k"),
+        R("tile stride (px)", "%d" % const["TILE_STRIDE"], FIXED, "k"),
+        R("embedding stride (px)", "%d" % const["EMB_STRIDE"], FIXED),
+        R("probability threshold", "%.2f" % THR, TEST, "i"),
+        R("correction floor", "%.2f" % const["CORRECTION_FLOOR"], FIXED),
+        R("SEM k on TXM", "none", INHERIT, "l"),
+        R("speck floor (px)", "%d" % const["MIN_BLOB_PX"], FIXED),
+        R("hole fill (px)", "%d" % const["FILL_HOLES_MAX_PX"], FIXED),
+        R("narrowing window (px)", "%d" % const["TIGHTEN_WINDOW"], FIXED),
+        R("narrowing core", "%.2f" % const["TIGHTEN_MIN_CORE"], FIXED),
+        R("width clip", "on" if const["WIDTH_CLIP"] else "off", FIXED),
+        R("clip radius (px)", "%d" % const["WIDTH_CLIP_RADIUS"], FIXED),
+        R("clip directions", "%d" % const["WIDTH_CLIP_DIRS"], FIXED),
+        R("clip probes", "%d" % const["WIDTH_CLIP_PROBES"], FIXED),
+        R("clip recentre (px)", "%d" % const["WIDTH_CLIP_RECENTRE"], FIXED),
+        R("clip peak sigma", "%.1f" % const["WIDTH_CLIP_PEAK_SIGMA"], FIXED),
+        R("clip background (px)", "/".join(str(w) for w in
+                                           const["WIDTH_CLIP_BG_WINDOWS"]), FIXED),
+        R("clip min points", "%d" % const["WIDTH_CLIP_MIN_MEASURED"], FIXED),
+        R("clip IDW neighbours", "%d" % const["WIDTH_CLIP_IDW_K"], FIXED),
+        R("straight min area (px)", "%d" % const["STRAIGHT_MIN_PX"], FIXED),
+        R("straight min aspect", "%.1f" % const["STRAIGHT_MIN_ASPECT"], FIXED),
+        R("straight max wander (px)", "%.1f" % const["STRAIGHT_MAX_WANDER"], FIXED),
+    ]
+
+    # ---- geometry, in inches ---------------------------------------------------
+    W = J.PAGEW
+    MX, NCOL, COLGAP = 0.05, 4, 0.185
+    PW = (W - 2 * MX - (NCOL - 1) * COLGAP) / NCOL
+    YLABW = 0.42                       # y title + y tick labels
+    PLOTH, XTICKH, XLABH, ROWGAP = 0.72, 0.17, 0.20, 0.16
+    PANELROW = PLOTH + XTICKH + XLABH + ROWGAP
+    ARMH, LEAD, TOPM, FOOTH = 0.20, 0.132, 0.07, 0.40
+    TCOL, TGAP = 3, 0.16               # the table's column groups
+
+    def _tcolw(rows):
+        nm = max(_tw(r[0] + ("" if r[3] is None else "  (%s)" % r[3]), T_TICK)
+                 for r in rows)
+        vl = max(_tw(r[1], T_TICK) for r in rows)
+        return nm, vl
+
+    def table_block(y0, rows, title):
+        """One printed table: top rule, header, header rule, rows, bottom rule."""
+        per = -(-len(rows) // TCOL)
+        cw = (W - 2 * MX - (TCOL - 1) * TGAP) / TCOL
+        nmw, vlw = _tcolw(rows)
+        codew = _tw("ref.", T_TICK, bold=False) + 0.04
+        T(MX, y0, title, T_NAME, weight="bold")
+        y0 += LEAD + 0.02
+        for c in range(TCOL):
+            x = MX + c * (cw + TGAP)
+            chunk = rows[c * per:(c + 1) * per]
+            if not chunk:
+                continue
+            rule(x, x + cw, y0, lw=0.8)
+            T(x, y0 + 0.030, "parameter", T_TICK, color=J.G_DARK)
+            T(x + cw - codew, y0 + 0.030, "value", T_TICK, color=J.G_DARK,
+              ha="right")
+            T(x + cw, y0 + 0.030, "ref.", T_TICK, color=J.G_DARK, ha="right")
+            rule(x, x + cw, y0 + LEAD + 0.012, lw=0.5)
+            yy = y0 + LEAD + 0.040
+            for name, value, prov, letter in chunk:
+                T(x, yy, name if letter is None else "%s  (%s)" % (name, letter),
+                  T_TICK)
+                T(x + cw - codew, yy, value, T_TICK, ha="right")
+                T(x + cw, yy, CODE[prov], T_TICK, ha="right", color=J.G_DARK)
+                yy += LEAD
+            rule(x, x + cw, yy + 0.010, lw=0.8)
+        return y0 + LEAD + 0.040 + per * LEAD + 0.030
+
+    sem_p = [q for q in PANELS if q[0] == "SEM"]
+    txm_p = [q for q in PANELS if q[0] == "TXM"]
+    sem_rows = -(-len(sem_p) // NCOL)
+    txm_rows = -(-len(txm_p) // NCOL)
+    sem_t_h = LEAD + 0.02 + LEAD + 0.040 + (-(-len(SEM_ROWS) // TCOL)) * LEAD + 0.030
+    txm_t_h = LEAD + 0.02 + LEAD + 0.040 + (-(-len(TXM_ROWS) // TCOL)) * LEAD + 0.030
+    H = (TOPM + ARMH + sem_rows * PANELROW + sem_t_h + 0.22
+         + ARMH + txm_rows * PANELROW + txm_t_h + FOOTH)
+    fig = plt.figure(figsize=(W, H))
+    texts = []
+
+    def T(x, y, t, size, *, weight="normal", color=J.INK, ha="left", va="top"):
+        a = fig.text(x / W, 1.0 - y / H, t, fontsize=size, ha=ha, va=va, color=color,
+                     fontweight=weight, linespacing=1.15)
+        texts.append(a)
+        return a
+
+    def rule(x0, x1, y, lw=0.5, colour=J.INK):
+        fig.add_artist(plt.Line2D([x0 / W, x1 / W], [1.0 - y / H] * 2,
+                                  transform=fig.transFigure, color=colour, lw=lw,
+                                  zorder=3, solid_capstyle="butt"))
+
+    panel_axes = []
+
+    def panels(y0, items):
+        """Lay the panels out `NCOL` across, wrapping. The SEM arm has eight of them
+        now and one row of eight would be 0.75 in per panel, where an axis title does
+        not fit."""
+        for i, (_arm, letter, xlab, ylab, fn, xt, xl, yt, yl) in enumerate(items):
+            r, c = divmod(i, NCOL)
+            x = MX + c * (PW + COLGAP)
+            ax = fig.add_axes([(x + YLABW) / W,
+                               1.0 - (y0 + r * PANELROW + PLOTH) / H,
+                               (PW - YLABW) / W, PLOTH / H])
+            panel_axes.append(ax)
+            fn(ax)
+            ax.minorticks_off()
+            ax.set_xticks(xt)
+            ax.set_xticklabels(xl)
+            ax.set_yticks(yt)
+            ax.set_yticklabels(yl)
+            ax.tick_params(which="both", length=2.0, width=0.5, pad=1.6,
+                           labelsize=T_TICK, top=False, right=False, direction="out")
+            for sp in ax.spines.values():
+                sp.set_linewidth(0.5)
+            if ylab:
+                ax.set_ylabel(ylab, fontsize=T_TICK, labelpad=1.6)
+            if xlab:
+                ax.set_xlabel(xlab, fontsize=T_TICK, labelpad=1.6)
+            # lowercase, bold, no parentheses, top left INSIDE the axes: both
+            # reference figures letter their panels exactly so
+            ax.text(0.035, 0.965, letter, transform=ax.transAxes, fontsize=T_NAME,
+                    fontweight="bold", ha="left", va="top", color=J.INK, zorder=9)
+
+    y = TOPM
+    T(MX, y, "SEM arm", T_NAME, weight="bold", color=J.ACCENT)
+    y += ARMH
+    panels(y, sem_p)
+    y += sem_rows * PANELROW
+    y = table_block(y, SEM_ROWS, "SEM arm: every constant") + 0.22
+    T(MX, y, "TXM arm", T_NAME, weight="bold", color=J.ACCENT2)
+    y += ARMH
+    panels(y, txm_p)
+    y += txm_rows * PANELROW
+    y = table_block(y, TXM_ROWS, "TXM arm: every constant")
+
+    # one footnote, which is how a printed table carries a flag column
+    # TWO LINES. One ran 7 in on a 6.27 in sheet and the plate's own check caught it.
+    T(MX, y + 0.03,
+      "ref.   S swept;   T settled by a test;   I inherited and swept after the "
+      "fact;   F fixed by construction.\n"
+      "Bracketed letter: the panel above.   Filled square: the value in use.   "
+      "Dashed: a second series, and in f the seven-rung union.",
+      T_TICK, color=J.G_DARK)
+
+    # ---- the controls ----------------------------------------------------------
+    fig.canvas.draw()
+    rend = fig.canvas.get_renderer()
+    pw, ph = fig.canvas.get_width_height()
+    tol = fig.dpi / 72.0
+    #: AXIS TITLES AND TICK LABELS ARE TEXT ON THE SHEET, and until now the check did
+    #: not look at them: it measured only the strings this module placed itself. The
+    #: last panel's axis title ran off the right edge of the plate and the check
+    #: reported PASS, because the title belongs to the axes and not to `texts`. Every
+    #: visible string is measured now, wherever it came from.
+    measured = list(texts)
+    for a_ in panel_axes:
+        measured.append(a_.xaxis.label)
+        measured.append(a_.yaxis.label)
+        measured.extend(a_.get_xticklabels())
+        measured.extend(a_.get_yticklabels())
+        measured.extend([t_ for t_ in a_.texts])
+    boxes = []
+    for t in measured:
+        if not t.get_text().strip() or not t.get_visible():
+            continue
+        try:
+            boxes.append((t.get_text().strip().replace("\n", " ")[:38],
+                          t.get_window_extent(renderer=rend)))
+        except Exception:
+            continue
+    bad = [f"{boxes[i][0]!r} x {boxes[k][0]!r}"
+           for i in range(len(boxes)) for k in range(i + 1, len(boxes))
+           if (min(boxes[i][1].x1, boxes[k][1].x1)
+               - max(boxes[i][1].x0, boxes[k][1].x0) > tol
+               and min(boxes[i][1].y1, boxes[k][1].y1)
+               - max(boxes[i][1].y0, boxes[k][1].y0) > tol)]
+    off = [f"{n!r}" for n, e in boxes
+           if e.x0 < -tol or e.x1 > pw + tol or e.y0 < -tol or e.y1 > ph + tol]
+    if bad or off:
+        raise SystemExit(("%d overlapping label(s): " % len(bad) + "; ".join(bad[:6])
+                          if bad else "")
+                         + ("  %d off the sheet: " % len(off) + "; ".join(off[:6])
+                            if off else ""))
+    print(f"  CONTROL {len(boxes)} drawn strings, none overlapping, none off the "
+          f"sheet: PASS")
+
+    ROWS = [("SEM", r) for r in SEM_ROWS] + [("TXM", r) for r in TXM_ROWS]
+    drawn = {q[1] for q in PANELS}
+    cited = {r[3] for _a, r in ROWS if r[3]}
+    if drawn != cited:
+        raise SystemExit(f"panels drawn {sorted(drawn)} but the tables cite "
+                         f"{sorted(cited)}")
+    if len(panel_axes) != len(PANELS):
+        raise SystemExit(f"{len(panel_axes)} axes drawn for {len(PANELS)} panels")
+    print(f"  CONTROL {len(drawn)} panels, every one of them a row of its table, and "
+          f"every lettered row a panel: PASS")
+    n_rows = len(ROWS)
+    tally = {"total": n_rows,
+             "swept": len([1 for _a, r in ROWS if r[2] == SWEEP]),
+             "test": len([1 for _a, r in ROWS if r[2] == TEST]),
+             "inherited": len([1 for _a, r in ROWS if r[2] == INHERIT])}
+    if tally != DOCSTRING_TALLY:
+        raise SystemExit(f"this module's docstring states {DOCSTRING_TALLY} and the "
+                         f"tables now hold {tally}; fix whichever is wrong rather "
+                         f"than shipping a figure whose own description is false")
+    print(f"  CONTROL the tally this module's docstring states is the tally the two "
+          f"tables hold ({tally}): PASS")
+    print(f"  CONTROL {n_rows} constants on the plate ({len(SEM_ROWS)} SEM, "
+          f"{len(TXM_ROWS)} TXM), every value parsed from the shipped source or read "
+          f"off a record: PASS")
     J.save(fig, os.path.join(OUT, NAME + ".png"))
-    ladder_bars["figure_height_in"] = Htot
-    ladder_bars["n_text"] = n_text
-    return ladder_bars
+    return dict(
+        figure_height_in=H, n_text=len(boxes), n_placed=len(boxes),
+        n_constants_on_the_plate=n_rows, panel_letters=sorted(drawn), tally=tally,
+        key_on_the_plate={CODE[c]: PROV_GLOSS[c] for c, _w in PROV},
+        constants=[{"arm": arm, "name": r[0], "value": r[1], "panel": r[3],
+                    "how_fixed": PROV_GLOSS[r[2]]} for arm, r in ROWS],
+        terms=[str(s) for s in LADDER], pooled=lad_pct,
+        median=[100 * x[1] for x in ladder], p25=[100 * x[2] for x in ladder],
+        p75=[100 * x[3] for x in ladder],
+        frames_with_a_nonzero_share=[x[4] for x in ladder],
+        frames_with_a_denominator=[x[5] for x in ladder],
+        shared_pct=100.0 - sum(lad_pct),
+        best_clean_min=best_cmin, best_cand_min=best_amin,
+        best_txm_threshold=best_t, txm_at_shipped=at_ship,
+        best_k_on_txm=best_k, best_margin_on_txm_pp=karm[best_k]["margin_pp"])
 
 
 def _concentration(fr, ladder):
@@ -759,280 +1458,577 @@ def _crossing(wf, grid):
     return "nowhere on this grid"
 
 
-def sidecar(tiles, frames, madk, madp, dead, ladder_bars):
-    """Every number the plate prints, with the file or the function that produced it."""
+def sidecar(tiles, frames, madk, madp, dead, txm, units, scores, stats, const, bars):
+    """Every number the plate prints, with the file or the function that produced it.
+
+    ONE BLOCK PER LETTERED ROW, and every block names its arm, its value, its verdict,
+    its unit set and the record the row was drawn from. A reader who wants to check a
+    row should not have to guess which of three unit sets it sits on.
+    """
     wf = madk["sets"]["whole_fields"]
     fr = [r for r in frames["frames"] if "error" not in r]
+    cv = scores["cross_validated"]
     cmp_path = os.path.join(_paths.REPO, "docs", "slides", "comparison.json")
     comp = {r["arm"]: r for r in json.load(open(cmp_path))["rows"]}
+    THR = float(const["DEFAULT_THRESHOLD"])
 
     def chain_pooled(t_dn, field):
         return _pooled(fr, lambda r, t=t_dn, f=field: r["chain"][str(t)][f])
 
     painted = sum(r["crack"] for r in fr)
     kept = sum(r["chain"][str(GATE)]["kept"] for r in fr)
+    karm = {k: units["pooled"][f"SEM detector, mad_k={float(k):g}"] for k in units["grid"]}
+    k_margin = karm[K]["margin_pp"] if K in karm else float("nan")
+
     rec = {
         "figure": NAME + ".png",
-        "column_class": "double, Elsevier 190 mm. journal_style.COLUMN_CLASS carries no "
-                        "row for this plate and is not edited from here, so the class is "
-                        "recorded in this sidecar instead.",
-        "what": "the evidence behind each constant of Table 1, one panel per constant, "
-                "with the panels for the constants that were never searched showing the "
-                "sensitivity rather than an optimum",
-        "settings_drawn": {
-            "mad_k": K, "absolute_dark_thresh": GATE, "scale_ladder": list(LADDER),
-            "clean_mask_min_area_px": CLEAN_MIN, "clean_mask_open_radius": 1,
-            "clean_mask_close_radius": 3, "candidate_min_area_px": CAND_MIN,
-            "connectivity": 8, "region_classifier": bool(DO.USE_REGION_CLASSIFIER),
-            "source": "analysis/detector_overrides.py and paper/figures/"
-                      "both_modalities.py, read at run time, never retyped"},
-        "two_values_of_mad_k": {
-            "shipped_in_the_app": float(DO.SHIPPED_MAD_K),
-            "evaluated_in_the_paper": float(DO.PAPER_MAD_K),
-            "note": "detector_overrides.py defines both and they are not the same "
-                    "number; every panel other than (a) and (b) is drawn at the paper's "
-                    "6.0, and (a) marks both"},
-        "plate": {
-            "figure_width_in": J.PAGEW, "figure_height_in": ladder_bars["figure_height_in"],
-            "dpi": 600, "smallest_printed_type_pt": J.FLOOR,
-            "layout": "two columns by three rows; (a) and (c) are stacked pairs of "
-                      "sub-panels sharing one x axis under one panel letter, and no "
-                      "panel in the plate carries a second y scale",
-            "text_collision_control": "PASS: %d drawn strings measured at the renderer's "
-                                      "own extents, no pair overlapping by more than "
-                                      "1 pt in both directions"
-                                      % ladder_bars.get("n_text", 0)},
-        "reconstruction_checks": {
-            "union": frames["controls"]["union"],
-            "kmax": frames["controls"]["kmax"],
-            "tile_chain": tiles["controls"]["chain"],
-            "tilebench": tiles["controls"]["tilebench"],
-            "rule": "all four abort the script on disagreement; none of them warns"},
-        "panel_a_mad_multiplier": {
-            "verdict": "SELECTED BY MEASUREMENT",
-            "unit_set": "31 public Inconel 718 whole fields, mean per image",
-            "source": "docs/figures/madk_above_five.json, sets.whole_fields.per_k",
-            "f1_by_k": {str(g): wf["per_k"][str(g)]["f1"] for g in madk["grid"]},
-            "area_ratio_by_k": {str(g): wf["per_k"][str(g)]["area_ratio"]
-                                for g in madk["grid"]},
-            "best_in_sample": wf["best_in_sample"],
-            "leave_one_image_out_f1": wf["loo_full_grid_f1"],
-            "f1_at_the_app_default_5": wf["shipped_f1"],
-            "why_the_grid_runs_to_40": madk["why"],
-            "paired_test_6_vs_5": {
-                "whole_fields": madp["tests"]["whole_fields"]["F1"]["6.0"],
-                "crops": madp["tests"]["crops"]["F1"]["6.0"],
-                "source": "docs/figures/madk_paired_test.json",
+        #: WHICH PANELS ARE NOT AT THE SHIPPED SETTING, named because they cannot be
+        #: brought to it. An audit of this plate found two.
+        "panels_measured_without_the_region_classifier": {
+            "a": ("the MAD-multiplier sweep. Its record, docs/figures/"
+                  "madk_above_five.json, is produced by analysis/research/improve/"
+                  "madk_above_five.py, whose emission is the area floor -- "
+                  "clean_mask(13) then a 40 px component floor -- with no call to the "
+                  "region classifier. Its unit set is the 31 public Inconel 718 whole "
+                  "fields, whose images were a download that is no longer on this "
+                  "machine, so the sweep cannot be repeated with the classifier on. "
+                  "The value it selects, mad_k, is a CANDIDATE-stage constant and the "
+                  "classifier runs after it, so the selection is not invalidated; the "
+                  "F1 axis it is selected on is a candidate-stage F1 and should be "
+                  "read as one."),
+            "l": ("the SEM multiplier carried onto transmission data. Its record, "
+                  "docs/figures/txm_background_units.json, is the same area floor. "
+                  "That is deliberate -- the SEM region classifier is not part of the "
+                  "TXM pipeline -- but the panel is labelled as the SEM detector and "
+                  "the curve would move if it were applied."),
+            "everything_else": ("panels b to h sweep through both_modalities.emit and "
+                                "are at the shipped setting; their two records carry "
+                                "use_region_classifier true and a hash that includes "
+                                "the flag, so a stale one aborts the build")},
+        "column_class": "double, Elsevier 190 mm, but drawn at the paper's own text "
+                        "block (journal_style.PAGEW) because it is a full-height table. "
+                        "journal_style.COLUMN_CLASS carries no row for this plate and is "
+                        "not edited from here.",
+        "layout": "per arm, a row of sweep panels over a printed table of every "
+                  "constant that arm reads. The panels carry a full axis title with "
+                  "its unit and numeric tick labels on both axes, and a lowercase bold "
+                  "letter inside the axes at the top left. The table is plain -- top "
+                  "rule, header, header rule, rows, bottom rule -- with how each value "
+                  "was settled as one letter in a ref. column, defined in one footnote "
+                  "under the plate. Both conventions are copied from the two published "
+                  "figures cited in docs/FIGURE_CONVENTIONS_FROM_PUBLISHED_WORK.md; "
+                  "`key_on_the_plate` below expands the ref. codes.",
+        "what": "one row per constant of BOTH detectors, grouped by how the constant was "
+                "fixed. Each row names the parameter in words, prints the value the "
+                "paper runs at, shows the evidence that exists for it as a sparkline "
+                "with that value marked, and states in words how it was decided and on "
+                "which unit set.",
+        "why_a_table": "the previous edition was six unlabelled curves. A reader could "
+                       "not tell which parameter a panel was about, which of the two "
+                       "models it belonged to, or what value had been chosen, and the "
+                       "TXM arm was absent entirely.",
+        "reading_rule": "THE SPARKLINE COLUMN IS A STRIP, NOT AN AXES: no tick marks and "
+                        "no y tick labels. The swept range is printed under each strip "
+                        "and the measurand with its full span opens the note beside it, "
+                        "so no information a tick label would have carried is lost. A "
+                        "solid grey rule and a filled square mark the value the paper "
+                        "runs at, in every row that has one on an axis; the one dotted "
+                        "rule, in (a), is the value the application itself runs.",
+        "the_point_of_the_grouping": "of the twelve constants drawn or listed here, ONE "
+                                     "was selected by a sweep on labelled data. Two more "
+                                     "were settled by a test with no value to choose. "
+                                     "The rest were inherited with no recorded "
+                                     "provenance and swept only after the fact, or never "
+                                     "swept at all. The band headings are that fact.",
+
+        "arm_1_sem": {
+            "model": "the darkness detector: no training. flatten the background at "
+                     "seven radii, cut every pixel more than k MAD below its local "
+                     "median, clean, keep regions",
+            "settings_drawn": {
+                "mad_k": K, "absolute_dark_thresh": GATE, "scale_ladder": list(LADDER),
+                "clean_mask_min_area_px": CLEAN_MIN, "clean_mask_open_radius": 1,
+                "clean_mask_close_radius": 3, "candidate_min_area_px": CAND_MIN,
+                "connectivity": 8, "region_classifier": bool(DO.USE_REGION_CLASSIFIER),
+                "source": "analysis/detector_overrides.py and paper/figures/"
+                          "both_modalities.py, read at run time, never retyped"},
+            "two_values_of_mad_k": {
+                "shipped_in_the_app": float(DO.SHIPPED_MAD_K),
+                "evaluated_in_the_paper": float(DO.PAPER_MAD_K),
+                "note": "detector_overrides.py defines both and they are not the same "
+                        "number; every row other than (a) and (b) is drawn at the "
+                        "paper's 6.0, and (a) marks both"}},
+
+        "arm_2_txm": {
+            "model": "a trained per-pixel ensemble: the mean probability of a "
+                     "%d-channel intensity and texture model and a %d-dimensional "
+                     "hybrid that adds a frozen %s embedding"
+                     % (stats["n_features"], stats["hybrid_dim"], const["SAM_MODEL_ID"]),
+            "settings_drawn": {k: const[k] for k in sorted(const)},
+            "source": "PARSED with ast out of the deployed "
+                      "TXM_Crack_Detection_Pipeline/app/core/pipeline.py and model.py, "
+                      "never retyped; a name that stops being a module-level literal "
+                      "aborts the plate",
+            "deployed_model": {"registry_key": txm["model_key"], "recipe": txm["recipe"],
+                               "members": stats["model"]}},
+
+        "rows": {
+            "a": {
+                "arm": "SEM", "parameter": "MAD multiplier k", "value": K,
+                "verdict": "SELECTED BY A SWEEP ON LABELLED DATA -- the only constant in "
+                           "either arm that was",
+                "unit_set": "31 public Inconel 718 whole fields, mean F1 per image",
+                "record": "docs/figures/madk_above_five.json, sets.whole_fields.per_k",
+                "f1_by_k": {str(g): wf["per_k"][str(g)]["f1"] for g in madk["grid"]},
+                "area_ratio_by_k": {str(g): wf["per_k"][str(g)]["area_ratio"]
+                                    for g in madk["grid"]},
+                "best_in_sample": wf["best_in_sample"],
+                "leave_one_image_out_f1": wf["loo_full_grid_f1"],
+                "f1_at_the_app_default_5": wf["shipped_f1"],
+                "why_the_grid_runs_to_40": madk["why"],
+                "paired_test_6_vs_5": {
+                    "source": "docs/figures/madk_paired_test.json",
+                    "whole_fields": madp["tests"]["whole_fields"]["F1"]["6.0"],
+                    "crops": madp["tests"]["crops"]["F1"]["6.0"],
+                    "read_this": (
+                        "resolved on the 31 whole fields (paired median gain %+.4f, %d "
+                        "of %d images favouring, p = %.1e) and NOT resolved on the 26 "
+                        "crops (%+.4f, p = %.2f)"
+                        % (madp["tests"]["whole_fields"]["F1"]["6.0"]["paired_median_gain"],
+                           madp["tests"]["whole_fields"]["F1"]["6.0"]["images_favouring"],
+                           madp["tests"]["whole_fields"]["n"],
+                           madp["tests"]["whole_fields"]["F1"]["6.0"]["wilcoxon_p"],
+                           madp["tests"]["crops"]["F1"]["6.0"]["paired_median_gain"],
+                           madp["tests"]["crops"]["F1"]["6.0"]["wilcoxon_p"]))},
+                "the_area_axis_is_not_drawn_here": {
+                    "why": "the previous edition drew the marked/annotated area ratio "
+                           "under the F1 curve. In a sparkline strip a second measurand "
+                           "cannot be told from the first, so it moves to this record",
+                    "crosses_one": _crossing(wf, madk["grid"]),
+                    "at_the_reported_k": wf["per_k"][str(K)]["area_ratio"],
+                    "at_the_app_default":
+                        wf["per_k"][str(float(DO.SHIPPED_MAD_K))]["area_ratio"]}},
+            "no panel: region classifier": {
+                "arm": "SEM", "parameter": "learned region classifier",
+                "value": "ON" if DO.USE_REGION_CLASSIFIER else "OFF",
+                "verdict": ("SET BY THE AUTHOR, AGAINST THE MEASUREMENT. Every pooled "
+                            "score except precision falls when it is on. It is a trade "
+                            "between marking less of the crack and being right more "
+                            "often about what is marked, and which error costs more is "
+                            "a judgement about the experiment, not a number this "
+                            "corpus can settle"
+                            if DO.USE_REGION_CLASSIFIER else
+                            "SETTLED BY A TEST WITH NO VALUE TO CHOOSE; fitted and "
+                            "held-out are the same number by construction"),
+                "unit_set": "26 hand-labelled 512 px tiles, 13 specimens, pooled over "
+                            "every pixel at 0 px tolerance, mad_k 5.0",
+                #: THE ONE-VARIABLE COMPARISON IS v1492_floor -> shipped. The v147 ->
+                #: ablation pair below is the SAME question asked at the single-radius
+                #: candidate stage the app no longer runs; it is kept because it is the
+                #: evidence the setting was originally chosen on, not because it
+                #: describes the shipped detector.
+                "record": "paper/figures/sem_deadzone.json; the shipped candidate stage "
+                          "is v1492_floor (classifier off) against shipped (on)",
+                "at_the_shipped_candidate_stage": {
+                    "classifier_off": dead["pooled_26"]["v1492_floor"],
+                    "classifier_on": dead["pooled_26"]["shipped"],
+                    "without_the_off_specimen_void_tile": {
+                        "classifier_off": dead["pooled_25_no_flood"]["v1492_floor"],
+                        "classifier_on": dead["pooled_25_no_flood"]["shipped"]},
+                    "paired": dead["paired_steps"]["classifier_over_floor"]},
+                "at_the_retired_single_radius_stage": {
+                    "classifier_on": dead["pooled_26"]["v147"],
+                    "classifier_off": dead["pooled_26"]["ablation"],
+                    "paired": dead["paired"]["ablation"]},
+                "every_tile_score_here_is_in_sample": (
+                    "the classifier's training images overlap this corpus. "
+                    "docs/figures/sem_classifier_lofo.json refits it without each frame "
+                    "in turn; that record, not this row, is what it is worth on a frame "
+                    "it has not seen"),
+                "not_duplicated": ("what deleting the classifier recovered per "
+                                   "specimen was drawn by mk_recover.py while the flag "
+                                   "was off; that plate describes the PREVIOUS "
+                                   "configuration and is not part of this figure "
+                                   "programme. This row is only the decision")},
+            "b": {
+                "arm": "SEM", "parameter": "absolute darkness gate",
+                "value": "%d of 255 DN" % GATE,
+                "verdict": "INHERITED. The value carries no recorded provenance anywhere "
+                           "in the archived pipeline or in this project -- "
+                           "analysis/detector_overrides.py calls it \"an integer with no "
+                           "provenance here\" -- and it supplies more of the detector's "
+                           "frame-scale recall than the whole seven-rung ladder does",
+                "unit_set": "26 tiles, pooled, 0 px tolerance, mad_k 6.0",
+                "record": "docs/figures/parameters_tiles.json, gate_26 and gate_25",
+                "iou_by_threshold_26": {k: v["iou"] for k, v in tiles["gate_26"].items()},
+                "iou_by_threshold_25": {k: v["iou"] for k, v in tiles["gate_25"].items()},
+                "best_26": _best({k: v["iou"] for k, v in tiles["gate_26"].items()}),
+                "best_25": _best({k: v["iou"] for k, v in tiles["gate_25"].items()}),
+                "flood_tile": tiles["flood_tile"],
                 "read_this": (
-                    "resolved on the 31 whole fields (paired median gain %+.4f, %d of %d "
-                    "images favouring, p = %.1e) and NOT resolved on the 26 crops "
-                    "(%+.4f, p = %.2f)"
-                    % (madp["tests"]["whole_fields"]["F1"]["6.0"]["paired_median_gain"],
-                       madp["tests"]["whole_fields"]["F1"]["6.0"]["images_favouring"],
-                       madp["tests"]["whole_fields"]["n"],
-                       madp["tests"]["whole_fields"]["F1"]["6.0"]["wilcoxon_p"],
-                       madp["tests"]["crops"]["F1"]["6.0"]["paired_median_gain"],
-                       madp["tests"]["crops"]["F1"]["6.0"]["wilcoxon_p"]))},
-            "area_ratio_crosses_one": _crossing(wf, madk["grid"]),
-            "area_ratio_at_the_reported_k": wf["per_k"][str(K)]["area_ratio"],
-            "area_ratio_at_the_app_default": wf["per_k"][str(float(DO.SHIPPED_MAD_K))][
-                "area_ratio"]},
-        "panel_b_region_classifier": {
-            "verdict": "DECIDED BY MEASUREMENT, with zero free parameters, so fitted and "
-                       "held-out are the same number by construction",
-            "unit_set": "26 hand-labelled 512 px tiles, 13 specimens, pooled over every "
-                        "pixel at 0 px tolerance, mad_k 5.0",
-            "source": "paper/figures/sem_deadzone.json, pooled_26.v147 (classifier on) "
-                      "and pooled_26.ablation (same candidate stage, classifier off)",
-            "classifier_on": dead["pooled_26"]["v147"],
-            "classifier_off": dead["pooled_26"]["ablation"],
-            "paired": dead["paired"]["ablation"],
-            "without_the_off_specimen_void_tile": dead["pooled_25_no_flood"],
-            "not_duplicated": "what the deletion recovers per specimen is "
-                              "paper/figures/out/6 - SEM, what deleting the region "
-                              "classifier recovers.png (mk_recover.py); this panel is "
-                              "only the decision"},
-        "panel_c_absolute_gate": {
-            "verdict": "INHERITED. The value 10 carries no recorded provenance "
-                       "anywhere in the archived pipeline or in this project -- "
-                       "analysis/detector_overrides.py calls it \"an integer with no "
-                       "provenance here\" -- and it supplies more of the detector's "
-                       "frame-scale recall than the whole seven-rung ladder does. It is "
-                       "swept here, and the instruments disagree about its sign",
-            "tiles": {"unit_set": "26 tiles, pooled, 0 px tolerance, mad_k 6.0",
-                      "iou_by_threshold_26": {k: v["iou"] for k, v in tiles["gate_26"].items()},
-                      "iou_by_threshold_25": {k: v["iou"] for k, v in tiles["gate_25"].items()},
-                      "best_26": max(tiles["gate_26"], key=lambda k: tiles["gate_26"][k]["iou"]),
-                      "best_25": max(tiles["gate_25"], key=lambda k: tiles["gate_25"][k]["iou"]),
-                      "flood_tile": tiles["flood_tile"],
-                      "read_this": (
-                          "on all 26 tiles the best setting on this grid is t = %s, "
-                          "where t = 0 is the gate switched off; drop the one crop with an "
-                          "off-specimen void and the ordering reverses -- the gate is "
-                          "then clearly worth having and the shipped 10 sits %.4f IoU "
-                          "below that grid's own best at t = %s"
-                          % (max(tiles["gate_26"], key=lambda k_: tiles["gate_26"][k_]["iou"]),
-                             max(v["iou"] for v in tiles["gate_25"].values())
-                             - tiles["gate_25"][str(GATE)]["iou"],
-                             max(tiles["gate_25"], key=lambda k_: tiles["gate_25"][k_]["iou"])))},
-            "frames": {"unit_set": "48 full frames carrying a hand-painted correction "
-                                   "mask, %d painted crack px, mad_k 6.0" % painted,
-                       "pooled_dark_stage_recall_by_threshold":
-                           {str(g): _pooled(fr, lambda r, t=g: r["dark_crack"][str(t)])[0]
-                            for g in GATE_GRID_DARK},
-                       "full_chain_recall_pooled":
-                           {str(t): chain_pooled(t, "kept")[0] for t in GATE_GRID_FRAME},
-                       "full_chain_recall_per_frame_median":
-                           {str(t): chain_pooled(t, "kept")[1] for t in GATE_GRID_FRAME},
-                       "read_this": "the curve in the LOWER sub-panel is the "
-                                    "darkness stage alone, which is 96% of the loss and "
-                                    "agrees with the whole chain to 0.001 at the shipped "
-                                    "setting; the three full-chain values are listed "
-                                    "here"},
-            "prior_record": "analysis/detector_overrides.py records the same quantity at "
-                            "the app's mad_k 5.0: the gate proposes 13,907,547 of the "
-                            "20,923,398 painted px that reach a candidate, 10,516,306 of "
-                            "them reached by no ladder rung, and dropping it deletes "
-                            "47.50% of kept hand-marked crack"},
-        "panel_d_scale_ladder": {
-            "verdict": "STRUCTURAL, NOT TUNED. Unioning the darkness cut over a ladder of "
-                       "flattening radii was decided by measurement and costs no free "
-                       "parameter, but the seven VALUES are a doubling ladder, not a "
-                       "searched set, and no sweep over alternative ladders exists in "
-                       "this project",
-            "unit_set": "the same 48 painted frames. A painted pixel is credited to a "
-                        "radius only when that radius and no other of the seven reaches "
-                        "it, so each bar is a true leave-one-out marginal",
-            "denominator": "the painted crack the SEVEN-RUNG UNION reaches on its own, "
-                           "with the absolute gate switched off: %d px of the %d painted"
-                           % (sum(r["dark_crack"]["0"] for r in fr), painted),
-            "radii": ladder_bars["terms"],
-            "pooled_pct": ladder_bars["pooled"],
-            "per_frame_median_pct": ladder_bars["median"],
-            "per_frame_p25_pct": ladder_bars["p25"],
-            "per_frame_p75_pct": ladder_bars["p75"],
-            "frames_with_a_nonzero_share": ladder_bars["frames_with_a_nonzero_share"],
-            "frames_with_any_ladder_reached_paint":
-                ladder_bars["frames_with_a_denominator"],
-            "reached_by_two_or_more_radii_pct": ladder_bars["shared_pct"],
-            "why_the_pooled_bar_and_the_median_diamond_differ": {
-                "question": "at sigma = 320 the pooled bar is 3.80% and the per-frame "
-                            "median 0.03%, two orders of magnitude apart. Is the bar an "
-                            "artefact of the two frames that hold most of the paint?",
-                "answer": "NO, and the quartile bars in the panel are what says so. Both "
-                          "statistics are the same leave-one-out quantity; they differ "
-                          "because the per-frame distribution is ZERO-INFLATED and "
-                          "right-skewed, not because a few frames distort the pooled "
-                          "sum. Only %d of the %d frames whose paint the ladder reaches "
-                          "have any pixel that sigma = 320 alone reaches, so the median "
-                          "sits at zero while p75 is %.2f%%; the same pattern holds at "
-                          "sigma = 160 (%d of %d) and sigma = 80 (%d of %d). A coarse "
-                          "radius contributes nothing on most frames and a great deal on "
-                          "the frames that carry a crack wide enough for it, which is "
-                          "the mechanism, not a defect of the aggregation."
-                          % (ladder_bars["frames_with_a_nonzero_share"][-1],
-                             ladder_bars["frames_with_a_denominator"][-1],
-                             ladder_bars["p75"][-1],
-                             ladder_bars["frames_with_a_nonzero_share"][-2],
-                             ladder_bars["frames_with_a_denominator"][-2],
-                             ladder_bars["frames_with_a_nonzero_share"][-3],
-                             ladder_bars["frames_with_a_denominator"][-3]),
-                "checked_separately": _concentration(fr, LADDER)},
-            "read_this": (
-                "%.1f%% of what the ladder reaches is reached by two or more radii, and "
-                "the two largest unique contributions are sigma = %s and sigma = %s -- "
-                "the ENDS of the ladder, which is the mechanism the override's docstring "
-                "names: a crack is only reliably dark at the scales near its own width, "
-                "so one radius sees one band"
-                % (ladder_bars["shared_pct"],
-                   *[ladder_bars["terms"][i] for i in sorted(
-                       sorted(range(len(ladder_bars["pooled"])),
-                              key=lambda j: -ladder_bars["pooled"][j])[:2])])),
-            "the_gate_is_not_in_this_panel": {
-                "why": "against the same denominator the absolute gate's unique share is "
-                       "an order of magnitude larger than any radius and would make the "
-                       "seven bars unreadable; it is panel (c)'s subject",
-                "gate_unique_pct_of_the_whole_union_pooled": 100.0 * _pooled(
-                    fr, lambda r: r["gate_only_crack"], den="union_crack")[0],
-                "gate_unique_pct_of_the_whole_union_per_frame_median": 100.0 * _pooled(
-                    fr, lambda r: r["gate_only_crack"], den="union_crack")[1]},
-            "single_radius_comparison": "detector_overrides.py records the union's gain "
-                                        "over the single sigma = 40 cut the archived "
-                                        "pipeline used, on the 26 tiles at mad_k 5.0: "
-                                        "P 0.4033 -> 0.4182, R 0.5326 -> 0.6252, "
-                                        "IoU 0.2979 -> 0.3344, F1 0.4590 -> 0.5012, and "
-                                        "the union is a strict superset so it can delete "
-                                        "nothing"},
-        "panel_e_size_floors": {
-            "verdict": "INHERITED, AND NEITHER IS AT AN OPTIMUM",
-            "unit_set": "26 tiles, pooled, 0 px tolerance, mad_k 6.0",
-            "clean_mask_small_object_floor_iou": {k: v["iou"] for k, v in tiles["clean_min"].items()},
-            "candidate_region_floor_iou": {k: v["iou"] for k, v in tiles["cand_min"].items()},
-            "shipped_iou": tiles["shipped"]["iou"],
-            "read_this": (
-                "the small-object floor moves pooled IoU by %.4f over 0-50 px and its "
-                "best value on this grid is %s, not %d; the candidate floor is worth "
-                "%+.4f IoU against the smallest floor on its grid, so 40 px is a cost "
-                "rather than a choice"
-                % (max(tiles["clean_min"][str(v)]["iou"] for v in CLEANMIN_GRID if v <= 50)
-                   - min(tiles["clean_min"][str(v)]["iou"] for v in CLEANMIN_GRID if v <= 50),
-                   max((str(v) for v in CLEANMIN_GRID),
-                       key=lambda v: tiles["clean_min"][v]["iou"]), CLEAN_MIN,
-                   tiles["cand_min"][str(CAND_MIN)]["iou"]
-                   - tiles["cand_min"][str(CANDMIN_GRID[0])]["iou"])),
-            "frame_scale_cross_check": {
-                "unit": "share of all hand-painted crack on the 48 frames lost to each "
-                        "cleaning step, at the shipped settings",
-                "small_object_floor": chain_pooled(GATE, "small13")[0],
-                "opening": chain_pooled(GATE, "opening")[0],
-                "candidate_floor": chain_pooled(GATE, "area40")[0],
-                "never_dark": chain_pooled(GATE, "notdark")[0],
-                "kept": kept / max(painted, 1),
-                "note": "the buckets are disjoint and exhaustive and are asserted to sum "
-                        "to the painted crack on every frame by "
-                        "fullframe_recall_decomposition.decompose"}},
-        "panel_f_opening_and_connectivity": {
-            "verdict": "INHERITED, AND NOT AT AN OPTIMUM. Connectivity is below the "
-                       "resolution of every instrument this project has",
-            "unit_set": "26 tiles, pooled, 0 px tolerance, mad_k 6.0",
-            "iou_by_radius_8_connected": {k: v["iou"] for k, v in tiles["opening"]["2"].items()},
-            "iou_by_radius_4_connected": {k: v["iou"] for k, v in tiles["opening"]["1"].items()},
-            "largest_8_vs_4_difference": max(
-                abs(tiles["opening"]["2"][str(v)]["iou"] - tiles["opening"]["1"][str(v)]["iou"])
-                for v in OPEN_GRID),
-            "read_this": (
-                "no opening at all scores higher than the shipped disk(1) by %.4f IoU, "
-                "and the whole 4-versus-8 connectivity question is worth %.4f"
-                % (tiles["opening"]["2"]["0"]["iou"] - tiles["opening"]["2"]["1"]["iou"],
-                   max(abs(tiles["opening"]["2"][str(v)]["iou"]
-                           - tiles["opening"]["1"][str(v)]["iou"]) for v in OPEN_GRID)))},
-        "table_1_row_that_is_two_constants": {
-            "row": "Morphological opening size 13 px",
-            "what_the_code_does": "unified_pipeline.py calls clean_mask(dark, "
-                                  "min_area_px=13); inside clean_mask the 13 is "
-                                  "remove_small_objects' AREA floor and the opening is "
-                                  "morphology.opening(mask, disk(open_radius=1)). The "
-                                  "two are separate constants and are drawn in panels "
-                                  "(e) and (f) respectively",
-            "source": "sem-crack-detector/code/detect_cracks.py clean_mask and "
-                      "interior_active_learning/code/unified_pipeline.py"},
-        "constants_with_no_evidence_and_so_not_drawn": {
-            "scale_ladder_values": "no sweep over alternative ladders (a different base, "
-                                   "a different number of rungs, a different top radius) "
-                                   "exists; panel (d) shows what the chosen ladder does, "
-                                   "not that it is the best ladder",
-            "clean_mask_close_radius_3": "not a row of Table 1 and never swept here. "
-                                         "analysis/research/improve/"
-                                         "lever5_postprocessing.py searched it and its "
-                                         "own adversarial audit "
-                                         "(audit_lever5_postprocessing.py) withdrew the "
-                                         "result: 82.4% of the gain was one tile",
-            "denoise_sigma_1.0": "segment_dark_regions' gaussian pre-smooth, inherited "
-                                 "and never swept",
-            "flatten_background_sigma_40": "fixed; the ladder in (d) is the response to "
-                                           "it rather than a sweep of it"},
+                    "on all 26 tiles the best setting on this grid is t = %s, where "
+                    "t = 0 is the gate switched off; drop the one crop with an "
+                    "off-specimen void and the ordering reverses -- the gate is then "
+                    "clearly worth having and the shipped %d sits %.4f IoU below that "
+                    "grid's own best at t = %s"
+                    % (_best({k: v["iou"] for k, v in tiles["gate_26"].items()}), GATE,
+                       max(v["iou"] for v in tiles["gate_25"].values())
+                       - tiles["gate_25"][str(GATE)]["iou"],
+                       _best({k: v["iou"] for k, v in tiles["gate_25"].items()}))),
+                "frame_scale_cross_check": {
+                    "unit_set": "48 full frames carrying a hand-painted correction mask, "
+                                "%d painted crack px, mad_k 6.0" % painted,
+                    "record": "docs/figures/parameters_frames.json",
+                    "pooled_dark_stage_recall_by_threshold":
+                        {str(g): _pooled(fr, lambda r, t=g: r["dark_crack"][str(t)])[0]
+                         for g in GATE_GRID_DARK},
+                    "full_chain_recall_pooled":
+                        {str(t): chain_pooled(t, "kept")[0] for t in GATE_GRID_FRAME}},
+                "prior_record": "analysis/detector_overrides.py records the same quantity "
+                                "at the app's mad_k 5.0: the gate proposes 13,907,547 of "
+                                "the 20,923,398 painted px that reach a candidate, "
+                                "10,516,306 of them reached by no ladder rung, and "
+                                "dropping it deletes 47.50% of kept hand-marked crack"},
+            "c": {
+                "arm": "SEM", "parameter": "minimum region area, two separate floors",
+                "value": {"clean_mask small-object floor px": CLEAN_MIN,
+                          "candidate region floor px": CAND_MIN},
+                "verdict": "INHERITED, AND NEITHER IS AT AN OPTIMUM",
+                "unit_set": "26 tiles, pooled, 0 px tolerance, mad_k 6.0",
+                "record": "docs/figures/parameters_tiles.json, clean_min and cand_min",
+                "clean_mask_small_object_floor_iou":
+                    {k: v["iou"] for k, v in tiles["clean_min"].items()},
+                "candidate_region_floor_iou":
+                    {k: v["iou"] for k, v in tiles["cand_min"].items()},
+                "best_on_each_grid": {"small_object_floor_px": bars["best_clean_min"],
+                                      "candidate_floor_px": bars["best_cand_min"]},
+                "shipped_iou": tiles["shipped"]["iou"],
+                "read_this": (
+                    "the small-object floor moves pooled IoU by %.4f over 0-50 px and "
+                    "its best value on this grid is %s, not %d; the candidate floor is "
+                    "worth %+.4f IoU against the smallest floor on its grid, so %d px "
+                    "is a cost rather than a choice"
+                    % (max(tiles["clean_min"][str(v)]["iou"] for v in CLEANMIN_GRID if v <= 50)
+                       - min(tiles["clean_min"][str(v)]["iou"] for v in CLEANMIN_GRID if v <= 50),
+                       bars["best_clean_min"], CLEAN_MIN,
+                       tiles["cand_min"][str(CAND_MIN)]["iou"]
+                       - tiles["cand_min"][str(CANDMIN_GRID[0])]["iou"], CAND_MIN)),
+                "table_1_row_that_is_two_constants": {
+                    "row": "Morphological opening size 13 px",
+                    "what_the_code_does": "unified_pipeline.py calls clean_mask(dark, "
+                                          "min_area_px=13); inside clean_mask the 13 is "
+                                          "remove_small_objects' AREA floor and the "
+                                          "opening is morphology.opening(mask, "
+                                          "disk(open_radius=1)). They are separate "
+                                          "constants and are rows (d) and (e)",
+                    "source": "sem-crack-detector/code/detect_cracks.py clean_mask and "
+                              "interior_active_learning/code/unified_pipeline.py"},
+                "frame_scale_cross_check": {
+                    "unit": "share of all hand-painted crack on the 48 frames lost to "
+                            "each cleaning step, at the shipped settings",
+                    "small_object_floor": chain_pooled(GATE, "small13")[0],
+                    "opening": chain_pooled(GATE, "opening")[0],
+                    "candidate_floor": chain_pooled(GATE, "area40")[0],
+                    "never_dark": chain_pooled(GATE, "notdark")[0],
+                    "kept": kept / max(painted, 1),
+                    "note": "the buckets are disjoint and exhaustive and are asserted to "
+                            "sum to the painted crack on every frame by "
+                            "fullframe_recall_decomposition.decompose"}},
+            "d": {
+                "arm": "SEM", "parameter": "morphological opening radius, and the "
+                                           "labelling connectivity",
+                "value": {"opening": "disk, radius 1 px", "connectivity": 8},
+                "verdict": "INHERITED, AND NOT AT AN OPTIMUM. Connectivity is below the "
+                           "resolution of every instrument this project has",
+                "unit_set": "26 tiles, pooled, 0 px tolerance, mad_k 6.0",
+                "record": "docs/figures/parameters_tiles.json, opening['2'] and ['1']",
+                "iou_by_radius_8_connected":
+                    {k: v["iou"] for k, v in tiles["opening"]["2"].items()},
+                "iou_by_radius_4_connected":
+                    {k: v["iou"] for k, v in tiles["opening"]["1"].items()},
+                "read_this": (
+                    "no opening at all scores higher than the shipped disk(1) by %.4f "
+                    "IoU, and the whole 4-versus-8 connectivity question is worth %.4f"
+                    % (tiles["opening"]["2"]["0"]["iou"] - tiles["opening"]["2"]["1"]["iou"],
+                       max(abs(tiles["opening"]["2"][str(v)]["iou"]
+                               - tiles["opening"]["1"][str(v)]["iou"])
+                           for v in OPEN_GRID)))},
+            "e": {
+                "arm": "SEM", "parameter": "background-flattening ladder",
+                "value": list(LADDER),
+                "verdict": "NEVER SEARCHED. Unioning the darkness cut over a ladder of "
+                           "flattening radii was decided by measurement and costs no "
+                           "free parameter, but the seven VALUES are a doubling ladder, "
+                           "not a searched set, and no sweep over alternative ladders "
+                           "(a different base, a different count, a different top) "
+                           "exists in this project",
+                "unit_set": "48 painted frames. A painted pixel is credited to a radius "
+                            "only when that radius and no other of the seven reaches it, "
+                            "so each bar is a true leave-one-out marginal",
+                "record": "docs/figures/parameters_frames.json, rung_only_crack",
+                "denominator": "the painted crack the SEVEN-RUNG UNION reaches on its "
+                               "own, with the absolute gate switched off: %d px of the "
+                               "%d painted"
+                               % (sum(r["dark_crack"]["0"] for r in fr), painted),
+                "radii": bars["terms"], "pooled_pct": bars["pooled"],
+                "per_frame_median_pct": bars["median"],
+                "per_frame_p25_pct": bars["p25"], "per_frame_p75_pct": bars["p75"],
+                "frames_with_a_nonzero_share": bars["frames_with_a_nonzero_share"],
+                "frames_with_any_ladder_reached_paint":
+                    bars["frames_with_a_denominator"],
+                "reached_by_two_or_more_radii_pct": bars["shared_pct"],
+                "the_bar_is_pooled_and_the_distribution_is_zero_inflated": {
+                    "question": "at the coarse radii the pooled bar and the per-frame "
+                                "median differ by two orders of magnitude. Is the bar an "
+                                "artefact of the two frames holding most of the paint?",
+                    "answer": "NO. Only %d of the %d frames whose paint the ladder "
+                              "reaches have any pixel that the top radius alone reaches, "
+                              "so the per-frame median sits at zero while p75 is %.2f%%. "
+                              "A coarse radius contributes nothing on most frames and a "
+                              "great deal on the frames carrying a crack wide enough for "
+                              "it. The previous edition drew the quartiles on the bars; "
+                              "a sparkline strip cannot carry them, so they are here."
+                              % (bars["frames_with_a_nonzero_share"][-1],
+                                 bars["frames_with_a_denominator"][-1], bars["p75"][-1]),
+                    "checked_separately": _concentration(fr, LADDER)},
+                "read_this": (
+                    "%.1f%% of what the ladder reaches is reached by two or more radii, "
+                    "and the two largest unique contributions are sigma = %s and "
+                    "sigma = %s -- the ENDS of the ladder, which is the mechanism the "
+                    "override's docstring names: a crack is only reliably dark at the "
+                    "scales near its own width"
+                    % (bars["shared_pct"],
+                       *[bars["terms"][i] for i in sorted(
+                           sorted(range(len(bars["pooled"])),
+                                  key=lambda j: -bars["pooled"][j])[:2])])),
+                "the_gate_is_not_in_this_row": {
+                    "why": "against the same denominator the absolute gate's unique "
+                           "share is an order of magnitude larger than any radius and "
+                           "would make the seven bars unreadable; it is row (c)",
+                    "gate_unique_pct_of_the_whole_union_pooled": 100.0 * _pooled(
+                        fr, lambda r: r["gate_only_crack"], den="union_crack")[0]},
+                "single_radius_comparison": "detector_overrides.py records the union's "
+                                            "gain over the single sigma = 40 cut the "
+                                            "archived pipeline used, on the 26 tiles at "
+                                            "mad_k 5.0: P 0.4033 -> 0.4182, R 0.5326 -> "
+                                            "0.6252, IoU 0.2979 -> 0.3344, F1 0.4590 -> "
+                                            "0.5012, and the union is a strict superset "
+                                            "so it can delete nothing"},
+            "f": {
+                "arm": "SEM", "parameter": "one flattening radius against the union",
+                "value": "7 rungs, 5-320 px",
+                "verdict": "the union had NO sweep anywhere until this revision; it "
+                           "was asserted to be worth having and is now measured",
+                "unit_set": "26 hand-labelled 512 px tiles, pooled over every pixel "
+                            "at 0 px tolerance, at the shipped constants",
+                "record": "docs/figures/parameters_tiles.json, single_radius and "
+                          "union_on_these_tiles",
+                "note": "the dashed rule on the panel is the shipped seven-rung "
+                        "union; the curve is what ONE radius scores on its own"},
+            "g": {
+                "arm": "SEM", "parameter": "clean_mask closing radius",
+                "value": "3 px",
+                "verdict": "INHERITED with no recorded provenance and swept HERE for "
+                           "the first time; the shipped value is not the best on its "
+                           "own grid",
+                "unit_set": "26 hand-labelled 512 px tiles, pooled, 0 px tolerance",
+                "record": "docs/figures/parameters_tiles.json, close"},
+            "h": {
+                "arm": "SEM", "parameter": "denoise sigma",
+                "value": "1.0",
+                "verdict": "INHERITED with no recorded provenance and swept HERE for "
+                           "the first time; the shipped value is not the best on its "
+                           "own grid",
+                "unit_set": "26 hand-labelled 512 px tiles, pooled, 0 px tolerance",
+                "record": "docs/figures/parameters_tiles.json, denoise"},
+            "i": {
+                "arm": "TXM", "parameter": "probability threshold", "value": THR,
+                "verdict": "SETTLED BY A TEST ON DATA THE MEMBERS WERE NOT FITTED TO: "
+                           "matched on the FALSE-ALARM RATE of the previous model over "
+                           "the three largest confirmed crack-free specimens, not "
+                           "maximised on any score. The curve drawn beside it is a "
+                           "sweep made HERE, after the fact",
+                "unit_set": "%d TXM frames, refereed pixels only (1 = crack, 2 or 3 = "
+                            "not-crack, 0 excluded): %d crack and %d not-crack px"
+                            % (txm["n_frames"], txm["crack_px"], txm["notcrack_px"]),
+                "record": "docs/figures/parameters_txm.json, written by this module; "
+                          "its frame set reproduces docs/figures/txm_background_units."
+                          "json exactly, group by group, which is control 1",
+                "measure": "pixel accuracy over refereed pixels, against the EMPTY-MASK "
+                           "baseline of %.3f%%. Overlap is NOT reported on this set: "
+                           "%s" % (txm["empty_mask_accuracy_pct"],
+                                   units["why_no_overlap_scores"]),
+                "what_is_swept": txm["scoring"],
+                "at_the_shipped_threshold": bars["txm_at_shipped"],
+                "best_on_the_grid": bars["best_txm_threshold"],
+                "accuracy_by_threshold": {t: v["accuracy_pct"]
+                                          for t, v in txm["curve"].items()},
+                "recall_by_threshold": {t: v["recall"] for t, v in txm["curve"].items()},
+                "read_this": (
+                    "the shipped %.2f scores %.3f%% accuracy, %+.3f pp over marking "
+                    "nothing, with recall %.4f on painted crack. The grid's own best is "
+                    "%.2f at %+.3f pp, so the curve is flat across the whole upper half "
+                    "and the threshold is not what the model's performance rests on"
+                    % (THR, bars["txm_at_shipped"]["accuracy_pct"],
+                       bars["txm_at_shipped"]["margin_pp"],
+                       bars["txm_at_shipped"]["recall"], bars["best_txm_threshold"],
+                       txm["curve"][f"{bars['best_txm_threshold']:.3f}"]["margin_pp"])),
+                "the_provenance_itself": "TXM_Crack_Detection_Pipeline/app/core/"
+                                         "pipeline.py, the comment block above "
+                                         "DEFAULT_THRESHOLD, which tabulates crack-free "
+                                         "false positives, indications per frame, width "
+                                         "and recall for v4 at 0.60 and v5 at 0.70 and "
+                                         "0.60. That table is prose in the source and "
+                                         "has no machine-readable record, which is why "
+                                         "this row's sparkline is the sweep made here "
+                                         "and not that table"},
+            "j": {
+                "arm": "TXM", "parameter": "which members are averaged",
+                "value": stats["model"],
+                "verdict": "SETTLED BY CROSS-VALIDATION",
+                "unit_set": cv["convention"],
+                "record": "docs/figures/txm_model_scores.json, cross_validated",
+                "f17_mean_iou": cv["f17_mean_iou"],
+                "hybrid_mean_iou": cv["hybrid_mean_iou"],
+                "ensemble_mean_iou": cv["ens_mean_iou"],
+                "ensemble_std_iou": cv["ens_std_iou"],
+                "ensemble_min_iou": cv["ens_min_iou"],
+                "mean_precision": cv["mean_precision"], "mean_recall": cv["mean_recall"],
+                "labelled_images_used": cv["labelled_images_used"],
+                "model_version_of_the_cv_artefact": cv["model_version"],
+                "caveat_grouping": cv["not_specimen_independent"],
+                "caveat_scope": cv["not_restricted"],
+                "read_this": "the mean of the two members beats either alone (%.4f "
+                             "against %.4f and %.4f), but the folds are grouped BY "
+                             "IMAGE over all %d labelled frames of four specimen "
+                             "groups, so no specimen is ever held out and this is not a "
+                             "specimen-independent score. It is also a v4 artefact; the "
+                             "deployed members are v5 and no v5 grouped-CV artefact "
+                             "exists in either repository."
+                             % (cv["ens_mean_iou"], cv["f17_mean_iou"],
+                                cv["hybrid_mean_iou"], cv["labelled_images_used"])},
+            "k": {
+                "arm": "TXM", "parameter": "SAM tile size and tile stride",
+                "value": {"tile_px": const["TILE"], "stride_px": const["TILE_STRIDE"],
+                          "embedding_stride_px": const["EMB_STRIDE"],
+                          "backbone": const["SAM_MODEL_ID"]},
+                "verdict": "FIXED BY CONSTRUCTION, NO SWEEP ON RECORD. The stride is "
+                           "below the tile so neighbouring tiles overlap and the "
+                           "embedding field is continuous across their seams",
+                "unit_set": "none -- this row has no sparkline because no sweep exists",
+                "record": "TXM_Crack_Detection_Pipeline/app/core/model.py, TILE and "
+                          "TILE_STRIDE, parsed with ast",
+                "what_the_source_states": "the comment above TILE_STRIDE records a "
+                                          "single measurement on one 3044x2354 frame: "
+                                          "with abutting tiles the worst row carried "
+                                          "32.8x the median row-to-row probability "
+                                          "change, all of it at the tile boundary, and "
+                                          "at stride 896 the worst row is 7.8x and sits "
+                                          "on crack. Those numbers are prose in the "
+                                          "source, on one frame, with no machine-"
+                                          "readable record, so they are quoted here and "
+                                          "NOT drawn as if they were a sweep."},
+            "l": {
+                "arm": "the SEM constant, run on TXM", "parameter": "MAD multiplier k",
+                "value": "none -- the SEM detector is not the TXM arm's detector",
+                "verdict": "CANNOT BE CHOSEN AT ALL ON THIS MODALITY",
+                "unit_set": "the same %d TXM frames and the same refereed pixels as row "
+                            "(g), so the two rows may be read against each other"
+                            % txm["n_frames"],
+                "record": "docs/figures/txm_background_units.json (FULL corpus, via "
+                          "_paths.scoped(scope=False)), pooled",
+                "groups": {g: {"frames": v["frames"], "crack_px": v["crack_px"],
+                               "notcrack_px": v["notcrack_px"]}
+                           for g, v in units["by_group"].items()},
+                "accuracy_by_k": {k: karm[k]["accuracy_pct"] for k in units["grid"]},
+                "margin_by_k": {k: karm[k]["margin_pp"] for k in units["grid"]},
+                "empty_mask_accuracy_pct": txm["empty_mask_accuracy_pct"],
+                "controls_in_the_record": {
+                    "mark_everything": units["pooled"]["control: mark everything"],
+                    "otsu_no_model": units["pooled"]["control: Otsu, no model"]},
+                "read_this": "every k on the grid scores BELOW an empty mask; the best "
+                             "is k = %g at %+.3f pp and the paper's k = %g at %+.3f pp. "
+                             "A constant cannot be selected on an instrument where no "
+                             "value of it beats marking nothing, which is the reason "
+                             "the TXM arm has a trained model and not this rule."
+                             % (bars["best_k_on_txm"], bars["best_margin_on_txm_pp"], K,
+                                k_margin)}},
+
+        "not_drawn_but_fixed": {
+            "sem_inherited_and_never_swept": {
+                "clean_mask_close_radius_px": 3,
+                "denoise_sigma": 1.0,
+                "flatten_background_sigma_px": 40,
+                "note": "the closing radius was searched once by "
+                        "analysis/research/improve/lever5_postprocessing.py and its own "
+                        "adversarial audit withdrew the result: 82.4% of the gain was "
+                        "one tile. The flattening sigma is the base the ladder in (f) "
+                        "is built around rather than a constant swept on its own."},
+            "txm_fixed_from_its_own_measurements": {
+                "speck_floor_px": const["MIN_BLOB_PX"],
+                "hole_fill_max_px": const["FILL_HOLES_MAX_PX"],
+                "tighten_window_px": const["TIGHTEN_WINDOW"],
+                "tighten_min_core": const["TIGHTEN_MIN_CORE"],
+                "correction_floor": const["CORRECTION_FLOOR"],
+                "source": "TXM_Crack_Detection_Pipeline/app/core/pipeline.py, parsed "
+                          "with ast; each carries a recorded measurement in the comment "
+                          "above it (the hole fill was swept over all 71 frames at "
+                          "64/256/1024 px, the speck floor against the owner's 30.2 M "
+                          "hand-drawn crack px, the narrowing window on one frame at "
+                          "w = 151 against w = 301). They are listed as a footnote "
+                          "rather than drawn: they act after the threshold in (g), not "
+                          "on the model."}},
+
+        "panel_letters_have_moved": {
+            "why": "the plate is a row of sweep panels over a printed table of every "
+                   "constant, and only the constants with evidence worth plotting get a "
+                   "letter. The learned region classifier had a panel in the previous "
+                   "edition and has none here -- it is a yes-or-no setting with no "
+                   "grid to sweep, so there is no curve to draw, "
+                   "so there is no curve to draw -- which shifts every letter after it "
+                   "up by one.",
+            "two_editions_ago_six_panels": {
+                "a": "MAD multiplier k", "b": "learned region classifier",
+                "c": "absolute intensity gate", "d": "the scale ladder",
+                "e": "the two size floors", "f": "opening radius and connectivity"},
+            "previous_edition_ten_rows": {
+                "a": "MAD multiplier k", "b": "learned region classifier",
+                "c": "absolute darkness gate", "d": "the two size floors",
+                "e": "opening radius and connectivity", "f": "the scale ladder",
+                "g": "probability threshold", "h": "which members are averaged",
+                "i": "SAM tile and stride", "j": "the SEM multiplier, run on TXM"},
+            "this_edition": "filled in below, from the panels actually drawn",
+            "downstream_kept_in_step": "paper/manuscript/sections/20-methods.md and "
+                "paper/figures/mk_paper_pdf.py were rewritten against THIS lettering "
+                "when the plate was. The keys of `rows` above are the plate's own panel "
+                "letters, and a control below fails the build if they stop matching the "
+                "panels the figure draws, so a future relettering cannot leave this "
+                "record describing a panel that is not there.",
+            "not_edited_from_here": "this module owns only itself; it reports a stale "
+                                    "pointer rather than reaching into the manuscript"},
+        "reconstruction_checks": {
+            "sem_union": frames["controls"]["union"],
+            "sem_kmax": frames["controls"]["kmax"],
+            "sem_tile_chain": tiles["controls"]["chain"],
+            "sem_tilebench": tiles["controls"]["tilebench"],
+            "txm_unit_set": txm["controls"]["unit_set"],
+            "txm_model": txm["controls"]["model"],
+            "txm_baseline": txm["controls"]["baseline"],
+            "plate_text_collisions": "PASS: %d drawn strings measured at the renderer's "
+                                     "own extents, no pair overlapping by more than 1 pt "
+                                     "in both directions" % bars["n_text"],
+            "plate_column_containment": "PASS: %d placed strings, every one measured "
+                                        "inside the column it was laid out in"
+                                        % bars["n_placed"],
+            "rule": "all of them abort the script on disagreement; none of them warns"},
+
+        "plate": {"figure_width_in": J.PAGEW, "figure_height_in": bars["figure_height_in"],
+                  "dpi": 600, "smallest_printed_type_pt": J.FLOOR,
+                  "layout": "a table: parameter, value, sparkline, note, grouped under "
+                            "two arm headings and seven provenance bands"},
+
         "the_preprocessing_budget": {
-            "why_it_matters": "the constants above are not free: together they are a "
+            "why_it_matters": "the SEM arm's constants are not free: together they are a "
                               "tuning budget spent before any model runs. On the 15-tile "
                               "benchmark this project scored the published models on, a "
                               "one-line global darkness threshold fitted "
@@ -1045,35 +2041,103 @@ def sidecar(tiles, frames, madk, madp, dead, ladder_bars):
                 "OmniCrack30k nnU-Net, trained on 30,017 images":
                     comp["OmniCrack30k nnU-Net"]["iou"],
                 "SAM 3, zero-shot union": comp["SAM 3 (zero-shot union)"]["iou"],
-                "shipped v1.49.2, all 15 tiles": comp[">>> shipped v1.49.2, all 15 tiles"]["iou"]},
+                "shipped v1.49.2, all 15 tiles":
+                    comp[">>> shipped v1.49.2, all 15 tiles"]["iou"]},
             "source": "docs/slides/comparison.json",
             "caveat": "at n = 15 nothing on that benchmark separates statistically, and "
-                      "3 of its 9 frames also appear in the 26-tile set that informed the "
-                      "shipped configuration"},
+                      "3 of its 9 frames also appear in the 26-tile set that informed "
+                      "the shipped configuration"},
+
         "tally": {
-            "selected by a sweep on labelled data": ["MAD multiplier k"],
-            "decided by measurement, zero free parameters":
-                ["learned region classifier (disabled)",
-                 "multiscale union versus a single flattening radius"],
+            "selected by a sweep on labelled data": ["SEM: MAD multiplier k"],
+            "settled by a test, no value to choose":
+                ["SEM: learned region classifier (%s)"
+                 % ("enabled" if DO.USE_REGION_CLASSIFIER else "disabled"),
+                 "SEM: multiscale union versus a single flattening radius",
+                 "TXM: probability threshold 0.60, matched on false alarms",
+                 "TXM: which members are averaged"],
+            "fixed by construction, no sweep on record":
+                ["TXM: SAM tile 1024 px and stride 896 px"],
             "inherited, no recorded provenance, swept only after the fact":
-                ["absolute intensity gate 10", "morphological opening disk(1)",
-                 "clean_mask small-object floor 13 px",
-                 "candidate region floor 40 px", "8-connectivity"],
+                ["SEM: absolute darkness gate 10", "SEM: opening disk(1)",
+                 "SEM: clean_mask small-object floor 13 px",
+                 "SEM: candidate region floor 40 px", "SEM: 8-connectivity"],
             "inherited and never swept at all":
-                ["the seven ladder values 5-320 px", "clean_mask close radius 3 px",
-                 "denoise sigma 1.0", "flatten_background sigma 40"]},
-        "aggregation_warning": "the panels use three different unit sets -- 31 public "
-                               "whole fields, 26 hand-labelled tiles and 48 painted full "
-                               "frames -- and a value from one may not be compared with a "
-                               "value from another. Each panel names its own n.",
+                ["SEM: the seven ladder values 5-320 px",
+                 "SEM: clean_mask close radius 3 px", "SEM: denoise sigma 1.0",
+                 "SEM: flatten_background sigma 40"],
+            "cannot be chosen on the other modality at all":
+                ["the SEM MAD multiplier k, run on TXM"]},
+
+        "the_asymmetry_between_g_and_j": {
+            "what_is_equal": "the same 31 TXM frames, the same refereed pixels, the "
+                             "same pixel-accuracy quantity behind both rows and the "
+                             "same empty-mask baseline. Control 1 of the TXM pass "
+                             "asserts the first two against docs/figures/"
+                             "txm_background_units.json, group by group.",
+            "what_is_drawn": "a DIFFERENT view of that one quantity in each row, "
+                             "because no single view can be read in both: on a 0-100% "
+                             "accuracy axis a 2.8 point margin and a 9.5 point "
+                             "shortfall are each under a point of ink. (g) draws the "
+                             "two axes the threshold was decided on, recall on painted "
+                             "crack and false alarms on painted not-crack; (j) draws "
+                             "the margin itself as bars below zero. The accuracy "
+                             "numbers for both are in their own blocks above.",
+            "what_is_not": "the TXM ensemble was FITTED on this paint, so row (g) is an "
+                           "in-sample curve and the row says so on the plate. The SEM "
+                           "darkness rule was fitted to nothing, so row (j) is "
+                           "out-of-sample for it.",
+            "which_way_it_runs": "the asymmetry favours the trained model. The pair is "
+                                 "therefore evidence that the SEM constant does NOT "
+                                 "transfer to TXM -- a rule fitted to nothing still has "
+                                 "to beat an empty mask, and it does not at any k -- and "
+                                 "it is NOT a measurement of how much better the trained "
+                                 "model is. That number is row (h), with its own "
+                                 "grouping caveat.",
+            "the_honest_pair": "an out-of-sample TXM number would need a grouped-CV "
+                               "artefact for the DEPLOYED v5 members, and none exists in "
+                               "either repository (txm_model_scores.json says so in "
+                               "cross_validated.model_version)."},
+        "aggregation_warning": "the rows use five different unit sets -- 31 public whole "
+                               "fields, 26 hand-labelled tiles, 48 painted SEM frames, "
+                               "31 refereed TXM frames and 71 labelled TXM frames -- and "
+                               "a value from one may not be compared with a value from "
+                               "another. Each row names its own. The ONE comparison the "
+                               "plate makes across rows is (g) against (j), which is the "
+                               "same 31 frames, the same refereed pixels and the same "
+                               "measure by construction and by control.",
+
         "generated_from": {
             "docs/figures/parameters_tiles.json": tiles["key"],
             "docs/figures/parameters_frames.json": frames["key"],
+            "docs/figures/parameters_txm.json": txm["key"],
             "docs/figures/madk_above_five.json": "committed",
             "docs/figures/madk_paired_test.json": "committed",
+            "docs/figures/txm_background_units.json": "committed, FULL corpus",
+            "docs/figures/txm_model_scores.json": "committed",
             "paper/figures/sem_deadzone.json": dead.get("generated", "committed"),
+            "paper/figures/txm_stats.json": stats.get("model_key", "committed"),
+            "TXM app/core/pipeline.py + model.py": "parsed with ast at run time",
             "docs/slides/comparison.json": "committed"},
     }
+    #: Read off the rows that were actually built, so the migration table cannot drift
+    #: from the plate the way the manuscript caption it warns about already has.
+    rec["panel_letters_have_moved"]["this_edition"] = {
+        L: "%s  [%s]" % (r["parameter"], r["arm"]) for L, r in rec["rows"].items()}
+    # THE RECORD'S LETTERS MUST BE THE PLATE'S LETTERS. This file was describing a
+    # panel (b) called "learned region classifier" after that panel had been taken off
+    # the plate, and every letter after it pointed one row out. A letter in this record
+    # that is not a panel, or a panel with no entry here, now fails the build.
+    lettered = {L for L in rec["rows"] if len(L) == 1}
+    drawn = set(bars["panel_letters"])
+    if lettered != drawn:
+        raise SystemExit(f"this caption file keys rows {sorted(lettered)} and the plate "
+                         f"draws panels {sorted(drawn)}; re-key the rows rather than "
+                         f"shipping a record that points at a panel nobody drew")
+    if bars["tally"] != DOCSTRING_TALLY:
+        raise SystemExit("the plate's tally and this module's docstring disagree")
+    print(f"  CONTROL the caption file's panel letters are the panels the plate draws "
+          f"({''.join(sorted(drawn))}): PASS")
     json.dump(rec, open(os.path.join(OUT, NAME + ".caption.json"), "w"), indent=1)
     return rec
 
@@ -1081,22 +2145,57 @@ def sidecar(tiles, frames, madk, madp, dead, ladder_bars):
 def main():
     t_start = time.time()
     tiles = _cached(os.path.join(DOCS, "parameters_tiles.json"),
+                    #: THE CLASSIFIER FLAG IS PART OF THE KEY. It changes the mask
+                    #: every sweep point is scored on, and without it in the key a
+                    #: cache written with the classifier off answers a run with it on
+                    #: -- silently, because the settings the file states would all
+                    #: still match. This is the exact failure `_cached` exists to
+                    #: prevent, and it was one flag away from happening.
                     _key(k=K, gate=list(GATE_GRID), cmin=list(CLEANMIN_GRID),
                          amin=list(CANDMIN_GRID), op=list(OPEN_GRID),
-                         ladder=list(LADDER), clean=CLEAN_MIN, cand=CAND_MIN),
-                    tile_evidence, dict(mad_k=K))
+                         close=list(CLOSE_GRID), den=list(DENOISE_GRID),
+                         single=list(SINGLE_LADDER_GRID),
+                         ladder=list(LADDER), clean=CLEAN_MIN, cand=CAND_MIN,
+                         clf=bool(DO.USE_REGION_CLASSIFIER)),
+                    tile_evidence,
+                    dict(mad_k=K, use_region_classifier=bool(DO.USE_REGION_CLASSIFIER)))
     frames = _cached(os.path.join(DOCS, "parameters_frames.json"),
                      _key(k=K, gate=GATE, ladder=list(LADDER), clean=CLEAN_MIN,
                           cand=CAND_MIN, dark=list(GATE_GRID_DARK),
-                          chain=list(GATE_GRID_FRAME)),
+                          chain=list(GATE_GRID_FRAME),
+                          clf=bool(DO.USE_REGION_CLASSIFIER)),
                      frame_evidence,
                      dict(mad_k=K, gate=GATE, ladder=list(LADDER),
-                          clean_min=CLEAN_MIN, cand_min=CAND_MIN))
+                          clean_min=CLEAN_MIN, cand_min=CAND_MIN,
+                          use_region_classifier=bool(
+                              DO.USE_REGION_CLASSIFIER)))
+    const = _txm_constants()
+    txm = _cached(os.path.join(DOCS, "parameters_txm.json"),
+                  _key(nb=TXM_NB, grid=list(TXM_GRID), thr=const["DEFAULT_THRESHOLD"]),
+                  txm_evidence, {})
+    units = json.load(open(_paths.scoped("txm_background_units.json", scope=False)))
+    scores = json.load(open(os.path.join(DOCS, "txm_model_scores.json")))
+    stats = json.load(open(os.path.join(HERE, "txm_stats.json")))
     madk = json.load(open(os.path.join(DOCS, "madk_above_five.json")))
     madp = json.load(open(os.path.join(DOCS, "madk_paired_test.json")))
     dead = json.load(open(os.path.join(HERE, "sem_deadzone.json")))
-    bars = draw(tiles, frames, madk, dead)
-    rec = sidecar(tiles, frames, madk, madp, dead, bars)
+
+    # The TXM arm's three records have to describe ONE model, or the rows would print a
+    # threshold from one configuration beside an architecture from another.
+    if str(stats.get("model_key")) != str(txm["model_key"]):
+        raise SystemExit(f"paper/figures/txm_stats.json was written for model "
+                         f"{stats.get('model_key')}, the deployed registry says "
+                         f"{txm['model_key']}")
+    if abs(float(stats.get("threshold", -1)) - float(const["DEFAULT_THRESHOLD"])) > 1e-9:
+        raise SystemExit(f"txm_stats.json states threshold {stats.get('threshold')}, "
+                         f"app/core/pipeline.py says {const['DEFAULT_THRESHOLD']}")
+    print(f"  CONTROL txm_stats.json, the registry and pipeline.py agree on model "
+          f"{txm['model_key']} at threshold {const['DEFAULT_THRESHOLD']}: PASS")
+
+    sem = _sem_constants()
+    bars = draw(tiles, frames, madk, dead, txm, units, scores, stats, const,
+                sem)
+    rec = sidecar(tiles, frames, madk, madp, dead, txm, units, scores, stats, const, bars)
     for k_, v in rec["tally"].items():
         print(f"  {k_}: {', '.join(v)}")
     print(f"total {time.time() - t_start:.0f}s")

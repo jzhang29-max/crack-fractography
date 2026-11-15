@@ -15,6 +15,7 @@ referenced as `[FIGURE key | caption]` so each one carries a real caption instea
 name -- a manuscript needs the caption to say which collection the panel is from, and the
 longer draft's auto-generated captions cannot.
 """
+import json
 import os
 import re
 import sys
@@ -453,6 +454,88 @@ MP.VALUES["st_zoom"] = f"{ST['inset_magnification']:g}"
 MD = MP._f(os.path.join(PAPER, "figures/out/F2 - how each modality sees a crack"
                               ".caption.json"), "the modality plate's caption")
 MP.VALUES["fig_modality_fov"] = f"{MD['matched_fov_um']:g}"
+MP.VALUES["fig_modality_t"] = f"{MD['foil_thickness_um']:g}"
+
+# THE SWEEP NUMBERS COME FROM THE RECORD. They were typed into this caption once and
+# went stale the moment the region classifier was switched on, with nothing to catch
+# it. `_f` raises if the file is missing, so a vanished record fails the build.
+_TILES = MP._f(os.path.join(REPO, "docs", "figures", "parameters_tiles.json"),
+               "the tile sweep record")
+_best = lambda k: max(_TILES[k], key=lambda v: _TILES[k][v]["iou"])      # noqa: E731
+MP.VALUES.update({
+    "sw_close_ship": f"{_TILES['close']['3']['iou']:.4f}",
+    "sw_close_best": _best("close"),
+    "sw_close_best_iou": f"{_TILES['close'][_best('close')]['iou']:.4f}",
+    "sw_den_ship": f"{_TILES['denoise']['1.0']['iou']:.4f}",
+    "sw_den_best": _best("denoise"),
+    "sw_den_best_iou": f"{_TILES['denoise'][_best('denoise')]['iou']:.4f}",
+    "sw_union": f"{_TILES['union_on_these_tiles']['iou']:.4f}",
+    "sw_single_best_iou":
+        f"{_TILES['single_radius'][_best('single_radius')]['iou']:.4f}",
+    "sw_prec25": f"{_TILES['shipped_25']['precision']:.3f}",
+    "sw_rec25": f"{_TILES['shipped_25']['recall']:.3f}",
+})
+
+# WHAT THE CLASSIFIER COSTS, AND WHO IT HAS ALREADY SEEN. Methods now states both, so
+# both are read: the one-variable comparison out of the dead-zone record, and the
+# overlap between the classifier's own training images and the frames it is scored on
+# out of the leave-one-frame-out record. Typing either would reproduce the failure the
+# block above exists to prevent.
+_DZ = MP._f(os.path.join(PAPER, "figures", "sem_deadzone.json"),
+            "the classifier arm record")
+_LF = MP._f(os.path.join(REPO, "docs", "figures", "sem_classifier_lofo.json"),
+            "the leave-one-frame-out record")
+_CS = _DZ["paired_steps"]["classifier_over_floor"]
+_LK = _DZ["pooled_25_no_flood"]
+MP.VALUES.update({
+    "clf_thr": f"{_LF['deployed_threshold']:.4f}",
+    "clf_d_iou": f"{_CS['median_delta_iou']:+.3f}",
+    "clf_n_spec": str(_CS["n_specimens"]),
+    "clf_n_worse": str(_CS["n_worse"]),
+    "clf_leak_tile_p": f"{abs(_LK['shipped']['precision'] - _LK['shipped_lofo']['precision']):.4f}",
+    #: all four from _LK, the one unit set the paired test is run on, so the sentence
+    #: cannot quote a rise measured on one tile set beside a p-value from another.
+    "clf_p_off": f"{_LK['v1492_floor']['precision']:.3f}",
+    "clf_p_on": f"{_LK['shipped']['precision']:.3f}",
+    "clf_r_off": f"{_LK['v1492_floor']['recall']:.3f}",
+    "clf_r_on": f"{_LK['shipped']['recall']:.3f}",
+    "clf_p": ("not run, the arms tie on every specimen"
+              if _CS["wilcoxon_p"] is None else f"{_CS['wilcoxon_p']:.4f}"),
+    "clf_n_train_img": str(_LF["n_training_images"]),
+    "clf_n_overlap": str(sum(1 for r in _LF["per_frame"] if r["in_training_set"])),
+    "clf_n_painted": str(_LF["frames_scored"]),
+    "clf_leak_p": f"{abs(_LF['fitted_frames']['refit_all']['mean_precision'] - _LF['fitted_frames']['lofo_fixed']['mean_precision']):.4f}",
+    "clf_leak_f1": f"{abs(_LF['fitted_frames']['refit_all']['mean_f1'] - _LF['fitted_frames']['lofo_fixed']['mean_f1']):.4f}",
+})
+
+# The scale dependence, out of the two records that measure it.
+_FK = MP._f(os.path.join(REPO, "docs", "figures", "sem_force_keep_share.json"),
+            "the force-keep share record")
+MP.VALUES.update({
+    "fk_n": str(len(_FK["frames"])),
+    "fk_pct": f"{100 * _FK['pooled_forced_share_of_kept_area']:.0f}",
+    "fk_reg_pct": f"{100 * sum(r['n_forced'] for r in _FK['frames']) / sum(r['n_regions'] for r in _FK['frames']):.2f}",
+})
+
+# The absolute gate's frame-scale recall, pooled over the 48 painted frames. Typed as
+# 0.275 and 0.117 once; the second moved when the classifier was enabled.
+_FR = MP._f(os.path.join(REPO, "docs", "figures", "parameters_frames.json"),
+            "the full-frame sweep record")
+_painted = sum(r["crack"] for r in _FR["frames"])
+_kept = lambda g: sum(r["chain"][str(g)]["kept"] for r in _FR["frames"]) / _painted
+MP.VALUES.update({"fr_gate_on": f"{_kept(_FR['gate']):.3f}",
+                  "fr_gate_off": f"{_kept(0):.3f}"})
+
+# The ladder's overlap share, out of the parameters plate's own caption file rather than
+# retyped: the plate computes it with "%.1f%%" and the caption is written as the plate
+# is drawn, so this follows the panel it describes.
+_P6 = MP._f(os.path.join(PAPER, "figures", "out",
+                         "F6 - how the parameters were determined.caption.json"),
+            "the parameters plate's caption")
+_lad = re.search(r"([0-9.]+)% of what the ladder reaches is reached by two or more",
+                 json.dumps(_P6))
+assert _lad, "the ladder overlap sentence is no longer in the parameters caption"
+MP.VALUES["sw_ladder_overlap"] = _lad.group(1)
 
 # --- what the over/under-counting figure actually drew, read from its own caption ------
 # The prose beside Figure 11 quotes how concentrated each error is. Those shares are
@@ -461,11 +544,32 @@ MP.VALUES["fig_modality_fov"] = f"{MD['matched_fov_um']:g}"
 # drift, and this project has shipped that drift before.
 CNT = MP._f(os.path.join(PAPER, "figures/out/F5 - over- and under-counting.caption.json"),
             "the over/under-counting plate's caption")
+# The plate was rebuilt around two named specimens and two DIFFERENT detectors, so the
+# quantities it used to publish -- a share of one collection's over-counted pixels --
+# no longer exist in its record. These are what it reports now, read from the same file.
 MP.VALUES.update({
-    "cnt_txm_over_share": MP._n(
-        100 * CNT["frames"]["TXM"]["over-counted"]["share_of_collection"], 0),
+    "cnt_sem_spec": CNT["rows"]["SEM"]["specimen"],
+    "cnt_txm_spec": CNT["rows"]["TXM"]["specimen"],
+    "cnt_sem_prec": MP._n(CNT["rows"]["SEM"]["precision"], 2),
+    "cnt_sem_rec": MP._n(CNT["rows"]["SEM"]["recall"], 2),
+    "cnt_txm_prec": MP._n(CNT["rows"]["TXM"]["precision"], 2),
+    "cnt_txm_rec": MP._n(CNT["rows"]["TXM"]["recall"], 2),
+    # The share of each frame an operator actually ruled on. The caption used to carry
+    # both as typed numbers; they move whenever the figure changes frame, so they are
+    # resolved from the figure's own record instead.
+    "cnt_sem_ref": MP._n(100.0 * CNT["rows"]["SEM"]["refereed_share_of_frame"], 2),
+    "cnt_txm_ref": MP._n(100.0 * CNT["rows"]["TXM"]["refereed_share_of_frame"], 1),
+    "cnt_sem_crack_px": f"{CNT['rows']['SEM']['crack_px']:,}",
+    "cnt_sem_notcrack_px": f"{CNT['rows']['SEM']['notcrack_px']:,}",
+    "cnt_sem_nm": MP._n(
+        next(q["nm"] for q in CNT["panels"] if q["coll"] == "SEM"), 2),
+    "cnt_txm_nm": MP._n(
+        next(q["nm"] for q in CNT["panels"] if q["coll"] == "TXM"), 2),
+    # A panel whose error kind CANNOT occur on its frame contributes a structural zero,
+    # not a measured minimum, so it is left out of this one.
     "cnt_med_over": MP._n(
-        min(p["over_pct"] for p in CNT["panels"] if p["kind"] == "over-counted"), 2),
+        min(p["over_pct"] for p in CNT["panels"]
+            if p["kind"] == "over-counted" and not p.get("kind_impossible")), 2),
 })
 
 # --- the detector's own axis, for the introduction's second figure --------------------

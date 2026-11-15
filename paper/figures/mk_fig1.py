@@ -1,5 +1,12 @@
 """Figure 1 -- what each filter and model stage does, panel by panel.
 
+NOT PART OF THE SHIPPED FIGURE PROGRAMME, AND IT DESCRIBES THE PREVIOUS CONFIGURATION.
+`USE_REGION_CLASSIFIER` is True as of 2026-11-14. Everything below that says the
+classifier is off, ignored, or decides nothing was written while it was False and has
+not been re-measured. The eight plates the paper ships are the FIGURES list in
+mk_paper_pdf.py; this module is not one of them. Do not quote a number from here.
+
+
 Every image panel is a real array written by a stage runner that imports and calls the
 pipelines' own functions. The TXM ensemble panel was verified bit-identical to the app's
 cached probability map (mean |diff| = 0.0).

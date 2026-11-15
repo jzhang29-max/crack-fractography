@@ -15,14 +15,16 @@ WHAT "PRODUCTION" MEANS HERE, precisely, and where each piece comes from:
     cut bit for bit) runs here before any number below is written.
   * the EMITTED mask is `unified_pipeline.run_unified_pipeline` driven exactly as
     `analysis/detect_one.py` drives it: `DO.install(up)`, corrections suppressed, hard
-    overrides suppressed, and then every row of `df` kept because
-    `USE_REGION_CLASSIFIER` is False. That is Pass 1 candidates AND Pass 2's concavity,
-    bridge-corridor and interior-fill additions. The candidate stage alone is NOT the
-    app's output and panels built on it must say which they drew.
+    overrides suppressed, and then the rows of `df` that `USE_REGION_CLASSIFIER` admits.
+    With the flag ON that is the rows whose `IsCrack` is true; with it OFF it is every
+    row, Pass 1 candidates AND Pass 2's concavity, bridge-corridor and interior-fill
+    additions alike. Either way the candidate stage alone is NOT the app's output, and
+    panels built on it must say which they drew.
 
-WHAT IS STILL LEARNED ON THIS PATH, which is the thing to check before claiming otherwise:
-`USE_REGION_CLASSIFIER = False` is applied by detect_one.py at EMISSION -- it ignores the
-`IsCrack` column. It does not stop the artefacts being loaded or consulted:
+WHAT IS LEARNED ON THIS PATH, which is the thing to check before claiming otherwise. The
+flag is now True, so the fitted weights reach the mask directly: detect_one.py keeps the
+rows whose `IsCrack` the classifier set. Even when the flag was False and that column was
+ignored at emission, the learned artefacts were still loaded and still shaped the result:
   * `score_pass1_candidates` still loads `models/crack_classifier.joblib` and writes
     `IsCrack`, and `run_unified_pipeline` builds Pass 2's seed `crack_mask` from exactly
     that column. So the disabled classifier still decides WHICH Pass-2 candidates exist
@@ -149,8 +151,16 @@ st = up.run_unified_pipeline(FRAME)
 _jl.load = _real_load
 labeled, df = st["labeled"], st["df"]
 tick(f"joblib artefacts loaded on the production path: {LOADED}")
-assert not DO.USE_REGION_CLASSIFIER, "this script describes the classifier-off path"
-emitted = np.isin(labeled, df["Label"].tolist())
+#: THE EMITTED SET FOLLOWS THE FLAG, it is not asserted to one value. This line used to
+#: read `assert not DO.USE_REGION_CLASSIFIER`, which turned a configuration change into a
+#: crash in a figure producer instead of a different figure. detect_one.py keeps every
+#: row when the flag is off and only the rows the model calls crack when it is on, so
+#: that is what is reproduced here.
+if DO.USE_REGION_CLASSIFIER:
+    kept_rows = df.loc[df["IsCrack"] == True, "Label"].tolist()      # noqa: E712
+else:
+    kept_rows = df["Label"].tolist()
+emitted = np.isin(labeled, kept_rows)
 tick(f"run_unified_pipeline: {len(df)} rows, emitted {100*emitted.mean():.3f}%")
 assert emitted.shape == cand.shape, (emitted.shape, cand.shape)
 

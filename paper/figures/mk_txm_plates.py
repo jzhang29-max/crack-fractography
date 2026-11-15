@@ -39,17 +39,28 @@ os.makedirs(OUT, exist_ok=True)
 
 #: One hue per claim, never per rank. The two specimen series the paper reports on are
 #: separated by MARKER as well as by colour, so nothing here depends on colour alone.
-GCOL = {"B3": J.ACCENT, "B2": J.ACCENT2}
-GMRK = {"B3": "o", "B2": "s"}
+#: Four specimen groups, not two: the plates are scored over the whole corpus now, and
+#: the published b2/b3 subset is only where the example micrographs come from. B3 and B2
+#: keep the two accent colours they carry everywhere else in the paper so a reader
+#: following them across figures is not re-taught the key; the other two take neutrals.
+GCOL = {"B3": J.ACCENT, "B2": J.ACCENT2, "Wrought": J.G_DARK, "AM/HC": J.G_MID}
+GMRK = {"B3": "o", "B2": "s", "Wrought": "^", "AM/HC": "D"}
 K6 = "SEM detector, mad_k=6"
 
 
-def load(name, what, scope=True):
-    """Read a measurement file, by default the b2/b3 record rather than the full corpus.
+def load(name, what, scope=False):
+    """Read a measurement file, by default the FULL corpus rather than the b2/b3 record.
 
-    `_paths.scoped` raises if the restricted record is missing instead of falling back,
-    because a plate that silently drew the wider corpus would carry a caption naming the
-    narrower one and nothing in the output would show it.
+    WHY THE DEFAULT IS THE WHOLE CORPUS. b2 and b3 are the series whose images are
+    published, and they are the ones the example micrographs are cut from, but they are
+    not what the detector's accuracy IS: restricted to them the transmission arm reports
+    a mean F1 of 0.482 over 18 frames, and over all 31 labelled frames of four specimen
+    groups it reports 0.372. A plate that scored only the published subset would state
+    the flattering number. The pictures stay b2/b3; the numbers are everything measured.
+
+    `_paths.scoped` raises if the record asked for is missing instead of falling back,
+    because a plate that silently drew a different corpus would carry a caption naming
+    the one it did not draw and nothing in the output would show it.
     """
     try:
         p = _paths.scoped(name, scope=scope)

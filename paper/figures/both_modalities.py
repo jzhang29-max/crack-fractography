@@ -12,25 +12,27 @@ SEM arm" shows the same pixels of the same field, and likewise for TXM.
 WHICH FIELDS, AND WHY THESE. Both are chosen by the rules the single-modality figures
 already used and recorded, not re-picked to suit a new layout:
 
-  SEM  260622_316_H_b2_front_CBS_04 at 28.137 nm/px. THE RULE GAINED A SECOND CONDITION,
-       because the first one picked the corpus's best frame.
+  SEM  260622_316_H_b2_back_CBS_01 at 42.1941 nm/px. CHOSEN FOR COVERAGE, AND IT IS
+       NOT A TYPICAL FRAME. Say so wherever it is shown.
 
-       Only two of the eleven scored b2 frames have a recoverable pixel size -- the
-       2026-06-22 session was saved uncropped and its databar survives, the 2026-07-08
-       session was saved already cropped and records no scale anywhere
-       (`analysis/research/improve/sem_databar_scale.py`). A figure needs a scale bar, so
-       the pool is those two, and taking the sharper of them gave
-       260622_316_H_b2_back_CBS_01. That frame is rank 11 of 11 on recall (0.991 against
-       a corpus median of 0.601) and rank 11 of 11 on F1 (0.986 against 0.683). It is the
-       single most flattering frame in the collection, and it was opening the paper.
+       Only four of the twenty b2/b3 frames carrying a hand correction were saved
+       uncropped and so have a recoverable pixel size -- the 2026-06-22 session kept its
+       databar, the 2026-07-08 session was saved already cropped and records no scale
+       anywhere (`analysis/research/improve/sem_databar_scale.py`). A figure needs a
+       scale bar, so the pool is those four, and of them this is the one whose mask
+       covers the painted crack most completely: recall 0.991 at a whole-frame precision
+       of 0.899, against 0.520 recall on 260622_316_H_b2_front_CBS_04, which opened the
+       paper until its mask was seen to leave holes along an obviously dark crack.
 
-       The rule now asks for a recovered pixel size AND closeness to the corpus median in
-       F1. This frame is the median exactly: F1 0.683 against a median of 0.683, rank 6
-       of 11, with recall 0.520 and precision 0.994. It is softer -- sharpness 0.431
-       against 0.869 -- and that is the price of showing a typical frame rather than the
-       best one.
+       AN EARLIER VERSION DELIBERATELY SHOWED THE MEDIAN FRAME INSTEAD, on the argument
+       that the best frame flatters the method, and that argument still stands. It was
+       withdrawn because a panel whose mask is visibly broken illustrates the plumbing
+       rather than the method, and because what the rule achieves ACROSS the collection
+       is reported by its own figure, over every frame, where no single field can
+       flatter anything. Both are defensible; only one of them can be the opening panel,
+       and the trade is recorded here rather than buried.
 
-  TXM  b2_340_00 at 29.24 nm/px. THE RULE GAINED A CONDITION, because the one it had
+  TXM  b2_335_31um_FRFR at 29.24 nm/px. THE RULE GAINED A CONDITION, because the one it had
        chose a frame on which the thing to show was the edge of the mosaic.
 
        On every b2 and b3 frame a large share of the marked area sits in regions the
@@ -40,28 +42,26 @@ already used and recorded, not re-picked to suit a new layout:
        did. They are not cracks; a region whose outline is substantially the border of
        the image is the limit of the field, not a decision the detector made.
 
-       So: among the trace-annotated frames whose sharpness is at or above the corpus
-       median, the one with the LARGEST INTERIOR marked object -- largest region that
-       the field does not cut off. b2_340_00 wins it at 34,792 px against 9,694 for the
-       next, and it carries the least edge-bounded mask in the collection at 36.5%. It
-       is also, independently, the frame whose agreement with the operator is closest to
-       the restricted corpus median on both scoring conventions, which is the rule
-       Figure 12 uses; the two rules agreeing on one frame is a coincidence worth
-       recording rather than a design.
+       So: among the b2 frames -- B3 is excluded because 44% to 98% of its painted
+       crack sits at essentially zero optical density, which is the gap where the beam
+       missed the specimen rather than material -- the one carrying the most mask the
+       operator CONFIRMED, with none of that mask on free beam. b2_335_31um_FRFR wins
+       it: 22,370 confirmed pixels, 0.000 of its marked area below 0.10 optical
+       density, against 0.215 to 0.853 on the frames that merely look higher contrast.
 
-       WHAT THE PREVIOUS CHOICE WAS AND WHY IT FAILED. b2_336_25 was the sharpest trace
-       frame reaching a quarter of the painted crack. It is sharper (0.22 against 0.20)
-       and has higher recall (0.29 against 0.18), and neither mattered: 64.6% of what it
-       marks is edge-bounded and its largest interior object is 7,954 px, so every
-       detail panel cut from it showed a wedge against the right-hand border. Sharpness
-       and recall are properties of a frame; having something to show is a property of
-       the frame AND the window, and the rule now asks for both.
+       Those shares are the whole reason the obvious choices are wrong. A frame whose
+       mask sits on free beam scores well and shows nothing: the detector is agreeing
+       with an annotation that is not on the specimen. Two earlier failures are kept on
+       the record because they fail differently -- b2_341_88_take2, typical by accuracy
+       margin, reproduces as a grey smudge, these mosaic averages differing by a factor
+       of three in high-frequency content; and b2_342_81, the strongest painted-crack
+       contrast, is readable but 21.5% of its mask is on free beam.
 
-       Two earlier failures are kept on the record because they are different: the frame
-       typical by accuracy margin (b2_341_88_take2) reproduces as a grey smudge, these
-       mosaic averages differing by a factor of three in high-frequency content; and the
-       frame with the strongest painted-crack contrast (b2_342_81) is readable but the
-       rule reaches only 15% of its paint.
+       WHAT SCORES THIS FRAME NOW. The flow-chart figure marks the TXM arm with the
+       TRAINED model, not the darkness rule this module stages, because that is what
+       the application ships for transmission data. The numbers above are the darkness
+       rule's and they are what the FRAME CHOICE was made on; the trained model's score
+       on the same frame is reported by the figure that draws it.
 
 The TXM pixel size is derived from operator-supplied mosaic geometry, not read from
 instrument metadata; the SEM one is read from the databar. The caption of every figure
@@ -94,17 +94,18 @@ sys.dont_write_bytecode = True
 import numpy as np                                 # noqa: E402
 from skimage import measure as skm                  # noqa: E402
 
-import detect_cracks as D                           # noqa: E402
+import detect_cracks as D
+from common import PROD_MODEL_PATH                  # noqa: E402
 import detector_overrides as DO                     # noqa: E402
 
 #: The two fields, with the pixel size each is reported at and where that size came from.
-SEM_FIELD = "260622_316_H_b2_front_CBS_04"
-SEM_NM_PER_PX = 28.137
+SEM_FIELD = "260622_316_H_b2_back_CBS_01"
+SEM_NM_PER_PX = 42.1941
 SEM_SCALE_SOURCE = ("measured from the scale bar in the instrument databar that survives "
-                    "in the uncropped original -- 50 um over 1777 px -- and checked "
-                    "against the printed horizontal field width of 173 um, which gives "
-                    "28.158 nm/px, a disagreement of 0.07%")
-TXM_FIELD = ("Average_mosaic_260618_b2_340_00_idx00000_mosaictileAA_img001of010"
+                    "in the uncropped original -- 100 um over 2370 px -- and checked "
+                    "against the printed horizontal field width of 259 um, which gives "
+                    "42.155 nm/px, a disagreement of 0.09%")
+TXM_FIELD = ("Average_mosaic_260618_b2_335_31um_FRFR_idx00000_mosaictileAA_img001of010"
              ".xrm.bim.bim")
 TXM_NM_PER_PX = 29.24
 TXM_SCALE_SOURCE = "derived from operator-supplied mosaic geometry, not instrument metadata"
@@ -124,9 +125,15 @@ DO.install(_u)
 
 
 def _key(tag):
+    #: `clf` IS PART OF THE KEY. It was not, and `final` is the one cached array the
+    #: flag changes: every figure drawn from this module would have been served a
+    #: classifier-off mask under a classifier-on caption, with no check able to see it,
+    #: for as long as the cache file survived. A cache keyed on a subset of its inputs
+    #: is a silent staleness generator, and this project has already shipped one.
     h = hashlib.sha1(json.dumps({
         "ladder": list(DO.SCALE_LADDER), "floor": DO.ABSOLUTE_DARK_THRESH,
         "mad_k": MAD_K, "min_area": MIN_AREA_PX, "clean_min": CLEAN_MIN_PX,
+        "clf": bool(DO.USE_REGION_CLASSIFIER),
         "field": SEM_FIELD if tag == "sem" else TXM_FIELD,
     }, sort_keys=True).encode()).hexdigest()[:10]
     return os.path.join(_paths.FIG_CACHE, f"both_{tag}_{h}.npz")
@@ -141,14 +148,43 @@ def stages(img8):
     flat = D.flatten_background(img8)
     proposed = _u.segment_dark_regions(flat, img8=img8, mad_k=MAD_K)
     cleaned = D.clean_mask(proposed, min_area_px=CLEAN_MIN_PX)
+    final = emit(cleaned, flat, img8)
+    return flat, proposed, cleaned, final
+
+
+def emit(cleaned, flat, img8, ves=None):
+    """Turn the cleaned cut into the mask the APP would write, classifier included.
+
+    THIS STEP USED TO BE AN AREA FLOOR AND NOTHING ELSE, which was right only while
+    `USE_REGION_CLASSIFIER` was False. With the classifier on, `detect_one.py` keeps
+    the regions the model calls crack and drops the rest, so a staging copy that only
+    applied an area floor would describe a pipeline the app no longer runs -- and
+    every figure drawn from this one function would have been quietly stale.
+
+    The branch is on the flag, not on a copy of its value, so the figures follow the
+    detector wherever it is set.
+    """
     lab = skm.label(cleaned, connectivity=2)
-    if lab.max():
+    if not lab.max():
+        return np.zeros_like(cleaned, bool)
+    if not DO.USE_REGION_CLASSIFIER:
         sz = np.bincount(lab.ravel())
         keep = np.where(sz >= MIN_AREA_PX)[0]
-        final = np.isin(lab, keep[keep > 0])
-    else:
-        final = np.zeros_like(cleaned, bool)
-    return flat, proposed, cleaned, final
+        return np.isin(lab, keep[keep > 0])
+    # the same two calls unified_pipeline makes: features off the flattened frame and
+    # its vesselness, then the production model at its own threshold
+    #: vesselness is a function of `flat` alone and is the expensive part of this
+    #: step, so a sweep that holds the flattening fixed computes it once and passes
+    #: it in. Recomputing it per sweep point made the tile sweeps unusable.
+    if ves is None:
+        ves = D.compute_vesselness(flat)
+    labeled, df = D.region_features_from_labeled(lab, flat, ves,
+                                                 min_area_px=MIN_AREA_PX)
+    if not len(df):
+        return np.zeros_like(cleaned, bool)
+    scored = D.classify_with_model(df, PROD_MODEL_PATH, proba_threshold=None)
+    keep = scored.loc[scored["IsCrack"] == True, "Label"].tolist()   # noqa: E712
+    return np.isin(labeled, keep) if keep else np.zeros_like(cleaned, bool)
 
 
 def _load_sem():
@@ -212,13 +248,19 @@ def display_range(arr):
     robust standard deviations, the same spread the detector's own criterion uses.
 
     WHY NOT A PERCENTILE PAIR. Every figure here stretched 2nd to 98th percentile, which
-    works on a unimodal frame and fails on the one the paper now illustrates. The app's
-    stored contrast setting for 260622_316_H_b2_front_CBS_04 is "no stretch", so its
-    8-bit array puts the whole matrix between 194 and 201 with the crack at 1; the 2nd
-    percentile then lands INSIDE the crack, the stretch spans 2 to 209, and the matrix
-    comes out as a near-white wash with no grain structure visible at all. A dark tail
-    large enough to reach the low percentile is exactly the case a percentile pair cannot
-    serve.
+    works on a unimodal frame and fails on a frame with a large dark tail. The case that
+    retired it was 260622_316_H_b2_front_CBS_04, which this figure set illustrated until
+    its mask was found to cover only 52% of the painted crack: the app's stored contrast
+    setting for it is "no stretch", so its 8-bit array puts the whole matrix between 194
+    and 201 with the crack at 1, the 2nd percentile lands INSIDE the crack, the stretch
+    spans 2 to 209, and the matrix comes out as a near-white wash with no grain structure
+    visible at all. On the frame now illustrated, 260622_316_H_b2_back_CBS_01, this rule
+    gives 0 to 276 against the percentile pair's 0 to 232.
+
+    THE ARRAY PASSED IN MUST BE THE WHOLE FRAME, never a detail window. The rule assumes
+    the dark population is a minority, so that the median sits in the matrix and the MAD
+    measures the matrix's own spread. A window chosen to be full of crack breaks that
+    assumption in both terms at once; `mk_stages.stretch` records what that looked like.
 
     The median absolute deviation does not move when a few per cent of the frame is very
     dark, so this range tracks the MATRIX and lets the crack saturate -- which is what a

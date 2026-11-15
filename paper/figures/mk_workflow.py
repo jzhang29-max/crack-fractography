@@ -83,7 +83,7 @@ NAME = "F1 - workflow"
 #: The detail window per modality, in MICROMETRES rather than in pixels, so that a
 #: change of field or of magnification cannot silently change what the panel shows. The
 #: two differ because the two cracks differ in scale by about that factor.
-DETAIL_UM = {"sem": 90.0, "txm": 20.0}
+DETAIL_UM = {"sem": 90.0, "txm": 32.0}
 ARMS = (("sem", "SEM"), ("txm", "TXM"))
 COLS = ("Field", "Crack", "Detected", "Measured")
 
@@ -107,18 +107,40 @@ LLIM = (0.3, 3000.0)
 #: the TXM field the two largest marked objects sit at 37.9% and 50.1%. Any cut between
 #: those separates them, and the panels either side of it are a crack and a frame edge.
 MAX_EDGE_PERIMETER = 0.15
+#: How much operator-confirmed mask a frame needs before rule 1 is used at all.
+MIN_CONFIRMED = 500
 
 
-def boundary_window(final, H):
-    """Top-left corner of the H x H window holding the most mask-boundary pixels.
+def boundary_window(final, H, confirm=None):
+    """Top-left corner of the H x H window the detail panels are cut from.
 
-    Boundary pixels belonging to a region the field of view cut off are not counted; see
-    MAX_EDGE_PERIMETER. Without that exclusion both TXM rows of this figure set landed on
-    the same object: a wedge flush with the right-hand edge of the mosaic holding 57.6% of
-    that frame's marked area, which is the largest thing the detector marks there and is
-    not a crack. The exclusion is on the WINDOW CHOICE only -- no pixel is removed from
-    any mask, and nothing here changes a number.
+    TWO RULES, AND THE FIRST ONE WINS WHERE IT APPLIES.
+
+    1. CONFIRMED DETECTIONS, when `confirm` (the mask intersected with the operator's
+       painted crack) holds at least MIN_CONFIRMED pixels. The window then sits where
+       the detector is demonstrably RIGHT. This exists because of what the transmission
+       frames turned out to be: on every b2 frame the obvious dark horizontal bands are
+       painted NOT crack by the operator, and the confirmed crack is elsewhere. Rule 2
+       maximises mask boundary, so on those frames it put the panel squarely on the
+       bands -- a TXM detail that showed the detector marking what the operator had
+       explicitly rejected, which is the opposite of what the panel is for.
+
+    2. MASK BOUNDARY, otherwise, discounting any region more than MAX_EDGE_PERIMETER of
+       whose own outline lies on the frame border. Such a region is the FIELD cut off,
+       not a boundary the detector drew. Without that discount both TXM rows landed on
+       the same object: a wedge flush with the edge of the mosaic, which is the largest
+       thing the detector marks there and is not a crack.
+
+    Both are WINDOW CHOICES only. No pixel is removed from any mask by either, and
+    nothing here changes a number that the paper reports.
     """
+    if confirm is not None and int(confirm.sum()) >= MIN_CONFIRMED:
+        cc = np.pad(np.cumsum(np.cumsum(confirm.astype(np.int64), 0), 1), ((1, 0), (1, 0)))
+        cbox = cc[H:, H:] - cc[:-H, H:] - cc[H:, :-H] + cc[:-H, :-H]
+        if cbox.size and cbox.max() > 0:
+            cy, cx = np.unravel_index(int(cbox.argmax()), cbox.shape)
+            return int(cy), int(cx)
+
     lab, n = ndi.label(final, np.ones((3, 3), bool))
     per = final & ~ndi.binary_erosion(final, np.ones((3, 3), bool))
     on = np.zeros_like(final)
@@ -160,7 +182,8 @@ def detail_of(d, tag):
     f = d["final"]
     H = int(round(DETAIL_UM[tag] * 1000.0 / float(d["nm_per_px"])))
     H = min(H, f.shape[0], f.shape[1])
-    y0, x0 = boundary_window(f, H)
+    pc = d.get("paint_crack")
+    y0, x0 = boundary_window(f, H, confirm=None if pc is None else (f & pc))
     lab, _ = ndi.label(f, np.ones((3, 3), bool))
     win = lab[y0:y0 + H, x0:x0 + H]
     sz = np.bincount(win.ravel())
@@ -311,9 +334,18 @@ def main():
             fh = S
         ax = ax_at(X[0] + (C1 - fw) / 2, ytop + (S - fh) / 2, fw, fh)
         ax.imshow(rgb, interpolation="nearest", aspect="equal")
-        ax.plot([half, half], [0, thumb.shape[0] - 1], color="white", lw=0.9, zorder=20)
-        ax.plot([half, half], [0, thumb.shape[0] - 1], color=J.INK, lw=0.4,
+        ax.plot([half, half], [0, thumb.shape[0] - 1], color="white", lw=1.6, zorder=20)
+        ax.plot([half, half], [0, thumb.shape[0] - 1], color=J.INK, lw=0.7,
                 linestyle=(0, (2, 2)), zorder=21)
+        # Without these the split reads as the detector having missed the left half of
+        # the crack, which is the opposite of what the panel shows.
+        # Kept to one word each: the house floor is 8 pt (J.FLOOR) and "as acquired"
+        # does not fit across half of this panel at that size.
+        for cx, lab in ((half * 0.5, "raw"), (half * 1.5, "mask")):
+            ax.text(cx, thumb.shape[0] * 0.012, lab, ha="center", va="top",
+                    fontsize=J.TICK, color=J.INK, zorder=23,
+                    bbox=dict(boxstyle="square,pad=0.14", fc="white", ec="none",
+                              alpha=0.82))
         ax.add_patch(Rectangle((x0 / step, y0 / step), H / step, H / step, fill=False,
                                edgecolor=J.ROI, linewidth=0.9, zorder=22))
         J.micrograph(ax)
