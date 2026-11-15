@@ -1,0 +1,394 @@
+{
+ "question": "Is the TXM model's error a BOUNDARY error or a DETECTION error?",
+ "bands_px": [
+  1,
+  2,
+  3,
+  5,
+  10,
+  20,
+  50
+ ],
+ "n_frames": 9,
+ "null": "refereed pixels that are not agreed crack, count-matched per frame, same distance transform",
+ "frames": [
+  {
+   "frame": "Average_mosaic_260619_HC_316L_fatigue_1000_cycles_idx00000_mosaictileAA_img001of010.xrm.bim.bim",
+   "agree_px": 55539,
+   "over_px": 20314,
+   "over": {
+    "within_1px": 0.1019,
+    "within_2px": 0.1916,
+    "within_3px": 0.2817,
+    "within_5px": 0.4257,
+    "within_10px": 0.6188,
+    "within_20px": 0.7652,
+    "within_50px": 0.8182
+   },
+   "over_null": {
+    "within_1px": 0.0003,
+    "within_2px": 0.0007,
+    "within_3px": 0.0015,
+    "within_5px": 0.0027,
+    "within_10px": 0.0052,
+    "within_20px": 0.0103,
+    "within_50px": 0.0268
+   },
+   "under_px": 76392,
+   "under": {
+    "within_1px": 0.0467,
+    "within_2px": 0.0809,
+    "within_3px": 0.1143,
+    "within_5px": 0.168,
+    "within_10px": 0.2568,
+    "within_20px": 0.359,
+    "within_50px": 0.5022
+   },
+   "under_null": {
+    "within_1px": 0.0007,
+    "within_2px": 0.0012,
+    "within_3px": 0.0017,
+    "within_5px": 0.0029,
+    "within_10px": 0.0057,
+    "within_20px": 0.0116,
+    "within_50px": 0.0298
+   }
+  },
+  {
+   "frame": "Average_mosaic_260619_HC_316L_fatigue_1100_cycles_idx00000_mosaictileAA_img001of010.xrm.bim.bim",
+   "agree_px": 74304,
+   "over_px": 46571,
+   "over": {
+    "within_1px": 0.0888,
+    "within_2px": 0.1702,
+    "within_3px": 0.2527,
+    "within_5px": 0.3917,
+    "within_10px": 0.6165,
+    "within_20px": 0.8512,
+    "within_50px": 0.9984
+   },
+   "over_null": {
+    "within_1px": 0.0016,
+    "within_2px": 0.0033,
+    "within_3px": 0.0052,
+    "within_5px": 0.0082,
+    "within_10px": 0.0152,
+    "within_20px": 0.0277,
+    "within_50px": 0.0628
+   },
+   "under_px": 83788,
+   "under": {
+    "within_1px": 0.0638,
+    "within_2px": 0.1097,
+    "within_3px": 0.1526,
+    "within_5px": 0.2205,
+    "within_10px": 0.3284,
+    "within_20px": 0.4447,
+    "within_50px": 0.6581
+   },
+   "under_null": {
+    "within_1px": 0.0021,
+    "within_2px": 0.0036,
+    "within_3px": 0.0056,
+    "within_5px": 0.0086,
+    "within_10px": 0.0159,
+    "within_20px": 0.0284,
+    "within_50px": 0.0633
+   }
+  },
+  {
+   "frame": "Average_mosaic_260619_HC_316L_fatigue_1200_cycles_idx00000_mosaictileAA_img001of010.xrm.bim.bim",
+   "agree_px": 50124,
+   "over_px": 86104,
+   "over": {
+    "within_1px": 0.0888,
+    "within_2px": 0.1718,
+    "within_3px": 0.261,
+    "within_5px": 0.4152,
+    "within_10px": 0.6887,
+    "within_20px": 0.9355,
+    "within_50px": 1.0
+   },
+   "over_null": {
+    "within_1px": 0.0031,
+    "within_2px": 0.0061,
+    "within_3px": 0.0092,
+    "within_5px": 0.0147,
+    "within_10px": 0.0276,
+    "within_20px": 0.0486,
+    "within_50px": 0.1019
+   },
+   "under_px": 39373,
+   "under": {
+    "within_1px": 0.0587,
+    "within_2px": 0.1018,
+    "within_3px": 0.1434,
+    "within_5px": 0.2143,
+    "within_10px": 0.3228,
+    "within_20px": 0.4257,
+    "within_50px": 0.6589
+   },
+   "under_null": {
+    "within_1px": 0.0026,
+    "within_2px": 0.0053,
+    "within_3px": 0.0088,
+    "within_5px": 0.0143,
+    "within_10px": 0.0263,
+    "within_20px": 0.0475,
+    "within_50px": 0.0998
+   }
+  },
+  {
+   "frame": "Average_mosaic_260619_HC_316L_fatigue_1250_cycles_idx00000_mosaictileAA_img001of010.xrm.bim.bim",
+   "agree_px": 15326,
+   "over_px": 6560,
+   "over": {
+    "within_1px": 0.1191,
+    "within_2px": 0.2284,
+    "within_3px": 0.3363,
+    "within_5px": 0.53,
+    "within_10px": 0.8495,
+    "within_20px": 0.9986,
+    "within_50px": 1.0
+   },
+   "over_null": {
+    "within_1px": 0.0003,
+    "within_2px": 0.0008,
+    "within_3px": 0.0014,
+    "within_5px": 0.0015,
+    "within_10px": 0.0027,
+    "within_20px": 0.0046,
+    "within_50px": 0.0123
+   },
+   "under_px": 5623,
+   "under": {
+    "within_1px": 0.2833,
+    "within_2px": 0.4387,
+    "within_3px": 0.5613,
+    "within_5px": 0.685,
+    "within_10px": 0.7654,
+    "within_20px": 0.7893,
+    "within_50px": 0.8527
+   },
+   "under_null": {
+    "within_1px": 0.0004,
+    "within_2px": 0.0011,
+    "within_3px": 0.0012,
+    "within_5px": 0.0018,
+    "within_10px": 0.0034,
+    "within_20px": 0.0064,
+    "within_50px": 0.0146
+   }
+  },
+  {
+   "frame": "Average_mosaic_260619_HC_316L_fatigue_1300_cycles_2_idx00000_mosaictileAA_img001of010.xrm.bim.bim",
+   "agree_px": 103514,
+   "over_px": 39691,
+   "over": {
+    "within_1px": 0.0661,
+    "within_2px": 0.1289,
+    "within_3px": 0.1917,
+    "within_5px": 0.3027,
+    "within_10px": 0.5322,
+    "within_20px": 0.7634,
+    "within_50px": 0.9468
+   },
+   "over_null": {
+    "within_1px": 0.0015,
+    "within_2px": 0.0028,
+    "within_3px": 0.004,
+    "within_5px": 0.0066,
+    "within_10px": 0.0121,
+    "within_20px": 0.0233,
+    "within_50px": 0.0609
+   },
+   "under_px": 34294,
+   "under": {
+    "within_1px": 0.0663,
+    "within_2px": 0.1106,
+    "within_3px": 0.154,
+    "within_5px": 0.2219,
+    "within_10px": 0.3416,
+    "within_20px": 0.516,
+    "within_50px": 0.802
+   },
+   "under_null": {
+    "within_1px": 0.0017,
+    "within_2px": 0.0033,
+    "within_3px": 0.0048,
+    "within_5px": 0.0075,
+    "within_10px": 0.0127,
+    "within_20px": 0.0247,
+    "within_50px": 0.0616
+   }
+  },
+  {
+   "frame": "Average_mosaic_260619_HC_316L_fatigue_1350_cycles_idx00000_mosaictileAA_img001of010.xrm.bim.bim",
+   "agree_px": 94950,
+   "over_px": 67821,
+   "over": {
+    "within_1px": 0.0563,
+    "within_2px": 0.1108,
+    "within_3px": 0.1703,
+    "within_5px": 0.2785,
+    "within_10px": 0.5062,
+    "within_20px": 0.7959,
+    "within_50px": 0.9993
+   },
+   "over_null": {
+    "within_1px": 0.0015,
+    "within_2px": 0.0034,
+    "within_3px": 0.0053,
+    "within_5px": 0.0086,
+    "within_10px": 0.0166,
+    "within_20px": 0.03,
+    "within_50px": 0.0712
+   },
+   "under_px": 59486,
+   "under": {
+    "within_1px": 0.0763,
+    "within_2px": 0.1317,
+    "within_3px": 0.1847,
+    "within_5px": 0.2654,
+    "within_10px": 0.3972,
+    "within_20px": 0.5372,
+    "within_50px": 0.7961
+   },
+   "under_null": {
+    "within_1px": 0.0017,
+    "within_2px": 0.0032,
+    "within_3px": 0.0049,
+    "within_5px": 0.008,
+    "within_10px": 0.0156,
+    "within_20px": 0.0288,
+    "within_50px": 0.0688
+   }
+  },
+  {
+   "frame": "Average_mosaic_260619_HC_316L_fatigue_1400_cycles_idx00000_mosaictileAA_img001of010.xrm.bim.bim",
+   "agree_px": 343232,
+   "over_px": 58469,
+   "over": {
+    "within_1px": 0.0953,
+    "within_2px": 0.177,
+    "within_3px": 0.2602,
+    "within_5px": 0.3988,
+    "within_10px": 0.6244,
+    "within_20px": 0.8455,
+    "within_50px": 0.9819
+   },
+   "over_null": {
+    "within_1px": 0.0018,
+    "within_2px": 0.0035,
+    "within_3px": 0.0052,
+    "within_5px": 0.0084,
+    "within_10px": 0.0154,
+    "within_20px": 0.0285,
+    "within_50px": 0.062
+   },
+   "under_px": 144012,
+   "under": {
+    "within_1px": 0.0772,
+    "within_2px": 0.1333,
+    "within_3px": 0.1873,
+    "within_5px": 0.2746,
+    "within_10px": 0.4338,
+    "within_20px": 0.6362,
+    "within_50px": 0.8791
+   },
+   "under_null": {
+    "within_1px": 0.0017,
+    "within_2px": 0.0031,
+    "within_3px": 0.0046,
+    "within_5px": 0.0074,
+    "within_10px": 0.0142,
+    "within_20px": 0.0268,
+    "within_50px": 0.0611
+   }
+  },
+  {
+   "frame": "Average_mosaic_260619_HC_316L_fatigue_1400_cycles_tip_idx00000_mosaictileAA_img001of010.xrm.bim.bim",
+   "agree_px": 118480,
+   "over_px": 29511,
+   "over": {
+    "within_1px": 0.0786,
+    "within_2px": 0.1507,
+    "within_3px": 0.2347,
+    "within_5px": 0.3761,
+    "within_10px": 0.6203,
+    "within_20px": 0.8912,
+    "within_50px": 1.0
+   },
+   "over_null": {
+    "within_1px": 0.0012,
+    "within_2px": 0.0019,
+    "within_3px": 0.0029,
+    "within_5px": 0.0042,
+    "within_10px": 0.0074,
+    "within_20px": 0.0142,
+    "within_50px": 0.0283
+   },
+   "under_px": 62828,
+   "under": {
+    "within_1px": 0.1079,
+    "within_2px": 0.1865,
+    "within_3px": 0.2581,
+    "within_5px": 0.3618,
+    "within_10px": 0.5424,
+    "within_20px": 0.7551,
+    "within_50px": 0.9664
+   },
+   "under_null": {
+    "within_1px": 0.0011,
+    "within_2px": 0.0021,
+    "within_3px": 0.0031,
+    "within_5px": 0.0049,
+    "within_10px": 0.0085,
+    "within_20px": 0.0147,
+    "within_50px": 0.0295
+   }
+  },
+  {
+   "frame": "Average_mosaic_260619_HC_316L_fatigue_1450_cycles_idx00000_mosaictileAA_img001of010.xrm.bim.bim",
+   "agree_px": 73520,
+   "over_px": 47457,
+   "over": {
+    "within_1px": 0.029,
+    "within_2px": 0.0567,
+    "within_3px": 0.0896,
+    "within_5px": 0.1486,
+    "within_10px": 0.2593,
+    "within_20px": 0.4034,
+    "within_50px": 0.5266
+   },
+   "over_null": {
+    "within_1px": 0.0003,
+    "within_2px": 0.0006,
+    "within_3px": 0.0009,
+    "within_5px": 0.0016,
+    "within_10px": 0.0028,
+    "within_20px": 0.0053,
+    "within_50px": 0.0148
+   },
+   "under_px": 32835,
+   "under": {
+    "within_1px": 0.0884,
+    "within_2px": 0.143,
+    "within_3px": 0.1899,
+    "within_5px": 0.2529,
+    "within_10px": 0.3396,
+    "within_20px": 0.4368,
+    "within_50px": 0.564
+   },
+   "under_null": {
+    "within_1px": 0.0005,
+    "within_2px": 0.0008,
+    "within_3px": 0.0013,
+    "within_5px": 0.0019,
+    "within_10px": 0.0036,
+    "within_20px": 0.0068,
+    "within_50px": 0.0162
+   }
+  }
+ ]
+}

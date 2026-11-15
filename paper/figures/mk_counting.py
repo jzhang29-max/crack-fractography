@@ -870,8 +870,38 @@ def main():
             rgb[under[sl]] = np.array(J.rgb(UNDER))
             rgb[agree[sl]] = np.array(J.rgb(AGREE))
             rgb[over[sl]] = np.array(J.rgb(OVER))
+            #: WHAT THE ERROR LOOKS LIKE, MEASURED. A reviewer asked this plate to
+            #: "show raw image or explain where it is over / undercounting in terms
+            #: of image". The raw window is now drawn beside every overlay, and the
+            #: question behind the request -- what IS the detector reacting to --
+            #: is answered with a number rather than with an adjective.
+            #:
+            #: The statistic is the MEDIAN of the displayed grey, on the same 0.5/99.5
+            #: stretch the panel beside it is drawn at, so a reader can check any of
+            #: these against the picture. Median, not mean: these classes are small
+            #: and often touch a bright inclusion or the frame's dark edge, and one
+            #: such tail drags a mean somewhere no pixel in the class actually is.
+            #:
+            #: The reference classes are the operator's own: `agree` is crack both
+            #: parties accept, and `matrix` is what the operator ruled NOT crack and
+            #: the detector also left alone -- the uncontested background. An error
+            #: class sitting at the crack level says intensity cannot separate it;
+            #: sitting at the matrix level says no darkness rule would ever reach it.
+            _matrix = neg[sl] & ~mask[sl]
+            def _med(m):
+                return round(float(np.median(grey[m])), 4) if m.any() else None
+            _greys = {"over": _med(over[sl]), "under": _med(under[sl]),
+                      "agree": _med(agree[sl]), "matrix": _med(_matrix)}
+            _counts = {"over": int(over[sl].sum()), "under": int(under[sl].sum()),
+                       "agree": int(agree[sl].sum()), "matrix": int(_matrix.sum())}
             panels.append({
                 "coll": coll, "kind": kind, "rgb": np.clip(rgb, 0, 1), "nm": nm,
+                "grey": grey, "median_grey_on_displayed_stretch": _greys,
+                "median_grey_px": _counts,
+                "median_grey_note": (
+                    "median of the panel's own 0.5/99.5-stretched grey, 0 = black, "
+                    "1 = white. agree = crack both parties accept; matrix = pixels "
+                    "the operator ruled not-crack and the detector did not mark."),
                 "frame": frame, "side": sdim, "origin": [y, x], "selected_px": cnt,
                 "fov_um": sdim * nm / 1000.0, "share_caps_applied": capped,
                 "constraints_dropped": dropped, "placed_by": placed_by,
@@ -895,20 +925,35 @@ def main():
     W = J.PAGEW
     Mg = 0.03
     LAB = 0.26
-    GAP = 0.07
-    PAN = (W - 2 * Mg - LAB - GAP) / 2
-    HDR = 0.42
+    GAP = 0.16          # between the two error kinds
+    PAIR = 0.035        # between a raw panel and the overlay it belongs to
+    #: FOUR PANELS PER ROW, NOT TWO, at a reviewer's request: "can help to show raw
+    #: image or explain where it is over / undercounting in terms of image". An
+    #: overlay on its own asks the reader to take on trust that the coloured pixels
+    #: correspond to something in the micrograph; the raw window beside it, at the
+    #: same place and the same stretch, lets them check. The two are a PAIR and are
+    #: spaced as one -- PAIR between them, the wider GAP between the error kinds --
+    #: so the grouping is read off the layout and does not need saying.
+    PAN = (W - 2 * Mg - LAB - 2 * PAIR - GAP) / 4
+    HDR = 0.56
     # Under each row: one line per panel saying how much of IT is the error it was chosen
     # for, then two lines for the row. The per-panel line exists because a panel can be
     # honestly almost empty -- the SEM field's precision is 0.97, so its over-counted
     # window is 0.14% red -- and an almost-empty panel under a header that says
     # "over-counted" reads as a mistake unless the figure says the number.
-    CAP = 0.50
+    CAP = 0.62
     LEG = 0.34
-    Htot = Mg + HDR + 2 * (PAN + CAP) + GAP + LEG + Mg
+    #: TWO gaps, not one: there is a seam between the rows AND a seam above the key.
+    #: With a single GAP in this sum the key began at the exact inch the lower row's
+    #: caption ended, and the row's bold identity line printed into the swatches.
+    Htot = Mg + HDR + 2 * (PAN + CAP) + 2 * GAP + LEG + Mg
 
     fig = plt.figure(figsize=(W, Htot))
     overflow = []
+
+    def col_x(c, half):
+        """Left edge of one panel: error kind `c`, 0 = raw and 1 = overlay."""
+        return Mg + LAB + c * (2 * PAN + PAIR + GAP) + half * (PAN + PAIR)
 
     def ax_at(xin, yin, win, hin):
         return fig.add_axes([xin / W, 1.0 - (yin + hin) / Htot, win / W, hin / Htot])
@@ -932,12 +977,17 @@ def main():
     heads = (("Over-counted", "window holding the most marked-but-rejected area"),
              ("Under-counted", "window holding the most unmarked painted crack"))
     for c, (head, sub) in enumerate(heads):
-        hx = ax_at(Mg + LAB + c * (PAN + GAP), Mg, PAN, HDR)
+        hx = ax_at(col_x(c, 0), Mg, 2 * PAN + PAIR, HDR)
         hx.set_axis_off()
-        say(hx, 0.5, 0.78, head, size=J.BODY, weight="bold", ha="center")
-        say(hx, 0.5, 0.26, sub, colour=J.G_DARK, ha="center")
+        say(hx, 0.5, 0.84, head, size=J.BODY, weight="bold", ha="center")
+        say(hx, 0.5, 0.52, sub, colour=J.G_DARK, ha="center")
+        #: which half is which, said once per pair rather than inside eight panels.
+        for half, what in enumerate(("the micrograph", "detector vs operator")):
+            hw = ax_at(col_x(c, half), Mg, PAN, HDR)
+            hw.set_axis_off()
+            say(hw, 0.5, 0.14, what, colour=J.G_MID, ha="center")
 
-    letters = iter("abcd")
+    letters = iter("abcdefgh")
     for r, coll in enumerate(("SEM", "TXM")):
         m = meta[coll]
         yrow = Mg + HDR + r * (PAN + CAP + GAP)
@@ -947,27 +997,64 @@ def main():
                 ha="center", va="center", color=J.INK, transform=lx.transAxes)
         for c, kind in enumerate(("over-counted", "under-counted")):
             p = next(q for q in panels if q["coll"] == coll and q["kind"] == kind)
-            ax = ax_at(Mg + LAB + c * (PAN + GAP), yrow, PAN, PAN)
-            ax.imshow(p["rgb"], interpolation="nearest")
-            J.micrograph(ax)
-            ax.add_patch(Rectangle((0, 0), 1, 1, transform=ax.transAxes, fill=False,
-                                   edgecolor=J.INK, linewidth=0.7, zorder=30))
-            J.panel_label(ax, next(letters), inside=True)
-            scalebar(ax, p["nm"], p["side"], fontsize=J.TICK)
+            for half in (0, 1):
+                ax = ax_at(col_x(c, half), yrow, PAN, PAN)
+                if half == 0:
+                    #: THE RAW HALF IS THE SAME PIXELS AND THE SAME STRETCH as the
+                    #: overlay beside it, with nothing drawn on it. Anything else
+                    #: would make the pair a comparison of two renderings instead of
+                    #: a comparison of a micrograph with what was concluded from it.
+                    ax.imshow(p["grey"], cmap="gray", vmin=0, vmax=1,
+                              interpolation="bilinear")
+                else:
+                    ax.imshow(p["rgb"], interpolation="nearest")
+                J.micrograph(ax)
+                ax.add_patch(Rectangle((0, 0), 1, 1, transform=ax.transAxes,
+                                       fill=False, edgecolor=J.INK, linewidth=0.7,
+                                       zorder=30))
+                J.panel_label(ax, next(letters), inside=True)
+                if half == 0:
+                    scalebar(ax, p["nm"], p["side"], fontsize=J.TICK)
         # WHAT EACH PANEL HOLDS, AND THEN WHAT THE ROW IS. The two rows are scored with
         # two different detectors, so the figure has to say which, beside the specimen it
         # is drawn from and the score that detector earned on this field. Without it a
         # reader attributes the transmission row's agreement to the electron row's rule.
-        cx = ax_at(Mg + LAB, yrow + PAN, PAN * 2 + GAP, CAP)
+        _span = 4 * PAN + 2 * PAIR + GAP
+        cx = ax_at(Mg + LAB, yrow + PAN, _span, CAP)
         cx.set_axis_off()
-        step = (PAN + GAP) / (2 * PAN + GAP)
+        step = (2 * PAN + PAIR + GAP) / _span
         for c, kind in enumerate(("over-counted", "under-counted")):
             p = next(q for q in panels if q["coll"] == coll and q["kind"] == kind)
             pct = p["over_pct"] if kind == "over-counted" else p["under_pct"]
-            say(cx, c * step, 0.80,
+            say(cx, c * step, 0.52,
                 p["kind_impossible"] or f"{pct:.2f}% of this window is {kind}",
                 colour=J.G_DARK)
-        say(cx, 0.0, 0.30,
+            #: WHERE THE ERROR IS, IN THE IMAGE. One clause, built from the medians
+            #: measured above, placed under the pair it describes. It is written only
+            #: when the class and both references exist, because a sentence comparing
+            #: a number to a missing one is worse than no sentence.
+            g = p["median_grey_on_displayed_stretch"]
+            key = "over" if kind == "over-counted" else "under"
+            if g[key] is not None and g["agree"] is not None and g["matrix"] is None:
+                #: the operator ruled NO pixel not-crack on this frame, so this window
+                #: has no uncontested background to compare against. The crack level
+                #: is still the operator's own and is still worth printing; inventing
+                #: a background out of the unruled pixels would be reading a verdict
+                #: into the absence of one.
+                say(cx, c * step, 0.17,
+                    f"grey {g[key]:.2f} here, crack {g['agree']:.2f} — nothing "
+                    f"ruled not-crack", colour=J.G_MID)
+            elif g[key] is not None and g["agree"] is not None and g["matrix"] is not None:
+                near = ("crack" if abs(g[key] - g["agree"]) <= abs(g[key] - g["matrix"])
+                        else "matrix")
+                say(cx, c * step, 0.17,
+                    f"grey {g[key]:.2f} here, crack {g['agree']:.2f}, "
+                    f"matrix {g['matrix']:.2f} — closer to {near}", colour=J.G_MID)
+        #: THE ROW'S IDENTITY LEADS ITS CAPTION, it does not trail it. Placed last in
+        #: the strip it sat directly above the NEXT row's panels and read as that
+        #: row's heading -- the electron row's specimen and detector were printed
+        #: immediately above the transmission micrographs.
+        say(cx, 0.0, 0.88,
             f"{coll} — {m['specimen']}, {m['detector']}", weight="bold")
 
     lg = ax_at(Mg, Htot - Mg - LEG, W - 2 * Mg, LEG)
@@ -1110,7 +1197,8 @@ def main():
                 "are 'each found by exact box sum', which is still true, but not that "
                 "the two rows run different detectors.",
         },
-        "panels": [{k: v for k, v in p.items() if k != "rgb"} for p in panels],
+        "panels": [{k: v for k, v in p.items() if k not in ("rgb", "grey")}
+                   for p in panels],
         "mad_k": OV.MADK,
         "sources": {"scores": os.path.basename(SCORES),
                     "traces": os.path.basename(TRACES),

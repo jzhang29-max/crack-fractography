@@ -182,31 +182,6 @@ FIGURES = [
    "the data and not declared is an undeclared degree of freedom.",
    "Every value is parsed out of the shipped source with ast, never retyped; a name "
    "that stops being defined there aborts the build."]),
- ("F7 - model selection.png",
-  "Which detector, asked the same way in both arms",
-  ["Eight candidates, the same eight, scored in both microscopies once the constant of "
-   "the previous figure is fixed. Getting them onto one axis required running the "
-   "classical arms on the transmission frames, a new measurement whose shared rows "
-   "reproduce the archived record to 1e-9.",
-   "Ranked by the WORSE of its two arms, since a model near parity on one microscopy "
-   "and an order of magnitude out on the other has not been shown to transfer. This "
-   "detector wins: 1.013x reported-over-annotated area on SEM, 1.151x on TXM. That "
-   "transmission value is the detector held at the PREVIOUS figure's k = 6, not "
-   "refitted on transmission data; refitting it would read 1.049x and flatter it.",
-   "Panels (b) and (c) are ONE measurement run twice — how far an arm falls below the "
-   "accuracy an all-background mask already earns — and they are drawn on one shared "
-   "scale, so a length in (b) means what it means in (c). What differs is the data, "
-   "and each title says so: the SEM collection adjudicates every pixel and is 1.80% "
-   "crack, the transmission frames only the 38% a human refereed, which is 14.62% "
-   "crack.",
-   "That shared scale is what makes the result readable: on the SEM fields NO arm "
-   "reaches the all-background mask, while on the transmission frames two do — Sauvola "
-   "by 0.76 points and the fixed-percentile threshold by 0.30 — and neither is this "
-   "detector. Area agreement, not accuracy, is what separates these arms, and it is "
-   "the quantity the tool reports.",
-   "The three learned transmission models are not on these axes: no SEM counterpart "
-   "was ever trained, and their only artefact is a cross-validation on a different "
-   "corpus reported in a different unit. The sidecar names both versions that exist."]),
  ("F5 - over- and under-counting.png",
   "What the errors look like, on each arm's own detector",
   ["Blue is marked area the operator confirms, red is marked area the operator ruled "

@@ -432,7 +432,13 @@ XLIM = (-0.7, x - SAMPGAP + 0.7)
 #: footnote is a clause, so the left margin and the bottom margin both come in and the
 #: same bars are drawn larger on the page. What the scores are measured against, and
 #: what the whisker assumes, are the caption's job.
-fig = plt.figure(figsize=(J.PAGEW, 2.90))
+#: HEADROOM ABOVE THE KEY IS DELIBERATE. A reviewer reading this plate on a slide
+#: wrote "top of figure is slightly cropped out": the key was anchored at y = 1.002,
+#: which is OUTSIDE the canvas, so it survived only as long as nothing trimmed the
+#: sheet. It is now inside the figure with white above it, and the plate is taller by
+#: that much. Height costs nothing here -- J.save scales type by the printed WIDTH --
+#: so there is no reason for the top line of a figure to sit on its own edge.
+fig = plt.figure(figsize=(J.PAGEW, 3.12))
 #: ONE COMBINED GROUP PER ARM, AND THE TXM RETRAINING HISTORY BESIDE IT, at the
 #: author's instruction, replacing the per-specimen panel this plate used to lead with
 #: and absorbing what was a separate figure.
@@ -446,7 +452,7 @@ fig = plt.figure(figsize=(J.PAGEW, 2.90))
 #: WHAT IT BUYS, which is not nothing: pooling takes EVERY frame of each arm, the weak
 #: specimens included, so there is no selection left to declare. The F1 >= 0.5 rule
 #: that decided which bars were drawn no longer decides anything on the sheet.
-gs = fig.add_gridspec(1, 2, left=0.062, right=0.993, top=0.900, bottom=0.300,
+gs = fig.add_gridspec(1, 2, left=0.062, right=0.993, top=0.858, bottom=0.330,
                       width_ratios=[1.0, 1.52], wspace=0.30)
 ax_b = fig.add_subplot(gs[0, 0])
 ax_r = fig.add_subplot(gs[0, 1])
@@ -566,9 +572,29 @@ ax_r.text(_xs[-1], _RT[-1]["iou"] + _RT[-1]["std"] + 0.010, f"{_RT[-1]['iou']:.3
 #:
 #: Putting the count under each point lets the reader see that for themselves instead
 #: of being told the opposite by a line that rises.
+#: WHAT WENT WRONG WITH THE PREVIOUS LABEL, because it is instructive. Each tick read
+#: "round N / 31.3 M px corrected", one line per round, and all three printed the SAME
+#: NUMBER -- the pool moves 0.16%, which rounds away at one decimal. The intent was to
+#: let a reader see the constancy; the effect was three identical strings that read as
+#: boilerplate. A reviewer looking at the slide asked whether more labelling was what
+#: lifted the line. It was not, and the plate was not saying so.
+#:
+#: A constant does not belong on a per-point tick. It is stated ONCE, below the axis,
+#: as the fact it is.
 ax_r.set_xticks(_xs)
-ax_r.set_xticklabels([f"round {i + 1}\n{(r['corr_px'] or 0) / 1e6:.1f} M px corrected"
-                      for i, r in enumerate(_RT)], fontsize=J.TICK, linespacing=1.15)
+ax_r.set_xticklabels([f"round {i + 1}" for i in _xs], fontsize=J.TICK)
+_pool = [r["corr_px"] or 0 for r in _RT]
+_grow = 100.0 * (_pool[-1] / _pool[0] - 1.0) if _pool[0] else 0.0
+if max(_pool) - min(_pool) > 0.02 * max(_pool):
+    raise SystemExit(
+        "the corrected-pixel pool moves more than 2% across the plotted rounds, so the "
+        "line below the axis, which tells the reader it was held, is no longer true. "
+        f"pool = {_pool}. Put the per-round count back on the ticks.")
+ax_r.text(0.5, -0.215,
+          f"corrections: the same {_pool[0] / 1e6:.1f} M px every round "
+          f"(+{_grow:.2f}%)\nwhat changed is the recipe, not more labelling",
+          transform=ax_r.transAxes, ha="center", va="top", fontsize=J.TICK,
+          color=J.G_DARK, linespacing=1.20)
 ax_r.set_xlim(-0.45, len(_RT) - 0.55)
 _lo = min(r["iou"] - r["std"] for r in _RT)
 _hi = max(r["iou"] + r["std"] for r in _RT)
@@ -578,6 +604,28 @@ ax_r.set_ylabel("held-out IoU, TXM model\n(5-fold, grouped by image)",
 ax_r.tick_params(labelsize=J.TICK, pad=1.6)
 for _s in ax_r.spines.values():
     _s.set_linewidth(0.6)
+#: THE SEM ARM IS NAMED HERE BECAUSE ITS ABSENCE WAS READ AS AN OVERSIGHT. A reviewer
+#: asked, of this panel, "did the SEM model not retrain?" It did not, and a panel that
+#: shows one arm's history and says nothing about the other leaves that question to be
+#: guessed at. The answer is one fit and no rounds, and the honest number beside it is
+#: the leave-one-frame-out refit in docs/figures/sem_classifier_lofo.json -- the arm's
+#: own in-sample bars are in panel (a) and cannot answer a question about retraining.
+#:
+#: It is a NOTE AND NOT A POINT ON THESE AXES. The y axis is a TXM IoU; the SEM number
+#: is an F1 over refereed pixels on a different unit set, and a marker placed on this
+#: scale would be read as comparable to the line. Nothing is plotted; it is text.
+_LOFO = json.load(open(os.path.join(DOC_FIGURES, "sem_classifier_lofo.json")))
+_sem_lofo = _LOFO["fitted_frames"]["lofo_fixed"]["mean_f1"]
+_sem_floor = _LOFO["fitted_frames"]["floor"]["mean_f1"]
+ax_r.text(0.025, 0.955,
+          "SEM: no rounds.\nThe region classifier is fitted once,\n"
+          f"and held out of its own fit it scores\nF1 {_sem_lofo:.3f} — against "
+          f"{_sem_floor:.3f} for the area\nfloor with no classifier at all.",
+          transform=ax_r.transAxes, ha="left", va="top", fontsize=J.TICK,
+          color=J.ACCENT, linespacing=1.25, zorder=8,
+          bbox=dict(boxstyle="round,pad=0.30", facecolor="white",
+                    edgecolor=J.ACCENT, linewidth=0.6, alpha=0.96))
+
 ax_r.text(0.0, 1.015, "(b)  what retraining bought, TXM model",
           transform=ax_r.transAxes, ha="left", va="bottom", fontsize=J.PANEL,
           fontweight="bold", color=J.INK)
@@ -603,7 +651,7 @@ _TUPLE = {tuple: HandlerTuple(ndivide=None, pad=0.0)}
 _ACC = Patch(facecolor="white", edgecolor=J.INK, linewidth=0.7, hatch="///")
 fig.legend([_pair(f) for _, f in METRICS] + [_ACC],
            [m for m, _ in METRICS] + ["pixel accuracy"], handler_map=_TUPLE,
-           loc="upper center", bbox_to_anchor=(0.50, 1.002), ncol=4, frameon=False,
+           loc="upper center", bbox_to_anchor=(0.50, 0.972), ncol=4, frameon=False,
            handlelength=1.3, handletextpad=0.35, columnspacing=0.9,
            borderpad=0.0, borderaxespad=0.0, fontsize=J.TICK)
 # Panel (b) draws ONE quantity, so it carries no legend: a key with a single entry

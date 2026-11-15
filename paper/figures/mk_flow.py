@@ -376,6 +376,54 @@ def tint(base, mask, colour):
     return np.clip(rgb, 0, 1)
 
 
+#: HOW A MICROGRAPH IS DRAWN, AND WHY IT IS TWO LAYERS AND NOT ONE.
+#:
+#: The author's PI read the transmission row of this plate and said it "looks very
+#: pixelated". It did, and the cause is measurable rather than a matter of taste. The
+#: transmission frame is 1688 x 1714 px against the electron frame's 4096 x 6144 -- 2.9
+#: megapixels against 25.2 -- and the inset windows are MAGNIFIED: a 148 px window is
+#: drawn into about 296 plate px, so one detector pixel becomes a 2 x 2 block at 600 dpi
+#: and a bigger one again wherever a slide blows the plate up. Drawn with nearest
+#: neighbour, every one of those blocks has a hard edge, and on transmission data, which
+#: is smooth grey gradients rather than the electron row's high-contrast grain texture,
+#: the blocks are the most conspicuous thing in the panel.
+#:
+#: THE PHOTOGRAPH IS RESAMPLED AND THE MASK IS NOT. These are different kinds of object
+#: and they get different treatment:
+#:
+#:   the grey   is a photograph. Resampling it smoothly for display is what every
+#:              viewer and every journal does, and it changes no measurement -- nothing
+#:              in this paper is computed off the rendered plate.
+#:   the masks  are the result. They keep nearest-neighbour, so no mask pixel is
+#:              invented, softened or spread into a neighbour it never occupied. The
+#:              module docstring's rule -- NO MASK IS EVER DILATED ANYWHERE IN THIS
+#:              FIGURE -- is unchanged and is now enforced by construction rather than
+#:              by every call remembering to pass the same keyword.
+#:
+#: Because the mask layer is drawn at the same extent with the same nearest-neighbour
+#: sampling it had when it was burnt into the grey, the coloured pixels land on exactly
+#: the output pixels they landed on before. CONTROL_mask_pixels_unchanged below renders
+#: the plate both ways and checks that, so the claim is measured and not asserted.
+GREY_INTERP = "bilinear"
+
+
+def show(ax, base, *layers):
+    """Draw a greyscale micrograph, then its mask overlays on top of it.
+
+    `base` is a float image in 0..1. Each layer is (boolean mask, colour); later
+    layers paint over earlier ones, which is the order the burnt-in version used.
+    """
+    ax.imshow(base, cmap="gray", vmin=0, vmax=1, interpolation=GREY_INTERP, zorder=1)
+    for i, (mask, colour) in enumerate(layers):
+        if mask is None or not mask.any():
+            continue
+        rgba = np.zeros(mask.shape + (4,), dtype=float)
+        rgba[mask, :3] = np.array(J.rgb(colour))
+        rgba[mask, 3] = 1.0
+        ax.imshow(rgba, interpolation="nearest", zorder=2 + i)
+    return ax
+
+
 def boxed(ax, colour=J.G_DARK, lw=0.5):
     for s in ("top", "bottom", "left", "right"):
         ax.spines[s].set_visible(True)
@@ -422,7 +470,63 @@ def bar(ax, nm_per_px, width_px, fontsize=J.TICK):
     return nm
 
 
+def CONTROL_mask_pixels_unchanged():
+    """Two-layer drawing must move no mask pixel. Rendered both ways and compared.
+
+    The change this control guards is the one the PI's "very pixelated" note caused:
+    the grey underneath a mask is now resampled smoothly instead of by nearest
+    neighbour. That is a change to the PHOTOGRAPH. If it also moved, softened or
+    spread the MASK, the plate would be reporting a different result, and the module
+    docstring's promise that no mask is ever dilated here would be false.
+
+    So: draw the same base and the same mask twice at the same axes geometry -- once
+    burnt in with `tint` and nearest neighbour, which is what this file did before,
+    once through `show` -- and require that the set of output pixels carrying the mask
+    colour is IDENTICAL. Both a magnified case (an inset) and a minified one (a stage
+    panel) are tested, because the two resample in opposite directions.
+    """
+    import io as _io
+    import matplotlib.pyplot as _plt
+    import matplotlib.image as _mpimg
+    rng = np.random.default_rng(0)
+    for name, src, out_in in (("magnified", 148, 0.50), ("minified", 879, 0.72)):
+        base = rng.random((src, src))
+        mask = np.zeros((src, src), bool)
+        #: a shape with thin limbs and single-pixel specks, which is what a crack mask
+        #: looks like and what a careless resample would eat first.
+        yy, xx = np.mgrid[0:src, 0:src]
+        mask[(np.abs(yy - xx) < max(1, src // 180))] = True
+        mask[src // 3: src // 3 + 1, src // 4: 3 * src // 4] = True
+        mask[rng.random((src, src)) > 0.999] = True
+        got = {}
+        for how in ("burnt", "layered"):
+            fig = _plt.figure(figsize=(out_in, out_in), dpi=600)
+            ax = fig.add_axes([0, 0, 1, 1])
+            if how == "burnt":
+                ax.imshow(tint(base, mask, J.MASK), interpolation="nearest")
+            else:
+                show(ax, base, (mask, J.MASK))
+            ax.set_axis_off()
+            buf = _io.BytesIO()
+            fig.savefig(buf, dpi=600, facecolor="white")
+            _plt.close(fig)
+            buf.seek(0)
+            px = _mpimg.imread(buf)[:, :, :3]
+            hit = np.all(np.abs(px - np.array(J.rgb(J.MASK))) < 2.0 / 255.0, axis=-1)
+            got[how] = hit
+        a, b = got["burnt"], got["layered"]
+        if a.shape != b.shape or not np.array_equal(a, b):
+            d = int((a != b).sum()) if a.shape == b.shape else -1
+            raise SystemExit(
+                f"CONTROL_mask_pixels_unchanged FAILED ({name}): layering the mask over "
+                f"a smoothly resampled grey moved {d} rendered mask pixels. The grey may "
+                f"be resampled; the mask may not.")
+        print(f"  CONTROL mask pixels unchanged, {name}: PASS "
+              f"({int(a.sum()):,} mask px identical)")
+
+
 def main():
+    CONTROL_mask_pixels_unchanged()
     sem = BM.load("sem")
     txm = txm_arm()
     sem_nm, txm_nm = float(sem["nm_per_px"]), float(txm["nm_per_px"])
@@ -494,7 +598,10 @@ def main():
         "ops": ["cut the\ndetail window",
                 "17 channels + SAM,\nmean of two models",
                 f"threshold {txm['threshold']:.2f}",
-                "drop blobs,\nfill holes",
+                #: "blobs" was the implementation's word for what this removes. The
+                #: things it removes are imaging artefacts, and that is what a reader
+                #: of the figure needs to be told.
+                "drop imaging\nartifacts, fill holes",
                 "narrow to the\nmeasured width"],
         "insets": {3: (txm["over"], txm["cleaned"], "thresholded", "cleaned"),
                    4: (txm["cleaned"], txm["final"], "cleaned", "detected")},
@@ -575,7 +682,7 @@ def main():
                 if fh > IMW:
                     fh, fw = IMW, IMW * thumb.shape[1] / thumb.shape[0]
                 ax = ax_at(xs[c] + (IMW - fw) / 2.0, ytop + (IMW - fh) / 2.0, fw, fh)
-                ax.imshow(thumb, cmap="gray", vmin=0, vmax=1, interpolation="nearest")
+                show(ax, thumb)
                 ax.add_patch(Rectangle((x0w / step, y0w / step), H / step, H / step,
                                        fill=False, edgecolor=J.ROI, linewidth=1.0,
                                        zorder=20))
@@ -583,12 +690,14 @@ def main():
             else:
                 ax = ax_at(xs[c], ytop, IMW, IMW)
                 if kind == "prob":
+                    #: a probability map is continuous data, not a mask, so it is
+                    #: resampled like the photograph it is derived from.
                     ax.imshow(arr, cmap=PROB_CMAP, vmin=0, vmax=1,
-                              interpolation="nearest")
+                              interpolation=GREY_INTERP)
                 elif kind == "mask":
-                    ax.imshow(tint(arr, mask[sl], J.MASK), interpolation="nearest")
+                    show(ax, arr, (mask[sl], J.MASK))
                 else:
-                    ax.imshow(arr, cmap="gray", vmin=0, vmax=1, interpolation="nearest")
+                    show(ax, arr)
                 if c == 1:
                     ax.add_patch(Rectangle((0, 0), 1, 1, transform=ax.transAxes,
                                            fill=False, edgecolor=J.ROI, linewidth=1.0,
@@ -631,10 +740,10 @@ def main():
             for k in (0, 1):
                 xl = xc - INSW - 0.025 + k * (INSW + 0.05)
                 ax = ax_at(xl, yins, INSW, INSW)
-                rgb = tint(cut, (before if k == 0 else after)[isl], J.MASK)
-                if k == 0:
-                    rgb[(before & ~after)[isl]] = np.array(J.rgb(J.ACCENT2))
-                ax.imshow(rgb, interpolation="nearest")
+                #: the removed pixels paint over the kept mask, which is the order
+                #: the burnt-in version applied them in.
+                show(ax, cut, ((before if k == 0 else after)[isl], J.MASK),
+                     ((before & ~after)[isl] if k == 0 else None, J.ACCENT2))
                 boxed(ax, colour=J.ROI if k == 0 else J.G_DARK, lw=0.9 if k == 0 else 0.5)
                 txt(xl + INSW / 2.0, yins + INSW + 0.03, "before" if k == 0 else "after",
                     maxw=INSW + 0.04, ha="center", va="top", fontstyle="italic",

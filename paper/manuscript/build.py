@@ -80,7 +80,6 @@ FIGS = {
         PAPER, "figures/out/F2 - how each modality sees a crack.png"),
     "parameters": os.path.join(
         PAPER, "figures/out/F6 - how the parameters were determined.png"),
-    "models": os.path.join(PAPER, "figures/out/F7 - model selection.png"),
     "counting": os.path.join(PAPER, "figures/out/F5 - over- and under-counting.png"),
     "scores": os.path.join(PAPER, "figures/out/F8 - scores by sample.png"),
     "measurands": os.path.join(PAPER, "figures/out/F4 - what is measured.png"),
@@ -535,6 +534,16 @@ MP.VALUES.update({
     # resolved from the figure's own record instead.
     "cnt_sem_ref": MP._n(100.0 * CNT["rows"]["SEM"]["refereed_share_of_frame"], 2),
     "cnt_txm_ref": MP._n(100.0 * CNT["rows"]["TXM"]["refereed_share_of_frame"], 1),
+    # WHAT THE MISSED CRACK LOOKS LIKE, resolved from the plate rather than typed.
+    # Read off the SEM under-counted panel, which is the one placed on the most
+    # unmarked painted crack, so the comparison is on the window the caption is
+    # describing. Both are medians of that panel's own displayed stretch.
+    "cnt_sem_under_grey": MP._n(next(
+        q["median_grey_on_displayed_stretch"]["under"] for q in CNT["panels"]
+        if q["coll"] == "SEM" and q["kind"] == "under-counted"), 2),
+    "cnt_sem_agree_grey": MP._n(next(
+        q["median_grey_on_displayed_stretch"]["agree"] for q in CNT["panels"]
+        if q["coll"] == "SEM" and q["kind"] == "under-counted"), 2),
     "cnt_sem_crack_px": f"{CNT['rows']['SEM']['crack_px']:,}",
     "cnt_sem_notcrack_px": f"{CNT['rows']['SEM']['notcrack_px']:,}",
     "cnt_sem_nm": MP._n(

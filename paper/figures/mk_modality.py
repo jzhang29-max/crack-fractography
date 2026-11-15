@@ -244,6 +244,35 @@ def _dogbone_h(cx, x0, x1, wg, wn):
     return MPath(v, c)
 
 
+def cell(ax):
+    """The electrochemical cell the specimen sits in WHILE the transmission arm images.
+
+    WHY THIS IS ON THE PLATE AT ALL. Without it the schematic says the two
+    microscopies look at one loaded specimen, and that is not the experiment. The load
+    and the hydrogen charging belong to the transmission measurement, which is in situ:
+    the specimen is pulled and charged while it is being imaged, so the series records
+    an evolving crack. The electron measurement is post mortem -- it looks at the
+    specimen afterwards, unloaded, and sees one final state. Drawing one loaded
+    specimen feeding both arms asserted that both were in situ, which is wrong and is
+    exactly the kind of error a schematic makes silently.
+    """
+    cy0, cy1 = DB_Y - 9.6, DB_Y + 9.6
+    cx0, cx1 = DB_CX - 17.0, DB_CX + 17.0
+    ax.add_patch(Rectangle((cx0, cy0), cx1 - cx0, cy1 - cy0, facecolor="#dceaf5",
+                           edgecolor=J.G_MID, lw=LW_EDGE, zorder=1))
+    #: the counter electrode, and the potentiostat that drives it
+    ax.add_patch(Rectangle((cx0 + 3.0, DB_Y - 7.2), 1.3, 14.4, facecolor="#9aa6ad",
+                           edgecolor=J.G_DARK, lw=LW_EDGE, zorder=2))
+    #: A LABEL, NOT A BOX. A drawn potentiostat with its leads needs somewhere to sit,
+    #: and every free corner of this sheet is already spoken for -- the first attempt
+    #: ran off the top edge and the second printed through the electron arm's title.
+    #: The cell and its electrode carry the meaning; the instrument driving them is a
+    #: word, and the caption says the rest.
+    ax.text(cx0 + 5.6, cy1 - 1.2, "H charging", fontsize=J.TICK, ha="left",
+            va="top", color=J.G_DARK, zorder=7)
+    return cy1
+
+
 def specimen(ax):
     """The dogbone, gripped and pulled, with the imaged region boxed in its gauge."""
     x0, x1 = DB_CX - DB_HALF, DB_CX + DB_HALF
@@ -368,16 +397,28 @@ def combined_schematic(ax, data, crops):
     ax.set_xlim(0, CANVAS[0])
     ax.set_ylim(0, CANVAS[1])
     ax.set_axis_off()
+    cell_top = cell(ax)
     rx0, ry0 = specimen(ax)
     leaders(ax, rx0, ry0)
+    #: the load and the charging are the TRANSMISSION experiment's conditions, so they
+    #: are labelled as such rather than left to look like the shared setting.
+    ax.text(DB_CX, CANVAS[1] - 2.3,
+            "pulled and hydrogen-charged WHILE the X-ray images it",
+            fontsize=J.TICK, ha="center", va="bottom", color=J.ACCENT2, zorder=8)
     bars = {}
-    for tag, x0, colour, name, kind, records in (
-            ("sem", PAN_X[0], J.ACCENT, "SEM", "surface",
+    #: WHEN each arm looks, beside WHAT it is -- the one correction that matters most
+    #: here. The electron arm is post mortem and sees one final state; the transmission
+    #: arm images while the specimen is loaded and charged, so its series is an
+    #: evolution. Two words each, on the title line; the caption carries the rest.
+    for tag, x0, colour, name, when, kind, records in (
+            ("sem", PAN_X[0], J.ACCENT, "SEM", "post mortem", "surface",
              "the crack where it cuts the surface"),
-            ("txm", PAN_X[1], J.ACCENT2, "TXM", "through",
+            ("txm", PAN_X[1], J.ACCENT2, "TXM", "in situ, under load", "through",
              f"the crack through all {FOIL_UM:g} {MU}m")):
         ax.text(x0, GEO_Y0 + GEO_H + 0.6, name, fontsize=12.0, fontweight="bold",
                 ha="left", va="bottom", color=colour, zorder=11)
+        ax.text(x0 + PAN_SIDE, GEO_Y0 + GEO_H + 0.9, when, fontsize=J.TICK,
+                ha="right", va="bottom", color=colour, zorder=11)
         how_it_works(ax, x0, colour, kind)
         d = data[tag]
         sl, win, nm = crops[tag]

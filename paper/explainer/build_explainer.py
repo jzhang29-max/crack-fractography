@@ -475,15 +475,26 @@ def main():
 
     # ------------------------------------------------- 6b: every parameter in words
     h1("7.  Every setting, one at a time")
-    p("This section walks all fifty, in the order the data meets them. Each one names "
-      "what it does and, where it was measured, what changing it costs. The names "
-      "match the rows of the table in the figure above, so the two can be read "
-      "together.")
     n_gloss = len([g for g in GLOSS.SEM_GLOSS + GLOSS.TXM_GLOSS if g[1]])
-    if n_gloss != PAR.DOCSTRING_TALLY["total"]:
-        raise SystemExit(f"the glossary explains {n_gloss} constants and the detectors "
-                         f"read {PAR.DOCSTRING_TALLY['total']}; a setting has been "
-                         f"added or removed without a plain-language entry")
+    n_plate = PAR.DOCSTRING_TALLY["total"]
+    p(f"This section walks all {n_gloss} settings the two detectors read, in the order "
+      "the data meets them. Each one names what it does and, where it was measured, "
+      "what changing it costs.")
+    if n_gloss > n_plate:
+        p(f"The figure above tabulates {n_plate} of them. The {n_gloss - n_plate} that "
+          "are not on it are the ones carried over from the earlier pipeline with no "
+          "record of why they hold their values; they were taken off the figure, and "
+          "they are explained here because the software still reads them and a setting "
+          "nobody can see is still a setting.")
+    #: THE GLOSSARY MUST COVER THE PLATE, NOT EQUAL IT. This compared the two counts
+    #: for equality, which was right while the figure tabulated every constant. The
+    #: figure now tabulates a subset, and the software still reads the rest, so the
+    #: explainer must still explain them. What would be a real fault is a constant on
+    #: the plate with no plain-language entry, and that is what is checked.
+    if n_gloss < n_plate:
+        raise SystemExit(f"the glossary explains {n_gloss} constants and the figure "
+                         f"tabulates {n_plate}; a setting is on the plate with no "
+                         f"plain-language entry")
     for arm, items in (("The electron arm", GLOSS.SEM_GLOSS),
                        ("The X-ray arm", GLOSS.TXM_GLOSS)):
         h2(arm)
