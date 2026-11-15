@@ -67,49 +67,25 @@ SECT = os.path.join(HERE, "sections")
 #
 #   5. TWO FIGURES THE PAPER DID NOT HAVE: what each measurand is, measured on one real
 #      crack; and what over-counting and under-counting actually look like.
+#: THE PAPER'S FIGURE PROGRAMME IS THE SEVEN-PLATE PACK, and nothing else. It used to
+#: declare sixteen, of which only four were in the pack: the paper and the figure set
+#: were two programmes maintained apart, and a reader comparing them found different
+#: figures under the same subject. The twelve that are gone took the passages built
+#: around them with them, at the author's instruction -- 22 blocks and about 3,400
+#: words, most of it Section 3's public-collection analysis and Section 4's
+#: transmission figures.
 FIGS = {
-    "workflow": os.path.join(PAPER, "figures/out/F1 - workflow.png"),
+    "flow": os.path.join(PAPER, "figures/out/F1 - flow chart.png"),
     "modality": os.path.join(
         PAPER, "figures/out/F2 - how each modality sees a crack.png"),
-    "stages": os.path.join(
-        PAPER, "figures/out/F3 - detection stages, both modalities.png"),
-    "measurands": os.path.join(PAPER, "figures/out/F4 - what is measured.png"),
     "parameters": os.path.join(
         PAPER, "figures/out/F6 - how the parameters were determined.png"),
+    "models": os.path.join(PAPER, "figures/out/F7 - model selection.png"),
     "counting": os.path.join(PAPER, "figures/out/F5 - over- and under-counting.png"),
-    "areabars": os.path.join(PAPER, "figures/out/P1 - public scores.png"),
-    # ONE PLATE, NOT TWO. The sweep over the detector's free constant and the sweep
-    # over the width the annotation is drawn at were a 1.5-column plate each, one line
-    # apiece, and the review's note was that the pair is larger than what it says. They
-    # are the same kind of statement on the same collections with the same markers.
-    "sensitivity": os.path.join(PAPER, "figures/out/P2 - the two sensitivities.png"),
-    "arms": os.path.join(PAPER, "figures/out/P4 - baselines.png"),
-    # ONE PLATE FOR BOTH ARMS. P5 and T4 drew the same accounting on two collections,
-    # two panels each. The denominators differ -- every pixel of the frame against only
-    # the pixels an operator adjudicated -- so they keep separate panels, and the
-    # dimensionless area ratio, which is the one quantity they share, is the third.
-    "budgets": os.path.join(
-        PAPER, "figures/out/P5 - the pixel budget in both arms.png"),
-    # the overlap measures for the crack class, shown rather than only mentioned. It is
-    # LAST in the results because the paper's primary endpoints are the ones computed
-    # over every pixel of the frame, and this one is explicitly secondary to them.
-    "overlap": os.path.join(PAPER, "figures/out/P8 - crack overlap.png"),
-    "txm": os.path.join(PAPER, "figures/out/txm_transfer.png"),
-    # the TXM collection has its OWN detector, which the supplied manuscript never
-    # showed. T1 is its three rungs on one window; T2 is what its score measures.
-    "txmstages": os.path.join(PAPER, "figures/out/T1 - TXM stages.png"),
-    "txmceiling": os.path.join(PAPER, "figures/out/T2 - TXM ceiling.png"),
-    # the SEM arm carried across got one plate where the SEM arm itself gets five. T3-T5
-    # are the three it was missing: its operating curve, its pixel budget beside the two
-    # no-information arms, and the overlap measures on both of this laboratory's own
-    # collections with the ceiling each is read against.
-    "txmcurve": os.path.join(PAPER, "figures/out/T3 - TXM operating curve.png"),
-
-    "txmoverlap": os.path.join(PAPER, "figures/out/T5 - overlap with its ceiling.png"),
-    # T6, the SEM detector's stages on a TXM frame, is RETIRED: `stages` now shows the
-    # same three stages for both modalities side by side, and `counting` shows the
-    # comparison with the operator's annotation that was T6's last panel.
+    "scores": os.path.join(PAPER, "figures/out/F8 - scores by sample.png"),
+    "measurands": os.path.join(PAPER, "figures/out/F4 - what is measured.png"),
 }
+
 
 # --- values this manuscript needs that the longer draft does not define ----------------
 TX = MP._f(PATHS.scoped("txm_background_units.json"), "TXM")

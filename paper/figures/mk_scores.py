@@ -589,8 +589,7 @@ ax_r.text(0.0, 1.015, "(b)  what retraining bought, TXM model",
 def _pair(f):
     #: one swatch per hue that is actually on the plate, so the key cannot show a
     #: colour the figure does not draw, or omit one it does.
-    _hues = [a for a in ("SEM", "TXM")
-             if any(a == arm for _, keys in SAMPLES for arm in keys)]
+    _hues = [a for a in ("SEM", "TXM") if a in COMBINED]
     return tuple(Patch(facecolor=tint(ARM_COLOUR[a], f), edgecolor=J.INK, linewidth=0.5)
                  for a in _hues)
 

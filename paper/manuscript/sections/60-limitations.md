@@ -69,7 +69,7 @@ ratio of pixel counts and does not depend on a pixel size, so the principal resu
 the absence; no physical length is reported for this collection and none can be.
 
 The consequence for presentation is that the method figure and the evaluation cannot be the
-same images. Figures {fig_workflow}, {fig_modality}, {fig_stages} and {fig_measurands} are
+same images. Figures {fig_flow}, {fig_modality}, {fig_flow} and {fig_measurands} are
 drawn from this laboratory's own corpus, where 7 of the 23 b2 and b3 frames carry a
 recoverable databar, at {wf_sem_nm} nm/px on the one illustrated, so that the processing
 stages can be shown at a stated scale. Section 3's quantitative results come from the public

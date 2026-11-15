@@ -20,9 +20,9 @@ crossing and the selected setting survives it.
 ### 5.2  Interpretation of the processing workflow
 
 The evaluated branch uses image intensity, multiple spatial scales and explicit mask
-operations. Each stage has a visible intermediate representation in Figure {fig_stages}, and
-Figure {fig_workflow} separates the operations that lead to the final area estimate. The
-lower row of Figure {fig_stages} is the same three stages on a frame of the second
+operations. Each stage has a visible intermediate representation in Figure {fig_flow}, and
+Figure {fig_flow} separates the operations that lead to the final area estimate. The
+lower row of Figure {fig_flow} is the same three stages on a frame of the second
 modality, which is where the inspectability earns something: the transfer there fails at the
 candidate stage rather than at the filters, and Figure {fig_modality}(b) measures by how
 much in the criterion's own units. The reported configuration retains the learned region classifier, so the
