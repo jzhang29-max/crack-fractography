@@ -238,7 +238,20 @@ def save(fig, path, *, dpi=600, printed_width=PAGEW, vector=True):
     import matplotlib.image as mpimg
     fig.savefig(path, dpi=dpi, facecolor="white")
     if vector:
-        fig.savefig(os.path.splitext(path)[0] + ".pdf", facecolor="white")
+        #: THE PDF NEEDS THE DPI TOO, and not passing it was a real defect rather than
+        #: an omission of no consequence. A PDF is vector for everything DRAWN -- rules,
+        #: type, patches -- but a micrograph is an imshow, and matplotlib embeds that as
+        #: a raster whose pixel count is the panel's size in inches times the save dpi.
+        #: With no dpi given it falls back to rcParams["figure.dpi"], which is 100, so
+        #: every micrograph in every vector plate went in at 100 ppi: the detail panels
+        #: of the flow chart were SEVENTY-ONE PIXELS SQUARE. The PNG beside them, saved
+        #: at 600, held the same panels at 426.
+        #:
+        #: Nothing caught it because every check this project runs on a plate -- the
+        #: type floor, the collision and off-sheet guards, the panel and tally controls
+        #: -- reads the figure in inches or reads the PNG. None of them opens the PDF,
+        #: and the PDF is the file a reader is told is the better one.
+        fig.savefig(os.path.splitext(path)[0] + ".pdf", dpi=dpi, facecolor="white")
     sizes = [t.get_fontsize() for t in fig.findobj(plt.Text) if t.get_text().strip()]
     plt.close(fig)
     saved_in = mpimg.imread(path).shape[1] / float(dpi)

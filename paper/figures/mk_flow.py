@@ -580,6 +580,13 @@ def main():
                 "drop specks,\nopen and close",
                 ("keep regions the\nmodel calls crack"
                  if BM.DO.USE_REGION_CLASSIFIER else "keep regions\n≥ 40 px")],
+        #: WHICH STEP IS THE LEARNED ONE. The author asked whether a reader of this
+        #: plate can tell a model is employed at all. The words were there -- "keep
+        #: regions the model calls crack" -- in the same grey as the four hand-written
+        #: rules beside it, so five operations read as five rules and the one trained
+        #: stage did not stand out. It is now set in the arm's own colour and in bold,
+        #: and says "trained", so the learned step is visible at a glance rather than
+        #: only to someone reading every label.
         "insets": {3: (sem["proposed"], sem["cleaned"], "proposed", "cleaned"),
                    4: (sem["cleaned"], sem["final"], "cleaned", "detected")},
         "painted": sem.get("paint_crack"),
