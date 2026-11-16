@@ -1051,15 +1051,30 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
         %.4f for the best single radius on the grid, so the panel now SHOWS what the
         ladder buys instead of claiming it.
         """
+        #: BLUE IS THE SHIPPED THING ON THIS PANEL, which inverts the colours it
+        #: used to carry. Everywhere else the blue series holds the value in use and
+        #: a blue filled square marks it; here the value in use is the UNION, which
+        #: was the orange dashed line, so the one panel where a reader most needs to
+        #: find "the setting" was the one where it was not blue. The union is now
+        #: blue and carries the square; the single-radius curve it is compared
+        #: against is the second series and takes the second colour.
         xs = [int(v) for v in SINGLE_LADDER_GRID]
-        L(ax, xs, [sing[str(v)] for v in xs], logx=True)
-        ax.axhline(union_iou, color=J.ACCENT2, lw=1.0, zorder=5,
+        L(ax, xs, [sing[str(v)] for v in xs], logx=True, dashed=True,
+          colour=J.ACCENT2)
+        ax.axhline(union_iou, color=J.ACCENT, lw=1.0, zorder=5,
                    dashes=(3.0, 1.8))
         #: the value in use on this axis is the UNION, not any single radius, so the
         #: dashed line is what the filled square means on the other panels and is
         #: named here rather than left to the footnote.
+        #: AND A FILLED SQUARE ON IT, because on this plate a filled square is what
+        #: "the value the software uses" looks like and a reader should not have to
+        #: learn a second convention for one panel. It sits ON the union line rather
+        #: than over any rung: the shipped setting is all seven radii at once, so
+        #: there is no single radius to put it on and pinning it to one would say
+        #: the opposite of what the panel is for.
+        S(ax, SINGLE_LADDER_GRID[0], union_iou)
         ax.text(SINGLE_LADDER_GRID[-1], union_iou, "in use ", fontsize=T_TICK,
-                ha="right", va="bottom", color=J.ACCENT2, zorder=7)
+                ha="right", va="bottom", color=J.ACCENT, zorder=7)
         ax.set_xlim(xs[0] * 0.7, xs[-1] * 1.4)
         #: LIMITS FROM THE DATA, NOT A TYPED FLOOR. This read set_ylim(0.23, ...),
         #: which was inside the range while the region classifier was off. With it on
@@ -1128,9 +1143,13 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
                 va="center", color=J.INK, zorder=8)
 
     def p_l(ax):
-        L(ax, kgrid, kmar, colour=J.ACCENT2)
+        #: BLUE, like every other single-series panel. It was drawn in the second
+        #: colour, which on this plate means "a second series" and there is only one
+        #: here, so the one panel a reader reaches last was the one whose marker did
+        #: not match the ten before it.
+        L(ax, kgrid, kmar)
         ax.axhline(0.0, color=J.INK, lw=0.7, zorder=5)
-        S(ax, K, karm[K]["margin_pp"], colour=J.ACCENT2)
+        S(ax, K, karm[K]["margin_pp"])
         ax.set_xlim(min(kgrid) - 0.4, max(kgrid) + 0.4)
         ax.set_ylim(min(kmar) * 1.15, abs(min(kmar)) * 0.18)
 
@@ -1397,7 +1416,7 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
     T(MX, y + 0.03,
       "ref.   A adopted, no sweep on record here;   T settled by a test;   F fixed by construction.\n"
       "FILLED SQUARE: the value the software uses.   Bracketed letter: the panel "
-      "above.\nDashed: a second series, or in e the seven-rung union.",
+      "above.\nDashed: a second series; in e the blue dashed line is the seven-rung union.",
       T_TICK, color=J.G_DARK)
 
     # ---- the controls ----------------------------------------------------------

@@ -237,6 +237,27 @@ MAX_DEEP_SHARE = 0.25
 #: is worse than one that contains little. Whatever the window ends up holding, the
 #: figure prints the measured share under the panel, so the choice cannot flatter it.
 WINDOW_STROKES = {"SEM": 6.0, "TXM": 6.0}
+
+#: A WINDOW THE AUTHOR CHOSE, NAMED AS SUCH. Everywhere else a window is PLACED, by
+#: an exact box sum at the position holding the most of its panel's error kind, and
+#: the figure says so. The author asked for a different part of the electron frame
+#: than that rule returns, which is an editorial choice about a picture and a
+#: perfectly reasonable one -- but it is not the rule, and a plate that quietly
+#: swapped the region while still claiming "placed by most of its own error kind"
+#: would be describing a search it did not run.
+#:
+#: So the override is explicit, it is keyed to the frame it was chosen on so it
+#: cannot silently follow a change of frame, and `placed_by` reports it. The
+#: percentages under each panel are measured on whatever window is drawn, so they
+#: stay true either way; what changes is only which crack a reader is shown.
+#:
+#: Chosen from the eight well-separated windows that carry both a crack the detector
+#: found and one it missed: (2176, 2688) and (256, 1920), the latter holding more
+#: marked-but-rejected area than any other window on this frame.
+WINDOW_OVERRIDE = {
+    ("MAR_Amb_HIP_CBS_0006", "under-counted"): (2176, 2688),
+    ("MAR_Amb_HIP_CBS_0006", "over-counted"): (256, 1920),
+}
 #: and it may never exceed this share of the frame's short side, for the reason above.
 MAX_WINDOW_FRAC = 0.5
 MIN_WINDOW_PX = 256
@@ -868,6 +889,18 @@ def main():
                 nosignal=img8 < NO_SIGNAL_DN, inside=pos | neg,
                 avoid=(placed.get(order[0])
                        if kind == order[1] and not neg.any() else None))
+            _ov = WINDOW_OVERRIDE.get((frame, kind))
+            if _ov is not None:
+                _oy, _ox = _ov
+                if not (0 <= _oy <= corr.shape[0] - sdim
+                        and 0 <= _ox <= corr.shape[1] - sdim):
+                    raise SystemExit(
+                        f"the window chosen for {frame} {kind} at {_ov} does not fit "
+                        f"a {sdim} px box in a {corr.shape} frame")
+                y, x = _oy, _ox
+                cnt = int(sel[y:y + sdim, x:x + sdim].sum())
+                placed_by = ("chosen by the author from the windows carrying both a "
+                             "found and a missed crack, not placed by the search")
             placed[kind] = (y, x, sdim)
             # The one line this panel prints in place of its own percentage, when that
             # percentage is zero for a reason the reader has to be told.
@@ -965,7 +998,7 @@ def main():
     # honestly almost empty -- the SEM field's precision is 0.97, so its over-counted
     # window is 0.14% red -- and an almost-empty panel under a header that says
     # "over-counted" reads as a mistake unless the figure says the number.
-    CAP = 0.50
+    CAP = 0.36
     LEG = 0.34
     #: TWO gaps, not one: there is a seam between the rows AND a seam above the key.
     #: With a single GAP in this sum the key began at the exact inch the lower row's
@@ -998,8 +1031,15 @@ def main():
     # Column headers. A second line says what the window IS, so the plate can be read
     # without its caption; both lines sit outside the artwork, which is where the house
     # style puts anything that is not the image.
-    heads = (("Over-counted", "window holding the most marked-but-rejected area"),
-             ("Under-counted", "window holding the most unmarked painted crack"))
+    #: THE SUB-HEAD NAMES THE COLUMN'S SUBJECT, NOT HOW ITS WINDOW WAS PLACED. It
+    #: used to say "window holding the most ...", which was true while every window
+    #: came from the search and became false for the electron row the moment one was
+    #: chosen by hand. A column heading that describes a placement rule has to be
+    #: rewritten every time a window moves; one that describes what the colours mean
+    #: does not, and the placement is in the caption and in this figure's record,
+    #: per panel, under placed_by.
+    heads = (("Over-counted", "marked, but the operator ruled it not crack"),
+             ("Under-counted", "painted crack the detector never marked"))
     for c, (head, sub) in enumerate(heads):
         hx = ax_at(col_x(c, 0), Mg, 2 * PAN + PAIR, HDR)
         hx.set_axis_off()
@@ -1060,11 +1100,15 @@ def main():
         for c, kind in enumerate(("over-counted", "under-counted")):
             p = next(q for q in panels if q["coll"] == coll and q["kind"] == kind)
             pct = p["over_pct"] if kind == "over-counted" else p["under_pct"]
-            say(cx, c * step, 0.40,
+            say(cx, c * step, 0.56,
                 p["kind_impossible"] or f"{pct:.2f}% of this window is {kind}",
                 colour=J.G_DARK)
-        say(cx, 0.0, 0.86,
-            f"{coll} — {m['specimen']}, {m['detector']}", weight="bold")
+        #: THE ROW'S SPECIMEN AND DETECTOR COME OFF THE PLATE at the author's
+        #: instruction. The rotated SEM / TXM label at the left already says which
+        #: microscopy a row is, and which specimen it is drawn from and which
+        #: detector marked it are caption facts, not artwork. Both are still in this
+        #: figure's record, under rows.<arm>.specimen and rows.<arm>.detector, and
+        #: the manuscript caption states them.
 
     lg = ax_at(Mg, Htot - Mg - LEG, W - 2 * Mg, LEG)
     lg.set_axis_off()

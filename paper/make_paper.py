@@ -710,16 +710,50 @@ class Doc:
                 y -= lead
         self.y -= max(len(c) for c in cells) * lead
 
-    def figure(self, path, caption):
+    #: HEAD_SIZE and HEAD_TITLE are the figure-pack's own heading sizes, repeated here
+    #: so the two documents present a plate the same way. The pack draws "Figure N" at
+    #: 15 pt bold over a 11.5 pt title in #333333; a reader who has both in front of
+    #: them should not have to work out that they are looking at the same six plates.
+    HEAD_SIZE, HEAD_TITLE = 15.0, 11.6
+
+    def figure(self, path, caption, number=None, title=None):
+        """Place a plate, optionally under the figure pack's own heading.
+
+        WITHOUT `number` and `title` this is what it always was: the plate, then a
+        small grey caption under it, which is what the explainer wants because its
+        plates sit inside a running explanation and are introduced by the prose
+        above them.
+
+        WITH them it matches the pack: a bold "Figure N" and a short title ABOVE the
+        artwork, then the plate, then the detailed caption. The author asked for the
+        manuscript to present its figures the way the pack does, and the difference
+        was not the artwork -- the same six files are in both -- but that the pack
+        gives each plate a heading and a one-line title while the manuscript buried
+        the title as the opening clause of a dense caption below the image. The
+        heading carries the number, so the caption no longer repeats it.
+        """
         img = mpimg.imread(path)
         w_in = PAGE[0] - ML - MR
         h_in = w_in * img.shape[0] / img.shape[1]
-        if h_in > PAGE[1] - MT - MB - 1.0:
-            h_in = PAGE[1] - MT - MB - 1.0
+        head_in = 0.52 if number is not None else 0.0
+        if h_in > PAGE[1] - MT - MB - 1.0 - head_in:
+            h_in = PAGE[1] - MT - MB - 1.0 - head_in
             w_in = h_in * img.shape[1] / img.shape[0]
-        if self.y - h_in - 0.5 < MB:
+        #: the heading must not be orphaned from its plate, so the break test counts it
+        if self.y - h_in - head_in - 0.5 < MB:
             self._new()
         self.y -= 0.12
+        if number is not None:
+            #: EACH HEADING LINE LEADS ITSELF. `text` advances by the BODY lead unless
+            #: told otherwise, and the body lead is 0.175 in against a 15 pt line that
+            #: stands 0.21 in tall, so the title printed through the number it was
+            #: supposed to sit under. A line's leading has to come from its own size.
+            self.text("Figure %d" % number, self.HEAD_SIZE, weight="bold",
+                      lead=self.HEAD_SIZE / 72.0 * 1.30)
+            if title:
+                self.text(title, self.HEAD_TITLE, color="#333333",
+                          lead=self.HEAD_TITLE / 72.0 * 1.30)
+            self.y -= 0.04
         ax = self.page.add_axes([ML / PAGE[0], (self.y - h_in) / PAGE[1],
                                  w_in / PAGE[0], h_in / PAGE[1]])
         ax.imshow(img); ax.axis("off")

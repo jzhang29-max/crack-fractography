@@ -85,6 +85,43 @@ FIGS = {
     "measurands": os.path.join(PAPER, "figures/out/F4 - what is measured.png"),
 }
 
+#: THE SHORT TITLE OF EACH PLATE, READ OUT OF THE FIGURE PACK rather than retyped, at
+#: the author's instruction that the manuscript present its figures the way the pack
+#: does. The pack already names every plate in one line -- "Two detectors, end to end"
+#: -- and the manuscript had no such line at all: the title was the opening clause of
+#: a long caption under the image, where a reader skimming for a figure will not find
+#: it. Both documents carry the SAME SIX PLATES, so they are titled from one place.
+#:
+#: Parsed out of mk_paper_pdf's own FIGURES literal with ast, not imported, because
+#: importing that module renders the pack. A plate the pack does not carry, or a title
+#: that stops matching, fails here rather than printing a figure with no name.
+def _pack_titles():
+    import ast
+    src = open(os.path.join(PAPER, "figures", "mk_paper_pdf.py"),
+               encoding="utf-8").read()
+    tree = ast.parse(src)
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Assign)
+                and any(getattr(t, "id", None) == "FIGURES" for t in node.targets)):
+            out = {}
+            for el in node.value.elts:
+                fname, title = el.elts[0].value, el.elts[1].value
+                out[fname] = title
+            return out
+    raise SystemExit("no FIGURES literal in mk_paper_pdf.py to read plate titles from")
+
+
+_TITLES = _pack_titles()
+FIG_TITLE = {}
+for _k, _path in FIGS.items():
+    _base = os.path.basename(_path)
+    if _base not in _TITLES:
+        raise SystemExit(
+            f"the manuscript places {_base} but the figure pack does not carry it, so "
+            f"there is no agreed title for it. Add it to mk_paper_pdf.FIGURES or give "
+            f"this plate a title of its own.")
+    FIG_TITLE[_k] = _TITLES[_base]
+
 
 # --- values this manuscript needs that the longer draft does not define ----------------
 TX = MP._f(PATHS.scoped("txm_background_units.json"), "TXM")
@@ -812,7 +849,10 @@ def main():
                         raise SystemExit(f"unknown figure key {key!r}")
                     if not os.path.exists(FIGS[key]):
                         raise SystemExit(f"missing plate for {key!r}: {FIGS[key]}")
-                    doc.figure(FIGS[key], f"Figure {fign}.  {cap}")
+                    #: the number and the title are the HEADING now, so the
+                    #: caption carries neither.
+                    doc.figure(FIGS[key], cap, number=fign,
+                               title=FIG_TITLE[key])
                     continue
                 if line.lstrip().startswith("|"):
                     pending.append([c.strip() for c in line.strip().strip("|").split("|")])
