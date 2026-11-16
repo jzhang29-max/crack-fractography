@@ -8,37 +8,29 @@
 
 ## Abstract
 
-Quantifying crack area in scanning electron microscopy supports the characterisation of
-defects in metallic microstructures. This study examines a multiscale darkness
-detector for measuring the two-dimensional crack area fraction in Inconel 718
-micrographs. The pipeline combines background correction, multiscale candidate
-detection, morphological cleanup and connected-component filtering, followed by an
-eight-feature logistic region classifier that decides which candidates are retained and
-carries the only fitted parameters in the chain, nine of them. **The two collections in
-this study were scored at different settings of that classifier, and the results must be
-read accordingly.** The laboratory collections were scored with it enabled, which is a
-trade and not an improvement: it raises precision and lowers recall, intersection over
-union and F1. The public collection reported below, including the aggregate area
-agreement, was scored with it bypassed, at the candidate stage; those measurements were
-not repeated at the present setting because the source images are a public download no
-longer held on the machine this analysis runs on. Because the classifier only ever
-removes candidate regions, repeating them could only lower the predicted area fraction. The primary collection comprises {in_n} whole fields. At the reported MAD
-multiplier of {mk_best}, the predicted crack area fraction was {ag_best_mark}%, compared
-with a reference value of {ag_best_lab}%. The predicted-to-reference area ratio was
-{ag_best}, corresponding to a net difference of 0.024 percentage points and an aggregate
-relative discrepancy of approximately {ag_best_err_pct}%. The reported background
-specificity was {ag_best_spec}%. Among seven displayed classical method summaries, the
-darkness detector had the area ratio closest to unity under the original selection
-procedure. A field-level comparison reported a smaller absolute area error at the selected
-setting than at the default setting in 23 of the {in_n} fields.
+Quantifying crack area in micrographs supports the characterisation of defects in
+metallic microstructures. This study examines the two detectors a laboratory actually
+ships for its own scanning electron (SEM) and transmission X-ray (TXM) micrographs: a
+multiscale darkness rule on the electron arm and a trained per-pixel ensemble on the
+transmission arm. The electron pipeline combines background correction, multiscale
+candidate detection, morphological cleanup and connected-component filtering, followed by
+an eight-feature logistic region classifier that decides which candidates are retained and
+carries the only fitted parameters in the chain, nine of them. Enabling that classifier is
+a trade and not an improvement: it raises precision and lowers recall, intersection over
+union and F1. Both collections reported here were scored with it enabled.
 
-This revision adds two things the previous version asserted without showing. First, the
-operating-setting sweep is now reported in full: the earlier grid stopped at the default
-setting with the area ratio still falling, and extending it identifies {mk_best} as the
-point at which the reported and reference areas agree. Second, the area endpoint is placed
-against the range it can resolve, using a reconstruction of the reference annotation that
-is exactly correct about position and wrong only about width. The revision also adds a
-cross-modality evaluation in four parts. The transmission X-ray microscopy collection's
+The principal result is what an overlap score on these collections measures. On the
+{om_sem_n} SEM and {om_txm_n} TXM frames that carry an explicit painted verdict for both
+crack and not-crack, the mean per-frame F1 is {om_sem_f1} and {om_txm_f1}. Reducing each
+frame's own annotation to its centreline and redrawing it three pixels wide gives a
+prediction that is exactly right about where every crack runs and wrong only about width,
+and against the stroke it came from that prediction scores {om_sem_cf1} and {om_txm_cf1}.
+**The detector outscores a geometrically correct trace of the reference because it marks
+wide, not because it is better located**, so an F1 on these collections ranks how closely
+a mask reproduces the annotator's brush. Neither collection adjudicates the whole frame
+either, so each precision is a bracket rather than a value, and both ends are reported.
+
+The paper also reports a cross-modality evaluation in four parts. The transmission X-ray microscopy collection's
 own detector is reported here for the first time, and the same model returns an IoU of
 {tm_cv_ens}, {tm_ld_iou} or {tm_wf_iou} according only to which pixels are scored. Against
 that collection's labels, a reconstruction of the reference annotation that is exactly
@@ -74,10 +66,11 @@ The loss is therefore at candidate generation and not at the filters that follow
 it is a margin that is thinner in transmission X-ray microscopy rather than a failure
 peculiar to it.
 
-These findings support the detector as an interpretable approach to aggregate crack area
-measurement within the evaluated collection. The principal result concerns agreement in
-total image area, with pixel-level segmentation considered as a separate endpoint.
+These findings support the detector as an interpretable approach to crack measurement
+on the collections evaluated here, and they locate what its scores can and cannot
+settle: the overlap numbers are governed by the width of the annotator's stroke, and
+the transfer loss is at candidate generation rather than at the filters that follow it.
 
 Keywords: scanning electron microscopy; transmission X-ray microscopy; austenitic stainless
-steel; Inconel 718; crack area fraction; multiscale image analysis; deterministic
+steel; crack area fraction; multiscale image analysis; deterministic
 segmentation; cross-modality transfer; annotation quality

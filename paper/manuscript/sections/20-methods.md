@@ -2,35 +2,40 @@
 
 ### 2.1  Image collection and evaluation units
 
-The primary evaluation comprises {in_n} whole-field SEM images of Inconel 718 from the
-collection identified in the source study [7]. The images are 1024 x 1024 pixels. Reference
-masks define the annotated crack pixels, and the mean reference crack area fraction for the
-whole fields is {ag_best_lab}%. Each field serves as an image-level evaluation unit.
+The evaluation uses the two collections this laboratory produced itself. A frame enters
+if it carries an explicit painted verdict for both crack and not-crack, which is the
+condition every score in this paper is computed under; {om_sem_n_all} scanning electron
+(SEM) and {om_txm_n_all} transmission X-ray (TXM) frames meet it. **Every number quoted
+in this paper is further restricted to specimen series b2 and b3**, which is {om_sem_n}
+of those SEM frames and {om_txm_n} of the TXM frames, and that restriction is the scope
+of the work rather than a selection made after seeing results. Figure {fig_scores} is the
+one exception and says so: its bars are drawn over every refereed frame of each arm, so
+they do not equal the restricted numbers in the text, and its caption file carries both
+unit sets. Each frame is one evaluation unit, and every quantity is a mean over frames,
+one vote per frame, unless it is named as pooled.
 
-The collection also includes {in_crop_n} released crops originating from {in_crop_src}
-parent images represented among the whole fields. The present primary endpoint uses the
-whole-field collection. The crop set provides related views of the material and its image
-framing, and is reported separately wherever it is used.
+**The annotation is a painted correction mask rather than a trace, and that governs what
+can be read off it.** An operator marked crack and not-crack explicitly and left the rest
+of each frame unruled, so every pixel carries one of three states: crack, not-crack, or no
+verdict. Only pixels carrying a verdict are scored. Two consequences follow, and both are
+carried through every result rather than noted once.
 
-**A provenance limitation of this collection, disclosed here because it affects how the
-reference should be read.** The archive's own class list declares fifteen target classes,
-of which the only crack class is a ceramic environmental barrier coating. The Inconel 718
-folders used here, including the crack class on which this entire evaluation rests, are
-present in the archive but absent from that class list; the undeclared folders and the
-Inconel 718 folders are the same set. The masks exist, are pixel-level, and are released
-under CC BY, but no annotation protocol, annotator count or class definition accompanies
-them. The collection also publishes no pixel size: there is no resolution tag in the image
-files, no databar in the fields, and no magnification in the record, and the collection's
-subsets originate from different microscopes. **No scale bar can be drawn on any panel
-taken from this collection, and none is shown.** The crack area fraction reported throughout
-is a dimensionless ratio of pixel counts and does not depend on a pixel size; physical
-lengths cannot be derived from these images and none are reported.
+First, a painted stroke is far wider than the feature it marks — {om_sem_width} px on the
+SEM frames and {om_txm_width} px on the TXM frames at the 90th percentile — so an overlap
+score computed against it rewards a mask for reproducing the stroke. Every such score in
+Section 3 is therefore reported beside what a geometrically correct three-pixel trace of
+the same annotation scores against that annotation, which is the only way to tell a mask
+that is well placed from one that is merely wide.
 
-For that reason every micrograph panel in this paper — Figures {fig_flow},
-{fig_modality}, {fig_flow} and {fig_measurands} — is drawn from a field of this
-laboratory's own corpus at a known pixel size and carries a scale bar, and each caption
-states that the field is not part of the evaluated collection. No quantitative result in
-Section 3 is taken from those fields.
+Second, the unruled remainder carries no verdict, so a precision computed on these frames
+is a bracket and not a value. Its ends are the assumption that every marked pixel nobody
+ruled on is correct and the assumption that every one is wrong. Both ends are reported
+wherever a precision is.
+
+Pixel sizes are known for both collections and every micrograph panel in this paper
+carries a scale bar; the transmission value and its provenance are given in Section 2.4.
+Unlike the summary measures, the panels are drawn from the same frames the results are
+computed on, so a reader can check a number against the field it came from.
 
 ### 2.2  Detector configuration
 
@@ -73,16 +78,14 @@ small minority of the retained area at frame scale and most of it on a 512-pixel
 where no component approaches that size. Scores from the two unit sets are reported
 separately throughout and are not pooled.
 
-**Which collections were scored with the classifier, and which were not.** Everything above describes the configuration this laboratory's own collections were scored at: the hand-corrected scanning-electron frames and the transmission frames were recomputed for it. The public Inconel 718 collection, and every quantity derived from it including the aggregate area agreement and the selection of the MAD multiplier itself, was measured with the classifier bypassed. Those measurements have not been repeated at the present setting, because the source images are a public download that is no longer held on the machine this analysis runs on; recomputing them requires re-obtaining that collection. The distinction has a known direction rather than an unknown one: the classifier only ever removes candidate regions and never adds one, so the retained set with it enabled is a subset of the retained set without it, and the predicted area fraction on that collection can only fall or stay equal. This is stated here rather than left for a reader to discover, because the two configurations differ and a methods section describing only one of them would misdescribe the other.
-
 Table {tbl_settings} lists the reported settings, and Figure {fig_parameters} gives the evidence behind each of them.
 
-[TABLE settings | The detector's reported configuration. One constant, the MAD multiplier, is exposed and swept; the rest are fixed. This table is the configuration the results are reported at; Figure {fig_parameters} carries the constants BOTH detectors read -- forty-one of them, including the settings applied before the detector runs and after it -- with the value in use and how each was arrived at.]
+[TABLE settings | The detector's reported configuration. One constant, the MAD multiplier, is exposed as a setting; the rest are fixed. This table is the configuration the results are reported at; Figure {fig_parameters} carries the constants BOTH detectors read -- forty-one of them, including the settings applied before the detector runs and after it -- with the value in use and how each was arrived at.]
 | Component | Reported setting |
 |---|---|
 | Input representation | 8-bit grayscale SEM image |
 | Multiscale processing | 5, 10, 20, 40, 80, 160 and 320 px |
-| Selected MAD multiplier | {mk_best} |
+| MAD multiplier | {om_k} |
 | Absolute intensity gate | 10.0 |
 | Morphological opening size | 13 px |
 | Minimum connected-region area | 40 pixels |
@@ -137,29 +140,22 @@ diagonal step counted as the square root of two — a count of skeleton pixels u
 path length by up to 41 per cent, and dividing such a count by an endpoint distance once gave
 819 of 1,503 exported cracks a tortuosity below one, which is geometrically impossible.
 
-[FIGURE parameters | Every constant BOTH detectors read, the value in use, and how each was settled. **Six choice graphs over a printed table of all forty-one constants**; a constant with a graph names its letter in its row. The ref. column is how the value was settled, and that is the finding: of the forty-one, exactly ONE was chosen by a sweep on labelled data, four were settled by a test that had no value to choose, and thirty-six are fixed by construction with no sweep on record anywhere. Nine further constants carried no recorded provenance at all; they and the five panels that swept them after the fact have been removed from this figure, and their sweeps remain in the supplementary records. **Panel (c) gives the seven-rung ladder the evidence it never had -- the dashed line is the shipped union and the curve is what ONE radius scores alone, {sw_union} against {sw_single_best_iou} for the best single radius -- so what the ladder buys is now measured instead of asserted. **Model 1, the SEM arm: a darkness rule that proposes, and nine fitted numbers that decide.** (a) the MAD multiplier is the only constant chosen by a sweep: over the 31 public whole fields mean F1 rises to an interior maximum of 0.356 at k = 6 and falls either side, leave-one-image-out selection over the full grid returns the same value, and the paired difference against the application's own k = 5 -- the dotted rule in that panel -- is +0.012 in F1 on 27 of the 31 fields (exact Wilcoxon p = 0.000004); the same comparison on the 26 hand-labelled crops is not resolved (+0.0003, p = 0.35). (b) and (c) are the seven-rung flattening ladder, which was never searched -- no sweep over any alternative exists in either repository. (b) shows it acts as a union: {sw_ladder_overlap}% of the paint it reaches is reached at two or more radii, and the two largest unique contributions are its extremes, 5 px and 320 px, which is what a scale-matched darkness criterion predicts, since a crack is only reliably dark at radii near its own width. (c) gives the ladder the evidence it never had -- the dashed line is the shipped union and the curve is what ONE radius scores alone, {sw_union} against {sw_single_best_iou} for the best single radius -- so what the ladder buys is measured instead of asserted. The learned region classifier is ENABLED in the reported configuration, and the choice is a trade rather than an improvement. Pooled over the 25 tiles that exclude the off-specimen flood crop it raises precision to {sw_prec25} while recall falls to {sw_rec25}; on the full 26 tiles, which that one crop's false positives dominate, every metric is lower than with it bypassed. It has no panel because it has no grid to sweep -- a classifier is on or off, and both settings are measured and reported above -- not because it is free of fitted parameters: it spends nine of them plus a threshold, and they are the only fitted parameters in this arm. **Model 2, the TXM arm, a trained per-pixel ensemble**: the mean probability of a 17-channel model and a 273-dimensional hybrid that adds a frozen SAM ViT-H embedding, both fitted on the operator's labelling of 71 frames. (d) the probability threshold 0.60, swept over the same 31 refereed frames as the rest of the transmission accounting and matched on the false-alarm curve; the sweep is IN SAMPLE, since the members were fitted on this paint, and it is therefore evidence about the threshold and not about the model. (e) which members are averaged, by a 5-fold cross-validation over the 71 labelled frames grouped BY IMAGE and not by specimen, so no whole specimen is ever held out. (f) what a SAM tile is, drawn rather than named: 1024 px squares at a stride of 896, overlapping by 128, set that way by construction so neighbouring embeddings stay continuous across their seams; there is no sweep over either number in any repository. the SEM arm's MAD multiplier carried onto transmission data is no longer drawn here, where **no value of it works**: over those same 31 frames every value on the grid scores below an empty mask, and the paper's 6.0 does so by 9.5 points. That row is why the two arms do not share a detector. **Twenty of the constants appeared in no earlier edition of this figure**: the contrast window with its three-frame exception, the databar probe and the field-of-view finder the SEM chain applies before the detector runs, and the nine-constant width clip and three-constant straight-artefact rejector the transmission mask path applies after it. A constant applied to the data and not declared is an undeclared degree of freedom. Row names are short because the stage box names the stage; every value is parsed out of the deployed source rather than retyped, and the figure's caption file carries the full name, the stage and the provenance of each. **The evidence here is wider than the paper's reported scope, deliberately.** The frame-scale SEM panels are the 48 frames that carried a hand correction when the constants were set -- 20 of specimen series b2 and 28 of specimens the results sections do not report -- and the tile panels are 26 tiles from 13 specimens. That is the corpus these constants were in fact fixed on, and narrowing it after the fact would describe a selection that did not happen. The panels rest on several different unit sets and values may not be compared across them; every number and its source is in the figure's caption file.]
+[FIGURE parameters | Every constant BOTH detectors read, the value in use, and how each was settled. **Five choice graphs over a printed table of all forty-one constants**; a constant with a graph names its letter in its row. The ref. column is how the value was settled, and that is the finding: of the forty-one, NOT ONE was chosen by a sweep on data this paper reports, four were settled by a test that had no value to choose, and thirty-six are fixed by construction with no sweep on record anywhere. The MAD multiplier is the one constant that is neither: its value is adopted, and the ref. column says so rather than claiming evidence the paper does not present. Nine further constants carried no recorded provenance at all; they and the five panels that swept them after the fact have been removed from this figure, and their sweeps remain in the supplementary records. **Panel (b) gives the seven-rung ladder the evidence it never had -- the dashed line is the shipped union and the curve is what ONE radius scores alone, {sw_union} against {sw_single_best_iou} for the best single radius -- so what the ladder buys is now measured instead of asserted. **Model 1, the SEM arm: a darkness rule that proposes, and nine fitted numbers that decide.** (a) and (b) are the seven-rung flattening ladder, which was never searched -- no sweep over any alternative exists in either repository. (a) shows it acts as a union: {sw_ladder_overlap}% of the paint it reaches is reached at two or more radii, and the two largest unique contributions are its extremes, 5 px and 320 px, which is what a scale-matched darkness criterion predicts, since a crack is only reliably dark at radii near its own width. (b) gives the ladder the evidence it never had -- the dashed line is the shipped union and the curve is what ONE radius scores alone, {sw_union} against {sw_single_best_iou} for the best single radius -- so what the ladder buys is measured instead of asserted. The learned region classifier is ENABLED in the reported configuration, and the choice is a trade rather than an improvement. Pooled over the 25 tiles that exclude the off-specimen flood crop it raises precision to {sw_prec25} while recall falls to {sw_rec25}; on the full 26 tiles, which that one crop's false positives dominate, every metric is lower than with it bypassed. It has no panel because it has no grid to sweep -- a classifier is on or off, and both settings are measured and reported above -- not because it is free of fitted parameters: it spends nine of them plus a threshold, and they are the only fitted parameters in this arm. **Model 2, the TXM arm, a trained per-pixel ensemble**: the mean probability of a 17-channel model and a 273-dimensional hybrid that adds a frozen SAM ViT-H embedding, both fitted on the operator's labelling of 71 frames. (c) the probability threshold 0.60, swept over the same 31 refereed frames as the rest of the transmission accounting and matched on the false-alarm curve; the sweep is IN SAMPLE, since the members were fitted on this paint, and it is therefore evidence about the threshold and not about the model. (d) which members are averaged, by a 5-fold cross-validation over the 71 labelled frames grouped BY IMAGE and not by specimen, so no whole specimen is ever held out. (e) what a SAM tile is, drawn rather than named: 1024 px squares at a stride of 896, overlapping by 128, set that way by construction so neighbouring embeddings stay continuous across their seams; there is no sweep over either number in any repository. the SEM arm's MAD multiplier carried onto transmission data is no longer drawn here, where **no value of it works**: over those same 31 frames every value on the grid scores below an empty mask, and the paper's 6.0 does so by 9.5 points. That row is why the two arms do not share a detector. **Twenty of the constants appeared in no earlier edition of this figure**: the contrast window with its three-frame exception, the databar probe and the field-of-view finder the SEM chain applies before the detector runs, and the nine-constant width clip and three-constant straight-artefact rejector the transmission mask path applies after it. A constant applied to the data and not declared is an undeclared degree of freedom. Row names are short because the stage box names the stage; every value is parsed out of the deployed source rather than retyped, and the figure's caption file carries the full name, the stage and the provenance of each. **The evidence here is wider than the paper's reported scope, deliberately.** The frame-scale SEM panels are the 48 frames that carried a hand correction when the constants were set -- 20 of specimen series b2 and 28 of specimens the results sections do not report -- and the tile panels are 26 tiles from 13 specimens. That is the corpus these constants were in fact fixed on, and narrowing it after the fact would describe a selection that did not happen. The panels rest on several different unit sets and values may not be compared across them; every number and its source is in the figure's caption file.]
 
 [FIGURE measurands | Every quantity the application measures on a detected region, drawn on the largest marked region the SEM field of Figure {fig_flow} contains. (a) the region in blue with the whole medial axis in orange; in red, the two tips of the longest tip-to-tip route, the straight chord between them, and the largest circle that fits inside the crack at the 10th, 50th and 90th percentile of width along the axis. (b) the width along that route, with the mean width over the whole axis as the dashed line. (c) each measurand, the rule it is measured by, and its value here. Every number in (c) comes from the shipped measurement functions, called on the region that is drawn; the route drawn in (a) is checked against the length reported in (c) to within one pixel. The tortuosity row is deliberately empty: the shipped definition applies only to an unbranched medial axis and this region has nine branch points, so the software emits no value. Where it does emit one, the figure's own control shows that digitisation alone puts a straight rasterised line between 1.00 and 1.08 according to its angle, so a tortuosity near 1.08 is a staircase and not a wandering crack.]
 
 **An all-background reference point accompanies every accuracy figure in this manuscript.**
-On an image that is {ag_best_lab}% crack, a prediction that marks nothing scores
-{in_empty_acc}% pixel accuracy, so marking a pixel improves accuracy only where more than
-half of what is marked is correct. Accuracy quoted without that reference point is not
-interpretable at this prevalence, and both numbers are given together throughout.
+Crack occupies a few per cent of a micrograph, so predicting no crack anywhere already
+scores {sa_sem_bg}% pixel accuracy on the SEM collection and {sa_txm_bg}% on the TXM
+collection. **Every pixel accuracy in this paper, and its baseline, is computed over
+every refereed frame of its arm — the unit set Figure {fig_scores} draws, not the
+b2/b3 restriction the other measures use** — because the all-background baseline is a
+property of the corpus and is read off that plate. The detectors score {sa_sem_acc}% and {sa_txm_acc}%. One of those sits a
+hundredth of a point above its baseline and the other sits below it, which is what the
+measure is worth at this prevalence and why no accuracy appears in this paper without
+the all-background figure beside it.
 
-### 2.4  Comparator and field-level analyses
-
-The displayed comparison includes the multiscale darkness detector, a darkness-or-Sato
-union, Sato filtering, Frangi filtering, Meijering filtering, Sauvola thresholding and
-percentile thresholding [8-12]. Seven method summaries appear in the source table. Each arm
-receives its own parameter by the same leave-one-image-out rule, on the same images, through
-the same scoring code.
-
-The selected operating setting is a MAD multiplier of {mk_best}. A paired field-level
-comparison contrasts its absolute area error with that of the default setting. The
-comparator summaries and field counts are descriptive.
-
-### 2.5  Cross-modality evaluation
+### 2.4  Cross-modality evaluation
 
 To test whether the configuration is specific to this imaging modality, the identical
 detector, with the identical constant, was applied to {tx_n} transmission X-ray microscopy
@@ -187,7 +183,7 @@ happens to a frame — and on this collection they disagree, so neither is given
 laboratory's collections are painted rather than traced, and the two are not painted alike.
 The share of annotated pixels lying more than 50 px from the edge of the annotation
 separates the two cases: a stroke of any width has almost none, a filled region has a great
-deal. It is reported per collection in Sections 4.3 and 4.4, it decides which frames the
-micrograph panels may show, and it is the reason the overlap measures in Section 4.4 are
+deal. It is reported per collection in Sections 3.1 and 4.3, it decides which frames the
+micrograph panels may show, and it is the reason the overlap measures in Section 3.1 are
 each reported beside what a geometrically correct three-pixel trace of the same annotation
 scores against that annotation.

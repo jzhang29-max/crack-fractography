@@ -256,20 +256,44 @@ def cell(ax):
     specimen feeding both arms asserted that both were in situ, which is wrong and is
     exactly the kind of error a schematic makes silently.
     """
+    #: DRAWN AS A VESSEL, NOT AS A COLOURED BLOCK. The first version of this was a
+    #: saturated flat rectangle behind the specimen with its label floating inside it,
+    #: and the author's verdict was "very cartoonish". It was: a filled block of colour
+    #: is the heaviest mark on a sheet whose every other element is thin grey line art,
+    #: so the cell read as the subject of the figure rather than as the condition the
+    #: specimen is under. The information it carries is unchanged; the weight is not.
+    #:
+    #: Three changes do it. The electrolyte is a faint tint with NO edge of its own
+    #: instead of a saturated fill with a hard border. The vessel is open at the top
+    #: and drawn on three sides, which is how a cell cross-section is drawn and which
+    #: stops the box from reading as a sealed container floating around the gauge. And
+    #: the electrode is a slim bar with a lead leaving the cell, rather than a thick
+    #: slab, so it reads as an electrode and not as part of the specimen.
     cy0, cy1 = DB_Y - 9.6, DB_Y + 9.6
     cx0, cx1 = DB_CX - 17.0, DB_CX + 17.0
-    ax.add_patch(Rectangle((cx0, cy0), cx1 - cx0, cy1 - cy0, facecolor="#dceaf5",
-                           edgecolor=J.G_MID, lw=LW_EDGE, zorder=1))
-    #: the counter electrode, and the potentiostat that drives it
-    ax.add_patch(Rectangle((cx0 + 3.0, DB_Y - 7.2), 1.3, 14.4, facecolor="#9aa6ad",
-                           edgecolor=J.G_DARK, lw=LW_EDGE, zorder=2))
-    #: A LABEL, NOT A BOX. A drawn potentiostat with its leads needs somewhere to sit,
-    #: and every free corner of this sheet is already spoken for -- the first attempt
-    #: ran off the top edge and the second printed through the electron arm's title.
-    #: The cell and its electrode carry the meaning; the instrument driving them is a
-    #: word, and the caption says the rest.
-    ax.text(cx0 + 5.6, cy1 - 1.2, "H charging", fontsize=J.TICK, ha="left",
-            va="top", color=J.G_DARK, zorder=7)
+    surf = DB_Y + 7.4                      # the electrolyte surface, below the rim
+    ax.add_patch(Rectangle((cx0, cy0), cx1 - cx0, surf - cy0, facecolor="#eef4f9",
+                           edgecolor="none", zorder=1))
+    ax.plot([cx0, cx1], [surf, surf], color=J.G_MID, lw=LW_EDGE, zorder=2)
+    ax.plot([cx0, cx0, cx1, cx1], [cy1, cy0, cy0, cy1], color=J.G_DARK,
+            lw=LW_EDGE, zorder=2, solid_joinstyle="miter")
+    #: THE COUNTER ELECTRODE LIES BELOW THE SPECIMEN, parallel to it. Drawn upright
+    #: beside the gauge it crossed the dogbone, which is painted over it, so it came
+    #: out as two disconnected grey stubs above and below the specimen -- a bar that
+    #: appears to pass THROUGH the thing being tested. A counter electrode parallel to
+    #: the working electrode is also what the cell actually contains.
+    #:
+    #: Its lead leaves through the left wall at a height below the specimen's widest
+    #: point, which is the one line out of this cell that crosses nothing.
+    ey = cy0 + 1.4
+    ax.add_patch(Rectangle((cx0 + 3.2, ey), 12.0, 0.85, facecolor="#8d99a1",
+                           edgecolor=J.G_DARK, lw=0.4, zorder=3))
+    ax.plot([cx0 + 3.2, cx0 - 2.2], [ey + 0.42, ey + 0.42], color=J.G_DARK,
+            lw=LW_LEAD, zorder=3)
+    #: the label names the electrolyte from inside it, in the clear strip under the
+    #: specimen's shoulder -- the one pocket of this sheet nothing else occupies.
+    ax.text(cx1 - 1.5, ey - 0.3, "H charging", fontsize=J.TICK, ha="right",
+            va="bottom", color=J.G_DARK, zorder=7)
     return cy1
 
 
@@ -374,7 +398,10 @@ def mount(ax, arr, x0, colour, nm_per_px, win_px, name, records):
     """One REAL micrograph of such a field, named, with what it records under it."""
     s = PAN_SIDE
     MOUNTED.append((x0, PAN_Y, x0 + s, PAN_Y + s))
-    ax.imshow(arr, cmap="gray", vmin=0, vmax=1, interpolation="nearest",
+    #: a PHOTOGRAPH, resampled smoothly for display. Nearest neighbour here only
+    #: hardens the edges of whatever source pixels the panel happens to land on,
+    #: and nothing is measured off this panel.
+    ax.imshow(arr, cmap="gray", vmin=0, vmax=1, interpolation="bilinear",
               extent=(x0, x0 + s, PAN_Y, PAN_Y + s), aspect="auto", zorder=9)
     ax.add_patch(Rectangle((x0, PAN_Y), s, s, fill=False, edgecolor=colour,
                            lw=1.4, zorder=11))

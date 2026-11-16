@@ -132,10 +132,8 @@ def _rec(d):
 MP.VALUES.update({
     # the false-negative share of the frame, which the longer draft does not
     # expose because its own limitations section quotes it differently
-    "in_fn_pct": MP._n(MP.PA_W["fn_pct"], 2),
     # the share of the frame that is background in BOTH the prediction and the
     # annotation: the pixels every overlap measure discards, which Section 3.6 now names
-    "in_tn_pct": MP._n(MP.PA_W["tn_pct"], 1),
     # THE SCORES PLATE AND TABLE 2 USE DIFFERENT AGGREGATIONS, and that is why both are
     # named. The plate reads pixel_accounting.json, whose own `metric` field says "mean
     # per image, mad_k leave-one-image-out": the whole fields come out 0.77 points below
@@ -144,11 +142,6 @@ MP.VALUES.update({
     # all-background value is identical in both, so the gap is entirely the aggregation.
     # A sentence beside the plate that quoted Table 2's number would describe bars the
     # plate does not draw.
-    "wf_margin_img": MP._n(abs(100 * MP.PA_W["accuracy"]
-                               - (100 - MP.PA_W["labelled_pct"])), 2),
-    "crop_margin_img": MP._n(abs(100 * MP.PA_C["accuracy"]
-                                 - (100 - MP.PA_C["labelled_pct"])), 2),
-    "wf_margin_pool": MP._n(abs(MP._WFK(6.0)["accuracy_margin_pp"]), 2),
     # THE SWEEP'S LEVERAGE, ONE MICROSCOPY AGAINST THE OTHER. Both ratios are read off
     # the same seven values of k, so the comparison is of how far each collection's
     # reported-over-annotated area moves, not of where it sits. Computed here rather
@@ -226,27 +219,7 @@ MP.VALUES.update({
 # two files the plate reads, through make_paper's own loaders, so the figure and the
 # sentence beside it cannot drift apart. Floors are the mark-everything control, whose
 # precision is the annotated crack fraction by construction.
-_OV_W, _OV_C = MP.IN, MP.IN_CROP
-_OV_WME = _OV_W["controls"]["mark_everything"]
-_OV_CME = _OV_C["controls"]["mark_everything"]
 MP.VALUES.update({
-    "ov_prec": MP._n(_OV_W["loo"]["precision"]),
-    "ov_crop_prec": MP._n(_OV_C["loo"]["precision"]),
-    "ov_crop_recall": MP._n(_OV_C["loo"]["recall"]),
-    "ov_crop_n": str(_OV_C["n"]),
-    "ov_prec_floor": MP._n(_OV_WME["precision"]),
-    "ov_crop_prec_floor": MP._n(_OV_CME["precision"]),
-    "ov_lift": MP._n(_OV_W["loo"]["precision"] / _OV_WME["precision"], 1),
-    "ov_crop_lift": MP._n(_OV_C["loo"]["precision"] / _OV_CME["precision"], 1),
-    "ov_prec_ratio": MP._n(_OV_C["loo"]["precision"] / _OV_W["loo"]["precision"], 2),
-    "ov_recall_ratio": MP._n(_OV_C["loo"]["recall"] / _OV_W["loo"]["recall"], 2),
-    "ov_prev_ratio": MP._n(_OV_C["prevalence"] / _OV_W["prevalence"], 2),
-    "ov_me_recall": MP._n(_OV_WME["recall"], 3),
-    "ov_crop_me_f1": MP._n(_OV_CME["f1"]),
-    "ov_k_lo": MP._n(min(float(k) for k in _OV_W["per_k"]), 1),
-    "ov_k_hi": MP._n(max(float(k) for k in _OV_W["per_k"]), 1),
-    "ov_prec_lo": MP._n(_OV_W["per_k"][min(_OV_W["per_k"], key=float)]["precision"]),
-    "ov_recall_lo": MP._n(_OV_W["per_k"][min(_OV_W["per_k"], key=float)]["recall"]),
 })
 for g in GROUPS:
     d = TX["by_group"][g]["arms"][_k6]
@@ -297,6 +270,15 @@ MP.VALUES.update({
 # pays for covering the stroke.
 OVM = MP._f(PATHS.scoped("overlap_means_sem_txm.json"),
             "per-frame overlap means")
+#: AND THE UNRESTRICTED COUNTS, so Section 2.1 can state the scope instead of leaving
+#: it to be inferred. Every number the manuscript quotes is the b2/b3-restricted
+#: record; the scores plate draws every refereed frame of both arms. Those are two
+#: different unit sets and the difference used to be visible only in the figure's own
+#: caption file, where a reader comparing the plate with the text would not look.
+_OVM_ALL = MP._f(PATHS.scoped("overlap_means_sem_txm.json", scope=False),
+                 "per-frame overlap means, unrestricted")
+MP.VALUES.update({f"om_{_t.lower()}_n_all": str(_OVM_ALL[_t]["n_frames"])
+                  for _t in ("SEM", "TXM")})
 for _tag in ("SEM", "TXM"):
     _d = OVM[_tag]
     _p = _tag.lower()
@@ -517,6 +499,20 @@ MP.VALUES["sw_ladder_overlap"] = _lad.group(1)
 # computed when the plate is drawn, so they are read back from the plate's caption file
 # rather than retyped: a figure and the sentence beside it that are maintained separately
 # drift, and this project has shipped that drift before.
+#: WHOLE-FRAME PIXEL ACCURACY AND THE BASELINE IT MUST BE READ AGAINST, both from the
+#: scores plate's own record so the manuscript and the figure cannot drift apart. This
+#: pair replaces the one the removed public collection used to supply, and it makes the
+#: same point harder: on the electron arm the detector and an all-background prediction
+#: are within a hundredth of a point of each other, and on the transmission arm the
+#: detector is BELOW the baseline.
+_SA = MP._f(os.path.join(PAPER, "figures/out/F8 - scores by sample.caption.json"),
+            "the scores plate's caption")["combined_panel"]["pixel_accuracy"]["per_arm"]
+MP.VALUES.update({
+    f"sa_{_t.lower()}_{_w}": MP._n(100 * _SA[_t][_k], 2)
+    for _t in ("SEM", "TXM")
+    for _w, _k in (("acc", "detector"), ("bg", "all_background"))
+})
+
 CNT = MP._f(os.path.join(PAPER, "figures/out/F5 - over- and under-counting.caption.json"),
             "the over/under-counting plate's caption")
 # The plate was rebuilt around two named specimens and two DIFFERENT detectors, so the
@@ -593,6 +589,40 @@ FIG_RE = re.compile(r"^\[FIGURE ([a-z]+)\s*\|\s*(.+)\]$")
 #: `[TABLE key | caption]` on its own line, IMMEDIATELY BEFORE a pipe table. The same
 #: shape as the figure directive, and for the same reason -- see `number_the_tables`.
 TBL_RE = re.compile(r"^\[TABLE ([a-z0-9_]+)\s*\|\s*(.+)\]$")
+
+
+def check_section_cross_references(files):
+    """Every typed "Section N.M" must point at a heading that exists.
+
+    Figure numbers cannot be typed into this prose -- `number_the_figures` fails the
+    build on one -- because a typed number silently points at the wrong plate the next
+    time a figure moves. SECTION numbers are typed, because there is no directive for
+    them, and they have exactly the same failure mode: delete or renumber a subsection
+    and every "see Section 3.6" in the paper now points somewhere else, or nowhere, and
+    nothing notices. Renumbering is precisely when a reader most needs the pointers to
+    be right.
+
+    So the headings are collected and every reference is checked against them. This is
+    a whole-document check and cannot be done per file: most references cross files.
+    """
+    have, refs = set(), []
+    for src in files:
+        for n, raw in enumerate(open(os.path.join(SECT, src), encoding="utf-8"), 1):
+            m = re.match(r"^#{2,4}\s+(\d+(?:\.\d+)?)\s", raw)
+            if m:
+                have.add(m.group(1))
+            for r in re.finditer(r"Sections?\s+(\d+\.\d+)"
+                                 r"(?:\s+and\s+(\d+\.\d+))?", raw):
+                for g in r.groups():
+                    if g:
+                        refs.append((src, n, g, raw.strip()[:90]))
+    dead = [(f, n, g, t) for f, n, g, t in refs if g not in have]
+    if dead:
+        raise SystemExit(
+            "section cross-references point at headings that do not exist:\n  "
+            + "\n  ".join(f"{f}:{n}: Section {g}  --  {t}" for f, n, g, t in dead)
+            + f"\nheadings that do exist: {', '.join(sorted(have))}")
+    print(f"  {len(refs)} section cross-references, all resolving")
 
 
 def number_the_figures(files):
@@ -719,6 +749,7 @@ def main():
     files = sorted(f for f in os.listdir(SECT) if f.endswith(".md"))
     if not files:
         raise SystemExit(f"{SECT} is empty")
+    check_section_cross_references(files)
     order = number_the_figures(files)
     torder = number_the_tables(files)
     laid, undirected = [], []

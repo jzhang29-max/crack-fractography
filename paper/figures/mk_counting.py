@@ -151,7 +151,14 @@ LEGIB = _paths.scoped("frame_legibility.json", scope=False)
 #: one edit. `HIP` picks the MAR 247 hot-isostatic-pressed fields; `hc_316l` picks the
 #: hydrogen-charged 316L fatigue mosaics, which is exactly the set `OV.txm_group()` already
 #: calls "AM/HC", so this plate and the by-group tables cannot disagree about membership.
-SPECIMEN = {"SEM": "mar_amb_hip_cbs_0010", "TXM": "hc_316l"}
+#: THE ELECTRON ARM IS THE HIP FAMILY, NOT ONE PINNED FRAME. It was pinned to
+#: mar_amb_hip_cbs_0010, whose mask holds 574,137 px of crack and 0 px of not-crack, so
+#: over-counting could not be measured on it and two of the plate's panels carried a
+#: sentence where the other two carried a percentage. Widening the arm to the specimen
+#: family lets the same selection rule -- best agreement among eligible frames -- pick a
+#: field that an operator ruled in BOTH directions, so every panel reports a measured
+#: share. The rule is unchanged; only the pool it chooses from is.
+SPECIMEN = {"SEM": "mar_amb_hip", "TXM": "hc_316l"}
 SPECIMEN_WORDS = {"SEM": "HIP (MAR 247, ambient)",
                   "TXM": "hydrogen-charged 316L fatigue"}
 
@@ -165,7 +172,16 @@ SPECIMEN_WORDS = {"SEM": "HIP (MAR 247, ambient)",
 #: prints the reason instead of a number. It never suppresses the OTHER direction: a
 #: frame with no UNDER-count is still rejected, because the under-counting column is
 #: where the detector's real failure on this corpus lives.
-ONE_SIDED_OK = {"SEM"}
+#: BOTH VERDICTS REQUIRED, ON BOTH ARMS. The electron arm used to be allowed through
+#: with crack paint alone, and the frame that won on agreement had NO not-crack verdict
+#: anywhere on it. Over-counting is defined against that verdict, so its two panels
+#: could carry no percentage -- they printed "no over-count is possible" where the
+#: other two printed a number, and the author asked why half the plate had no
+#: statistics. The honest answer was that the frame could not supply them. The fix is
+#: to require a frame that can: a collection's panels are drawn from a frame carrying
+#: at least MIN_PX of BOTH verdicts, so every panel on the plate reports a measured
+#: share of its own window.
+ONE_SIDED_OK = set()
 
 #: An over-counting panel has to show over-counting, not one object. On the TXM frame
 #: with the most over-counted pixels, 98.8% of that area is a SINGLE connected component
@@ -896,7 +912,15 @@ def main():
                        "agree": int(agree[sl].sum()), "matrix": int(_matrix.sum())}
             panels.append({
                 "coll": coll, "kind": kind, "rgb": np.clip(rgb, 0, 1), "nm": nm,
-                "grey": grey, "median_grey_on_displayed_stretch": _greys,
+                "grey": grey,
+                #: the three verdict masks, kept so the overlay panel can draw the
+                #: photograph smoothly and each verdict exactly. Burnt into one RGB
+                #: array they share a single resampling rule, and the only rule that
+                #: is honest for a mask -- nearest neighbour -- is the one that makes
+                #: a 2.9 Mpx transmission frame look blocky.
+                "m_under": under[sl].copy(), "m_agree": agree[sl].copy(),
+                "m_over": over[sl].copy(),
+                "median_grey_on_displayed_stretch": _greys,
                 "median_grey_px": _counts,
                 "median_grey_note": (
                     "median of the panel's own 0.5/99.5-stretched grey, 0 = black, "
@@ -941,7 +965,7 @@ def main():
     # honestly almost empty -- the SEM field's precision is 0.97, so its over-counted
     # window is 0.14% red -- and an almost-empty panel under a header that says
     # "over-counted" reads as a mistake unless the figure says the number.
-    CAP = 0.62
+    CAP = 0.50
     LEG = 0.34
     #: TWO gaps, not one: there is a seam between the rows AND a seam above the key.
     #: With a single GAP in this sum the key began at the exact inch the lower row's
@@ -1007,7 +1031,17 @@ def main():
                     ax.imshow(p["grey"], cmap="gray", vmin=0, vmax=1,
                               interpolation="bilinear")
                 else:
-                    ax.imshow(p["rgb"], interpolation="nearest")
+                    ax.imshow(p["grey"], cmap="gray", vmin=0, vmax=1,
+                               interpolation="bilinear", zorder=1)
+                    for _z, (_m, _c) in enumerate(((p["m_under"], UNDER),
+                                                   (p["m_agree"], AGREE),
+                                                   (p["m_over"], OVER))):
+                        if not _m.any():
+                            continue
+                        _rgba = np.zeros(_m.shape + (4,), float)
+                        _rgba[_m, :3] = np.array(J.rgb(_c))
+                        _rgba[_m, 3] = 1.0
+                        ax.imshow(_rgba, interpolation="nearest", zorder=2 + _z)
                 J.micrograph(ax)
                 ax.add_patch(Rectangle((0, 0), 1, 1, transform=ax.transAxes,
                                        fill=False, edgecolor=J.INK, linewidth=0.7,
@@ -1026,35 +1060,10 @@ def main():
         for c, kind in enumerate(("over-counted", "under-counted")):
             p = next(q for q in panels if q["coll"] == coll and q["kind"] == kind)
             pct = p["over_pct"] if kind == "over-counted" else p["under_pct"]
-            say(cx, c * step, 0.52,
+            say(cx, c * step, 0.40,
                 p["kind_impossible"] or f"{pct:.2f}% of this window is {kind}",
                 colour=J.G_DARK)
-            #: WHERE THE ERROR IS, IN THE IMAGE. One clause, built from the medians
-            #: measured above, placed under the pair it describes. It is written only
-            #: when the class and both references exist, because a sentence comparing
-            #: a number to a missing one is worse than no sentence.
-            g = p["median_grey_on_displayed_stretch"]
-            key = "over" if kind == "over-counted" else "under"
-            if g[key] is not None and g["agree"] is not None and g["matrix"] is None:
-                #: the operator ruled NO pixel not-crack on this frame, so this window
-                #: has no uncontested background to compare against. The crack level
-                #: is still the operator's own and is still worth printing; inventing
-                #: a background out of the unruled pixels would be reading a verdict
-                #: into the absence of one.
-                say(cx, c * step, 0.17,
-                    f"grey {g[key]:.2f} here, crack {g['agree']:.2f} — nothing "
-                    f"ruled not-crack", colour=J.G_MID)
-            elif g[key] is not None and g["agree"] is not None and g["matrix"] is not None:
-                near = ("crack" if abs(g[key] - g["agree"]) <= abs(g[key] - g["matrix"])
-                        else "matrix")
-                say(cx, c * step, 0.17,
-                    f"grey {g[key]:.2f} here, crack {g['agree']:.2f}, "
-                    f"matrix {g['matrix']:.2f} — closer to {near}", colour=J.G_MID)
-        #: THE ROW'S IDENTITY LEADS ITS CAPTION, it does not trail it. Placed last in
-        #: the strip it sat directly above the NEXT row's panels and read as that
-        #: row's heading -- the electron row's specimen and detector were printed
-        #: immediately above the transmission micrographs.
-        say(cx, 0.0, 0.88,
+        say(cx, 0.0, 0.86,
             f"{coll} — {m['specimen']}, {m['detector']}", weight="bold")
 
     lg = ax_at(Mg, Htot - Mg - LEG, W - 2 * Mg, LEG)
@@ -1197,7 +1206,7 @@ def main():
                 "are 'each found by exact box sum', which is still true, but not that "
                 "the two rows run different detectors.",
         },
-        "panels": [{k: v for k, v in p.items() if k not in ("rgb", "grey")}
+        "panels": [{k: v for k, v in p.items() if k not in ("rgb", "grey", "m_under", "m_agree", "m_over")}
                    for p in panels],
         "mad_k": OV.MADK,
         "sources": {"scores": os.path.basename(SCORES),

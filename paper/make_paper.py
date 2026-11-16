@@ -232,8 +232,6 @@ def _f(path, what):
     return json.load(open(path))
 
 
-PM = _f(os.path.join(REPO, "docs/figures/public_metrics.json"), "public metrics")["datasets"]
-SP = _f(os.path.join(REPO, "docs/figures/sem_public_metrics.json"), "SEM metrics")["datasets"]
 SB = _f(os.path.join(REPO, "docs/figures/sem_baselines.json"), "SEM baselines")["results"]
 PB = _f(os.path.join(SCRATCH, "baselines_full.json"), "pavement baselines")["results"]
 SW = _f(os.path.join(REPO, "docs/figures/sem_width_ceiling.json"), "SEM width ceiling")
@@ -241,14 +239,11 @@ SW = _f(os.path.join(REPO, "docs/figures/sem_width_ceiling.json"), "SEM width ce
 # skeleton F1, and carrying a decoy arm -- the detector's own mask dilated -- whose only
 # job is to say whether the metric can be bought instead of earned.
 SK = _f(os.path.join(REPO, "docs/figures/skelf1_ranking.json"), "skeleton-F1 ranking")["sets"]
-DC = _f(os.path.join(REPO, "docs/figures/dilation_costs_measurements.json"),
-        "what dilation costs the measurements")["sets"]
 # Where the recall goes, stage by stage, with both gates opened to their limit so the
 # ceiling below is the proposal mechanism's own and not a threshold choice.
 # The mad_k sweep EXTENDED ABOVE the shipped value. The published sweep stopped at 5.0
 # with F1 still rising, so the claimed optimum was the edge of the grid; this carries the
 # two-sided curve and the paired test against the neighbouring rungs.
-MK = _f(os.path.join(REPO, "docs/figures/madk_above_five.json"), "mad_k above five")["sets"]
 # Everything the paper reports is now computed over EVERY pixel in the frame. BC carries
 # the sweep in those units with the empty-mask baseline beside each row; AB carries the
 # classical-arm comparison re-ranked the same way.
@@ -269,12 +264,9 @@ UCA = _f(os.path.join(REPO, "docs/figures/unproposed_crack_anatomy.json"),
 # the same arms measured differently and not a different experiment.
 DZ = _f(os.path.join(REPO, "docs/figures/sem_deadzone_background_units.json"),
         "classifier ablation, background units")
-_WF = BC["sweeps"]["whole_fields"]
 _CR = BC["sweeps"]["crops"]
 # the operating point whose reported area fraction is closest to the annotator's, and the
 # one the app currently ships, so the two can be quoted against each other
-_AG_BEST = min(_WF, key=lambda r: abs(r["area_agreement_corpus"] - 1.0))
-_AG_SHIP = next(r for r in _WF if r["mad_k"] == 5.0)
 _CROP_BEST = max(_CR, key=lambda r: r["accuracy_pct"])
 _ARM_W = AB["whole_fields"]["arms"]
 _ARM_AREA = sorted(_ARM_W.items(), key=lambda kv: abs(kv[1]["area_agreement"] - 1.0))
@@ -293,8 +285,6 @@ _ARM_UNION = _ARM_W["UNION darkness OR Sato"]
 _DZ_HOG = max(DZ["labelled_share_by_specimen"].items(), key=lambda kv: kv[1])
 
 
-def _WFK(k):
-    return next(r for r in _WF if r["mad_k"] == k)
 
 
 def _ARM_TABLE():
@@ -320,39 +310,24 @@ def _ARM_TABLE():
 
 
 _ARM_TABLE = _ARM_TABLE()
-MKT = _f(os.path.join(REPO, "docs/figures/madk_paired_test.json"),
-         "mad_k paired test")["tests"]
 RVD = _f(os.path.join(REPO, "docs/figures/ridge_vs_dilation_loo.json"),
          "ridge vs dilation")["sets"]
 RFA = _f(os.path.join(REPO, "docs/figures/recall_fix_attempts.json"),
          "recall fix attempts")
 TXP = _f(os.path.join(REPO, "docs/figures/texture_prototype.json"),
          "texture prototype")["sets"]
-RD = _f(os.path.join(REPO, "docs/figures/recall_decomposition_inconel.json"),
-        "recall decomposition")
 RG = _f(os.path.join(REPO, "docs/figures/ridge_grow_controls.json"),
         "ridge-growing controls")["sets"]
-_RD_OPEN = RD["arms"]["no gates (mad_k=0.5, no floor)"]
-_RD_MAD = RD["arms"]["MAD cut only (no darkness floor)"]
-_RD_SHIP = RD["arms"]["shipped proposal (both gates)"]
 _DECOY = "DECOY: detector DILATED"
 _DET = "DETECTOR (shipped, 1 param)"
 
 
-def _rank_real(set_key, metric):
-    """Where the detector sits among the seven real arms, the decoy excluded: the decoy is
-    not a competing method, it is a control on the metric."""
-    r = sorted(((k, v[metric]) for k, v in SK[set_key].items() if k != _DECOY),
-               key=lambda kv: -kv[1])
-    return [k for k, _ in r].index(_DET) + 1
 
 
 def _decoy_rank(set_key, metric):
     r = sorted(SK[set_key].items(), key=lambda kv: -kv[1][metric])
     return [k for k, _ in r].index(_DECOY) + 1
 PA = _f(os.path.join(REPO, "docs/figures/pixel_accounting.json"), "pixel accounting")["sets"]
-PA_W = PA["Inconel 718, whole fields"]["detector"]
-PA_C = PA["Inconel 718, released crops"]["detector"]
 PA_E = PA["EBC coating, whole fields"]["detector"]
 PA_EC = PA["EBC coating, released crops"]["detector"]
 PA_M = PA["MetalDAM voids (not cracks)"]["detector"]
@@ -385,61 +360,38 @@ def _p(x):
 # CrackForest's values are deliberately absent: it is road imagery and was removed from
 # the draft. If a section reintroduces a {cf_...} placeholder the renderer fails on an
 # unresolved name rather than quietly printing a dataset the paper no longer argues from.
+
+# THE PUBLIC WHOLE-FIELD COLLECTION IS ABSENT FOR THE SAME REASON, at the author's
+# instruction: the paper reports this laboratory's own material and nothing else. What
+# went with it was not a mention but a result -- it had been the primary evaluation set,
+# and the abstract's headline, the principal-measurement section, the seven-arm
+# comparator and the conclusions were all computed on it. The {in_...}, {ag_...},
+# {mk_...}, {wf<n>_...}, {ov_...} and {arm_tbl} families are therefore deleted rather
+# than left defined and unused, so a section that reintroduces one fails on an
+# unresolved name instead of quietly reprinting a collection the paper no longer argues
+# from. The records themselves are still on disk and nothing about them is retracted.
+#
+# ONE CONSEQUENCE IS RECORDED HERE BECAUSE IT IS NOT VISIBLE ANYWHERE ELSE. The MAD
+# multiplier was the single constant of the forty-one that had been chosen by a sweep on
+# labelled data, and that sweep was run on the removed collection; no record of this
+# laboratory's own reproduces it. The value in use is unchanged and is now read from the
+# record the reported results were computed at, but it is a constant this paper offers
+# no evidence for, and Figure 3's tally says so rather than counting it as swept.
 SO = _f(os.path.join(REPO, "docs/figures/sem_originals_metrics.json"),
         "SEM originals")["datasets"]
-# WHOLE FIELDS are the paper's primary numbers. The released crops are quoted only where
-# the text says so, and the baseline comparison is crops-only because that is the one set
-# all seven arms share.
-IN, EBC = SO["Inconel718_crack"], SO["EBC_crack"]
-IN_CROP = SP["Inconel718_crack"]
-_rank_i = len(SB["Inconel718_crack"]) - sorted(
-    SB["Inconel718_crack"].items(), key=lambda kv: kv[1]).index(
-        ("YOUR DETECTOR", SB["Inconel718_crack"]["YOUR DETECTOR"]))
-_dc_rank = sorted(PB["DeepCrack"].items(), key=lambda kv: -kv[1])
-_in_rank = sorted(SB["Inconel718_crack"].items(), key=lambda kv: -kv[1])
+EBC = SO["EBC_crack"]
 _ORD = {1: "first", 2: "second", 3: "third", 4: "fourth", 5: "fifth",
         6: "sixth", 7: "seventh", 8: "eighth"}
 
 VALUES = {
     # --- SEM alloy, the paper's primary set ---
-    "in_n": str(IN["n"]),
-    "in_prev": _n(100 * IN["prevalence"], 2),
-    "in_f1": _n(IN["loo"]["f1"]),
-    "in_recall_perimage": _n(IN["loo"]["recall"]),
-    "in_iou": _n(IN["loo"]["iou"]),
-    "in_me_f1": _n(IN["controls"]["mark_everything"]["f1"]),
-    "in_lift_f1": _n(IN["loo"]["f1"] / IN["controls"]["mark_everything"]["f1"], 1),
-    "in_lift_iou": _n(IN["loo"]["iou"] / IN["controls"]["mark_everything"]["iou"], 1),
-    "in_rnd_f1": _n(IN["controls"]["equal_area_random"]["f1"]),
-    "in_sauvola": _n(SB["Inconel718_crack"]["Sauvola local"]),
-    "in_sato": _n(SB["Inconel718_crack"]["Sato ridge"]),
     # the spread across the three leading arms, which is the "indistinguishable" claim
-    "in_spread": _n(_in_rank[0][1] - _in_rank[2][1]),
-    "in_stroke": _n(SW["Inconel718_crack"]["label_stroke_px_median"], 1),
-    "wc_in_iou": _n(SW["Inconel718_crack"]["ceiling_iou"]),
-    "in_crop_f1": _n(IN_CROP["loo"]["f1"]),
-    "in_crop_prev": _n(100 * IN_CROP["prevalence"], 2),
-    "in_crop_src": "18",
     # --- accuracy and specificity, with the empty-mask baseline that makes them legible ---
-    "in_empty_acc": _n(100 - PA_W["labelled_pct"], 2),
-    "in_spec": _n(100 * PA_W["specificity"], 2),
-    "in_crop_acc": _n(100 * PA_C["accuracy"], 2),
-    "in_crop_spec": _n(100 * PA_C["specificity"], 2),
-    "in_crop_empty_acc": _n(100 - PA_C["labelled_pct"], 2),
-    "in_crop_margin": _n(100 * PA_C["accuracy"] - (100 - PA_C["labelled_pct"]), 2),
     "md_acc": _n(100 * PA_M["accuracy"], 2),
     "md_spec": _n(100 * PA_M["specificity"], 2),
     "md_empty_acc": _n(100 - PA_M["labelled_pct"], 2),
     "md_margin": _n(100 * PA_M["accuracy"] - (100 - PA_M["labelled_pct"]), 2),
     # --- the headline: the crack area fraction the tool reports against the human's ---
-    "ag_best": _n(_AG_BEST["area_agreement_corpus"], 4),
-    "ag_best_k": f"{_AG_BEST['mad_k']:g}",
-    "ag_best_mark": _n(_AG_BEST["marked_pct"], 3),
-    "ag_best_lab": _n(_AG_BEST["labelled_pct"], 3),
-    "ag_best_err_pct": _n(abs(_AG_BEST["area_agreement_corpus"] - 1) * 100, 1),
-    "ag_ship": _n(_AG_SHIP["area_agreement_corpus"], 3),
-    "ag_best_acc": _n(_AG_BEST["accuracy_pct"], 2),
-    "ag_best_spec": _n(_AG_BEST["specificity_pct"], 2),
     # --- the crops at their best accuracy ---
     "cb_acc": _n(_CROP_BEST["accuracy_pct"], 2),
     "cb_k": f"{_CROP_BEST['mad_k']:g}",
@@ -478,25 +430,11 @@ VALUES = {
     "dz_hog_a": _n(DZ["per_specimen"]["v147"][_DZ_HOG[0]]["area_agreement"], 3),
     "dz_hog_b": _n(DZ["per_specimen"]["ablation"][_DZ_HOG[0]]["area_agreement"], 3),
     # the sweep in background-counting units, at the three rungs the text names
-    "wf5_area": _n(_WFK(5.0)["area_agreement_corpus"], 3),
-    "wf6_area": _n(_WFK(6.0)["area_agreement_corpus"], 4),
-    "wf7_area": _n(_WFK(7.0)["area_agreement_corpus"], 3),
-    "wf4_area": _n(_WFK(4.0)["area_agreement_corpus"], 3),
-    "wf5_acc": _n(_WFK(5.0)["accuracy_pct"], 2),
-    "wf6_acc": _n(_WFK(6.0)["accuracy_pct"], 2),
-    "wf6_spec": _n(_WFK(6.0)["specificity_pct"], 2),
-    "wf5_spec": _n(_WFK(5.0)["specificity_pct"], 2),
-    "wf6_mark": _n(_WFK(6.0)["marked_pct"], 3),
-    "wf5_mark": _n(_WFK(5.0)["marked_pct"], 3),
     # the classical arms, ranked by how close their reported area fraction is
-    "arm_tbl": _ARM_TABLE,
     # our own corpus: the refereed pixels are overwhelmingly crack, so a full mask nearly
     # wins there. Rule 4 needs both numbers to make that concrete.
     # Section 3.6 in percentage-of-image units: the labelled crack the proposal stage
     # never reaches, expressed as a share of the frame rather than as a recall
-    "rd_never_pct_img": _n(PA_W["labelled_pct"] * (1 - _RD_OPEN["recall"]), 3),
-    "rd_reach_pct_img": _n(PA_W["labelled_pct"] * _RD_OPEN["recall"], 3),
-    "rd_never_within10": _n(100 * UCA["missed_within_px_of_found"]["10"], 1),
     "lab_pos_pct": _n(100 * LSC["refereed_crack_px"]
                       / (LSC["refereed_crack_px"] + LSC["refereed_notcrack_px"]), 1),
     "lab_all_f1": _n(2 * (LSC["refereed_crack_px"]
@@ -526,69 +464,18 @@ VALUES = {
     "ebcc_acc": _n(100 * PA_EC["accuracy"], 2),
     "ebcc_spec": _n(100 * PA_EC["specificity"], 2),
     "ebcc_empty_acc": _n(100 - PA_EC["labelled_pct"], 2),
-    "in_crop_n": str(RFA["n"]),
-    "in_crop_gain": _n(IN_CROP["loo"]["f1"] - IN["loo"]["f1"]),
-    "in_rank": _ORD[_rank_i],
     # the same comparison on the whole fields the rest of the paper reports
-    "in_rank_fields": _ORD[_rank_real("whole_fields", "pixel_f1")],
-    "in_rank_skel": _ORD[_rank_real("whole_fields", "skel_f1_tau5")],
-    "in_best_fields": _n(max(v["pixel_f1"] for k, v in SK["whole_fields"].items()
-                             if k != _DECOY)),
-    "in_f1_fields_cmp": _n(SK["whole_fields"][_DET]["pixel_f1"]),
     # the decoy: the detector's own mask, dilated, nothing else
-    "dec_rank_crop": _ORD[_decoy_rank("crops", "pixel_f1")],
     # NOTE: the 3.5 paragraph argues from the crops throughout, so its skeleton rank
     # must come from the crops too -- a whole-field rank quoted beside crop values
     # would be two different sets in one sentence.
-    "dec_rank_skel": _ORD[_decoy_rank("crops", "skel_f1_tau5")],
-    "dec_f1_crop": _n(SK["crops"][_DECOY]["pixel_f1"]),
-    "dec_f1_fields": _n(SK["whole_fields"][_DECOY]["pixel_f1"]),
-    "dec_skel_crop": _n(SK["crops"][_DECOY]["skel_f1_tau5"]),
     "det_skel_crop": _n(SK["crops"][_DET]["skel_f1_tau5"]),
-    "dec_gain_crop": _n(SK["crops"][_DECOY]["pixel_f1"]
-                        - SK["crops"][_DET]["pixel_f1"]),
-    "dec_area_crop": _n(DC["crops"]["detector DILATED (ranks 1st)"]
-                        ["area_fraction_ratio"], 2),
-    "dec_area_fields": _n(DC["whole_fields"]["detector DILATED (ranks 1st)"]
-                          ["area_fraction_ratio"], 2),
-    "dec_width_fields": _n(DC["whole_fields"]["detector DILATED (ranks 1st)"]
-                           ["width_ratio"], 2),
-    "ship_width_fields": _n(DC["whole_fields"]["shipped detector"]["width_ratio"], 2),
     # --- where the recall goes ---
-    "rd_open_recall": _n(_RD_OPEN["recall"], 3),
-    "rd_open_marked": _n(_RD_OPEN["marked_pct"], 1),
-    "rd_open_prec": _n(_RD_OPEN["precision"], 4),
-    "rd_never": _n(100 * (1 - _RD_OPEN["recall"]), 1),
-    "rd_ship_prec": _n(_RD_SHIP["precision"], 4),
-    "rd_floor_cost": _n(_RD_SHIP["recall"] - _RD_MAD["recall"], 4),
-    "rd_ship_recall": _n(RD["shipped_recall"], 4),
     # the ridge-growing arm against the same arm fed another field entirely
     "rg_real": _n(RG["whole_fields"]["B grown through REAL ridge"]["f1"]),
     "rg_other": _n(RG["whole_fields"]["D grown through ANOTHER FIELD ridge"]["f1"]),
     # --- the two-sided mad_k curve, and whether its peak is resolvable ---
-    "mk_ship": "5.0",   # the shipped constant, named so the prose cannot drift
-    "mk_best": str(MK["whole_fields"]["best_in_sample"]),
-    "mk_ship_f1": _n(MK["whole_fields"]["per_k"]["5.0"]["f1"]),
-    "mk_best_f1": _n(MK["whole_fields"]["per_k"]["6.0"]["f1"]),
-    "mk_ship_ratio": _n(MK["whole_fields"]["per_k"]["5.0"]["area_ratio"], 2),
-    "mk_6_ratio": _n(MK["whole_fields"]["per_k"]["6.0"]["area_ratio"], 2),
-    "mk_7_ratio": _n(MK["whole_fields"]["per_k"]["7.0"]["area_ratio"], 2),
-    "mk_7_f1": _n(MK["whole_fields"]["per_k"]["7.0"]["f1"]),
-    "mk_top": str(max(float(k) for k in MK["whole_fields"]["per_k"])),
-    "mk_f1_gain": _n(MKT["whole_fields"]["F1"]["6.0"]["paired_median_gain"]),
-    "mk_f1_wins": str(MKT["whole_fields"]["F1"]["6.0"]["images_favouring"]),
-    "mk_f1_p": _p(MKT["whole_fields"]["F1"]["6.0"]["wilcoxon_p"]),
-    "mk_area_wins": str(MKT["whole_fields"]["|area error| pp"]["6.0"]["images_favouring"]),
-    "mk_area_p": _p(MKT["whole_fields"]["|area error| pp"]["6.0"]["wilcoxon_p"]),
-    "mk_n": str(MKT["whole_fields"]["n"]),
-    "mk_crop_f1_p": _p(MKT["crops"]["F1"]["6.0"]["wilcoxon_p"]),
-    "mk_crop_area_p": _p(MKT["crops"]["|area error| pp"]["6.0"]["wilcoxon_p"]),
-    "mk_crop_ship_ratio": _n(MK["crops"]["per_k"]["5.0"]["area_ratio"], 2),
-    "mk_crop_6_ratio": _n(MK["crops"]["per_k"]["6.0"]["area_ratio"], 2),
     # the whole-field form of the decoy gain, which the cost sentence needs
-    "dec_gain_fields": _n(SK["whole_fields"][_DECOY]["pixel_f1"]
-                          - SK["whole_fields"][_DET]["pixel_f1"]),
-    "dec_rank_fields_pixel": _ORD[_decoy_rank("whole_fields", "pixel_f1")],
     "rgd_fields_ridge": _n(RVD["whole_fields"]["grown through RIDGE (2 params)"]["f1"]),
     "rgd_fields_dil": _n(RVD["whole_fields"]["just DILATED (2 params)"]["f1"]),
     "rgd_crop_ridge": _n(RVD["crops"]["grown through RIDGE (2 params)"]["f1"]),
@@ -597,22 +484,8 @@ VALUES = {
                     - TXP["whole_fields"]["decoy: WRONG-IMAGE texture"]["sel_by_f1"]["f1"]),
     "tx_ratio": _n(TXP["whole_fields"]["+ TEXTURE attached to seed"]["sel_by_f1"]
                    ["area_ratio"], 2),
-    "wc_in_at": str(SW["Inconel718_crack"]["ceiling_at_width"]),
     "wc_corpus_at": str(MF["ceiling_widths"][_corpus.index(max(_corpus))]),
     # --- the pixel budget: the same result in the units the tool actually reports ---
-    "in_lab_pct": _n(PA_W["labelled_pct"], 2),
-    "in_mark_pct": _n(PA_W["marked_pct"], 2),
-    "in_tp_pct": _n(PA_W["tp_pct"], 2),
-    "in_fp_pct": _n(PA_W["fp_pct"], 2),
-    "in_tn_plus": _n(100 * (1 - PA_W["labelled_pct"] / 100), 2),
-    "in_ratio": _n(PA_W["marked_pct"] / PA_W["labelled_pct"], 2),
-    "in_acc": _n(100 * PA_W["accuracy"], 2),
-    "in_crop_lab_pct": _n(PA_C["labelled_pct"], 2),
-    "in_crop_mark_pct": _n(PA_C["marked_pct"], 2),
-    "in_crop_tp_pct": _n(PA_C["tp_pct"], 2),
-    "in_crop_fp_pct": _n(PA_C["fp_pct"], 2),
-    "in_crop_ratio": _n(PA_C["marked_pct"] / PA_C["labelled_pct"], 2),
-    "in_crop_acc": _n(100 * PA_C["accuracy"], 2),
     # --- appendix A: every set measured ---
     "ebc_lab_pct": _pct(PA_E, "labelled_pct"), "ebc_mark_pct": _pct(PA_E, "marked_pct"),
     "ebc_tp_pct": _pct(PA_E, "tp_pct"), "ebc_fp_pct": _pct(PA_E, "fp_pct"),

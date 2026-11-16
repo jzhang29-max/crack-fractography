@@ -2,42 +2,37 @@
 
 ### 6.1  Spatial interpretation and measurement scope
 
-Agreement in aggregate area can arise when false-positive and false-negative areas cancel. It
-does not establish accurate crack localisation or foreground overlap. At the selected
-setting the reported pixel accuracy is {wf6_acc}%, against approximately {in_empty_acc}% for
-an all-background prediction. A decomposition of the aggregate summaries gives approximately
-{in_fp_pct}% false-positive and {in_fn_pct}% false-negative image area. Their near
-cancellation explains the small net area discrepancy. The {ag_best_spec}% specificity must
-not be interpreted as foreground segmentation accuracy. Complete per-image precision, recall,
-Dice, intersection over union and boundary measures are required to assess localisation
-[3,4]. Section 3.6 reports the first three on the public collection and Section 4.4 reports
-them, averaged over frames, on this laboratory's own two collections; they are reported as
-secondary to the area endpoint, and Section 4.4 gives the two reasons — on both of this
-laboratory's collections the annotation is a stroke far wider than the feature, so an
-overlap score there pays for covering the stroke, and neither collection adjudicates the
-whole frame, so a precision computed on it is a bracket rather than a value.
+Agreement in aggregate area can arise when false-positive and false-negative areas
+cancel. It does not establish accurate crack localisation or foreground overlap, and
+neither does pixel accuracy: over every refereed frame of each arm the detectors
+score {sa_sem_acc}% and {sa_txm_acc}% where a
+prediction that marks no crack at all scores {sa_sem_bg}% and {sa_txm_bg}%. Complete
+per-image precision, recall, Dice, intersection over union and boundary measures are
+required to assess localisation [3,4]. Section 3.1 reports the first three, averaged over
+frames, on both of this laboratory's collections, together with the two reasons they must
+be read with care — on both collections the annotation is a stroke far wider than the
+feature, so an overlap score there pays for covering the stroke, and neither collection
+adjudicates the whole frame, so a precision computed on it is a bracket rather than a
+value.
 
-**The ranking reported in Section 3.2 is specific to the area endpoint and can be obtained
-without detection.** Dilating this detector's own output, which reads no new evidence from
-the image, moves it to the top of a conventional overlap ranking while increasing the
-reported crack area fraction to {dec_area_fields} times the reference. That observation is
-the reason this manuscript reports area agreement and background rejection rather than
-overlap scores, and a reader should apply the same scepticism to the area ranking: it is a
-ranking of total marked area and nothing more.
+**A conventional overlap ranking can be climbed without detecting anything**, because
+widening a mask raises the score whether or not the mask is better placed. That is not an
+inference here but the measurement of Section 3.1: a reconstruction of each frame's own
+annotation that is exactly right about where every crack runs scores {om_sem_cf1} and
+{om_txm_cf1}, while the detector scores {om_sem_f1} and {om_txm_f1} against the same
+references. Every overlap score in this manuscript is therefore reported beside what that
+correct trace earns, and a reader should apply the same scepticism to any ranking by
+area: it ranks total marked area and nothing more.
 
 Diagnostic observations further limit the interpretation of the darkness criterion.
-Approximately 42% of annotated crack area lies outside the reported proposal support **on
-the public Inconel 718 collection**. The corresponding measurement on this laboratory's
-own frames, which is a different collection and a different annotation and is reported in
-Figure {fig_modality}(b), is that the median frame has {mc_sem_prop}% of its annotated
+Reported in Figure {fig_modality}(b), the median frame has {mc_sem_prop}% of its annotated
 crack proposed in SEM and {mc_txm_prop}% in TXM, with the median annotated pixel sitting
 below the operating threshold on {mc_sem_below} of {mc_sem_n} and {mc_txm_below} of
-{mc_txm_n} frames. The three figures are not interchangeable — they are pooled over area,
-over frames and over frames respectively, on three different annotations — but they agree
-on where the loss is. The
-unreached labelled regions have higher reported mean intensity than the detected dark cores —
-a mean grey level of 127 against a background of 82 and detected cores of 59 — which is
-consistent with a contrast-polarity limitation rather than a threshold setting. Panels of the
+{mc_txm_n} frames. The unreached annotated regions are not dark: the record behind Figure
+{fig_counting} puts the crack the SEM detector missed at a median displayed grey of
+{cnt_sem_under_grey} where the crack it found sits at {cnt_sem_agree_grey}, which is
+consistent with a contrast-polarity limitation rather than with a threshold set too high.
+Panels of the
 most heavily cracked fields indicate that these regions are the illuminated interior surface
 of an open crack. Expansion experiments increased marked area and did not establish a
 validated correction. A future detector could combine dark-core evidence with independently
@@ -61,21 +56,10 @@ against a stated stroke rule, which Section 6.3 lists among what a new benchmark
 
 ### 6.2  Scale and units
 
-No panel drawn from the Inconel 718 collection carries a scale bar, because the collection
-publishes no pixel size in any form: no resolution tag in the image files, no databar in the
-fields, no magnification in the record, and subsets originating from different microscopes.
-This is stated rather than left as an omission. The reported quantity is a dimensionless
-ratio of pixel counts and does not depend on a pixel size, so the principal result survives
-the absence; no physical length is reported for this collection and none can be.
-
-The consequence for presentation is that the method figure and the evaluation cannot be the
-same images. Figures {fig_flow}, {fig_modality}, {fig_flow} and {fig_measurands} are
-drawn from this laboratory's own corpus, where 7 of the 23 b2 and b3 frames carry a
-recoverable databar, at {wf_sem_nm} nm/px on the one illustrated, so that the processing
-stages can be shown at a stated scale. Section 3's quantitative results come from the public
-collection and Section 4.3's from the transmission frames; Section 4.4 and the critical-k
-measurement of Figure {fig_modality}(b) are this laboratory's own frames, and are the
-exception to the sentence that used to stand here.
+Pixel size is known for both collections evaluated here, so every micrograph panel in
+this paper carries a scale bar and the method figures are drawn from the same frames the
+results are computed on. On the electron side 7 of the 23 b2 and b3 frames carry a
+recoverable databar, at {wf_sem_nm} nm/px on the one illustrated.
 
 The TXM panels in Section 4 do carry scale bars, from a pixel size of 29.24 nm/px that is
 derived from mosaic geometry rather than read from instrument metadata. Those bars, and any
@@ -84,29 +68,21 @@ corrected.
 
 ### 6.3  Validation and reproducibility
 
-The reference annotation for this collection has undocumented provenance. As recorded in
-Section 2.1, the Inconel 718 crack class is present in the archive but absent from the
-collection's own class list, and no annotation protocol, annotator count or class definition
-accompanies it. No inter-annotator agreement can be computed, and no second annotator exists,
-so the reference cannot be distinguished from one annotator's judgement. A new benchmark
-should fix the tuning objective within training folds, preserve complete per-image results,
-report uncertainty for the primary endpoint, and document the annotation rules — including
-a stated stroke width, since Section 6.1 shows that the annotations available here vary
-between a traced line and a filled region and that the difference changes every overlap
-score computed against them.
-
-The released crops share parent images with the whole fields, so they do not form an
-independent test population. Image framing also changes the reported area ratio: cropping
-these images around their own cracks moves it from {in_ratio} to {in_crop_ratio} with no
-change to the method, and reverses which operating setting is preferable.
+Neither collection evaluated here has a second annotator, so no inter-annotator
+agreement can be computed and neither reference can be distinguished from one annotator's
+judgement. A new benchmark should fix the tuning objective within training folds, preserve
+complete per-image results, report uncertainty for the primary endpoint, and document the
+annotation rules — including a stated stroke width, since Section 6.1 shows that the
+annotations available here vary between a traced line and a filled region and that the
+difference changes every overlap score computed against them.
 
 The implementation requires a reproducible specification of the MAD normalisation, the
 logical combination of the intensity gates, image and mask resizing, the morphological
 footprint and the software version. The reported 13-pixel opening does not establish whether
 that value denotes a radius, diameter or another footprint convention.
 
-The current conclusion is limited to Inconel 718 whole fields and a two-dimensional area
-endpoint, with the cross-modality result of Section 4 scoped as stated there. Generic defect
+The current conclusion is limited to the two collections evaluated here, with the
+cross-modality result of Section 4 scoped as stated there. Generic defect
 labels from another material collection, including MetalDAM [13], are not interchangeable
 with crack annotations. Independent material-specific validation is needed before
 interpreting image area as a physical three-dimensional defect quantity.

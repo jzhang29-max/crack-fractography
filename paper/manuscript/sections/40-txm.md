@@ -84,7 +84,7 @@ it misses the specimen or because the crack there has opened through the full th
 Either way it is not a test of the detection rule: the median painted-crack pixel on a B3
 frame reaches the detector as {fb_b3_img8} of 255 and {fb_b3_gate}% of the painted crack
 is below the absolute darkness floor of {fb_gate}, which marks it unconditionally whatever
-the relative criterion decides. Section 4.5 gives the split: {mc_b3_prop}% of B3's painted
+the relative criterion decides. The split is {mc_b3_prop}% of B3's painted
 crack is proposed and most of that comes from the floor alone. **B3's margin should be
 read as a measurement of the annotation, not of the detector.**
 
@@ -176,56 +176,5 @@ the other was not. What Section 4.2 adds is that neither number should be read a
 from the crack. The frame counts also differ from measurement to measurement — {tm_cv_n}
 for the grouped cross-validation, {tm_ld_n} for the labelled-domain median, {tm_wf_n} for
 the whole-frame median, {tx_n} for the carried-over detector in Section 4.3 and
-{om_txm_n} for the overlap measures in Section 4.4, according to which frames carry the
+{om_txm_n} for the overlap measures in Section 3.1, according to which frames carry the
 labels each measurement needs — and they are not pooled anywhere.
-
-### 4.4  Precision, recall and F1 on this laboratory's own two collections
-
-Section 3.6 reports these three measures for the public collection, where every pixel of
-the annotation carries a verdict. This section reports them for the two collections the
-laboratory produced itself, at the same constant k = {om_k}, averaged over frames rather
-than pooled over pixels: pooling lets one frame carry a collection, and in the TXM set one
-frame holds {tpf_b3_share}% of its group's reviewed crack.
-
-On the {om_sem_n} SEM frames that carry both a painted crack and a reviewed not-crack
-verdict, the mean precision is {om_sem_prec}, the mean recall {om_sem_rec} and the mean F1
-{om_sem_f1}, with standard deviations over frames of {om_sem_precsd}, {om_sem_recsd} and
-{om_sem_f1sd}. On the {om_txm_n} TXM frames the same three are {om_txm_prec},
-{om_txm_rec} and {om_txm_f1}, with standard deviations {om_txm_precsd}, {om_txm_recsd} and
-{om_txm_f1sd}. The spread is as large as the difference between the collections, and on
-TXM it is structured by specimen group rather than scattered.
-
-**Two things have to be read with those six numbers, and both of them are larger than the
-numbers.**
-
-The first is the brush. Neither annotation is a crack trace; both are strokes far wider
-than the feature, {om_sem_width} px wide on the SEM frames and {om_txm_width} px on the TXM
-frames at the 90th percentile. Reducing each frame's own annotation to its centreline and
-redrawing it three pixels wide gives a prediction that is exactly right about where every
-crack runs, and against the stroke it came from it scores an F1 of {om_sem_cf1} on the SEM
-frames and {om_txm_cf1} on the TXM frames. The detector scores {om_sem_f1} and
-{om_txm_f1}. It is above that reference on {om_sem_above} of {om_sem_n} SEM frames and
-{om_txm_above} of {om_txm_n} TXM frames. **An F1 measured on these collections therefore
-ranks how closely a mask reproduces the annotator's stroke, and the detector outscores a
-geometrically correct trace because it marks wide, not because it is better located.**
-This is the same statement Section 4.2 makes for the collection's own detector, measured
-on a second detector and a second modality.
-
-The SEM annotation is the wider of the two by this measure, not the narrower. On the
-{pr_sem_n} SEM frames the share of annotated pixels lying more than {pr_px} px inside the
-annotation has a median of {pr_sem_med}% and reaches {pr_sem_max}%, and {pr_sem_above} of
-the {pr_sem_n} exceed 25%; the corresponding TXM figures are a median of {pr_txm_med}% and
-{pr_txm_above} of {pr_txm_n}. On more than half of this laboratory's own SEM frames the
-reference is therefore closer to a blocked-out area than to a traced line, which is the
-direct reason the SEM precision in this section is high while its ceiling is low: there is
-a great deal of annotated area to land inside.
-
-The second is the denominator. Neither collection adjudicates the whole frame, so a
-precision computed on it is a bracket rather than a value. The figures above exclude
-unreviewed pixels at both ends, which assumes every marked pixel nobody looked at is
-correct; at the other end, counting every one of them as wrong, the mean precision is
-{om_sem_lo} on the SEM frames and {om_txm_lo} on the TXM frames, and the mean F1 is
-{om_sem_f1lo} and {om_txm_f1lo}. The true value lies between the two, and which end a
-reader should stand nearer to is not something this annotation can settle. Section 3.6
-reports the public collection as values rather than as brackets for exactly this reason:
-there, every pixel carries a verdict.

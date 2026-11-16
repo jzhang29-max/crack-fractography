@@ -452,10 +452,17 @@ fig = plt.figure(figsize=(J.PAGEW, 3.12))
 #: WHAT IT BUYS, which is not nothing: pooling takes EVERY frame of each arm, the weak
 #: specimens included, so there is no selection left to declare. The F1 >= 0.5 rule
 #: that decided which bars were drawn no longer decides anything on the sheet.
-gs = fig.add_gridspec(1, 2, left=0.062, right=0.993, top=0.858, bottom=0.330,
-                      width_ratios=[1.0, 1.52], wspace=0.30)
+#: THREE PANELS, BECAUSE THE SECOND ONE WAS ONE ARM'S HISTORY AND THE AUTHOR ASKED
+#: WHERE THE OTHER ARM WAS. Panel (b) showed what retraining bought the transmission
+#: model and carried a sentence about the electron arm in a box; a sentence in a box is
+#: not a result on a sheet of results. Panel (c) now draws the electron arm's own
+#: question -- what its one trained stage bought -- on its own axis, because the two
+#: are a TXM IoU and an SEM F1 over different unit sets and must not share a scale.
+gs = fig.add_gridspec(1, 3, left=0.062, right=0.993, top=0.858, bottom=0.330,
+                      width_ratios=[0.80, 1.02, 1.22], wspace=0.50)
 ax_b = fig.add_subplot(gs[0, 0])
 ax_r = fig.add_subplot(gs[0, 1])
+ax_s = fig.add_subplot(gs[0, 2])
 
 
 def score_bar(ax, centre, lo, hi, colour):
@@ -604,29 +611,66 @@ ax_r.set_ylabel("held-out IoU, TXM model\n(5-fold, grouped by image)",
 ax_r.tick_params(labelsize=J.TICK, pad=1.6)
 for _s in ax_r.spines.values():
     _s.set_linewidth(0.6)
-#: THE SEM ARM IS NAMED HERE BECAUSE ITS ABSENCE WAS READ AS AN OVERSIGHT. A reviewer
-#: asked, of this panel, "did the SEM model not retrain?" It did not, and a panel that
-#: shows one arm's history and says nothing about the other leaves that question to be
-#: guessed at. The answer is one fit and no rounds, and the honest number beside it is
-#: the leave-one-frame-out refit in docs/figures/sem_classifier_lofo.json -- the arm's
-#: own in-sample bars are in panel (a) and cannot answer a question about retraining.
-#:
-#: It is a NOTE AND NOT A POINT ON THESE AXES. The y axis is a TXM IoU; the SEM number
-#: is an F1 over refereed pixels on a different unit set, and a marker placed on this
-#: scale would be read as comparable to the line. Nothing is plotted; it is text.
+#: WHAT THE ELECTRON ARM'S ONE TRAINED STAGE BOUGHT, which is the same question panel
+#: (b) asks of the transmission model and the answer is the opposite. Three arms from
+#: docs/figures/sem_classifier_lofo.json, all on the same 18 refereed frames and all a
+#: mean over frames: the area floor with no classifier at all, the deployed classifier
+#: scored on frames it was fitted on, and the same recipe refitted without each held-out
+#: frame. The deployed bar is IN SAMPLE and the panel says so rather than letting it
+#: stand beside the other two as though all three were comparable.
 _LOFO = json.load(open(os.path.join(DOC_FIGURES, "sem_classifier_lofo.json")))
-_sem_lofo = _LOFO["fitted_frames"]["lofo_fixed"]["mean_f1"]
-_sem_floor = _LOFO["fitted_frames"]["floor"]["mean_f1"]
-ax_r.text(0.025, 0.955,
-          "SEM: no rounds.\nThe region classifier is fitted once,\n"
-          f"and held out of its own fit it scores\nF1 {_sem_lofo:.3f} — against "
-          f"{_sem_floor:.3f} for the area\nfloor with no classifier at all.",
-          transform=ax_r.transAxes, ha="left", va="top", fontsize=J.TICK,
-          color=J.ACCENT, linespacing=1.25, zorder=8,
-          bbox=dict(boxstyle="round,pad=0.30", facecolor="white",
-                    edgecolor=J.ACCENT, linewidth=0.6, alpha=0.96))
+_PF = [r for r in _LOFO["per_frame"]
+       if all(k in r for k in ("floor", "shipped", "lofo_fixed"))]
+if len(_PF) != _LOFO["fitted_frames"]["floor"]["n_frames"]:
+    raise SystemExit(
+        f"{len(_PF)} per-frame rows carry all three arms but the summary reports "
+        f"{_LOFO['fitted_frames']['floor']['n_frames']} frames; the panel would be "
+        f"drawn on a different unit set from the number beside it")
 
-ax_r.text(0.0, 1.015, "(b)  what retraining bought, TXM model",
+#: PAIRED, BECAUSE THE COMPARISON IS PAIRED. Drawn first as three absolute means with
+#: their standard deviations OVER FRAMES, this panel showed three points at 0.647,
+#: 0.638 and 0.636 each carrying a +/-0.25 whisker, and read as "no difference, and
+#: not measurable either". The spread is real but it is between FRAMES -- a frame with
+#: a wide clean crack scores far above a frame with a faint one under every arm -- and
+#: it is not the uncertainty of the comparison. The arms are run on the SAME 18 frames,
+#: so the quantity that answers "what did the classifier buy" is the per-frame
+#: DIFFERENCE, whose standard deviation is 0.018 and not 0.25. The count of frames it
+#: helps and hurts is printed beside each point, because a mean near zero can be
+#: a wash or a consistent small loss and only the count tells them apart.
+_SEM_D = []
+for _lab, _key in (("in sample", "shipped"), ("held out", "lofo_fixed")):
+    _d = [r[_key]["f1"] - r["floor"]["f1"] for r in _PF]
+    _n = len(_d)
+    _mean = sum(_d) / _n
+    _sd = (sum((x - _mean) ** 2 for x in _d) / (_n - 1)) ** 0.5
+    _SEM_D.append((_lab, _mean, _sd, sum(1 for x in _d if x < 0), _n))
+
+ax_s.axhline(0.0, color=J.ACCENT, lw=0.9, dashes=(3.0, 2.0), zorder=2)
+for _i, (_lab, _m, _sd, _worse, _n) in enumerate(_SEM_D):
+    ax_s.errorbar(_i, _m, yerr=_sd, color=J.ACCENT, lw=0.9, capsize=2.4, zorder=3)
+    ax_s.plot(_i, _m, "o", ms=6.0, color=J.ACCENT, mec="white", mew=0.8, zorder=5)
+    ax_s.text(_i, _m - _sd - 0.004, f"{_m:+.3f}", fontsize=J.TICK, ha="center",
+              va="top", color=J.ACCENT, fontweight="bold", zorder=6)
+    ax_s.text(_i, _m + _sd + 0.004, f"worse on\n{_worse} of {_n}", fontsize=J.TICK,
+              ha="center", va="bottom", color=J.G_DARK, linespacing=1.15, zorder=6)
+ax_s.set_xticks(range(len(_SEM_D)))
+ax_s.set_xticklabels([l for l, _m, _sd, _w, _n in _SEM_D], fontsize=J.TICK)
+ax_s.set_xlim(-0.6, len(_SEM_D) - 0.4)
+_dlo = min(m - sd for _l, m, sd, _w, _n in _SEM_D)
+_dhi = max(m + sd for _l, m, sd, _w, _n in _SEM_D)
+ax_s.set_ylim(_dlo - 0.018, max(_dhi, 0.0) + 0.030)
+ax_s.set_ylabel("change in per-frame F1\nagainst no classifier", fontsize=J.LABEL,
+                labelpad=2.0)
+ax_s.tick_params(labelsize=J.TICK, pad=1.6)
+for _s2 in ax_s.spines.values():
+    _s2.set_linewidth(0.6)
+ax_s.text(0.0, 1.015, "(c)  the SEM model",
+          transform=ax_s.transAxes, ha="left", va="bottom", fontsize=J.PANEL,
+          fontweight="bold", color=J.INK)
+ax_s.text(0.5, -0.215, "paired, same 18 frames", transform=ax_s.transAxes,
+          ha="center", va="top", fontsize=J.TICK, color=J.G_DARK)
+
+ax_r.text(0.0, 1.015, "(b)  what TXM retraining bought",
           transform=ax_r.transAxes, ha="left", va="bottom", fontsize=J.PANEL,
           fontweight="bold", color=J.INK)
 
@@ -893,9 +937,10 @@ CAPTION = dict(
         "arm-to-arm comparison; the rest of the axis is two different specimen sets "
         "drawn on one axis, and no bar of one arm may be read against a bar of the other "
         "outside b2.",
-        "No per-sample breakdown of the public Inconel 718 collection is drawn. "
-        "arms_background_units.json is one external collection, not this laboratory's "
-        "specimen series, and it carries no specimen grouping at all.",
+        "Only this laboratory's own collections are drawn. The paper reports no "
+        "external collection, so there is no second corpus for this plate to break "
+        "down, and arms_background_units.json is read for the all-background "
+        "baseline alone.",
         "Every SEM sample other than b2 rests on 1 to 3 frames, and MAR_Amb_Cast and "
         "AS_24hr on one frame each. Those bars are single measurements and carry no "
         "spread; no error bar is drawn on them because there is none to draw.",

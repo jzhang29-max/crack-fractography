@@ -558,9 +558,10 @@ def main():
     charts = [{
         "tag": "sem", "nm": sem_nm, "whole": sem["flat"], "field": sem["img"],
         "sl": ssl, "H": sH, "letters": "abcdef",
-        "title": ("SEM  —  a threshold rule, then a trained classifier"
-                  if BM.DO.USE_REGION_CLASSIFIER else
-                  "SEM  —  a threshold rule, nothing trained"),
+        #: THE ROW NAMES THE MICROSCOPY AND NOTHING ELSE, at the author's instruction.
+        #: What each arm's detector IS belongs in the caption; a dash and a description
+        #: on the title line is the same sub-line that was taken off the stage boxes.
+        "title": "SEM",
         #: NO SUB-LINE. The author explains the model in the caption; the plate's job
         #: is the chain of arrays, and a second line of prose beside the title was
         #: competing with it.
@@ -585,7 +586,7 @@ def main():
     }, {
         "tag": "txm", "nm": txm_nm, "whole": txm["img"], "field": txm["img"],
         "sl": tsl, "H": tH, "letters": "ghijkl",
-        "title": "TXM  —  a trained pixel model",
+        "title": "TXM",
         "sub": "",
         "stages": ["full field", "detail", "crack\nprobability", "thresholded",
                    "cleaned", "detected"],

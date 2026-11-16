@@ -55,16 +55,16 @@ The present study claims no novelty for the framing; its contribution is the mea
 made in those units, for one deterministic detector on one alloy, together with the ways the
 conventional scores mislead about it.
 
-We examine the reported behaviour of a multiscale darkness detector on Inconel 718
-whole-field images. The analysis centres on aggregate area agreement at a selected operating
-setting, the corresponding background specificity, and a descriptive comparison with
-classical image-processing methods. Two sections place the selected setting against the full
-sweep and against the range the area endpoint can resolve, and a third carries the detector
-to a second imaging modality. That third section reports the transfer under two aggregations
-rather than one, because a figure pooled over pixels and the mean over frames disagree about
-it, and it closes by giving precision, recall and F1 for both of this laboratory's own
-collections beside the score a geometrically correct crack trace earns against their
-annotations.
+We examine the behaviour of the two detectors this laboratory ships, each on the
+microscopy it was built for: a multiscale darkness rule on the electron frames and a
+trained per-pixel ensemble on the transmission frames. The analysis centres on precision,
+recall and F1 over the crack class, each reported beside the score a geometrically correct
+three-pixel trace of the same annotation earns against that annotation, and each reported
+as a bracket rather than a value, because neither collection adjudicates the whole frame.
+A further section carries the electron detector to the second modality unchanged and
+reports the transfer under two aggregations rather than one, because a figure pooled over
+pixels and the mean over frames disagree about it. A last section locates where the
+transfer is lost, on the axis the detector itself thresholds rather than through a score.
 
 [FIGURE flow | Both detectors end to end, one row per microscopy. Each arrow carries the operation that produces the array it points at, and each cleaning step carries a before/after inset magnified 4x to 19x so what the step removed can be seen rather than asserted; no pixel in any panel is dilated. The electron arm is a darkness rule followed by a trained region classifier -- a multiscale background estimate subtracted at seven radii, a robust darkness cut, morphological cleaning, and then an eight-feature logistic model that decides which surviving regions are kept. The transmission arm is a trained per-pixel ensemble: 17 hand-built image channels and a frozen SAM ViT-H embedding, the mean of two fitted members cut at 0.60, then pruned and narrowed to the measured width. The two arms do not share a detector and the plate does not pretend they do. Table {tbl_settings} lists the constants and Figure {fig_parameters} reports how each was arrived at.]
 

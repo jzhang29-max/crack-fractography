@@ -214,6 +214,8 @@ def prepare(tag):
                                       out_range=(0.0, 1.0))
     rgb = np.dstack([grey] * 3)
     rgb[region] = 0.72 * rgb[region] + 0.28 * np.array(J.rgb(J.MASK))
+    #: kept beside the composite so the panel can draw the photograph smoothly and
+    #: the region exactly, instead of resampling one rule over both.
 
     sk_pts = np.argwhere(skel)
     sk_w = np.array([2.0 * dt[y, x] for y, x in sk_pts])
@@ -221,7 +223,8 @@ def prepare(tag):
     picks = [int(order[int(round(q * (len(order) - 1)))]) for q in (0.10, 0.50, 0.90)]
     circles = [(sk_pts[k][0], sk_pts[k][1], sk_w[k] / 2.0) for k in picks]
 
-    return dict(d=d, nm=nm, um=um, region=region, rgb=rgb, skel=skel, circles=circles,
+    return dict(d=d, nm=nm, um=um, region=region, rgb=rgb, grey=grey,
+                skel=skel, circles=circles,
                 shape=shape, net_len=net_len, n_branch=n_branch, n_end=n_end,
                 skel_px=skel_px, geo=geo, geo_info=geo_info, path_len=path_len,
                 floor=floor, chord_px=chord_px, ends=(py0, px0, py1, px1),
@@ -230,7 +233,16 @@ def prepare(tag):
 
 def draw_region(ax, P, letter):
     """One micrograph panel: the region, its whole medial axis, route, chord, circles."""
-    ax.imshow(P["rgb"], interpolation="nearest")
+    #: TWO LAYERS: the micrograph resampled smoothly because it is a photograph, the
+    #: region tint at nearest neighbour because it is the result. The tint is a 28%
+    #: blend over the grey, so it is rebuilt here at the same weights rather than
+    #: reused from the composite.
+    ax.imshow(P["grey"], cmap="gray", vmin=0, vmax=1, interpolation="bilinear",
+              zorder=1)
+    _rgba = np.zeros(P["region"].shape + (4,), float)
+    _rgba[P["region"], :3] = np.array(J.rgb(J.MASK))
+    _rgba[P["region"], 3] = 0.28
+    ax.imshow(_rgba, interpolation="nearest", zorder=2)
     J.micrograph(ax)
     ax.add_patch(Rectangle((0, 0), 1, 1, transform=ax.transAxes, fill=False,
                            edgecolor=J.INK, linewidth=0.7, zorder=40))

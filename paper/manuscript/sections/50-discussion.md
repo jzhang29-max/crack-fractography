@@ -2,20 +2,22 @@
 
 ### 5.1  Interpretation of the principal measurement
 
-The principal finding is close aggregate area agreement for a deterministic detector applied
-to the evaluated Inconel 718 collection. A reference fraction of {ag_best_lab}% and a
-predicted fraction of {ag_best_mark}% differ by 0.024 percentage points. Expressing the
-result in both image-area units and relative reference-area units makes the measurement scale
-explicit. The ratio of {ag_best} supplies an interpretable summary for readers comparing
-marked area with the reference total.
+The principal finding is what an overlap score on these collections measures. Both
+annotations are painted strokes rather than traced lines — on the SEM frames a median of
+{pr_sem_med}% of annotated pixels lie more than {pr_px} px inside the annotation, reaching
+{pr_sem_max}% — and against such a reference the detector records a mean per-frame F1 of
+{om_sem_f1} on SEM and {om_txm_f1} on TXM, where a geometrically correct three-pixel trace
+of the same annotation records {om_sem_cf1} and {om_txm_cf1}. The detector is above that
+trace on {om_sem_above} of {om_sem_n} SEM frames and {om_txm_above} of {om_txm_n} TXM
+frames. **An overlap score on these collections therefore ranks resemblance to the
+annotator's stroke rather than agreement about where the crack is**, which is the
+conclusion Section 4.2 reaches for the transmission collection's own detector, arrived at
+here independently on a second detector and a second modality.
 
-The complete displayed comparator set places this result in context. Among the seven
-summaries, the darkness detector has the smallest absolute deviation of the area ratio from
-unity. The field-level count provides a complementary observation: the selected setting has
-lower reported absolute area error than the default in most of the evaluated whole fields.
-Section 3.4 adds the information that the earlier selection could not have identified any
-other setting, because its grid stopped at the default; the extended sweep locates the
-crossing and the selected setting survives it.
+A second reading of the same measurements concerns the denominator. Neither collection
+adjudicates the whole frame, so every precision computed on it is a bracket, and the
+distance between its ends is wider than most of the differences a reader would want to
+draw from it. Section 3.1 gives both ends for that reason rather than choosing one.
 
 ### 5.2  Interpretation of the processing workflow
 
@@ -34,43 +36,32 @@ enabling the classifier lowers recall, intersection over union and F1 on every u
 measured here, and its training images overlap the laboratory collection, so the
 corresponding scores are in sample.
 
-The reported specificity of {ag_best_spec}% indicates high background rejection in the
-reference background population. This observation is consistent with the intended use of a
-darkness criterion to identify a relatively small foreground population. It complements the
-area measurement while retaining its own definition and denominator.
-
 ### 5.3  Conclusions
 
-A multiscale darkness detector achieved close reported agreement with the aggregate reference
-crack area in {in_n} Inconel 718 SEM whole fields. At a MAD multiplier of {mk_best}, the
-predicted area was {ag_best_mark}% against a reference of {ag_best_lab}%, giving a ratio of
-{ag_best} and an approximately {ag_best_err_pct}% relative aggregate discrepancy. The
-detector also recorded {ag_best_spec}% background specificity and the closest area ratio to
-unity among the seven displayed comparator summaries.
+On this laboratory's own two collections, scored only on the pixels an operator ruled on,
+the two detectors record a mean per-frame F1 of {om_sem_f1} over {om_sem_n} SEM frames and
+{om_txm_f1} over {om_txm_n} TXM frames. Those numbers are not a ranking of how well the
+cracks were found. A reconstruction of each frame's own annotation that is exactly right
+about where every crack runs and wrong only about width scores {om_sem_cf1} and
+{om_txm_cf1} against the annotation it came from, so the detector outscores a
+geometrically correct trace by marking wide rather than by being better placed.
 
-Two results reported here qualify that conclusion rather than supporting it. The pixel
-accuracy at the selected setting, {wf6_acc}%, is below the {in_empty_acc}% of an
-all-background prediction, and Section 3.5 shows that the entire range available to pixel
-accuracy on this collection is {wc_f_head} percentage points, so no configuration could have
-been distinguished on that endpoint. And the same detector carried to a second imaging
-modality clears an all-background prediction on one of its two specimen series when the
-comparison is pooled over pixels; giving each frame one vote instead, it is
-{tpf_mean_all} points from that prediction on average over the {tpf_n} frames, with
-{tpf_pos_all} of them individually above it, and one specimen group changes sign between
-the two aggregations. Section 4.3 reports both.
+Pixel accuracy settles nothing either. Over every refereed frame of each arm, the
+detectors score {sa_sem_acc}% and {sa_txm_acc}%
+where a prediction that marks no crack at all scores {sa_sem_bg}% and {sa_txm_bg}%: a
+hundredth of a point above that baseline on one arm, and below it on the other.
 
-A third qualifier concerns the references themselves. On this laboratory's own two
-collections the annotation is a painted stroke rather than a traced line — on the SEM
-frames a median of {pr_sem_med}% of annotated pixels lie more than {pr_px} px inside the
-annotation, reaching {pr_sem_max}% — and against such a reference the detector records a
-mean per-frame F1 of {om_sem_f1} on SEM and {om_txm_f1} on TXM where a geometrically
-correct three-pixel trace of the same annotation records {om_sem_cf1} and {om_txm_cf1}. It
-is above that trace on {om_sem_above} of {om_sem_n} SEM frames and {om_txm_above} of
-{om_txm_n} TXM frames. An overlap score on these collections therefore ranks resemblance
-to the annotator's stroke, which is the same conclusion Section 4.2 reaches for the TXM
-collection's own detector, reached independently on a second detector and a second
-modality. It is the clearest statement in this work of why the area endpoint rather than
-an overlap score carries the result.
+The same detector carried to the second modality clears an all-background prediction on
+one of its two specimen series when the comparison is pooled over pixels; giving each
+frame one vote instead, it is {tpf_mean_all} points from that prediction on average over
+the {tpf_n} frames, with {tpf_pos_all} of them individually above it, and one specimen
+group changes sign between the two aggregations. Section 4.3 reports both.
 
-Together these establish an aggregate area result and an interpretable workflow within the
-evaluated collection, and they bound how far either should be read.
+Where the transfer is lost is located rather than inferred. On the axis the detector
+itself thresholds, the median annotated pixel sits below the operating point on
+{mc_sem_below} of {mc_sem_n} SEM frames and {mc_txm_below} of {mc_txm_n} TXM frames, with
+a median of {mc_sem_prop}% and {mc_txm_prop}% of the annotated crack proposed at all, so
+the loss is at candidate generation and not at the filters that follow it.
+
+Together these establish an interpretable workflow on the collections evaluated here, and
+bound what its scores can be asked to settle.

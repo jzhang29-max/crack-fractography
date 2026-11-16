@@ -40,8 +40,12 @@ nine-constant width clip and a three-constant straight-artefact rejector that
 declared is an undeclared degree of freedom.
 
 HOW EACH CONSTANT WAS FIXED IS THE ref. COLUMN, AND THAT IS THE RESULT.
-Of the forty-one, exactly ONE -- the SEM MAD multiplier -- was selected by a sweep on
-labelled data. Four were settled by a test that had no value to choose. NINE were
+Of the forty-one, NOT ONE was selected by a sweep on data this paper reports. The SEM
+MAD multiplier was once the single exception, and its sweep was run on a public
+collection that has been removed from this paper at the author's instruction; the value
+in use is unchanged, the evidence for it is not here, and the ref. column says `adopted`
+rather than claiming either that it was swept or that its construction fixed it. Four
+constants were settled by a test that had no value to choose. NINE were
 inherited from archived code with no recorded provenance and are swept HERE, after the
 fact: their panels show SENSITIVITY, not selection, and where the shipped value is not
 the best value on the instrument the marker simply sits off the peak. Thirty-six are
@@ -795,8 +799,8 @@ APP_RULE = dict(color=J.G_MID, lw=0.7, linestyle=(0, (1, 2)), zorder=2)
 T_NAME, T_BAND, T_TICK = 8.5, 9.0, 8.0
 
 #: THE TALLY THIS MODULE'S DOCSTRING STATES, asserted against the tables after they are
-#: built. The docstring is prose and prose does not recompute: "of the fifty, exactly
-#: ONE was selected by a sweep" is the plate's finding, and a constant added to either
+#: built. The docstring is prose and prose does not recompute: how many constants were
+#: selected by a sweep is the plate's finding, and a constant added to either
 #: table in a later revision would falsify it silently. Changing a table without
 #: changing these numbers now aborts.
 #: THE INHERITED CONSTANTS AND THEIR PANELS WERE REMOVED at the author's instruction.
@@ -812,7 +816,8 @@ T_NAME, T_BAND, T_TICK = 8.5, 9.0, 8.0
 #: their own grid\'s optimum. Those measurements still exist in
 #: docs/figures/parameters_tiles.json and parameters_frames.json; the figure no longer
 #: shows them.
-DOCSTRING_TALLY = {"total": 41, "swept": 1, "test": 4, "inherited": 0}
+DOCSTRING_TALLY = {"total": 41, "swept": 0, "test": 4, "inherited": 0,
+                   "adopted": 1}
 
 _SCRATCH = None
 
@@ -959,6 +964,14 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
 
     # ---------------------------------------------------------------- the four kinds
     SWEEP, TEST, INHERIT, FIXED = J.ACCENT, J.G_DARK, J.ACCENT2, J.G_MID
+    #: ADOPTED: a value this paper uses and offers no evidence for. It is
+    #: not FIXED -- nothing about its construction determines it -- and it
+    #: is not SWEPT, because no sweep of it exists on any data reported
+    #: here. Saying so is the whole point of this column.
+    #: its own colour, because these categories are keyed BY COLOUR: giving
+    #: ADOPT the same value as SWEEP silently merged the two and the tally
+    #: went on reporting one swept constant after the sweep was removed.
+    ADOPT = J.INK
     #: FOUR WORDS ON THE PLATE, and what each one means in the caption file below.
     #: The key used to be four phrases -- twenty words of lettering explaining a
     #: four-colour legend -- and a legend that needs a sentence per entry is a caption
@@ -970,9 +983,12 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
                  "the marker sits wherever the shipped value falls",
         TEST: "settled by a test that had no value to choose -- on or off, which "
               "members -- so there is a verdict but no optimum",
+        ADOPT: "adopted: the value in use, with no sweep of it on any data this paper "
+               "reports. It is not fixed by construction -- nothing about the "
+               "construction determines it -- and it is not swept here, so the figure "
+               "declines to claim either",
         FIXED: "fixed by construction, with no sweep on record in either repository"}
-    PROV = [(SWEEP, "swept"), (INHERIT, "inherited"), (TEST, "tested"),
-            (FIXED, "fixed")]
+    PROV = [(ADOPT, "adopted"), (TEST, "tested"), (FIXED, "fixed")]
 
     MAXDOTS = 14
 
@@ -995,11 +1011,6 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
     #: with its unit and several numeric tick labels, and those belong where a reader
     #: of this module can see them against each other rather than buried in nine
     #: separate closures.
-    def p_a(ax):
-        L(ax, grid, [f1[g] for g in grid], logx=True)
-        ax.axvline(float(DO.SHIPPED_MAD_K), **APP_RULE)
-        S(ax, K, f1[K]); ax.set_ylim(0.0, 0.42); ax.set_xlim(0.9, 44)
-
     def p_b(ax):
         gg = [int(g) for g in GATE_GRID]
         L(ax, gg, [gate26[str(g)] for g in gg])
@@ -1137,19 +1148,17 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
     _d0, _d1 = min(dns.values()), max(dns.values())
     _s1 = max(max(sing.values()), union_iou)
     PANELS = [
-        ("SEM", "a", "MAD multiplier $k$", "F1", p_a,
-         [1, 10, 40], ["1", "10", "40"], [0, 0.2, 0.4], ["0", "0.2", "0.4"]),
-        ("SEM", "b", "ladder rung (px)", "unique (%)", p_e,
+        ("SEM", "a", "ladder rung (px)", "unique (%)", p_e,
          [5, 40, 320], ["5", "40", "320"], [0, _hi_e], ["0", "%g" % _hi_e]),
-        ("SEM", "c", "one radius only (px)", "IoU", p_f,
+        ("SEM", "b", "one radius only (px)", "IoU", p_f,
          [5, 40, 320], ["5", "40", "320"], [0.25, round(_s1, 2)],
          ["0.25", "%.2f" % round(_s1, 2)]),
-        ("TXM", "d", "threshold", "rate", p_i,
+        ("TXM", "c", "threshold", "rate", p_i,
          [0.05, 0.5, 0.95], ["0.05", "0.5", "0.95"], [0, 0.5, 1],
          ["0", "0.5", "1"]),
-        ("TXM", "e", "members", "IoU", p_j,
+        ("TXM", "d", "members", "IoU", p_j,
          [0, 2], ["17-ch", "mean"], [0, 0.5, 1], ["0", "0.5", "1"]),
-        ("TXM", "f", "SAM tile and stride (px)", "", p_k, [], [], [], []),
+        ("TXM", "e", "SAM tile and stride (px)", "", p_k, [], [], [], []),
     ]
 
     # ------------------------------------------- EVERY constant, as a printed table
@@ -1162,7 +1171,7 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
     #: bottom rule. No boxes, no arrows, no colour, no key. How each value was settled
     #: is one letter in its own narrow column, defined in a single footnote, which is
     #: the normal way a printed table carries that kind of flag.
-    CODE = {SWEEP: "S", TEST: "T", INHERIT: "I", FIXED: "F"}
+    CODE = {SWEEP: "S", TEST: "T", INHERIT: "I", FIXED: "F", ADOPT: "A"}
 
     def R(name, value, prov, letter=None):
         return (name, value, prov, letter)
@@ -1185,23 +1194,23 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
           FIXED),
         R("flattening clip (%)", pct(sem["flatten_background.low_pct"],
                                      sem["flatten_background.high_pct"]), FIXED),
-        R("scale ladder (px)", "%d–%d" % (LADDER[0], LADDER[-1]), FIXED, "b"),
-        R("ladder rungs", "%d" % len(LADDER), FIXED, "b"),
+        R("scale ladder (px)", "%d–%d" % (LADDER[0], LADDER[-1]), FIXED, "a"),
+        R("ladder rungs", "%d" % len(LADDER), FIXED, "a"),
         R("decimate above (px)", "%d" % int(DO.DECIMATE_ABOVE_SIGMA), FIXED),
         R("multiscale union", "on" if DO.USE_MULTISCALE_UNION else "off",
-          TEST, "c"),
-        R("MAD multiplier k", "%.1f" % K, SWEEP, "a"),
+          TEST, "b"),
+        R("MAD multiplier k", "%.1f" % K, ADOPT),
         R("region classifier", "on" if DO.USE_REGION_CLASSIFIER else "off", TEST),
     ]
     TXM_ROWS = [
         R("recipe", str(const["RECIPE"]), FIXED),
-        R("members averaged", "2", TEST, "e"),
+        R("members averaged", "2", TEST, "d"),
         R("feature channels", "%d" % stats["n_features"], FIXED),
         R("backbone", "SAM ViT-H", FIXED),
-        R("SAM tile (px)", "%d" % const["TILE"], FIXED, "f"),
-        R("tile stride (px)", "%d" % const["TILE_STRIDE"], FIXED, "f"),
+        R("SAM tile (px)", "%d" % const["TILE"], FIXED, "e"),
+        R("tile stride (px)", "%d" % const["TILE_STRIDE"], FIXED, "e"),
         R("embedding stride (px)", "%d" % const["EMB_STRIDE"], FIXED),
-        R("probability threshold", "%.2f" % THR, TEST, "d"),
+        R("probability threshold", "%.2f" % THR, TEST, "c"),
         R("correction floor", "%.2f" % const["CORRECTION_FLOOR"], FIXED),
         R("speck floor (px)", "%d" % const["MIN_BLOB_PX"], FIXED),
         R("hole fill (px)", "%d" % const["FILL_HOLES_MAX_PX"], FIXED),
@@ -1295,9 +1304,17 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
         """Lay the panels out `NCOL` across, wrapping. The SEM arm has eight of them
         now and one row of eight would be 0.75 in per panel, where an axis title does
         not fit."""
+        #: A SHORT ROW IS CENTRED, NOT LEFT-ALIGNED AGAINST A HOLE. The grid is NCOL
+        #: wide and neither arm fills it: the electron arm has two panels since its
+        #: one swept constant lost its panel with the collection that swept it, and
+        #: the transmission arm has three. Laid out from the left, each row ended in
+        #: empty columns and the author read the plate as truncated -- as though a
+        #: panel had failed to draw. Centring says the row is the whole row.
+        _n_last = len(items) % NCOL or NCOL
         for i, (_arm, letter, xlab, ylab, fn, xt, xl, yt, yl) in enumerate(items):
             r, c = divmod(i, NCOL)
-            x = MX + c * (PW + COLGAP)
+            _in_row = NCOL if (r + 1) * NCOL <= len(items) else _n_last
+            x = MX + c * (PW + COLGAP) + (NCOL - _in_row) * (PW + COLGAP) / 2.0
             ax = fig.add_axes([(x + YLABW) / W,
                                1.0 - (y0 + r * PANELROW + PLOTH) / H,
                                (PW - YLABW) / W, PLOTH / H])
@@ -1336,9 +1353,9 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
     # one footnote, which is how a printed table carries a flag column
     # TWO LINES. One ran 7 in on a 6.27 in sheet and the plate's own check caught it.
     T(MX, y + 0.03,
-      "ref.   S swept;   T settled by a test;   F fixed by construction.\n"
+      "ref.   A adopted, no sweep on record here;   T settled by a test;   F fixed by construction.\n"
       "FILLED SQUARE: the value the software uses.   Bracketed letter: the panel "
-      "above.\nDashed: a second series, or in c the seven-rung union.",
+      "above.\nDashed: a second series, or in b the seven-rung union.",
       T_TICK, color=J.G_DARK)
 
     # ---- the controls ----------------------------------------------------------
@@ -1427,7 +1444,8 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
     tally = {"total": n_rows,
              "swept": len([1 for _a, r in ROWS if r[2] == SWEEP]),
              "test": len([1 for _a, r in ROWS if r[2] == TEST]),
-             "inherited": len([1 for _a, r in ROWS if r[2] == INHERIT])}
+             "inherited": len([1 for _a, r in ROWS if r[2] == INHERIT]),
+             "adopted": len([1 for _a, r in ROWS if r[2] == ADOPT])}
     if tally != DOCSTRING_TALLY:
         raise SystemExit(f"this module's docstring states {DOCSTRING_TALLY} and the "
                          f"tables now hold {tally}; fix whichever is wrong rather "
@@ -1520,17 +1538,6 @@ def sidecar(tiles, frames, madk, madp, dead, txm, units, scores, stats, const, b
         #: WHICH PANELS ARE NOT AT THE SHIPPED SETTING, named because they cannot be
         #: brought to it. An audit of this plate found two.
         "panels_measured_without_the_region_classifier": {
-            "a": ("the MAD-multiplier sweep. Its record, docs/figures/"
-                  "madk_above_five.json, is produced by analysis/research/improve/"
-                  "madk_above_five.py, whose emission is the area floor -- "
-                  "clean_mask(13) then a 40 px component floor -- with no call to the "
-                  "region classifier. Its unit set is the 31 public Inconel 718 whole "
-                  "fields, whose images were a download that is no longer on this "
-                  "machine, so the sweep cannot be repeated with the classifier on. "
-                  "The value it selects, mad_k, is a CANDIDATE-stage constant and the "
-                  "classifier runs after it, so the selection is not invalidated; the "
-                  "F1 axis it is selected on is a candidate-stage F1 and should be "
-                  "read as one."),
             "l": ("the SEM multiplier carried onto transmission data. Its record, "
                   "docs/figures/txm_background_units.json, is the same area floor. "
                   "That is deliberate -- the SEM region classifier is not part of the "
@@ -1569,9 +1576,10 @@ def sidecar(tiles, frames, madk, madp, dead, txm, units, scores, stats, const, b
                         "solid grey rule and a filled square mark the value the paper "
                         "runs at, in every row that has one on an axis; the one dotted "
                         "rule, in (a), is the value the application itself runs.",
-        "the_point_of_the_grouping": "of the twelve constants drawn or listed here, ONE "
-                                     "was selected by a sweep on labelled data. Two more "
-                                     "were settled by a test with no value to choose. "
+        "the_point_of_the_grouping": "of the twelve constants drawn or listed here, NONE "
+                                     "was selected by a sweep on data this paper "
+                                     "reports. Two were settled by a test with no "
+                                     "value to choose. "
                                      "The rest were inherited with no recorded "
                                      "provenance and swept only after the fact, or never "
                                      "swept at all. The band headings are that fact.",
@@ -1608,41 +1616,6 @@ def sidecar(tiles, frames, madk, madp, dead, txm, units, scores, stats, const, b
                                "members": stats["model"]}},
 
         "rows": {
-            "a": {
-                "arm": "SEM", "parameter": "MAD multiplier k", "value": K,
-                "verdict": "SELECTED BY A SWEEP ON LABELLED DATA -- the only constant in "
-                           "either arm that was",
-                "unit_set": "31 public Inconel 718 whole fields, mean F1 per image",
-                "record": "docs/figures/madk_above_five.json, sets.whole_fields.per_k",
-                "f1_by_k": {str(g): wf["per_k"][str(g)]["f1"] for g in madk["grid"]},
-                "area_ratio_by_k": {str(g): wf["per_k"][str(g)]["area_ratio"]
-                                    for g in madk["grid"]},
-                "best_in_sample": wf["best_in_sample"],
-                "leave_one_image_out_f1": wf["loo_full_grid_f1"],
-                "f1_at_the_app_default_5": wf["shipped_f1"],
-                "why_the_grid_runs_to_40": madk["why"],
-                "paired_test_6_vs_5": {
-                    "source": "docs/figures/madk_paired_test.json",
-                    "whole_fields": madp["tests"]["whole_fields"]["F1"]["6.0"],
-                    "crops": madp["tests"]["crops"]["F1"]["6.0"],
-                    "read_this": (
-                        "resolved on the 31 whole fields (paired median gain %+.4f, %d "
-                        "of %d images favouring, p = %.1e) and NOT resolved on the 26 "
-                        "crops (%+.4f, p = %.2f)"
-                        % (madp["tests"]["whole_fields"]["F1"]["6.0"]["paired_median_gain"],
-                           madp["tests"]["whole_fields"]["F1"]["6.0"]["images_favouring"],
-                           madp["tests"]["whole_fields"]["n"],
-                           madp["tests"]["whole_fields"]["F1"]["6.0"]["wilcoxon_p"],
-                           madp["tests"]["crops"]["F1"]["6.0"]["paired_median_gain"],
-                           madp["tests"]["crops"]["F1"]["6.0"]["wilcoxon_p"]))},
-                "the_area_axis_is_not_drawn_here": {
-                    "why": "the previous edition drew the marked/annotated area ratio "
-                           "under the F1 curve. In a sparkline strip a second measurand "
-                           "cannot be told from the first, so it moves to this record",
-                    "crosses_one": _crossing(wf, madk["grid"]),
-                    "at_the_reported_k": wf["per_k"][str(K)]["area_ratio"],
-                    "at_the_app_default":
-                        wf["per_k"][str(float(DO.SHIPPED_MAD_K))]["area_ratio"]}},
             "no panel: region classifier": {
                 "arm": "SEM", "parameter": "learned region classifier",
                 "value": "ON" if DO.USE_REGION_CLASSIFIER else "OFF",
@@ -1685,7 +1658,7 @@ def sidecar(tiles, frames, madk, madp, dead, txm, units, scores, stats, const, b
                                    "was off; that plate describes the PREVIOUS "
                                    "configuration and is not part of this figure "
                                    "programme. This row is only the decision")},
-            "b": {
+            "a": {
                 "arm": "SEM", "parameter": "background-flattening ladder",
                 "value": list(LADDER),
                 "verdict": "NEVER SEARCHED. Unioning the darkness cut over a ladder of "
@@ -1746,7 +1719,7 @@ def sidecar(tiles, frames, madk, madp, dead, txm, units, scores, stats, const, b
                                             "0.6252, IoU 0.2979 -> 0.3344, F1 0.4590 -> "
                                             "0.5012, and the union is a strict superset "
                                             "so it can delete nothing"},
-            "c": {
+            "b": {
                 "arm": "SEM", "parameter": "one flattening radius against the union",
                 "value": "7 rungs, 5-320 px",
                 "verdict": "the union had NO sweep anywhere until this revision; it "
@@ -1757,7 +1730,7 @@ def sidecar(tiles, frames, madk, madp, dead, txm, units, scores, stats, const, b
                           "union_on_these_tiles",
                 "note": "the dashed rule on the panel is the shipped seven-rung "
                         "union; the curve is what ONE radius scores on its own"},
-            "d": {
+            "c": {
                 "arm": "TXM", "parameter": "probability threshold", "value": THR,
                 "verdict": "SETTLED BY A TEST ON DATA THE MEMBERS WERE NOT FITTED TO: "
                            "matched on the FALSE-ALARM RATE of the previous model over "
@@ -1798,7 +1771,7 @@ def sidecar(tiles, frames, madk, madp, dead, txm, units, scores, stats, const, b
                                          "has no machine-readable record, which is why "
                                          "this row's sparkline is the sweep made here "
                                          "and not that table"},
-            "e": {
+            "d": {
                 "arm": "TXM", "parameter": "which members are averaged",
                 "value": stats["model"],
                 "verdict": "SETTLED BY CROSS-VALIDATION",
@@ -1823,7 +1796,7 @@ def sidecar(tiles, frames, madk, madp, dead, txm, units, scores, stats, const, b
                              "exists in either repository."
                              % (cv["ens_mean_iou"], cv["f17_mean_iou"],
                                 cv["hybrid_mean_iou"], cv["labelled_images_used"])},
-            "f": {
+            "e": {
                 "arm": "TXM", "parameter": "SAM tile size and tile stride",
                 "value": {"tile_px": const["TILE"], "stride_px": const["TILE_STRIDE"],
                           "embedding_stride_px": const["EMB_STRIDE"],
@@ -1870,12 +1843,14 @@ def sidecar(tiles, frames, madk, madp, dead, txm, units, scores, stats, const, b
 
         "panel_letters_have_moved": {
             "why": "the plate is a row of sweep panels over a printed table of every "
-                   "constant, and only the constants with evidence worth plotting get a "
-                   "letter. The learned region classifier had a panel in the previous "
-                   "edition and has none here -- it is a yes-or-no setting with no "
-                   "grid to sweep, so there is no curve to draw, "
-                   "so there is no curve to draw -- which shifts every letter after it "
-                   "up by one.",
+                   "constant, and only the constants with evidence worth plotting "
+                   "get a letter. TWO have lost their panel. The learned region "
+                   "classifier is a yes-or-no setting with no grid to sweep, so "
+                   "there was never a curve to draw. The MAD multiplier had the "
+                   "one genuine sweep on this plate, and that sweep was run on a "
+                   "public collection the author has removed from the paper; its "
+                   "panel went with it, and the constant is now marked adopted. "
+                   "Between them they shift every remaining letter up by two.",
             "two_editions_ago_six_panels": {
                 "a": "MAD multiplier k", "b": "learned region classifier",
                 "c": "absolute intensity gate", "d": "the scale ladder",
@@ -1938,7 +1913,8 @@ def sidecar(tiles, frames, madk, madp, dead, txm, units, scores, stats, const, b
                       "the shipped configuration"},
 
         "tally": {
-            "selected by a sweep on labelled data": ["SEM: MAD multiplier k"],
+            "adopted, with no sweep on any data this paper reports": [
+                "SEM: MAD multiplier k"],
             "settled by a test, no value to choose":
                 ["SEM: learned region classifier (%s)"
                  % ("enabled" if DO.USE_REGION_CLASSIFIER else "disabled"),
@@ -1987,8 +1963,8 @@ def sidecar(tiles, frames, madk, madp, dead, txm, units, scores, stats, const, b
                                "artefact for the DEPLOYED v5 members, and none exists in "
                                "either repository (txm_model_scores.json says so in "
                                "cross_validated.model_version)."},
-        "aggregation_warning": "the rows use five different unit sets -- 31 public whole "
-                               "fields, 26 hand-labelled tiles, 48 painted SEM frames, "
+        "aggregation_warning": "the rows use four different unit sets -- "
+                               "26 hand-labelled tiles, 48 painted SEM frames, "
                                "31 refereed TXM frames and 71 labelled TXM frames -- and "
                                "a value from one may not be compared with a value from "
                                "another. Each row names its own. The ONE comparison the "
