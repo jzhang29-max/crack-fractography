@@ -458,11 +458,10 @@ fig = plt.figure(figsize=(J.PAGEW, 3.12))
 #: not a result on a sheet of results. Panel (c) now draws the electron arm's own
 #: question -- what its one trained stage bought -- on its own axis, because the two
 #: are a TXM IoU and an SEM F1 over different unit sets and must not share a scale.
-gs = fig.add_gridspec(1, 3, left=0.062, right=0.993, top=0.858, bottom=0.330,
-                      width_ratios=[0.80, 1.02, 1.22], wspace=0.50)
+gs = fig.add_gridspec(1, 2, left=0.062, right=0.993, top=0.858, bottom=0.330,
+                      width_ratios=[1.0, 1.15], wspace=0.46)
 ax_b = fig.add_subplot(gs[0, 0])
 ax_r = fig.add_subplot(gs[0, 1])
-ax_s = fig.add_subplot(gs[0, 2])
 
 
 def score_bar(ax, centre, lo, hi, colour):
@@ -537,142 +536,70 @@ ax_b.text(0.0, 1.015, "(a)  how well it does", transform=ax_b.transAxes, ha="lef
 
 # -------------------------------------------------- panel (b): how the TXM model got there
 #: ABSORBED FROM WHAT WAS A SEPARATE PLATE. Panel (a) says how well the two arms do;
-#: this says how the transmission arm reached its number, which is the obvious next
-#: question and was costing a whole sheet to answer. The data loader is imported from
-#: mk_retrain rather than re-read here, so the two cannot drift apart and the standalone
-#: plate stays reproducible.
+#: ONE QUANTITY, BOTH ARMS. This used to be two panels that answered two different
+#: questions -- the transmission model's held-out IoU over its retraining rounds, and
+#: the electron classifier's paired change in F1 -- on two metrics, two x-axes and two
+#: unit sets. Side by side they invited exactly the comparison neither supports, and
+#: the author said so: they do not show the same thing.
 #:
-#: ONLY THE LIKE-FOR-LIKE ROUNDS ARE DRAWN. Rounds scored against the earlier reference
-#: -- ground truth plus corrections, rather than corrections alone -- are a different
-#: measurement and are left off entirely here rather than shaded, because at this size a
-#: shaded band and a caption cannot carry the distinction. The standalone plate shows
-#: them; this one states in its own axis label that it is showing the later regime.
-import mk_retrain as RT                                              # noqa: E402
-
-_R = RT.rounds()
-_cmp = [r for r in _R if r["deployed"]]
-_ref = {}
-for r in _R:
-    _ref.setdefault(r["ref"], []).append(r)
-_last = _R[-1]["ref"]
-_RT = [r for r in _R if r["ref"] == _last and r["deployed"]]
-_xs = list(range(len(_RT)))
-ax_r.plot(_xs, [r["iou"] for r in _RT], "-", color=J.ACCENT2, lw=1.3, zorder=3)
-for i, r in enumerate(_RT):
-    ax_r.errorbar(i, r["iou"], yerr=r["std"], color=J.ACCENT2, lw=0.9, capsize=2.4,
-                  zorder=4)
-    ax_r.plot(i, r["iou"], "o", ms=6.0, color=J.ACCENT2, mec="white", mew=0.8,
-              zorder=5)
-ax_r.text(_xs[-1], _RT[-1]["iou"] + _RT[-1]["std"] + 0.010, f"{_RT[-1]['iou']:.3f}",
-          fontsize=J.TICK, fontweight="bold", color=J.ACCENT2, ha="center",
-          va="bottom", zorder=6)
-#: ROUND NUMBER AND CORRECTED PIXELS, NOT THE INTERNAL RECIPE NAME. "corrections v3"
-#: is a string from a deployment log and means nothing to a reader.
+#: What both arms DO have, on the same metric and on each arm's own frames, is the
+#: paper's principal result. Reduce a frame's own annotation to its centreline and
+#: redraw it three pixels wide and you have a prediction that is exactly right about
+#: where every crack runs and wrong only about width. Scored against the stroke it came
+#: from, that prediction is the SECOND bar of each pair. The detector is the first. The
+#: detector stands far above a geometrically correct trace of the reference, on both
+#: arms, which is what it means to say an overlap score here ranks a mask for covering
+#: the annotator's brush rather than for finding the crack.
 #:
-#: THE CORRECTED PIXEL COUNT IS ON THE AXIS BECAUSE IT IS THE POINT. The obvious
-#: reading of a rising line over "retraining rounds" is that each round of human
-#: correction bought the improvement. On this record it did not: across these three
-#: rounds the corrected pixel count moves by 0.16%, from 31,268,420 to 31,317,667,
-#: while held-out IoU rises 0.776 to 0.811. What improved is the recipe. The one round
-#: where correction volume actually jumped, by 20%, is also the round where the
-#: scoring reference changed, so it cannot be read either and is not drawn.
-#:
-#: Putting the count under each point lets the reader see that for themselves instead
-#: of being told the opposite by a line that rises.
-#: WHAT WENT WRONG WITH THE PREVIOUS LABEL, because it is instructive. Each tick read
-#: "round N / 31.3 M px corrected", one line per round, and all three printed the SAME
-#: NUMBER -- the pool moves 0.16%, which rounds away at one decimal. The intent was to
-#: let a reader see the constancy; the effect was three identical strings that read as
-#: boilerplate. A reviewer looking at the slide asked whether more labelling was what
-#: lifted the line. It was not, and the plate was not saying so.
-#:
-#: A constant does not belong on a per-point tick. It is stated ONCE, below the axis,
-#: as the fact it is.
-ax_r.set_xticks(_xs)
-ax_r.set_xticklabels([f"round {i + 1}" for i in _xs], fontsize=J.TICK)
-_pool = [r["corr_px"] or 0 for r in _RT]
-_grow = 100.0 * (_pool[-1] / _pool[0] - 1.0) if _pool[0] else 0.0
-if max(_pool) - min(_pool) > 0.02 * max(_pool):
-    raise SystemExit(
-        "the corrected-pixel pool moves more than 2% across the plotted rounds, so the "
-        "line below the axis, which tells the reader it was held, is no longer true. "
-        f"pool = {_pool}. Put the per-round count back on the ticks.")
-ax_r.text(0.5, -0.215,
-          f"corrections: the same {_pool[0] / 1e6:.1f} M px every round "
-          f"(+{_grow:.2f}%)\nwhat changed is the recipe, not more labelling",
-          transform=ax_r.transAxes, ha="center", va="top", fontsize=J.TICK,
-          color=J.G_DARK, linespacing=1.20)
-ax_r.set_xlim(-0.45, len(_RT) - 0.55)
-_lo = min(r["iou"] - r["std"] for r in _RT)
-_hi = max(r["iou"] + r["std"] for r in _RT)
-ax_r.set_ylim(_lo - 0.030, _hi + 0.055)
-ax_r.set_ylabel("held-out IoU, TXM model\n(5-fold, grouped by image)",
-                fontsize=J.LABEL, labelpad=2.0)
+#: The retraining history that used to be panel (b) is not deleted: it is its own
+#: standalone plate, which is where a reader who wants it will look, and nothing in it
+#: was comparable to the electron arm anyway.
+#: the detector bar is COMBINED, which is the bar panel (a) draws, so the two panels
+#: cannot disagree about the same arm. The ceiling comes from the same record, and the
+#: frame count is checked rather than assumed.
+_CEIL = []
+for _a in ("SEM", "TXM"):
+    if _a not in COMBINED or _a not in FULL:
+        continue
+    if COMBINED[_a]["n"] != FULL[_a]["n_frames"]:
+        raise SystemExit(
+            f"{_a}: panel (a) is drawn over {COMBINED[_a]['n']} frames and the "
+            f"correct-trace ceiling beside it over {FULL[_a]['n_frames']}; the pair "
+            f"would compare two unit sets")
+    _CEIL.append((_a, COMBINED[_a]["n"], COMBINED[_a]["f1"],
+                  FULL[_a]["ceiling_mean_f1"]))
+_CW, _CGAP = 0.34, 0.30
+for _i, (_arm, _n, _det, _cei) in enumerate(_CEIL):
+    _base = _i * (2 * _CW + _CGAP)
+    for _k, (_v, _f, _lab) in enumerate(((_det, 1.0, "detector"),
+                                         (_cei, 0.34, "correct trace"))):
+        ax_r.bar(_base + _k * _CW, _v, _CW * 0.92,
+                 facecolor=tint(ARM_COLOUR[_arm], _f), edgecolor=J.INK, linewidth=0.7,
+                 zorder=3)
+        ax_r.text(_base + _k * _CW, _v + 0.012, f"{_v:.3f}", fontsize=J.TICK,
+                  ha="center", va="bottom", color=J.INK,
+                  fontweight=("bold" if _k == 0 else "normal"), zorder=5)
+    ax_r.text(_base + _CW / 2.0, -0.055, f"{_arm}\n{_n} frames", fontsize=J.TICK,
+              ha="center", va="top", color=ARM_COLOUR[_arm], fontweight="bold",
+              transform=ax_r.get_xaxis_transform(), linespacing=1.15)
+    #: the multiple, which is the sentence the pair makes
+    ax_r.text(_base + _CW / 2.0, max(_det, _cei) + 0.085,
+              f"×{_det / _cei:.1f}", fontsize=J.TICK, ha="center", va="bottom",
+              color=ARM_COLOUR[_arm], fontweight="bold", zorder=5)
+ax_r.set_xticks([])
+ax_r.set_xlim(-0.34, (len(_CEIL) - 1) * (2 * _CW + _CGAP) + 2 * _CW)
+ax_r.set_ylim(0, max(v for _a, _n, v, _c in _CEIL) + 0.20)
+ax_r.set_ylabel("mean per-frame F1", fontsize=J.LABEL, labelpad=2.0)
 ax_r.tick_params(labelsize=J.TICK, pad=1.6)
-for _s in ax_r.spines.values():
-    _s.set_linewidth(0.6)
-#: WHAT THE ELECTRON ARM'S ONE TRAINED STAGE BOUGHT, which is the same question panel
-#: (b) asks of the transmission model and the answer is the opposite. Three arms from
-#: docs/figures/sem_classifier_lofo.json, all on the same 18 refereed frames and all a
-#: mean over frames: the area floor with no classifier at all, the deployed classifier
-#: scored on frames it was fitted on, and the same recipe refitted without each held-out
-#: frame. The deployed bar is IN SAMPLE and the panel says so rather than letting it
-#: stand beside the other two as though all three were comparable.
-_LOFO = json.load(open(os.path.join(DOC_FIGURES, "sem_classifier_lofo.json")))
-_PF = [r for r in _LOFO["per_frame"]
-       if all(k in r for k in ("floor", "shipped", "lofo_fixed"))]
-if len(_PF) != _LOFO["fitted_frames"]["floor"]["n_frames"]:
-    raise SystemExit(
-        f"{len(_PF)} per-frame rows carry all three arms but the summary reports "
-        f"{_LOFO['fitted_frames']['floor']['n_frames']} frames; the panel would be "
-        f"drawn on a different unit set from the number beside it")
-
-#: PAIRED, BECAUSE THE COMPARISON IS PAIRED. Drawn first as three absolute means with
-#: their standard deviations OVER FRAMES, this panel showed three points at 0.647,
-#: 0.638 and 0.636 each carrying a +/-0.25 whisker, and read as "no difference, and
-#: not measurable either". The spread is real but it is between FRAMES -- a frame with
-#: a wide clean crack scores far above a frame with a faint one under every arm -- and
-#: it is not the uncertainty of the comparison. The arms are run on the SAME 18 frames,
-#: so the quantity that answers "what did the classifier buy" is the per-frame
-#: DIFFERENCE, whose standard deviation is 0.018 and not 0.25. The count of frames it
-#: helps and hurts is printed beside each point, because a mean near zero can be
-#: a wash or a consistent small loss and only the count tells them apart.
-_SEM_D = []
-for _lab, _key in (("in sample", "shipped"), ("held out", "lofo_fixed")):
-    _d = [r[_key]["f1"] - r["floor"]["f1"] for r in _PF]
-    _n = len(_d)
-    _mean = sum(_d) / _n
-    _sd = (sum((x - _mean) ** 2 for x in _d) / (_n - 1)) ** 0.5
-    _SEM_D.append((_lab, _mean, _sd, sum(1 for x in _d if x < 0), _n))
-
-ax_s.axhline(0.0, color=J.ACCENT, lw=0.9, dashes=(3.0, 2.0), zorder=2)
-for _i, (_lab, _m, _sd, _worse, _n) in enumerate(_SEM_D):
-    ax_s.errorbar(_i, _m, yerr=_sd, color=J.ACCENT, lw=0.9, capsize=2.4, zorder=3)
-    ax_s.plot(_i, _m, "o", ms=6.0, color=J.ACCENT, mec="white", mew=0.8, zorder=5)
-    ax_s.text(_i, _m - _sd - 0.004, f"{_m:+.3f}", fontsize=J.TICK, ha="center",
-              va="top", color=J.ACCENT, fontweight="bold", zorder=6)
-    ax_s.text(_i, _m + _sd + 0.004, f"worse on\n{_worse} of {_n}", fontsize=J.TICK,
-              ha="center", va="bottom", color=J.G_DARK, linespacing=1.15, zorder=6)
-ax_s.set_xticks(range(len(_SEM_D)))
-ax_s.set_xticklabels([l for l, _m, _sd, _w, _n in _SEM_D], fontsize=J.TICK)
-ax_s.set_xlim(-0.6, len(_SEM_D) - 0.4)
-_dlo = min(m - sd for _l, m, sd, _w, _n in _SEM_D)
-_dhi = max(m + sd for _l, m, sd, _w, _n in _SEM_D)
-ax_s.set_ylim(_dlo - 0.018, max(_dhi, 0.0) + 0.030)
-ax_s.set_ylabel("change in per-frame F1\nagainst no classifier", fontsize=J.LABEL,
-                labelpad=2.0)
-ax_s.tick_params(labelsize=J.TICK, pad=1.6)
-for _s2 in ax_s.spines.values():
+for _s2 in ax_r.spines.values():
     _s2.set_linewidth(0.6)
-ax_s.text(0.0, 1.015, "(c)  the SEM model",
-          transform=ax_s.transAxes, ha="left", va="bottom", fontsize=J.PANEL,
-          fontweight="bold", color=J.INK)
-ax_s.text(0.5, -0.215, "paired, same 18 frames", transform=ax_s.transAxes,
-          ha="center", va="top", fontsize=J.TICK, color=J.G_DARK)
-
-ax_r.text(0.0, 1.015, "(b)  what TXM retraining bought",
+ax_r.text(0.0, 1.015, "(b)  what the score is measuring",
           transform=ax_r.transAxes, ha="left", va="bottom", fontsize=J.PANEL,
           fontweight="bold", color=J.INK)
+ax_r.text(0.5, -0.215,
+          "pale bar: an exactly placed 3 px trace",
+          transform=ax_r.transAxes, ha="center", va="top", fontsize=J.TICK,
+          color=J.G_DARK)
 
 # ------------------------------------------------------------------------------- keys
 #: Every key swatch is two-tone, half in each arm's hue, so the key says once that the

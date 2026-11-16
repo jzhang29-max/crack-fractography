@@ -167,17 +167,20 @@ FIGURES = [
    f"{SW['close_best_iou']:.4f} at {SW['close_best']} px, and the denoise sigma "
    f"{SW['den_ship']:.4f} at the shipped 1.0 against {SW['den_best_iou']:.4f} at "
    f"{SW['den_best']}.",
-   "Panel b also gives the seven-rung flattening ladder the evidence it never had. "
+   "Panel e also gives the seven-rung flattening ladder the evidence it never had. "
    "The dashed line is the shipped union; the curve is what ONE radius scores on its "
    f"own. The union reaches {SW['union']:.4f} against {SW['single_best_iou']:.4f} for "
    f"the best single radius ({SW['single_best']} px), so what the ladder buys is "
    f"measured here rather than asserted.",
    "The ref. column is how each value was settled, and that is the finding. NOT ONE "
-   "of the forty-one was chosen by a sweep on data this paper reports. The MAD "
+   "of the fifty was chosen by a sweep on data this paper reports. The MAD "
    "multiplier k = 6 had been the single exception; its sweep was run on a public "
    "collection the author has removed from the paper, so the value is marked "
    "adopted -- in use, with no evidence for it presented here. Four constants were "
-   "settled by a test with no value to choose. Thirty-six are fixed by construction "
+   "settled by a test with no value to choose, thirty-six are fixed by "
+   "construction, and TEN are adopted -- taken from archived code with no "
+   "recorded provenance and swept here after the fact, so their panels show "
+   "sensitivity and never selection. Thirty-six are fixed by construction "
    "with no sweep on record anywhere.",
    "The eight settings the SEM chain applies before the detector runs and the twelve "
    "the TXM mask path applies after it are all in the table. A constant applied to "
