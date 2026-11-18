@@ -1,0 +1,1046 @@
+{
+ "what": "the scale ladder's base and top, on full frames, scored against the paint",
+ "generated": "2026-11-18",
+ "why_not_tiles": "on a 512 px tile sigma=2560 changes 307 px in 6,815,744 against the rung below it, so the tile bench cannot rank the top of the ladder; see docs/figures/ladder_endpoints.json saturation",
+ "scoring": "correction masks: 1 = crack, 2 or 3 = not-crack, 0 excluded",
+ "frame_selection": "up to 2 per specimen, NOT alphabetical",
+ "n_frames": 14,
+ "n_specimens": 10,
+ "painted_crack_px": 32256472,
+ "painted_notcrack_px": 229376,
+ "mad_k": 5.0,
+ "absolute_dark_thresh": 10,
+ "use_region_classifier": true,
+ "controls": {
+  "cached_rungs_reproduce_shipped_union": "PASS on every frame scored"
+ },
+ "subtractive_warning": "every arm that drops sigma=5 can delete a pixel the shipped ladder kept; px_lost_vs_shipped and painted_crack_lost_vs_shipped are per frame",
+ "frames_losing_painted_crack": [
+  [
+   "260622_316_H_b2_back_CBS_01",
+   "drop5_10-320",
+   27
+  ],
+  [
+   "260622_316_H_b2_back_CBS_01",
+   "drop5_top640",
+   27
+  ],
+  [
+   "260622_316_H_b2_back_CBS_01",
+   "drop5_top1280",
+   27
+  ],
+  [
+   "260622_316_H_b2_back_CBS_01",
+   "drop5_top2560",
+   27
+  ],
+  [
+   "260622_316_H_b2_front_CBS_01",
+   "drop5_10-320",
+   12
+  ],
+  [
+   "260622_316_H_b2_front_CBS_01",
+   "drop5_top640",
+   12
+  ],
+  [
+   "260622_316_H_b2_front_CBS_01",
+   "drop5_top1280",
+   12
+  ],
+  [
+   "260622_316_H_b2_front_CBS_01",
+   "drop5_top2560",
+   12
+  ],
+  [
+   "AS_24hr_BSE_Side_008",
+   "drop5_10-320",
+   124
+  ],
+  [
+   "AS_24hr_BSE_Side_008",
+   "drop5_top640",
+   124
+  ],
+  [
+   "AS_24hr_BSE_Side_008",
+   "drop5_top1280",
+   124
+  ],
+  [
+   "AS_24hr_BSE_Side_008",
+   "drop5_top2560",
+   105
+  ],
+  [
+   "Cast_24hr_SE_Side_006",
+   "drop5_10-320",
+   2091
+  ],
+  [
+   "Cast_24hr_SE_Side_006",
+   "drop5_top640",
+   2091
+  ],
+  [
+   "Cast_24hr_SE_Side_006",
+   "drop5_top1280",
+   2091
+  ],
+  [
+   "Cast_24hr_SE_Side_006",
+   "drop5_top2560",
+   2091
+  ],
+  [
+   "HIP_24hr_SE_Side_006",
+   "drop5_10-320",
+   111
+  ],
+  [
+   "HIP_24hr_SE_Side_006",
+   "drop5_top640",
+   111
+  ],
+  [
+   "HIP_24hr_SE_Side_006",
+   "drop5_top1280",
+   111
+  ],
+  [
+   "HIP_24hr_SE_Side_006",
+   "drop5_top2560",
+   111
+  ],
+  [
+   "MAR_AmbB_AS_CBS_0004",
+   "drop5_10-320",
+   15162
+  ],
+  [
+   "MAR_AmbB_AS_CBS_0004",
+   "drop5_top640",
+   15162
+  ],
+  [
+   "MAR_AmbB_AS_CBS_0004",
+   "drop5_top1280",
+   15162
+  ],
+  [
+   "MAR_AmbB_AS_CBS_0004",
+   "drop5_top2560",
+   15162
+  ],
+  [
+   "MAR_Amb_AS_CBS_0001",
+   "drop5_10-320",
+   50
+  ],
+  [
+   "MAR_Amb_AS_CBS_0001",
+   "drop5_top640",
+   3
+  ],
+  [
+   "MAR_Amb_Cast_CBS_0005",
+   "drop5_10-320",
+   5609
+  ],
+  [
+   "MAR_Amb_Cast_CBS_0005",
+   "drop5_top640",
+   5609
+  ],
+  [
+   "MAR_Amb_Cast_CBS_0005",
+   "drop5_top1280",
+   5609
+  ],
+  [
+   "MAR_Amb_Cast_CBS_0005",
+   "drop5_top2560",
+   5609
+  ],
+  [
+   "MAR_Amb_HIP_CBS_0003",
+   "drop5_10-320",
+   521
+  ],
+  [
+   "MAR_Amb_HIP_CBS_0003",
+   "drop5_top640",
+   521
+  ],
+  [
+   "MAR_Amb_HIP_CBS_0003",
+   "drop5_top1280",
+   521
+  ],
+  [
+   "MAR_Amb_HIP_CBS_0003",
+   "drop5_top2560",
+   521
+  ],
+  [
+   "260622_316_H_b2_front_CBS_03",
+   "drop5_10-320",
+   613
+  ],
+  [
+   "260622_316_H_b2_front_CBS_03",
+   "drop5_top640",
+   613
+  ],
+  [
+   "260622_316_H_b2_front_CBS_03",
+   "drop5_top1280",
+   613
+  ],
+  [
+   "260622_316_H_b2_front_CBS_03",
+   "drop5_top2560",
+   613
+  ],
+  [
+   "260708_316_H_b2_front_CBS_002",
+   "drop5_10-320",
+   2972
+  ],
+  [
+   "260708_316_H_b2_front_CBS_002",
+   "drop5_top640",
+   2753
+  ],
+  [
+   "260708_316_H_b2_front_CBS_002",
+   "drop5_top1280",
+   2618
+  ],
+  [
+   "260708_316_H_b2_front_CBS_002",
+   "drop5_top2560",
+   2488
+  ],
+  [
+   "MAR_Amb_AS_CBS_0003",
+   "drop5_10-320",
+   34406
+  ],
+  [
+   "MAR_Amb_AS_CBS_0003",
+   "drop5_top640",
+   34406
+  ],
+  [
+   "MAR_Amb_AS_CBS_0003",
+   "drop5_top1280",
+   34406
+  ],
+  [
+   "MAR_Amb_AS_CBS_0003",
+   "drop5_top2560",
+   34406
+  ],
+  [
+   "MAR_Amb_HIP_CBS_0005",
+   "drop5_10-320",
+   3030
+  ],
+  [
+   "MAR_Amb_HIP_CBS_0005",
+   "drop5_top640",
+   3030
+  ],
+  [
+   "MAR_Amb_HIP_CBS_0005",
+   "drop5_top1280",
+   3030
+  ],
+  [
+   "MAR_Amb_HIP_CBS_0005",
+   "drop5_top2560",
+   3030
+  ]
+ ],
+ "ladders": {
+  "shipped_5-320": {
+   "rungs": [
+    5,
+    10,
+    20,
+    40,
+    80,
+    160,
+    320
+   ],
+   "n_rungs": 7,
+   "recall_on_painted_crack": 0.3214,
+   "rate_on_painted_notcrack": 0.8522,
+   "pct_of_frame_marked": 9.2621,
+   "median_per_frame_recall": 0.8442,
+   "n_frames_better_than_shipped": 0,
+   "n_frames_worse_than_shipped": 0
+  },
+  "drop5_10-320": {
+   "rungs": [
+    10,
+    20,
+    40,
+    80,
+    160,
+    320
+   ],
+   "n_rungs": 6,
+   "recall_on_painted_crack": 0.3194,
+   "rate_on_painted_notcrack": 0.8516,
+   "pct_of_frame_marked": 9.1373,
+   "median_per_frame_recall": 0.7652,
+   "n_frames_better_than_shipped": 0,
+   "n_frames_worse_than_shipped": 12
+  },
+  "drop5_top640": {
+   "rungs": [
+    10,
+    20,
+    40,
+    80,
+    160,
+    320,
+    640
+   ],
+   "n_rungs": 7,
+   "recall_on_painted_crack": 0.3201,
+   "rate_on_painted_notcrack": 0.8516,
+   "pct_of_frame_marked": 9.1461,
+   "median_per_frame_recall": 0.7653,
+   "n_frames_better_than_shipped": 3,
+   "n_frames_worse_than_shipped": 9
+  },
+  "drop5_top1280": {
+   "rungs": [
+    10,
+    20,
+    40,
+    80,
+    160,
+    320,
+    640,
+    1280
+   ],
+   "n_rungs": 8,
+   "recall_on_painted_crack": 0.3202,
+   "rate_on_painted_notcrack": 0.8517,
+   "pct_of_frame_marked": 9.148,
+   "median_per_frame_recall": 0.7653,
+   "n_frames_better_than_shipped": 3,
+   "n_frames_worse_than_shipped": 9
+  },
+  "drop5_top2560": {
+   "rungs": [
+    10,
+    20,
+    40,
+    80,
+    160,
+    320,
+    640,
+    1280,
+    2560
+   ],
+   "n_rungs": 9,
+   "recall_on_painted_crack": 0.3206,
+   "rate_on_painted_notcrack": 0.8517,
+   "pct_of_frame_marked": 9.1552,
+   "median_per_frame_recall": 0.7653,
+   "n_frames_better_than_shipped": 5,
+   "n_frames_worse_than_shipped": 7
+  },
+  "keep5_top2560": {
+   "rungs": [
+    5,
+    10,
+    20,
+    40,
+    80,
+    160,
+    320,
+    640,
+    1280,
+    2560
+   ],
+   "n_rungs": 10,
+   "recall_on_painted_crack": 0.3226,
+   "rate_on_painted_notcrack": 0.8522,
+   "pct_of_frame_marked": 9.2796,
+   "median_per_frame_recall": 0.8442,
+   "n_frames_better_than_shipped": 6,
+   "n_frames_worse_than_shipped": 0
+  }
+ },
+ "per_frame": [
+  {
+   "frame": "260622_316_H_b2_back_CBS_01",
+   "specimen": "260622_316_H_b2_back",
+   "painted_crack_px": 2455992,
+   "painted_notcrack_px": 55660,
+   "frame_px": 25165824,
+   "shipped_5-320": {
+    "recall": 0.991,
+    "notcrack_rate": 0.8297,
+    "marked_pct": 10.7724
+   },
+   "drop5_10-320": {
+    "recall": 0.991,
+    "notcrack_rate": 0.8297,
+    "marked_pct": 10.762,
+    "px_lost_vs_shipped": 2621,
+    "painted_crack_lost_vs_shipped": 27
+   },
+   "drop5_top640": {
+    "recall": 0.991,
+    "notcrack_rate": 0.8297,
+    "marked_pct": 10.762,
+    "px_lost_vs_shipped": 2621,
+    "painted_crack_lost_vs_shipped": 27
+   },
+   "drop5_top1280": {
+    "recall": 0.991,
+    "notcrack_rate": 0.8297,
+    "marked_pct": 10.762,
+    "px_lost_vs_shipped": 2621,
+    "painted_crack_lost_vs_shipped": 27
+   },
+   "drop5_top2560": {
+    "recall": 0.991,
+    "notcrack_rate": 0.8297,
+    "marked_pct": 10.762,
+    "px_lost_vs_shipped": 2621,
+    "painted_crack_lost_vs_shipped": 27
+   },
+   "keep5_top2560": {
+    "recall": 0.991,
+    "notcrack_rate": 0.8297,
+    "marked_pct": 10.7724,
+    "px_lost_vs_shipped": 0,
+    "painted_crack_lost_vs_shipped": 0
+   }
+  },
+  {
+   "frame": "260622_316_H_b2_front_CBS_01",
+   "specimen": "260622_316_H_b2_front",
+   "painted_crack_px": 47745,
+   "painted_notcrack_px": 0,
+   "frame_px": 25165824,
+   "shipped_5-320": {
+    "recall": 0.8442,
+    "notcrack_rate": 0.0,
+    "marked_pct": 10.5757
+   },
+   "drop5_10-320": {
+    "recall": 0.844,
+    "notcrack_rate": 0.0,
+    "marked_pct": 10.5577,
+    "px_lost_vs_shipped": 4513,
+    "painted_crack_lost_vs_shipped": 12
+   },
+   "drop5_top640": {
+    "recall": 0.844,
+    "notcrack_rate": 0.0,
+    "marked_pct": 10.5577,
+    "px_lost_vs_shipped": 4513,
+    "painted_crack_lost_vs_shipped": 12
+   },
+   "drop5_top1280": {
+    "recall": 0.844,
+    "notcrack_rate": 0.0,
+    "marked_pct": 10.5577,
+    "px_lost_vs_shipped": 4513,
+    "painted_crack_lost_vs_shipped": 12
+   },
+   "drop5_top2560": {
+    "recall": 0.844,
+    "notcrack_rate": 0.0,
+    "marked_pct": 10.5577,
+    "px_lost_vs_shipped": 4513,
+    "painted_crack_lost_vs_shipped": 12
+   },
+   "keep5_top2560": {
+    "recall": 0.8442,
+    "notcrack_rate": 0.0,
+    "marked_pct": 10.5757,
+    "px_lost_vs_shipped": 0,
+    "painted_crack_lost_vs_shipped": 0
+   }
+  },
+  {
+   "frame": "AS_24hr_BSE_Side_008",
+   "specimen": "AS_24hr_BSE_Side",
+   "painted_crack_px": 916151,
+   "painted_notcrack_px": 133346,
+   "frame_px": 25165824,
+   "shipped_5-320": {
+    "recall": 0.9902,
+    "notcrack_rate": 0.9987,
+    "marked_pct": 4.7127
+   },
+   "drop5_10-320": {
+    "recall": 0.9901,
+    "notcrack_rate": 0.9984,
+    "marked_pct": 4.6748,
+    "px_lost_vs_shipped": 9536,
+    "painted_crack_lost_vs_shipped": 124
+   },
+   "drop5_top640": {
+    "recall": 0.9901,
+    "notcrack_rate": 0.9984,
+    "marked_pct": 4.681,
+    "px_lost_vs_shipped": 9423,
+    "painted_crack_lost_vs_shipped": 124
+   },
+   "drop5_top1280": {
+    "recall": 0.9901,
+    "notcrack_rate": 0.9987,
+    "marked_pct": 4.6877,
+    "px_lost_vs_shipped": 9275,
+    "painted_crack_lost_vs_shipped": 124
+   },
+   "drop5_top2560": {
+    "recall": 0.9905,
+    "notcrack_rate": 0.9987,
+    "marked_pct": 4.7002,
+    "px_lost_vs_shipped": 9068,
+    "painted_crack_lost_vs_shipped": 105
+   },
+   "keep5_top2560": {
+    "recall": 0.9906,
+    "notcrack_rate": 0.9987,
+    "marked_pct": 4.7366,
+    "px_lost_vs_shipped": 0,
+    "painted_crack_lost_vs_shipped": 0
+   }
+  },
+  {
+   "frame": "Cast_24hr_SE_Side_006",
+   "specimen": "Cast_24hr_SE_Side",
+   "painted_crack_px": 3709448,
+   "painted_notcrack_px": 0,
+   "frame_px": 25165824,
+   "shipped_5-320": {
+    "recall": 0.2531,
+    "notcrack_rate": 0.0,
+    "marked_pct": 11.8998
+   },
+   "drop5_10-320": {
+    "recall": 0.2525,
+    "notcrack_rate": 0.0,
+    "marked_pct": 11.5502,
+    "px_lost_vs_shipped": 87979,
+    "painted_crack_lost_vs_shipped": 2091
+   },
+   "drop5_top640": {
+    "recall": 0.2525,
+    "notcrack_rate": 0.0,
+    "marked_pct": 11.5502,
+    "px_lost_vs_shipped": 87979,
+    "painted_crack_lost_vs_shipped": 2091
+   },
+   "drop5_top1280": {
+    "recall": 0.2525,
+    "notcrack_rate": 0.0,
+    "marked_pct": 11.5502,
+    "px_lost_vs_shipped": 87979,
+    "painted_crack_lost_vs_shipped": 2091
+   },
+   "drop5_top2560": {
+    "recall": 0.2525,
+    "notcrack_rate": 0.0,
+    "marked_pct": 11.5502,
+    "px_lost_vs_shipped": 87979,
+    "painted_crack_lost_vs_shipped": 2091
+   },
+   "keep5_top2560": {
+    "recall": 0.2531,
+    "notcrack_rate": 0.0,
+    "marked_pct": 11.8998,
+    "px_lost_vs_shipped": 0,
+    "painted_crack_lost_vs_shipped": 0
+   }
+  },
+  {
+   "frame": "HIP_24hr_SE_Side_006",
+   "specimen": "HIP_24hr_SE_Side",
+   "painted_crack_px": 574137,
+   "painted_notcrack_px": 0,
+   "frame_px": 25165824,
+   "shipped_5-320": {
+    "recall": 0.7654,
+    "notcrack_rate": 0.0,
+    "marked_pct": 2.6338
+   },
+   "drop5_10-320": {
+    "recall": 0.7652,
+    "notcrack_rate": 0.0,
+    "marked_pct": 2.6232,
+    "px_lost_vs_shipped": 2662,
+    "painted_crack_lost_vs_shipped": 111
+   },
+   "drop5_top640": {
+    "recall": 0.7653,
+    "notcrack_rate": 0.0,
+    "marked_pct": 2.6234,
+    "px_lost_vs_shipped": 2662,
+    "painted_crack_lost_vs_shipped": 111
+   },
+   "drop5_top1280": {
+    "recall": 0.7653,
+    "notcrack_rate": 0.0,
+    "marked_pct": 2.6234,
+    "px_lost_vs_shipped": 2662,
+    "painted_crack_lost_vs_shipped": 111
+   },
+   "drop5_top2560": {
+    "recall": 0.7653,
+    "notcrack_rate": 0.0,
+    "marked_pct": 2.6234,
+    "px_lost_vs_shipped": 2662,
+    "painted_crack_lost_vs_shipped": 111
+   },
+   "keep5_top2560": {
+    "recall": 0.7655,
+    "notcrack_rate": 0.0,
+    "marked_pct": 2.634,
+    "px_lost_vs_shipped": 0,
+    "painted_crack_lost_vs_shipped": 0
+   }
+  },
+  {
+   "frame": "MAR_AmbB_AS_CBS_0004",
+   "specimen": "MAR_AmbB_AS",
+   "painted_crack_px": 35921,
+   "painted_notcrack_px": 0,
+   "frame_px": 25165824,
+   "shipped_5-320": {
+    "recall": 0.8494,
+    "notcrack_rate": 0.0,
+    "marked_pct": 4.7011
+   },
+   "drop5_10-320": {
+    "recall": 0.4274,
+    "notcrack_rate": 0.0,
+    "marked_pct": 4.3264,
+    "px_lost_vs_shipped": 94289,
+    "painted_crack_lost_vs_shipped": 15162
+   },
+   "drop5_top640": {
+    "recall": 0.4274,
+    "notcrack_rate": 0.0,
+    "marked_pct": 4.3384,
+    "px_lost_vs_shipped": 93932,
+    "painted_crack_lost_vs_shipped": 15162
+   },
+   "drop5_top1280": {
+    "recall": 0.4274,
+    "notcrack_rate": 0.0,
+    "marked_pct": 4.3473,
+    "px_lost_vs_shipped": 93782,
+    "painted_crack_lost_vs_shipped": 15162
+   },
+   "drop5_top2560": {
+    "recall": 0.4274,
+    "notcrack_rate": 0.0,
+    "marked_pct": 4.3479,
+    "px_lost_vs_shipped": 93782,
+    "painted_crack_lost_vs_shipped": 15162
+   },
+   "keep5_top2560": {
+    "recall": 0.8494,
+    "notcrack_rate": 0.0,
+    "marked_pct": 4.7208,
+    "px_lost_vs_shipped": 0,
+    "painted_crack_lost_vs_shipped": 0
+   }
+  },
+  {
+   "frame": "MAR_Amb_AS_CBS_0001",
+   "specimen": "MAR_Amb_AS",
+   "painted_crack_px": 54300,
+   "painted_notcrack_px": 0,
+   "frame_px": 8714304,
+   "shipped_5-320": {
+    "recall": 0.8587,
+    "notcrack_rate": 0.0,
+    "marked_pct": 4.2282
+   },
+   "drop5_10-320": {
+    "recall": 0.8578,
+    "notcrack_rate": 0.0,
+    "marked_pct": 4.2264,
+    "px_lost_vs_shipped": 154,
+    "painted_crack_lost_vs_shipped": 50
+   },
+   "drop5_top640": {
+    "recall": 0.8889,
+    "notcrack_rate": 0.0,
+    "marked_pct": 4.2546,
+    "px_lost_vs_shipped": 107,
+    "painted_crack_lost_vs_shipped": 3
+   },
+   "drop5_top1280": {
+    "recall": 0.897,
+    "notcrack_rate": 0.0,
+    "marked_pct": 4.2636,
+    "px_lost_vs_shipped": 102,
+    "painted_crack_lost_vs_shipped": 0
+   },
+   "drop5_top2560": {
+    "recall": 0.9574,
+    "notcrack_rate": 0.0,
+    "marked_pct": 4.3605,
+    "px_lost_vs_shipped": 39,
+    "painted_crack_lost_vs_shipped": 0
+   },
+   "keep5_top2560": {
+    "recall": 0.9574,
+    "notcrack_rate": 0.0,
+    "marked_pct": 4.361,
+    "px_lost_vs_shipped": 0,
+    "painted_crack_lost_vs_shipped": 0
+   }
+  },
+  {
+   "frame": "MAR_Amb_Cast_CBS_0005",
+   "specimen": "MAR_Amb_Cast",
+   "painted_crack_px": 3061367,
+   "painted_notcrack_px": 0,
+   "frame_px": 25165824,
+   "shipped_5-320": {
+    "recall": 0.5141,
+    "notcrack_rate": 0.0,
+    "marked_pct": 35.3265
+   },
+   "drop5_10-320": {
+    "recall": 0.5122,
+    "notcrack_rate": 0.0,
+    "marked_pct": 35.1492,
+    "px_lost_vs_shipped": 44605,
+    "painted_crack_lost_vs_shipped": 5609
+   },
+   "drop5_top640": {
+    "recall": 0.5122,
+    "notcrack_rate": 0.0,
+    "marked_pct": 35.1492,
+    "px_lost_vs_shipped": 44605,
+    "painted_crack_lost_vs_shipped": 5609
+   },
+   "drop5_top1280": {
+    "recall": 0.5122,
+    "notcrack_rate": 0.0,
+    "marked_pct": 35.1492,
+    "px_lost_vs_shipped": 44605,
+    "painted_crack_lost_vs_shipped": 5609
+   },
+   "drop5_top2560": {
+    "recall": 0.5122,
+    "notcrack_rate": 0.0,
+    "marked_pct": 35.1492,
+    "px_lost_vs_shipped": 44605,
+    "painted_crack_lost_vs_shipped": 5609
+   },
+   "keep5_top2560": {
+    "recall": 0.5141,
+    "notcrack_rate": 0.0,
+    "marked_pct": 35.3265,
+    "px_lost_vs_shipped": 0,
+    "painted_crack_lost_vs_shipped": 0
+   }
+  },
+  {
+   "frame": "MAR_Amb_HIP_CBS_0003",
+   "specimen": "MAR_Amb_HIP",
+   "painted_crack_px": 2684580,
+   "painted_notcrack_px": 0,
+   "frame_px": 25165824,
+   "shipped_5-320": {
+    "recall": 0.3344,
+    "notcrack_rate": 0.0,
+    "marked_pct": 9.3391
+   },
+   "drop5_10-320": {
+    "recall": 0.3342,
+    "notcrack_rate": 0.0,
+    "marked_pct": 9.1614,
+    "px_lost_vs_shipped": 44724,
+    "painted_crack_lost_vs_shipped": 521
+   },
+   "drop5_top640": {
+    "recall": 0.3355,
+    "notcrack_rate": 0.0,
+    "marked_pct": 9.1759,
+    "px_lost_vs_shipped": 44724,
+    "painted_crack_lost_vs_shipped": 521
+   },
+   "drop5_top1280": {
+    "recall": 0.3355,
+    "notcrack_rate": 0.0,
+    "marked_pct": 9.1759,
+    "px_lost_vs_shipped": 44724,
+    "painted_crack_lost_vs_shipped": 521
+   },
+   "drop5_top2560": {
+    "recall": 0.3355,
+    "notcrack_rate": 0.0,
+    "marked_pct": 9.1759,
+    "px_lost_vs_shipped": 44724,
+    "painted_crack_lost_vs_shipped": 521
+   },
+   "keep5_top2560": {
+    "recall": 0.3357,
+    "notcrack_rate": 0.0,
+    "marked_pct": 9.3536,
+    "px_lost_vs_shipped": 0,
+    "painted_crack_lost_vs_shipped": 0
+   }
+  },
+  {
+   "frame": "260622_316_H_b2_front_CBS_03",
+   "specimen": "260622_316_H_b2_front",
+   "painted_crack_px": 720859,
+   "painted_notcrack_px": 0,
+   "frame_px": 25165824,
+   "shipped_5-320": {
+    "recall": 0.8992,
+    "notcrack_rate": 0.0,
+    "marked_pct": 11.7355
+   },
+   "drop5_10-320": {
+    "recall": 0.8983,
+    "notcrack_rate": 0.0,
+    "marked_pct": 11.7019,
+    "px_lost_vs_shipped": 8449,
+    "painted_crack_lost_vs_shipped": 613
+   },
+   "drop5_top640": {
+    "recall": 0.8983,
+    "notcrack_rate": 0.0,
+    "marked_pct": 11.7019,
+    "px_lost_vs_shipped": 8449,
+    "painted_crack_lost_vs_shipped": 613
+   },
+   "drop5_top1280": {
+    "recall": 0.8983,
+    "notcrack_rate": 0.0,
+    "marked_pct": 11.7019,
+    "px_lost_vs_shipped": 8449,
+    "painted_crack_lost_vs_shipped": 613
+   },
+   "drop5_top2560": {
+    "recall": 0.8983,
+    "notcrack_rate": 0.0,
+    "marked_pct": 11.7019,
+    "px_lost_vs_shipped": 8449,
+    "painted_crack_lost_vs_shipped": 613
+   },
+   "keep5_top2560": {
+    "recall": 0.8992,
+    "notcrack_rate": 0.0,
+    "marked_pct": 11.7355,
+    "px_lost_vs_shipped": 0,
+    "painted_crack_lost_vs_shipped": 0
+   }
+  },
+  {
+   "frame": "260708_316_H_b2_front_CBS_002",
+   "specimen": "260708_316_H_b2_front",
+   "painted_crack_px": 141662,
+   "painted_notcrack_px": 293,
+   "frame_px": 6268948,
+   "shipped_5-320": {
+    "recall": 0.6636,
+    "notcrack_rate": 1.0,
+    "marked_pct": 5.5227
+   },
+   "drop5_10-320": {
+    "recall": 0.6426,
+    "notcrack_rate": 1.0,
+    "marked_pct": 5.4511,
+    "px_lost_vs_shipped": 4490,
+    "painted_crack_lost_vs_shipped": 2972
+   },
+   "drop5_top640": {
+    "recall": 0.6519,
+    "notcrack_rate": 1.0,
+    "marked_pct": 5.4792,
+    "px_lost_vs_shipped": 4244,
+    "painted_crack_lost_vs_shipped": 2753
+   },
+   "drop5_top1280": {
+    "recall": 0.6583,
+    "notcrack_rate": 1.0,
+    "marked_pct": 5.5012,
+    "px_lost_vs_shipped": 4059,
+    "painted_crack_lost_vs_shipped": 2618
+   },
+   "drop5_top2560": {
+    "recall": 0.7155,
+    "notcrack_rate": 1.0,
+    "marked_pct": 5.6353,
+    "px_lost_vs_shipped": 3905,
+    "painted_crack_lost_vs_shipped": 2488
+   },
+   "keep5_top2560": {
+    "recall": 0.7336,
+    "notcrack_rate": 1.0,
+    "marked_pct": 5.7032,
+    "px_lost_vs_shipped": 0,
+    "painted_crack_lost_vs_shipped": 0
+   }
+  },
+  {
+   "frame": "MAR_Amb_AS_CBS_0003",
+   "specimen": "MAR_Amb_AS",
+   "painted_crack_px": 12780833,
+   "painted_notcrack_px": 37212,
+   "frame_px": 25165824,
+   "shipped_5-320": {
+    "recall": 0.1083,
+    "notcrack_rate": 0.3485,
+    "marked_pct": 6.2274
+   },
+   "drop5_10-320": {
+    "recall": 0.1056,
+    "notcrack_rate": 0.3455,
+    "marked_pct": 5.9705,
+    "px_lost_vs_shipped": 64659,
+    "painted_crack_lost_vs_shipped": 34406
+   },
+   "drop5_top640": {
+    "recall": 0.1056,
+    "notcrack_rate": 0.3455,
+    "marked_pct": 5.9705,
+    "px_lost_vs_shipped": 64659,
+    "painted_crack_lost_vs_shipped": 34406
+   },
+   "drop5_top1280": {
+    "recall": 0.1056,
+    "notcrack_rate": 0.3455,
+    "marked_pct": 5.9705,
+    "px_lost_vs_shipped": 64659,
+    "painted_crack_lost_vs_shipped": 34406
+   },
+   "drop5_top2560": {
+    "recall": 0.1056,
+    "notcrack_rate": 0.3455,
+    "marked_pct": 5.9705,
+    "px_lost_vs_shipped": 64659,
+    "painted_crack_lost_vs_shipped": 34406
+   },
+   "keep5_top2560": {
+    "recall": 0.1083,
+    "notcrack_rate": 0.3485,
+    "marked_pct": 6.2274,
+    "px_lost_vs_shipped": 0,
+    "painted_crack_lost_vs_shipped": 0
+   }
+  },
+  {
+   "frame": "MAR_Amb_Cast_ETD_0003",
+   "specimen": "MAR_Amb_Cast",
+   "painted_crack_px": 26983,
+   "painted_notcrack_px": 2865,
+   "frame_px": 25165824,
+   "shipped_5-320": {
+    "recall": 0.9804,
+    "notcrack_rate": 1.0,
+    "marked_pct": 0.3484
+   },
+   "drop5_10-320": {
+    "recall": 0.9804,
+    "notcrack_rate": 1.0,
+    "marked_pct": 0.3446,
+    "px_lost_vs_shipped": 959,
+    "painted_crack_lost_vs_shipped": 0
+   },
+   "drop5_top640": {
+    "recall": 0.9804,
+    "notcrack_rate": 1.0,
+    "marked_pct": 0.3446,
+    "px_lost_vs_shipped": 959,
+    "painted_crack_lost_vs_shipped": 0
+   },
+   "drop5_top1280": {
+    "recall": 0.9804,
+    "notcrack_rate": 1.0,
+    "marked_pct": 0.3446,
+    "px_lost_vs_shipped": 959,
+    "painted_crack_lost_vs_shipped": 0
+   },
+   "drop5_top2560": {
+    "recall": 0.9804,
+    "notcrack_rate": 1.0,
+    "marked_pct": 0.3446,
+    "px_lost_vs_shipped": 959,
+    "painted_crack_lost_vs_shipped": 0
+   },
+   "keep5_top2560": {
+    "recall": 0.9804,
+    "notcrack_rate": 1.0,
+    "marked_pct": 0.3484,
+    "px_lost_vs_shipped": 0,
+    "painted_crack_lost_vs_shipped": 0
+   }
+  },
+  {
+   "frame": "MAR_Amb_HIP_CBS_0005",
+   "specimen": "MAR_Amb_HIP",
+   "painted_crack_px": 5046494,
+   "painted_notcrack_px": 0,
+   "frame_px": 25165824,
+   "shipped_5-320": {
+    "recall": 0.1799,
+    "notcrack_rate": 0.0,
+    "marked_pct": 5.5469
+   },
+   "drop5_10-320": {
+    "recall": 0.1793,
+    "notcrack_rate": 0.0,
+    "marked_pct": 5.4448,
+    "px_lost_vs_shipped": 25691,
+    "painted_crack_lost_vs_shipped": 3030
+   },
+   "drop5_top640": {
+    "recall": 0.1823,
+    "notcrack_rate": 0.0,
+    "marked_pct": 5.5057,
+    "px_lost_vs_shipped": 25691,
+    "painted_crack_lost_vs_shipped": 3030
+   },
+   "drop5_top1280": {
+    "recall": 0.1823,
+    "notcrack_rate": 0.0,
+    "marked_pct": 5.5057,
+    "px_lost_vs_shipped": 25691,
+    "painted_crack_lost_vs_shipped": 3030
+   },
+   "drop5_top2560": {
+    "recall": 0.1829,
+    "notcrack_rate": 0.0,
+    "marked_pct": 5.5165,
+    "px_lost_vs_shipped": 25691,
+    "painted_crack_lost_vs_shipped": 3030
+   },
+   "keep5_top2560": {
+    "recall": 0.1835,
+    "notcrack_rate": 0.0,
+    "marked_pct": 5.6186,
+    "px_lost_vs_shipped": 0,
+    "painted_crack_lost_vs_shipped": 0
+   }
+  }
+ ],
+ "seconds": 497.3
+}
