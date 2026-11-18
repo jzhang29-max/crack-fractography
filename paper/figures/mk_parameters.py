@@ -43,14 +43,26 @@ HOW EACH CONSTANT WAS FIXED IS THE ref. COLUMN, AND THAT IS THE RESULT.
 The SEM MAD multiplier was once the single constant with a sweep behind it, and that
 sweep was run on a public collection since removed from this paper at the author's
 instruction; the value in use is unchanged and the sweep behind it is now this
-laboratory's own, not the removed collection's. Of the fifty: TEN are swept here and
-drawn; FIVE were settled by a test that had no value to choose -- on or off, which
-members; EIGHT were selected from a measurement recorded in the source repository but
-are not drawn, and the caption file quotes each measurement in full; TWENTY-SEVEN are
-fixed by construction or set by hand with nothing measured about them anywhere. Nine of
-the ten swept rows were taken from archived code with no recorded provenance, so their
-panels show SENSITIVITY, not selection, and where the shipped value is not the best
-value on the instrument the marker simply sits off the peak.
+laboratory's own, not the removed collection's. Of the fifty: TWELVE are swept here;
+FIVE were settled by a test that had no value to choose -- on or off, which members;
+EIGHT were selected from a measurement recorded in the source repository but are not
+drawn, and the caption file quotes each measurement in full; TWENTY-FIVE are fixed by
+construction or set by hand with nothing measured about them anywhere. Nine of the
+swept rows were taken from archived code with no recorded provenance, so their panels
+show SENSITIVITY, not selection, and where the shipped value is not the best value on
+the instrument the marker simply sits off the peak.
+
+THE LADDER'S TWO ROWS JOINED THE SWEPT ONES AND THE VALUE DID NOT CHANGE. They read F
+until docs/figures/ladder_endpoints.json and ladder_endpoints_frames.json existed, on
+the honest grounds that no sweep over alternative ladders had ever been run. One has
+now been run -- 58 ladders over base, top and step on the 26 tiles, and six of them on
+14 full frames against the paint -- so the F claim became false and the letter moved.
+What the sweep found is that the ladder's TOP is unrankable on tiles (sigma=2560 moves
+307 px in 6,815,744 there, because a 512 px tile cannot hold a background estimate that
+large) and that the tile preference for dropping sigma=5 is WRONG at frame scale, where
+it loses 64,728 px of painted crack and is worse on 12 of 14 frames. The shipped ladder
+stands; what changed is that there is now evidence behind it. Panel (e) still draws the
+single-radius curve, which is the part of the question a tile can answer.
 
 THE M LETTER EXISTS BECAUSE F WAS BEING USED FOR TWO DIFFERENT THINGS and only said one
 of them. F asserts that no measurement of a constant exists in either repository. Eight
@@ -886,11 +898,6 @@ WHY_F_IS_TRUE = {
                            "not a tuned quantity",
     "flattening clip (%)": "kwarg defaults on flatten_background; the docstring argues "
                            "percentile over min/max and gives no numbers for either",
-    "scale ladder (px)": "a doubling ladder, not a searched set. Panel (e) scores one "
-                         "rung at a time but no sweep over ALTERNATIVE ladders -- a "
-                         "different base, count or top -- exists in this project",
-    "ladder rungs": "the count follows from the doubling ladder above; it was never "
-                    "chosen against any alternative",
     "decimate above (px)": "a speed guard in detector_overrides.py carrying no comment "
                            "and no measurement",
     # --- TXM ------------------------------------------------------------------------
@@ -921,8 +928,8 @@ WHY_F_IS_TRUE = {
                            "measured cut",
 }
 
-DOCSTRING_TALLY = {"total": 50, "swept": 10, "test": 5, "measured": 8,
-                   "fixed": 27}
+DOCSTRING_TALLY = {"total": 50, "swept": 12, "test": 5, "measured": 8,
+                   "fixed": 25}
 
 _SCRATCH = None
 
@@ -1388,8 +1395,8 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
           FIXED),
         R("flattening clip (%)", pct(sem["flatten_background.low_pct"],
                                      sem["flatten_background.high_pct"]), FIXED),
-        R("scale ladder (px)", "%d–%d" % (LADDER[0], LADDER[-1]), FIXED, "e"),
-        R("ladder rungs", "%d" % len(LADDER), FIXED, "e"),
+        R("scale ladder (px)", "%d–%d" % (LADDER[0], LADDER[-1]), SWEEP, "e"),
+        R("ladder rungs", "%d" % len(LADDER), SWEEP, "e"),
         R("decimate above (px)", "%d" % int(DO.DECIMATE_ABOVE_SIGMA), FIXED),
         R("multiscale union", "on" if DO.USE_MULTISCALE_UNION else "off",
           TEST, "f"),
