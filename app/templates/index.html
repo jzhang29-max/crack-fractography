@@ -496,6 +496,14 @@ img.mask{width:100%;height:auto;border-radius:8px;border:1px solid var(--rule);
   <button id="limitsbtn" title="What this data establishes, and what it does not cover"><span id="limitsn">0</span> findings</button>
   <button id="defsbtn" title="What each number means, and when it lies">Definitions</button>
   <button id="csv">&darr; CSV</button>
+  <!-- ONE CSV PER IMAGE, zipped. The &darr; CSV button beside it gives one combined table
+       for the whole arm, which is the right default for a spreadsheet but the wrong shape
+       when each image is its own measurement. Splitting that file by hand afterwards was
+       work the app already had everything it needed to do. -->
+  <button id="csvperframe"
+          title="One CSV per image, zipped: every crack of each image in its own file">
+    &darr; CSV per image
+  </button>
   <button id="setupbtn" title="Where the app reads from">Setup</button>
   <!-- WHICH BUILD IS THIS. A round was spent on a screenshot whose toolbar matched no
        version in the repository, because the window gave no way to tell. -->

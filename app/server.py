@@ -584,26 +584,40 @@ def original(arm: str, frame: str):
 
 @app.get("/api/export.csv")
 def export_csv(arm: str = Query(...), level: str = "frames",
-               specimen: str | None = None, min_area_px: int = 0):
+               specimen: str | None = None, min_area_px: int = 0,
+               frame: str | None = None):
     """Flat CSV of whatever is on screen, because the table IS the product for most users.
 
     "Whatever is on screen" is now true. It was not: the min-area slider and the specimen
     selector were client-side only, so a filtered view exported unfiltered rows and the
     exported file carried no record of the filter. A citable number that silently disagrees
     with the screen it came from is worse than no export.
+
+    `frame` NARROWS TO ONE IMAGE, and it exists because the export was lying. The image
+    editor's own CSV button called this endpoint with arm and level=cracks and nothing
+    else, then saved the answer as `<frame>_cracks.csv`. On the reference corpus that is a
+    file named for one image holding 26,075 cracks from 142 of them -- the exact fault the
+    paragraph above says this endpoint was fixed for, left in place at the one call site
+    where the filename asserts the opposite. The filter is server-side so the comment line
+    records it, like every other filter here.
     """
     import csv
     import io
     if level not in ("frames", "specimens", "cracks"):
         raise HTTPException(400, "level must be frames, specimens or cracks")
+    if frame and level == "specimens":
+        raise HTTPException(400, "level=specimens has no frame to filter on")
     rows = [r for r in _load(level) if r.get("arm") == arm]
     if specimen:
         rows = [r for r in rows if r.get("specimen") == specimen]
+    if frame:
+        rows = [r for r in rows if r.get("frame") == frame]
     n_before = len(rows)
     if min_area_px and level == "cracks":
         rows = [r for r in rows if (r.get("area_px") or 0) >= min_area_px]
     if not rows:
-        raise HTTPException(404, f"nothing for arm={arm!r} at level={level!r}")
+        raise HTTPException(404, f"nothing for arm={arm!r} at level={level!r}"
+                                 + (f" frame={frame!r}" if frame else ""))
     keys, seen = [], set()
     for r in rows:
         for k in r:
@@ -614,14 +628,83 @@ def export_csv(arm: str = Query(...), level: str = "frames",
     # be reconciled with the figure it sits beside six months later.
     buf.write(f"# crack-fractography export  arm={arm}  level={level}"
               f"  specimen={specimen or 'all'}"
+              f"  frame={frame or 'all'}"
               f"  min_area_px={min_area_px}"
               f"  rows={len(rows)} of {n_before} before filtering\n")
     w = csv.DictWriter(buf, fieldnames=keys, extrasaction="ignore")
     w.writeheader()
     w.writerows(rows)
+    name = (f"{_safe_stem(frame)}_{level}.csv" if frame
+            else f'{arm.replace("/", "_")}_{level}.csv')
     return Response(buf.getvalue(), media_type="text/csv",
+                    headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+def _safe_stem(name):
+    """A frame name reduced to something safe to put in a filename or a zip entry.
+
+    Frame stems come from uploaded filenames, so they are user input reaching a path.
+    Anything that is not a letter, digit, dot, dash or underscore becomes an underscore,
+    which also removes the separators a zip entry could use to escape its directory.
+    """
+    return "".join(c if (c.isalnum() or c in "._-") else "_" for c in str(name)) or "frame"
+
+
+@app.get("/api/export_per_frame.zip")
+def export_per_frame_zip(arm: str = Query(...), level: str = "cracks",
+                         specimen: str | None = None, min_area_px: int = 0):
+    """ONE CSV PER IMAGE, zipped -- the same rows `export.csv` gives, split by frame.
+
+    This exists because "give me a table per image" was being done by hand outside the
+    app: ten frames meant ten requests, or one combined file split in a spreadsheet. The
+    split belongs here, where the frame names and the filters are already known.
+
+    Each entry is byte-identical to what `export.csv` returns for that one frame, because
+    it calls it. A second implementation of the same CSV would be a second thing to keep
+    in step, and the two would disagree the first time a column was added.
+    """
+    import io
+    import zipfile
+    if level not in ("frames", "cracks"):
+        raise HTTPException(400, "level must be frames or cracks")
+    rows = [r for r in _load(level) if r.get("arm") == arm]
+    if specimen:
+        rows = [r for r in rows if r.get("specimen") == specimen]
+    frames = sorted({r["frame"] for r in rows if r.get("frame")})
+    if not frames:
+        raise HTTPException(404, f"nothing for arm={arm!r} at level={level!r}")
+
+    buf = io.BytesIO()
+    written = []
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        for fr in frames:
+            try:
+                one = export_csv(arm=arm, level=level, specimen=specimen,
+                                 min_area_px=min_area_px, frame=fr)
+            except HTTPException as e:
+                # 404 here means min_area_px removed every row of this frame. That is a
+                # real answer about the frame, not an error for the whole download, so it
+                # is recorded in the manifest rather than failing the zip.
+                if e.status_code != 404:
+                    raise
+                written.append((fr, 0))
+                continue
+            entry = f"{_safe_stem(fr)}_{level}.csv"
+            z.writestr(entry, one.body)
+            written.append((fr, one.body.decode().count("\n") - 2))  # less comment+header
+        z.writestr("MANIFEST.txt",
+                   f"crack-fractography per-frame export\n"
+                   f"arm={arm}  level={level}  specimen={specimen or 'all'}  "
+                   f"min_area_px={min_area_px}\n"
+                   f"{len([w for w in written if w[1]])} file(s), "
+                   f"{sum(w[1] for w in written)} data row(s)\n\n"
+                   + "".join(f"{fr}\t{n} row(s)"
+                             f"{'  (no rows after filtering, no file written)' if not n else ''}\n"
+                             for fr, n in written))
+    stem = f'{arm.replace("/", "_")}{"_" + _safe_stem(specimen) if specimen else ""}'
+    return Response(buf.getvalue(), media_type="application/zip",
                     headers={"Content-Disposition":
-                             f'attachment; filename="{arm.replace("/", "_")}_{level}.csv"'})
+                             f'attachment; filename="{stem}_{level}_per_frame.zip"'})
 
 
 # ---------------------------------------------------------------------------------------

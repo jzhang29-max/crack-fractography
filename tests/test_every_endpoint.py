@@ -31,7 +31,8 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 COVERED = {
     ("get", "/api/arms"), ("get", "/api/frames"), ("get", "/api/specimens"),
     ("get", "/api/cracks"), ("get", "/api/mask/{arm:path}/{frame}"),
-    ("get", "/api/export.csv"), ("post", "/api/upload"),
+    ("get", "/api/export.csv"), ("get", "/api/export_per_frame.zip"),
+    ("post", "/api/upload"),
     ("get", "/api/paint"), ("post", "/api/paint"),
     ("post", "/api/mask_edit"), ("post", "/api/scale"), ("post", "/api/remeasure"),
     ("get", "/api/readout"), ("get", "/api/figure/fields"), ("get", "/api/figure/says"),
@@ -180,6 +181,31 @@ def test_export_csv_is_a_csv_with_the_frames_in_it(srv):
     body = [L for L in lines if not L.startswith("#")]
     assert "," in body[0], body[:1]
     assert len(body) >= 2, "header only; no rows exported"
+
+
+def test_export_per_frame_zip_is_a_zip_with_one_csv_per_frame(srv):
+    """End to end over HTTP. tests/test_export_per_frame.py pins the behaviour in detail;
+    this is the inventory's own check that the route exists and answers."""
+    import zipfile
+    st, raw = srv.get("/api/export_per_frame.zip?arm=uploads&level=cracks")
+    assert st == 200, raw[:200]
+    assert raw[:2] == b"PK", raw[:16]
+    z = zipfile.ZipFile(io.BytesIO(raw))
+    assert z.testzip() is None
+    names = z.namelist()
+    assert "MANIFEST.txt" in names
+    csvs = [n for n in names if n.endswith(".csv")]
+    assert csvs, names
+    # the frames in the zip are the frames of the arm, not some other arm's
+    st, frames = srv.json("/api/frames?arm=uploads")
+    stems = {f["frame"] for f in frames["frames"]} if isinstance(frames, dict) else set()
+    if stems:
+        assert len(csvs) == len(stems), (sorted(csvs), sorted(stems))
+
+    st, raw = srv.get("/api/export_per_frame.zip?arm=uploads&level=specimens")
+    assert st == 400, st
+    st, raw = srv.get("/api/export_per_frame.zip?arm=no_such_arm&level=cracks")
+    assert st == 404, st
 
 
 def test_figure_fields_says_and_svg_are_consistent(srv):

@@ -34,6 +34,22 @@ def free_port():
         return s.getsockname()[1]
 
 
+class _Headers(dict):
+    """A dict whose keys do not care about case, because HTTP header names do not."""
+
+    def __init__(self, items):
+        super().__init__({str(k).lower(): v for k, v in dict(items).items()})
+
+    def get(self, key, default=None):
+        return super().get(str(key).lower(), default)
+
+    def __getitem__(self, key):
+        return super().__getitem__(str(key).lower())
+
+    def __contains__(self, key):
+        return super().__contains__(str(key).lower())
+
+
 class Server:
     """A live app server on a private data dir. Use as a context manager."""
 
@@ -96,6 +112,22 @@ class Server:
 
     def get(self, path):
         return self._send(urllib.request.Request(self.base + path))
+
+    def get_with_headers(self, path):
+        """-> (status, body, headers). `get` throws the headers away, which is fine until
+        the thing under test IS a header -- the filename an export downloads as was
+        asserting a filter the request never applied, and no test could see it.
+
+        The headers come back case-insensitive. HTTP header names are, uvicorn emits them
+        lowercased, and a test that asks for "Content-Disposition" and silently gets ""
+        from a plain dict passes while checking nothing.
+        """
+        req = urllib.request.Request(self.base + path)
+        try:
+            with urllib.request.urlopen(req, timeout=120) as r:
+                return r.status, r.read(), _Headers(r.headers)
+        except urllib.error.HTTPError as e:
+            return e.code, e.read(), _Headers(e.headers)
 
     def post(self, path, body=None, ctype=None):
         req = urllib.request.Request(self.base + path, data=body or b"", method="POST")

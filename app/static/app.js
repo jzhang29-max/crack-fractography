@@ -2302,7 +2302,10 @@ async function openEditor(frame) {
       menu.hidden = true;
       const kind = b.dataset.x;
       if (kind === "csv") {
-        const q = new URLSearchParams({ arm: state.arm, level: "cracks" });
+        //: `frame` IS THE POINT. Without it this asked for the whole arm and saved the
+        //: answer as `<frame>_cracks.csv` -- on the reference corpus, one image's name on
+        //: a file holding 26,075 cracks from 142 images.
+        const q = new URLSearchParams({ arm: state.arm, level: "cracks", frame });
         return download(`/api/export.csv?${q}`, `${frame}_cracks.csv`);
       }
       // A full-resolution render, not the on-screen canvas: an exported figure should not
@@ -2663,6 +2666,17 @@ async function loadArm() {
     if (state.spec) q.set("specimen", state.spec);
     download(`/api/export.csv?${q}`,
              `${state.arm.replace("/", "_")}${state.spec ? "_" + state.spec : ""}_frames.csv`);
+  };
+  //: ONE CSV PER IMAGE. Same rows as the button above, split by frame and zipped, because
+  //: a per-image table is what you want when each image is its own measurement and the
+  //: combined file is what you want in a spreadsheet. The server does the split so every
+  //: entry is byte-identical to that frame's own export.csv.
+  $("#csvperframe").onclick = () => {
+    const q = new URLSearchParams({ arm: state.arm, level: "cracks" });
+    if (state.spec) q.set("specimen", state.spec);
+    download(`/api/export_per_frame.zip?${q}`,
+             `${state.arm.replace("/", "_")}${state.spec ? "_" + state.spec : ""}` +
+             `_cracks_per_frame.zip`);
   };
   // Upload. A .tif is segmented here first; a .png is taken as a mask already. The control
   // says "image or mask" rather than explaining the difference, because the server decides
