@@ -66,6 +66,10 @@ def main():
     meas = rec("F4 - what is measured")
     param = rec("F6 - how the parameters were determined")
     tally = param["tally"]
+    #: the authoritative counts, read rather than retyped: every hand-typed
+    #: copy of them in this file and in the two paper builds was wrong the
+    #: moment eight rows moved off the "fixed" letter.
+    counts = param["counts_by_letter"]
 
     close_best = max(tiles["close"], key=lambda k: tiles["close"][k]["iou"])
     den_best = max(tiles["denoise"], key=lambda k: tiles["denoise"][k]["iou"])
@@ -451,8 +455,16 @@ def main():
     b("**Nine** were inherited from older code with no record of why, and have been "
       "tested here after the fact. Their graphs show how sensitive the result is to "
       "them, not how they were chosen.")
-    b("The remaining **thirty-six** are fixed by construction and have never been "
-      "searched at all, in this work or the code it came from.")
+    b(f"**{counts['measured']}** were set from a measurement written down in the "
+      "software's own source — the X-ray hole fill, for instance, was tried at three "
+      "sizes over all 71 frames — but have no graph here, because several are two "
+      "values on one image rather than a grid and a curve drawn through two points "
+      "would flatter them. Each measurement is quoted in the figure's data file.")
+    b(f"The remaining **{counts['fixed']}** are fixed by construction or set by hand, "
+      "and have never been searched at all, in this work or the code it came from. "
+      "Each one now has to say in the source why that is true, and the figure refuses "
+      "to build if one does not — an earlier edition filed eight settings under this "
+      "heading while printing their measurements elsewhere in the same file.")
     h3("Three settings were tested for the first time, and two came back badly")
     p("Three constants that had never been examined anywhere could be tested on the same "
       "26 hand-marked image crops and the same scorer as everything else, so they were. "
@@ -620,8 +632,10 @@ def main():
     b("**The electron rule does not transfer to X-ray images.** Carried across unchanged, "
       "no value of its one tuned constant beats declaring the image crack-free. That is "
       "why the two arms exist.")
-    b("**Most of its settings were never optimised.** Thirty-six of fifty were fixed by "
-      "construction and never searched.")
+    b(f"**Most of its settings were never optimised.** {counts['fixed']} of "
+      f"{counts['total']} were fixed by construction or set by hand and never "
+      f"searched; {counts['measured']} more rest on a measurement that was never a "
+      "sweep.")
     b("**The reference is one person's painting**, it covers only part of each frame, "
       "and it is not independent of the X-ray model, which was fitted on it.")
     b("**It does not measure depth.** Neither instrument gives it, so no number in this "

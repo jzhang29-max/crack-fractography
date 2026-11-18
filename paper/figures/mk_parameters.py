@@ -40,17 +40,32 @@ nine-constant width clip and a three-constant straight-artefact rejector that
 declared is an undeclared degree of freedom.
 
 HOW EACH CONSTANT WAS FIXED IS THE ref. COLUMN, AND THAT IS THE RESULT.
-Of the fifty, NOT ONE was selected by a sweep on data this paper reports. The SEM
-MAD multiplier was once the single exception, and its sweep was run on a public
-collection that has been removed from this paper at the author's instruction; the value
-in use is unchanged and the sweep behind it is now this laboratory's own, not the
-removed collection's
-rather than claiming either that it was swept or that its construction fixed it. Four
-constants were settled by a test that had no value to choose. NINE were
-taken from archived code with no recorded provenance and are swept HERE, after the
-fact: their panels show SENSITIVITY, not selection, and where the shipped value is not
-the best value on the instrument the marker simply sits off the peak. Thirty-six are
-fixed by construction with no sweep on record.
+The SEM MAD multiplier was once the single constant with a sweep behind it, and that
+sweep was run on a public collection since removed from this paper at the author's
+instruction; the value in use is unchanged and the sweep behind it is now this
+laboratory's own, not the removed collection's. Of the fifty: TEN are swept here and
+drawn; FIVE were settled by a test that had no value to choose -- on or off, which
+members; EIGHT were selected from a measurement recorded in the source repository but
+are not drawn, and the caption file quotes each measurement in full; TWENTY-SEVEN are
+fixed by construction or set by hand with nothing measured about them anywhere. Nine of
+the ten swept rows were taken from archived code with no recorded provenance, so their
+panels show SENSITIVITY, not selection, and where the shipped value is not the best
+value on the instrument the marker simply sits off the peak.
+
+THE M LETTER EXISTS BECAUSE F WAS BEING USED FOR TWO DIFFERENT THINGS and only said one
+of them. F asserts that no measurement of a constant exists in either repository. Eight
+rows carrying it had one: the TXM hole fill was swept over all 71 frames at three caps,
+the speck floor by leave-one-image-out IoU, the tile stride, narrowing window, narrowing
+core, correction floor, clip peak sigma and straight-artefact wander cut each by a
+measurement written above the constant in its own source file. What they share is not an
+absence of evidence but an absence of a PANEL -- they act after the threshold rather
+than on the model, so none was drawn -- and every row without a panel had been given F.
+This edition's own sidecar gave the game away: it filed five of them under a key named
+`txm_fixed_from_its_own_measurements` while the plate lettered them "no measurement
+exists". Nothing in either pipeline changed here; the column was made true about
+constants that are exactly where they were. The width clip moved to T instead, because
+it is an on/off decision with a verdict and no optimum, like the multiscale union and
+the region classifier beside it.
 
 THREE OF THOSE NINE WERE SWEPT FOR THE FIRST TIME IN THIS REVISION, because the author's
 standing objection was that the plate did not show how each setting was chosen and for
@@ -835,7 +850,79 @@ T_NAME, T_BAND, T_TICK = 8.5, 9.0, 8.0
 #: their own grid\'s optimum. Those measurements still exist in
 #: docs/figures/parameters_tiles.json and parameters_frames.json; the figure no longer
 #: shows them.
-DOCSTRING_TALLY = {"total": 50, "swept": 10, "test": 4, "inherited": 0}
+#: EVERY ROW LETTERED F MUST SAY, HERE, WHY F IS TRUE OF IT.
+#:
+#: F is the only letter on this plate that makes a claim about what does NOT exist:
+#: that no measurement of this constant is on record in either repository. That is the
+#: easiest claim in the figure to get wrong, and this edition got it wrong eight times
+#: -- the TXM hole fill was lettered "no measurement exists" while the caption file
+#: printed its three-point sweep over all 71 frames two keys further down. The cause was
+#: that F had become the default for any row without a PANEL, and not-drawn is not the
+#: same as not-measured.
+#:
+#: A text scan of the source comments was tried as the guard and rejected: of thirteen
+#: F-lettered TXM constants it flagged three, and all three were the comment above a
+#: NEIGHBOURING constant (the straightness census belongs to the wander cut, the model
+#: scores belong above the recipe name, and WIDTH_CLIP_PROBES merely contains the word
+#: "measured" in its own one-line description). A guard with a quarter of its hits
+#: spurious teaches a reader to wave it through, and the exemption list would be exactly
+#: where the next real one hid. So the requirement is a sentence per row instead: cheap
+#: to write, impossible to satisfy without looking at the source, and readable by a
+#: referee who wants to check one.
+WHY_F_IS_TRUE = {
+    # --- SEM: plain defaults in detect_cracks.py's function signatures ---------------
+    "contrast window (%)": "a kwarg default on load_as_uint8; the docstring measures "
+                           "nothing and no sweep of the percentiles exists",
+    "contrast, 3 frames (%)": "0/100 is the degenerate no-clip case, applied by hand to "
+                              "three named low-contrast frames in common.py",
+    "databar search depth": "kwarg default on _detect_databar_top; its docstring "
+                            "describes the burned-in info bar and measures nothing",
+    "databar window (rows)": "kwarg default on _detect_databar_top, never measured",
+    "databar sd ratio": "kwarg default on _detect_databar_top, never measured",
+    "databar mean ratio": "kwarg default on _detect_databar_top, never measured",
+    "field-of-view gate (DN)": "kwarg default on find_field_of_view, never measured",
+    "field-of-view shrink": "kwarg default on find_field_of_view, never measured",
+    "field-of-view floor": "kwarg default on find_field_of_view; a fallback trigger, "
+                           "not a tuned quantity",
+    "flattening clip (%)": "kwarg defaults on flatten_background; the docstring argues "
+                           "percentile over min/max and gives no numbers for either",
+    "scale ladder (px)": "a doubling ladder, not a searched set. Panel (e) scores one "
+                         "rung at a time but no sweep over ALTERNATIVE ladders -- a "
+                         "different base, count or top -- exists in this project",
+    "ladder rungs": "the count follows from the doubling ladder above; it was never "
+                    "chosen against any alternative",
+    "decimate above (px)": "a speed guard in detector_overrides.py carrying no comment "
+                           "and no measurement",
+    # --- TXM ------------------------------------------------------------------------
+    "recipe": "a NAME, not a quantity. The comment above it reports the model's scores, "
+              "which are evidence about the model and not about the string",
+    "feature channels": "the 17 hand-built channels, which is a COUNT of the filter "
+                        "bank and not a tuned number: 1 intensity + 6 Gaussian "
+                        "smoothings + 4 gradient magnitudes + 4 Laplacians + 2 local "
+                        "standard deviations. No sweep over alternative banks exists "
+                        "(the hybrid member's 273 dimensions are these plus SAM's 256, "
+                        "and that is `hybrid_dim`, not this row)",
+    "backbone": "facebook/sam-vit-huge, used frozen. No comparison against a smaller "
+                "SAM checkpoint exists in this project",
+    "SAM tile (px)": "1024 px is the ViT-H encoder's own input size",
+    "embedding stride (px)": "16 px is the ViT patch size: 1024 / 64 embedding cells",
+    "clip radius (px)": "a one-line description in the source, no measurement",
+    "clip directions": "a one-line description in the source, no measurement",
+    "clip probes": "a budget per frame. Its own line contains the word 'measured' "
+                   "describing what a probe IS, which is not evidence about 4000",
+    "clip recentre (px)": "slack for a skeleton sitting off the ridge; no measurement",
+    "clip background (px)": "three window sizes with no comment and no measurement",
+    "clip min points": "a refusal threshold -- decline rather than guess -- not tuned",
+    "clip IDW neighbours": "a one-line description in the source, no measurement",
+    "straight min area (px)": "this and the aspect below DEFINE the population the "
+                              "wander census screened; the census measured the wander "
+                              "cut, not this screen",
+    "straight min aspect": "see the area floor above: part of the screen, not a "
+                           "measured cut",
+}
+
+DOCSTRING_TALLY = {"total": 50, "swept": 10, "test": 5, "measured": 8,
+                   "fixed": 27}
 
 _SCRATCH = None
 
@@ -994,7 +1081,7 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
                          f"row below says 'SAM ViT-H' and would be wrong")
 
     # ---------------------------------------------------------------- the four kinds
-    SWEEP, TEST, INHERIT, FIXED = J.ACCENT, J.G_DARK, J.ACCENT2, J.G_MID
+    SWEEP, TEST, MEASURED, FIXED = J.ACCENT, J.G_DARK, J.ACCENT2, J.G_MID
     #: ADOPTED: a value this paper uses and offers no evidence for. It is
     #: not FIXED -- nothing about its construction determines it -- and it
     #: is not SWEPT, because no sweep of it exists on any data reported
@@ -1012,13 +1099,17 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
                "filled square is the value the software uses, and on several of these "
                "it is NOT the best point on the grid -- which is the finding, not an "
                "oversight, and is why the curve is drawn rather than summarised",
-        INHERIT: "inherited from archived code with no recorded provenance, and swept "
-                 "HERE after the fact: the curve shows sensitivity, not selection, and "
-                 "the marker sits wherever the shipped value falls",
+        MEASURED: "selected from a measurement recorded in the source repository, "
+                  "not from a sweep run here. The measurement is quoted in the caption "
+                  "file beside this plate; it is not drawn, because several are two "
+                  "values on one frame rather than a grid and a sparkline would dress "
+                  "them as something they are not",
         TEST: "settled by a test that had no value to choose -- on or off, which "
               "members -- so there is a verdict but no optimum",
-        FIXED: "fixed by construction, with no sweep on record in either repository"}
-    PROV = [(SWEEP, "swept"), (TEST, "tested"), (FIXED, "fixed")]
+        FIXED: "fixed by construction or set by hand, with no measurement of it on "
+               "record in either repository"}
+    PROV = [(SWEEP, "swept"), (TEST, "tested"), (MEASURED, "measured"),
+            (FIXED, "fixed")]
 
     MAXDOTS = 14
 
@@ -1274,7 +1365,7 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
     #: bottom rule. No boxes, no arrows, no colour, no key. How each value was settled
     #: is one letter in its own narrow column, defined in a single footnote, which is
     #: the normal way a printed table carries that kind of flag.
-    CODE = {SWEEP: "S", TEST: "T", INHERIT: "I", FIXED: "F"}
+    CODE = {SWEEP: "S", TEST: "T", MEASURED: "M", FIXED: "F"}
 
     def R(name, value, prov, letter=None):
         return (name, value, prov, letter)
@@ -1326,7 +1417,7 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
         R("feature channels", "%d" % stats["n_features"], FIXED),
         R("backbone", "SAM ViT-H", FIXED),
         R("SAM tile (px)", "%d" % const["TILE"], FIXED, "l"),
-        R("tile stride (px)", "%d" % const["TILE_STRIDE"], FIXED, "l"),
+        R("tile stride (px)", "%d" % const["TILE_STRIDE"], MEASURED, "l"),
         R("embedding stride (px)", "%d" % const["EMB_STRIDE"], FIXED),
         R("probability threshold", "%.2f" % THR, TEST, "j"),
         #: NOT A SETTING ANYONE CHOSE: the electron arm's multiplier carried onto
@@ -1334,24 +1425,25 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
         #: below an empty mask. The row exists so the plate cannot be read as though
         #: the two arms share a constant.
         R("SEM k on TXM", "none", SWEEP, "m"),
-        R("correction floor", "%.2f" % const["CORRECTION_FLOOR"], FIXED),
-        R("speck floor (px)", "%d" % const["MIN_BLOB_PX"], FIXED),
-        R("hole fill (px)", "%d" % const["FILL_HOLES_MAX_PX"], FIXED),
-        R("narrowing window (px)", "%d" % const["TIGHTEN_WINDOW"], FIXED),
-        R("narrowing core", "%.2f" % const["TIGHTEN_MIN_CORE"], FIXED),
-        R("width clip", "on" if const["WIDTH_CLIP"] else "off", FIXED),
+        R("correction floor", "%.2f" % const["CORRECTION_FLOOR"], MEASURED),
+        R("speck floor (px)", "%d" % const["MIN_BLOB_PX"], MEASURED),
+        R("hole fill (px)", "%d" % const["FILL_HOLES_MAX_PX"], MEASURED),
+        R("narrowing window (px)", "%d" % const["TIGHTEN_WINDOW"], MEASURED),
+        R("narrowing core", "%.2f" % const["TIGHTEN_MIN_CORE"], MEASURED),
+        R("width clip", "on" if const["WIDTH_CLIP"] else "off", TEST),
         R("clip radius (px)", "%d" % const["WIDTH_CLIP_RADIUS"], FIXED),
         R("clip directions", "%d" % const["WIDTH_CLIP_DIRS"], FIXED),
         R("clip probes", "%d" % const["WIDTH_CLIP_PROBES"], FIXED),
         R("clip recentre (px)", "%d" % const["WIDTH_CLIP_RECENTRE"], FIXED),
-        R("clip peak sigma", "%.1f" % const["WIDTH_CLIP_PEAK_SIGMA"], FIXED),
+        R("clip peak sigma", "%.1f" % const["WIDTH_CLIP_PEAK_SIGMA"], MEASURED),
         R("clip background (px)", "/".join(str(w) for w in
                                            const["WIDTH_CLIP_BG_WINDOWS"]), FIXED),
         R("clip min points", "%d" % const["WIDTH_CLIP_MIN_MEASURED"], FIXED),
         R("clip IDW neighbours", "%d" % const["WIDTH_CLIP_IDW_K"], FIXED),
         R("straight min area (px)", "%d" % const["STRAIGHT_MIN_PX"], FIXED),
         R("straight min aspect", "%.1f" % const["STRAIGHT_MIN_ASPECT"], FIXED),
-        R("straight max wander (px)", "%.1f" % const["STRAIGHT_MAX_WANDER"], FIXED),
+        R("straight max wander (px)", "%.1f" % const["STRAIGHT_MAX_WANDER"],
+          MEASURED),
     ]
 
     # ---- geometry, in inches ---------------------------------------------------
@@ -1475,8 +1567,25 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
 
     # one footnote, which is how a printed table carries a flag column
     # TWO LINES. One ran 7 in on a 6.27 in sheet and the plate's own check caught it.
+    #
+    # BUILT FROM THE SAME MAP THE COLUMN PRINTS, not retyped beside it. This line was a
+    # literal string, and when an M letter joined the table the key went on offering a
+    # reader three letters to decode four -- the column said M on three rows and nothing
+    # on the plate said what M was. A key that is typed cannot be kept in step with a
+    # column that is computed, so it is no longer typed.
+    KEY_PHRASE = {SWEEP: "swept here", TEST: "settled by a test",
+                  MEASURED: "measured in the source, not drawn",
+                  FIXED: "fixed by construction, nothing measured"}
+    #: SEM_ROWS + TXM_ROWS rather than ROWS: ROWS is assembled further down,
+    #: after the tables are drawn, and the footnote is drawn before it.
+    _used = {r[2] for r in SEM_ROWS + TXM_ROWS}
+    _unkeyed = sorted(CODE[c] for c in _used if c not in KEY_PHRASE)
+    if _unkeyed:
+        raise SystemExit(f"the table prints {_unkeyed} and the footnote key does not "
+                         f"define them; a reader cannot decode the ref. column")
+    _key = ";   ".join(f"{CODE[c]} {KEY_PHRASE[c]}" for c, _w in PROV if c in _used)
     T(MX, y + 0.03,
-      "ref.   S swept here;   T settled by a test;   F fixed by construction.\n"
+      f"ref.   {_key}.\n"
       "FILLED SQUARE: the value the software uses.   Bracketed letter: the panel "
       "above.\nDashed: a second series; in e the blue dashed line is the seven-rung union.",
       T_TICK, color=J.G_DARK)
@@ -1567,7 +1676,8 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
     tally = {"total": n_rows,
              "swept": len([1 for _a, r in ROWS if r[2] == SWEEP]),
              "test": len([1 for _a, r in ROWS if r[2] == TEST]),
-             "inherited": len([1 for _a, r in ROWS if r[2] == INHERIT]),
+             "measured": len([1 for _a, r in ROWS if r[2] == MEASURED]),
+             "fixed": len([1 for _a, r in ROWS if r[2] == FIXED]),
              }
     if tally != DOCSTRING_TALLY:
         raise SystemExit(f"this module's docstring states {DOCSTRING_TALLY} and the "
@@ -1575,6 +1685,23 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
                          f"than shipping a figure whose own description is false")
     print(f"  CONTROL the tally this module's docstring states is the tally the two "
           f"tables hold ({tally}): PASS")
+    #: F is the one letter that asserts an ABSENCE -- no measurement of this constant
+    #: anywhere -- so every row carrying it has to say why that is true. Eight rows
+    #: carried F with a measurement sitting in their own source file, and nothing in
+    #: this build could notice, because the only check was on the COUNTS.
+    _f_rows = sorted(r[0] for _a, r in ROWS if r[2] == FIXED)
+    _missing = [n for n in _f_rows if n not in WHY_F_IS_TRUE]
+    _stale = sorted(set(WHY_F_IS_TRUE) - set(_f_rows))
+    if _missing or _stale:
+        raise SystemExit(
+            "WHY_F_IS_TRUE must hold one line for each row lettered F, and nothing "
+            "else.\n  lettered F with no reason given: " + (", ".join(_missing) or "-")
+            + "\n  a reason for a row no longer lettered F: "
+            + (", ".join(_stale) or "-")
+            + "\nF claims no measurement of the constant exists in either repository. "
+              "If one does, the row is M, not F.")
+    print(f"  CONTROL each of the {len(_f_rows)} rows lettered F states why no "
+          f"measurement of it exists: PASS")
     print(f"  CONTROL {n_rows} constants on the plate ({len(SEM_ROWS)} SEM, "
           f"{len(TXM_ROWS)} TXM), every value parsed from the shipped source or read "
           f"off a record: PASS")
@@ -1583,8 +1710,12 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
         figure_height_in=H, n_text=len(boxes), n_placed=len(boxes),
         n_constants_on_the_plate=n_rows, panel_letters=sorted(drawn), tally=tally,
         key_on_the_plate={CODE[c]: PROV_GLOSS[c] for c, _w in PROV},
+        #: `letter` as well as the gloss, so the two printed tables can be rebuilt
+        #: from this record without re-deriving which letter a row carries.
         constants=[{"arm": arm, "name": r[0], "value": r[1], "panel": r[3],
-                    "how_fixed": PROV_GLOSS[r[2]]} for arm, r in ROWS],
+                    "letter": CODE[r[2]], "how_fixed": PROV_GLOSS[r[2]]}
+                   for arm, r in ROWS],
+        key_phrases={CODE[c]: KEY_PHRASE[c] for c, _w in PROV},
         terms=[str(s) for s in LADDER], pooled=lad_pct,
         median=[100 * x[1] for x in ladder], p25=[100 * x[2] for x in ladder],
         p75=[100 * x[3] for x in ladder],
@@ -2030,10 +2161,17 @@ def sidecar(tiles, frames, madk, madp, dead, txm, units, scores, stats, const, b
                 "value": {"tile_px": const["TILE"], "stride_px": const["TILE_STRIDE"],
                           "embedding_stride_px": const["EMB_STRIDE"],
                           "backbone": const["SAM_MODEL_ID"]},
-                "verdict": "FIXED BY CONSTRUCTION, NO SWEEP ON RECORD. The stride is "
-                           "below the tile so neighbouring tiles overlap and the "
-                           "embedding field is continuous across their seams",
-                "unit_set": "none -- this row has no sparkline because no sweep exists",
+                "verdict": "TWO ROWS, TWO DIFFERENT ANSWERS, which is why they now "
+                           "carry different letters. The TILE is F: 1024 px is the "
+                           "ViT-H encoder's own input size and the 16 px embedding "
+                           "stride is its patch size, so neither was ever a choice. "
+                           "The tile STRIDE is M: 896 was settled by the measurement "
+                           "quoted below, on one frame. The previous edition lettered "
+                           "both F and so asserted, of the stride, that no measurement "
+                           "of it exists -- while printing that measurement two keys "
+                           "further down.",
+                "unit_set": "no sparkline: the stride's evidence is one frame, not a "
+                            "grid, and drawing two points as a curve would overstate it",
                 "record": "TXM_Crack_Detection_Pipeline/app/core/model.py, TILE and "
                           "TILE_STRIDE, parsed with ast",
                 "what_the_source_states": "the comment above TILE_STRIDE records a "
@@ -2082,20 +2220,125 @@ def sidecar(tiles, frames, madk, madp, dead, txm, units, scores, stats, const, b
                         "adversarial audit withdrew the result: 82.4% of the gain was "
                         "one tile. The flattening sigma is the base the ladder in (f) "
                         "is built around rather than a constant swept on its own."},
-            "txm_fixed_from_its_own_measurements": {
-                "speck_floor_px": const["MIN_BLOB_PX"],
-                "hole_fill_max_px": const["FILL_HOLES_MAX_PX"],
-                "tighten_window_px": const["TIGHTEN_WINDOW"],
-                "tighten_min_core": const["TIGHTEN_MIN_CORE"],
-                "correction_floor": const["CORRECTION_FLOOR"],
-                "source": "TXM_Crack_Detection_Pipeline/app/core/pipeline.py, parsed "
-                          "with ast; each carries a recorded measurement in the comment "
-                          "above it (the hole fill was swept over all 71 frames at "
-                          "64/256/1024 px, the speck floor against the owner's 30.2 M "
-                          "hand-drawn crack px, the narrowing window on one frame at "
-                          "w = 151 against w = 301). They are listed as a footnote "
-                          "rather than drawn: they act after the threshold in (g), not "
-                          "on the model."}},
+            "these_rows_used_to_be_lettered_F_and_were_wrong": {
+                "what_went_wrong": "F asserts no measurement of the constant exists in "
+                                   "either repository. For the eight rows now lettered "
+                                   "M that assertion was false, and this sidecar said "
+                                   "so in the same breath: the previous edition filed "
+                                   "them under a key literally named "
+                                   "`txm_fixed_from_its_own_measurements`. The letter "
+                                   "was a SCOPE decision -- these act after the "
+                                   "threshold rather than on the model, so no panel was "
+                                   "drawn for them -- and every row without a panel was "
+                                   "given F. Not drawn is not the same as not measured, "
+                                   "and only M says the second thing.",
+                "nothing_about_the_pipeline_changed": "no constant moved; this is the "
+                                                      "provenance column being made "
+                                                      "true about constants that are "
+                                                      "exactly where they were."},
+            "measured_not_drawn": {
+                "why_not_drawn": "several of these are two values on one frame rather "
+                                 "than a grid, and a sparkline drawn through two points "
+                                 "would dress a comparison as a sweep. The measurement "
+                                 "is quoted in full here instead, and the source line "
+                                 "is named so a reader can check it.",
+                "rows": {
+                    "hole fill (px)": {
+                        "value": const["FILL_HOLES_MAX_PX"],
+                        "measurement": "a three-point sweep over ALL 71 frames at "
+                                       "64 / 256 / 1024 px, taken after narrowing. "
+                                       "1024 is best on every axis at once: enclosed "
+                                       "voids 342,963 -> 2,471 / 1,145 / 894, recall on "
+                                       "painted crack 74.74% -> 76.02% / 76.32% / "
+                                       "76.58%, and on-specimen false positives on the "
+                                       "6 crack-free frames flat at 0.0040% for every "
+                                       "cap including no fill at all. An earlier census "
+                                       "over the first 14 images set the cap's SHAPE: "
+                                       "1,302 of 1,313 interior holes are under 1,024 "
+                                       "px and hold only 19.4% of the hole area, while "
+                                       "two holes of 59,194 and 65,505 px are islands "
+                                       "of intact material that filling would misreport",
+                        "source": "app/core/pipeline.py, above FILL_HOLES_MAX_PX"},
+                    "speck floor (px)": {
+                        "value": const["MIN_BLOB_PX"],
+                        "measurement": "leave-one-image-out IoU on full-resolution "
+                                       "probability maps, improving monotonically up to "
+                                       "2000 and winning on all four folds. 2000 rather "
+                                       "than the better-scoring 5000 because at 5000 "
+                                       "the worst single image loses 12.4% of the crack "
+                                       "its owner confirmed, against 2.7% at 2000 -- "
+                                       "scored on the owner's own 30.2 M hand-drawn "
+                                       "crack pixels",
+                        "source": "app/core/pipeline.py, above MIN_BLOB_PX"},
+                    "narrowing window (px)": {
+                        "value": const["TIGHTEN_WINDOW"],
+                        "measurement": "TWO VALUES ON ONE FRAME, which is why this is "
+                                       "not drawn. On wrought_316L_fatigue_1200_cycles, "
+                                       "w = 151 keeps 76.6% of the painted crack at a "
+                                       "1.0 px half-width and w = 301 keeps 83.7% at "
+                                       "1.4 px; 301 is chosen for the recall",
+                        "source": "app/core/pipeline.py, above TIGHTEN_WINDOW"},
+                    "narrowing core": {
+                        "value": const["TIGHTEN_MIN_CORE"],
+                        "measurement": "a per-frame census over 66 frames against the "
+                                       "darkest fifth of the corridor: the rule keeps a "
+                                       "median 97.0%, but 8 frames fall below 70% and 4 "
+                                       "below 50%, worst 34.4%. 0.60 sits between the "
+                                       "65.1% frame and the 49.8% one, so narrowing is "
+                                       "DECLINED on the four pathological frames and "
+                                       "applied everywhere else",
+                        "source": "app/core/pipeline.py, above TIGHTEN_MIN_CORE"},
+                    "correction floor": {
+                        "value": const["CORRECTION_FLOOR"],
+                        "measurement": "two values: 0.20 keeps 89.6% of what the hand "
+                                       "strokes were adding while dropping the "
+                                       "brush-shaped remainder, 0.35 keeps only 65.3%",
+                        "source": "app/core/pipeline.py, above CORRECTION_FLOOR"},
+                    "tile stride (px)": {
+                        "value": const["TILE_STRIDE"],
+                        "measurement": "ONE FRAME, 3044x2354. With abutting tiles "
+                                       "(stride == tile) the worst row carries 32.8x "
+                                       "the median row-to-row probability change, all "
+                                       "of it at the y = 1023 tile boundary; at stride "
+                                       "896 the worst row is 7.8x and sits on crack "
+                                       "rather than on a seam. Two lookup-time "
+                                       "alternatives were tried and both failed -- "
+                                       "reaching past a tile edge invents data and "
+                                       "raised false positives on crack-free specimens "
+                                       "6.2x, and a window that stops at the edge "
+                                       "reduces to last-tile-wins. Costs 13% more tiles",
+                        "source": "app/core/model.py, above TILE_STRIDE"},
+                    "clip peak sigma": {
+                        "value": const["WIDTH_CLIP_PEAK_SIGMA"],
+                        "measurement": "gating on whether the WIDTH MEASUREMENT "
+                                       "succeeded rather than on the pixel's own "
+                                       "contrast. The v1 contrast gate was a selection "
+                                       "effect, because width rises with contrast "
+                                       "(rho = +0.673): on the worst over-marker it "
+                                       "admitted 1.6% of the skeleton and reported a "
+                                       "median half-width of 17.6 px where an ungated "
+                                       "sample of the same frame reports 3.5 px. The "
+                                       "change took the measurable fraction from 43% to "
+                                       "65% and that frame from 2.57x to 1.15x",
+                        "source": "app/core/pipeline.py, above WIDTH_CLIP_PEAK_SIGMA"},
+                    "straight max wander (px)": {
+                        "value": const["STRAIGHT_MAX_WANDER"],
+                        "measurement": "a population census over all 71 frames. "
+                                       "Standalone components of >= 200 px with bbox "
+                                       "aspect >= 6 split into 5 artefacts wandering "
+                                       "0.13-0.71 px, one component at 1.73 px that is "
+                                       "55.9% painted CRACK, and 6 genuine long cracks "
+                                       "at 2.9-12.9 px. The cut is placed in the gap at "
+                                       "1.0. The first version used 2.0 and removed "
+                                       "1,360 px of crack the annotator had painted",
+                        "source": "app/core/pipeline.py, above STRAIGHT_MAX_WANDER"}}}},
+
+        "why_each_F_is_true": dict(WHY_F_IS_TRUE,
+            **{"_what_this_is": "F asserts that no measurement of the constant exists "
+                                "in either repository, which is a claim about an "
+                                "absence and the easiest thing on this plate to get "
+                                "wrong. One line per F row, checked against the table "
+                                "at build time so a row cannot carry F silently."}),
 
         "panel_letters_have_moved": {
             "why": "the plate is a row of sweep panels over a printed table of every "
@@ -2168,6 +2411,11 @@ def sidecar(tiles, frames, madk, madp, dead, txm, units, scores, stats, const, b
                       "3 of its 9 frames also appear in the 26-tile set that informed "
                       "the shipped configuration"},
 
+        #: THE COUNTS, so no downstream document has to retype them. Four places --
+        #: the manuscript caption, the figure pack's caption, and two passages of the
+        #: explainer -- each carried a hand-typed "four tested, thirty-six fixed", and
+        #: all four were wrong the moment eight rows moved off F. They read this now.
+        "counts_by_letter": dict(DOCSTRING_TALLY),
         "tally": {
             "swept in this edition on this laboratory's own data": [
                 "SEM: MAD multiplier k"],
@@ -2176,9 +2424,17 @@ def sidecar(tiles, frames, madk, madp, dead, txm, units, scores, stats, const, b
                  % ("enabled" if DO.USE_REGION_CLASSIFIER else "disabled"),
                  "SEM: multiscale union versus a single flattening radius",
                  "TXM: probability threshold 0.60, matched on false alarms",
-                 "TXM: which members are averaged"],
+                 "TXM: which members are averaged",
+                 "TXM: the width clip, on or off (no panel: it acts on the exported "
+                 "mask, after everything this plate's panels sweep)"],
             "fixed by construction, no sweep on record":
-                ["TXM: SAM tile 1024 px and stride 896 px"],
+                ["TXM: SAM tile 1024 px -- the ViT-H encoder's own input size, and the "
+                 "16 px embedding stride is its patch size"],
+            "selected from a measurement in the source, not drawn":
+                ["TXM: tile stride 896 px (one frame; see `measured_not_drawn`)",
+                 "TXM: hole fill 1024 px, speck floor 2000 px, narrowing window 301 px, "
+                 "narrowing core 0.60, correction floor 0.20, clip peak sigma 2.0, "
+                 "straight-artefact wander cut 1.0 px"],
             "swept here after the fact, no recorded provenance for the value":
                 ["SEM: absolute darkness gate 10", "SEM: opening disk(1)",
                  "SEM: clean_mask small-object floor 13 px",
@@ -2227,6 +2483,13 @@ def sidecar(tiles, frames, madk, madp, dead, txm, units, scores, stats, const, b
                                "plate makes across rows is (g) against (j), which is the "
                                "same 31 frames, the same refereed pixels and the same "
                                "measure by construction and by control.",
+
+        #: THE TWO PRINTED TABLES, row for row, as the plate sets them. The caption
+        #: carried the VALUES already but not which letter each row ends in, so the
+        #: one column this figure exists to publish was the one thing a reader could
+        #: not get out of the record without re-running the generator.
+        "table_rows": bars["constants"],
+        "ref_column_key": bars["key_phrases"],
 
         "generated_from": {
             "docs/figures/parameters_tiles.json": tiles["key"],
