@@ -43,11 +43,12 @@ HOW EACH CONSTANT WAS FIXED IS THE ref. COLUMN, AND THAT IS THE RESULT.
 The SEM MAD multiplier was once the single constant with a sweep behind it, and that
 sweep was run on a public collection since removed from this paper at the author's
 instruction; the value in use is unchanged and the sweep behind it is now this
-laboratory's own, not the removed collection's. Of the fifty: TWELVE are swept here;
-FIVE were settled by a test that had no value to choose -- on or off, which members;
-EIGHT were selected from a measurement recorded in the source repository but are not
-drawn, and the caption file quotes each measurement in full; TWENTY-FIVE are fixed by
-construction or set by hand with nothing measured about them anywhere. Nine of the
+laboratory's own, not the removed collection's. Of the fifty: NINETEEN are swept here,
+of which seven carry no panel and state their finding in WHY_THE_SWEPT_VALUE_STANDS
+instead; FIVE were settled by a test that had no value to choose -- on or off, which
+members; EIGHT were selected from a measurement recorded in the source repository but
+are not drawn, and the caption file quotes each measurement in full; EIGHTEEN are fixed
+by construction or set by hand with nothing measured about them anywhere. Nine of the
 swept rows were taken from archived code with no recorded provenance, so their panels
 show SENSITIVITY, not selection, and where the shipped value is not the best value on
 the instrument the marker simply sits off the peak.
@@ -896,10 +897,6 @@ WHY_F_IS_TRUE = {
     "field-of-view shrink": "kwarg default on find_field_of_view, never measured",
     "field-of-view floor": "kwarg default on find_field_of_view; a fallback trigger, "
                            "not a tuned quantity",
-    "flattening clip (%)": "kwarg defaults on flatten_background; the docstring argues "
-                           "percentile over min/max and gives no numbers for either",
-    "decimate above (px)": "a speed guard in detector_overrides.py carrying no comment "
-                           "and no measurement",
     # --- TXM ------------------------------------------------------------------------
     "recipe": "a NAME, not a quantity. The comment above it reports the model's scores, "
               "which are evidence about the model and not about the string",
@@ -913,14 +910,9 @@ WHY_F_IS_TRUE = {
                 "SAM checkpoint exists in this project",
     "SAM tile (px)": "1024 px is the ViT-H encoder's own input size",
     "embedding stride (px)": "16 px is the ViT patch size: 1024 / 64 embedding cells",
-    "clip radius (px)": "a one-line description in the source, no measurement",
-    "clip directions": "a one-line description in the source, no measurement",
     "clip probes": "a budget per frame. Its own line contains the word 'measured' "
                    "describing what a probe IS, which is not evidence about 4000",
-    "clip recentre (px)": "slack for a skeleton sitting off the ridge; no measurement",
-    "clip background (px)": "three window sizes with no comment and no measurement",
     "clip min points": "a refusal threshold -- decline rather than guess -- not tuned",
-    "clip IDW neighbours": "a one-line description in the source, no measurement",
     "straight min area (px)": "this and the aspect below DEFINE the population the "
                               "wander census screened; the census measured the wander "
                               "cut, not this screen",
@@ -928,8 +920,38 @@ WHY_F_IS_TRUE = {
                            "measured cut",
 }
 
-DOCSTRING_TALLY = {"total": 50, "swept": 12, "test": 5, "measured": 8,
-                   "fixed": 25}
+DOCSTRING_TALLY = {"total": 50, "swept": 19, "test": 5, "measured": 8,
+                   "fixed": 18}
+
+
+#: A SWEPT ROW WITH NO PANEL still owes the reader the finding. These seven were
+#: lettered F until the sweeps of 2026-11-18 existed; F asserts that no measurement
+#: of a constant exists, so the letter had to move the moment one did. They have no
+#: sparkline because their grids are not one-dimensional curves over a single tile
+#: score -- they are frame-scale recalls, paired width ratios and liveness checks --
+#: so what the sweep concluded is written here and quoted into the caption file.
+WHY_THE_SWEPT_VALUE_STANDS = {
+    "flattening clip (%)": "kwarg defaults on flatten_background. SWEPT NOW, and the "
+                           "docstring's argument holds: raw min/max scores the same "
+                           "recall and deletes 17,153 px of hand-painted crack, "
+                           "(2, 98) deletes 376,508, and (0.5, 99.5) is the only arm "
+                           "that deletes none. Note the pair exists TWICE -- "
+                           "detector_overrides._flatten hard-codes it for sigma > 64, "
+                           "so it governs 3 of 7 ladder rungs. "
+                           "docs/figures/flattening_clip.json",
+    "decimate above (px)": "a speed guard, RE-VALIDATED at frame scale after its only "
+                           "prior check ran on tiles where the radii it governs are "
+                           "inert. The decimated path finds 7,373 painted crack px "
+                           "the exact path misses and loses 1,149, is 4x faster "
+                           "(17.98 s vs 72.39 s per frame), and 32 and 64 are the "
+                           "same computation because install() never decimates the "
+                           "sigma=40 rung. docs/figures/decimate_guard.json",
+    "clip radius (px)": "swept 20 to 2000: the curve KNEES at the shipped 200 -- 100 px reaches 0.79x of the shipped width, 400 px only 1.03x and nothing above it moves. The one of the five with a defensible value. docs/figures/txm_clip_constants.json",
+    "clip directions": "swept 2 to 120: a smooth monotone from 1.11x to 0.92x of the shipped width with no knee, Jaccard >= 0.99 throughout. 12 is arbitrary and the choice costs little. docs/figures/txm_clip_constants.json",
+    "clip recentre (px)": "slack for a skeleton sitting off the ridge. Swept 0 to 30: a smooth monotone 1.05x to 0.87x with no knee, so 3 is arbitrary and cheap. docs/figures/txm_clip_constants.json",
+    "clip background (px)": "three window sizes. SWEPT NOW -- and the module constant is a DEAD KNOB: local_background binds WIDTH_CLIP_BG_WINDOWS as a default argument at import, so assigning to it changes this table and nothing else (0 of 511,153 px moved). The VALUE is live and is the most load-bearing of the five -- measured width spans 0.36x to 1.59x across the grid -- but the NAME is not a knob. docs/figures/txm_clip_constants.json",
+    "clip IDW neighbours": "swept k = 1 to 120: median width moves 0.9998x to 1.0031x, so this constant is inert to within 0.3% and 12 is as good as anything. docs/figures/txm_clip_constants.json",
+}
 
 _SCRATCH = None
 
@@ -1394,10 +1416,10 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
         R("field-of-view floor", "%.2f" % sem["find_field_of_view.min_keep_frac"],
           FIXED),
         R("flattening clip (%)", pct(sem["flatten_background.low_pct"],
-                                     sem["flatten_background.high_pct"]), FIXED),
+                                     sem["flatten_background.high_pct"]), SWEEP),
         R("scale ladder (px)", "%d–%d" % (LADDER[0], LADDER[-1]), SWEEP, "e"),
         R("ladder rungs", "%d" % len(LADDER), SWEEP, "e"),
-        R("decimate above (px)", "%d" % int(DO.DECIMATE_ABOVE_SIGMA), FIXED),
+        R("decimate above (px)", "%d" % int(DO.DECIMATE_ABOVE_SIGMA), SWEEP),
         R("multiscale union", "on" if DO.USE_MULTISCALE_UNION else "off",
           TEST, "f"),
         #: ADOPTED, EACH WITH A PANEL. These nine carry no recorded provenance in
@@ -1438,15 +1460,15 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
         R("narrowing window (px)", "%d" % const["TIGHTEN_WINDOW"], MEASURED),
         R("narrowing core", "%.2f" % const["TIGHTEN_MIN_CORE"], MEASURED),
         R("width clip", "on" if const["WIDTH_CLIP"] else "off", TEST),
-        R("clip radius (px)", "%d" % const["WIDTH_CLIP_RADIUS"], FIXED),
-        R("clip directions", "%d" % const["WIDTH_CLIP_DIRS"], FIXED),
+        R("clip radius (px)", "%d" % const["WIDTH_CLIP_RADIUS"], SWEEP),
+        R("clip directions", "%d" % const["WIDTH_CLIP_DIRS"], SWEEP),
         R("clip probes", "%d" % const["WIDTH_CLIP_PROBES"], FIXED),
-        R("clip recentre (px)", "%d" % const["WIDTH_CLIP_RECENTRE"], FIXED),
+        R("clip recentre (px)", "%d" % const["WIDTH_CLIP_RECENTRE"], SWEEP),
         R("clip peak sigma", "%.1f" % const["WIDTH_CLIP_PEAK_SIGMA"], MEASURED),
         R("clip background (px)", "/".join(str(w) for w in
-                                           const["WIDTH_CLIP_BG_WINDOWS"]), FIXED),
+                                           const["WIDTH_CLIP_BG_WINDOWS"]), SWEEP),
         R("clip min points", "%d" % const["WIDTH_CLIP_MIN_MEASURED"], FIXED),
-        R("clip IDW neighbours", "%d" % const["WIDTH_CLIP_IDW_K"], FIXED),
+        R("clip IDW neighbours", "%d" % const["WIDTH_CLIP_IDW_K"], SWEEP),
         R("straight min area (px)", "%d" % const["STRAIGHT_MIN_PX"], FIXED),
         R("straight min aspect", "%.1f" % const["STRAIGHT_MIN_ASPECT"], FIXED),
         R("straight max wander (px)", "%.1f" % const["STRAIGHT_MAX_WANDER"],
@@ -1696,6 +1718,23 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
     #: anywhere -- so every row carrying it has to say why that is true. Eight rows
     #: carried F with a measurement sitting in their own source file, and nothing in
     #: this build could notice, because the only check was on the COUNTS.
+    #: THE SWEPT ROWS WITHOUT A PANEL owe the same debt F rows do, for the same reason:
+    #: a reader cannot see the evidence, so the module has to carry it. Without this the
+    #: new dict would rot exactly as the F reasons did -- a row moves letter and its
+    #: paragraph is left behind describing a state that no longer holds.
+    _s_nopanel = sorted(r[0] for _a, r in ROWS if r[2] == SWEEP and not r[3])
+    _s_missing = [n for n in _s_nopanel if n not in WHY_THE_SWEPT_VALUE_STANDS]
+    _s_stale = sorted(set(WHY_THE_SWEPT_VALUE_STANDS) - set(_s_nopanel))
+    if _s_missing or _s_stale:
+        raise SystemExit(
+            "WHY_THE_SWEPT_VALUE_STANDS must hold one line for each swept row that has "
+            "no panel, and nothing else.\n  swept, undrawn, unexplained: "
+            + (", ".join(_s_missing) or "-")
+            + "\n  explained but no longer a swept undrawn row: "
+            + (", ".join(_s_stale) or "-"))
+    print(f"  CONTROL each of the {len(_s_nopanel)} swept rows with no panel states what "
+          f"its sweep found: PASS")
+
     _f_rows = sorted(r[0] for _a, r in ROWS if r[2] == FIXED)
     _missing = [n for n in _f_rows if n not in WHY_F_IS_TRUE]
     _stale = sorted(set(WHY_F_IS_TRUE) - set(_f_rows))

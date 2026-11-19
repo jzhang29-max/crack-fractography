@@ -396,6 +396,14 @@ def install(up, **extra):
             bg = np.pad(bg, ((0, img8.shape[0] - bg.shape[0]),
                              (0, img8.shape[1] - bg.shape[1])), mode="edge")
         flat = img8.astype(np.float32) - bg
+        #: THE SAME TWO NUMBERS AS flatten_background's low_pct/high_pct KWARGS, and a
+        #: second copy of them. This branch runs for sigma > DECIMATE_ABOVE_SIGMA, so on
+        #: SCALE_LADDER (5, 10, 20, 40, 80, 160, 320) the kwarg defaults govern four rungs
+        #: and these literals govern the other three. Changing the kwarg alone would leave
+        #: the ladder clipping its own rungs two different ways. Measured in
+        #: docs/figures/flattening_clip.json, which also shows (0.5, 99.5) is the right
+        #: pair: raw min/max scores the same recall and deletes 17,153 px of hand-painted
+        #: crack, and (2, 98) deletes 376,508.
         lo, hi = np.percentile(flat, [0.5, 99.5])
         if hi <= lo:
             lo, hi = flat.min(), flat.max()

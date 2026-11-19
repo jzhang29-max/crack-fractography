@@ -33,8 +33,39 @@ FLOODED = "MAR_H_HIP_CBS_0002__crop_3122_120_512x512"
 def build_cache(verbose=True):
     """Cut each tile out of its parent micrograph once and store it. The parents are up
     to 6144x4376 uint16; re-reading them per experiment is what makes a sweep take hours.
-    Stores the percentile-stretched uint8 exactly as detect_cracks.load_as_uint8 makes it,
-    so a cached tile is byte-identical to what the real pipeline would have seen."""
+
+    THE CACHED TILE IS NOT WHAT THE PIPELINE SEES, and this docstring said it was. It
+    claimed the stored uint8 was "exactly as detect_cracks.load_as_uint8 makes it, so a
+    cached tile is byte-identical to what the real pipeline would have seen". It is not.
+    load_as_uint8 takes its percentiles over the WHOLE micrograph; the lines below crop
+    first and take them over the 512 px crop, which is per-tile autocontrast. Measured on
+    the first six tiles of the manifest, mean absolute difference between the two against
+    the same raw data:
+
+        260622_316_H_b2_front_CBS_03__crop_30_445        14.9 grey levels
+        260622_316_H_b2_front_CBS_04__crop_423_59       104.4
+        260622_316_H_b4_CBS_02__crop_3853_3216           31.4
+        260622_316_H_b4_CBS_02__crop_4695_807             9.2
+        260622_316_amb_b3_CBS_02__crop_3853_3216         52.5
+        260708_316_H_b2_front_CBS_005__crop_2122_2980    24.5
+
+    The worst case is a crop whose own 1-99.5 window is (48059, 54484) inside a frame
+    window of (1542, 54998): a narrow bright band stretched across the full range here
+    and compressed into a sliver by the pipeline.
+
+    WHAT THAT DOES AND DOES NOT INVALIDATE. The tiles remain a self-consistent benchmark
+    -- the hand labels were drawn on these same crops -- so a score computed here is a
+    real score of this instrument. What cannot be carried across is an inference from a
+    tile result to pipeline behaviour on anything contrast-sensitive, which is the darkness
+    cut, the MAD multiplier, the absolute gate and every rung of the scale ladder. That
+    is one more reason, on top of tile size, why docs/figures/ladder_endpoints.json's tile
+    preference for dropping sigma=5 was refuted at frame scale.
+
+    Left as it is rather than fixed: rebuilding the cache with frame-wide percentiles
+    would silently change every tile number this project has published, and the labels
+    were drawn against these pixels. The behaviour is the record; the claim about it was
+    the bug.
+    """
     import tifffile
     from PIL import Image
     from skimage import exposure
