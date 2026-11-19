@@ -739,6 +739,19 @@ class Doc:
         if h_in > PAGE[1] - MT - MB - 1.0 - head_in:
             h_in = PAGE[1] - MT - MB - 1.0 - head_in
             w_in = h_in * img.shape[1] / img.shape[0]
+            #: A PLATE TOO TALL FOR THE TEXT BLOCK IS SHRUNK, AND ITS TYPE WITH IT.
+            #: journal_style holds every plate to an 8 pt floor at the plate's OWN
+            #: width; it cannot see this page scaling the plate down afterwards, and
+            #: that blind spot is how a plate once reached the reader at 5.6 pt. The
+            #: same floor is applied here, to the width the page actually prints.
+            _plate_in = img.shape[1] / 600.0
+            _pt = 8.0 * (w_in / _plate_in)
+            if _pt < 8.0 - 1e-9:
+                raise SystemExit(
+                    f"{path}: the plate is {_plate_in:.2f} x "
+                    f"{img.shape[0] / 600.0:.2f} in and this page fits it to "
+                    f"{w_in:.2f} in wide, so its 8 pt type prints at {_pt:.1f} pt. "
+                    f"Make the plate shorter or split it.")
         #: the heading must not be orphaned from its plate, so the break test counts it
         if self.y - h_in - head_in - 0.5 < MB:
             self._new()

@@ -201,9 +201,9 @@ OUT = _paths.FIG_DIR
 #: WHAT THE DASHED SERIES IS, per plate. Each entry names only the panels that plate
 #: draws.
 _DASHED_KEY = {
-    "SEM": "DASHED is the panel\u2019s second series: (a) precision, "
-           "(c) candidate floor,\n(d) 4-connectivity, (f) one radius at a time.",
-    "TXM": "DASHED is the panel\u2019s second series: (j) false-positive rate.",
+    "SEM": "DASHED second series: (a) precision, (c) candidate floor, "
+           "(d) 4-connectivity, (f) one radius.",
+    "TXM": "DASHED second series: (j) false-positive rate.",
 }
 
 NAME = "F6 - how the parameters were determined"
@@ -1513,8 +1513,18 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem, arm):
     W = J.PAGEW
     MX, NCOL, COLGAP = 0.05, 3, 0.185
     PW = (W - 2 * MX - (NCOL - 1) * COLGAP) / NCOL
+    #: HOW MANY PANELS PER ROW. The cell is always a third of the page so a panel
+    #: is the same size on both plates, but the electron arm's nine wrap at three
+    #: and the transmission arm's four wrap at two -- three across would leave one
+    #: panel alone on a second row, which reads as a panel that failed to draw.
+    PCOL = 3 if arm == "SEM" else 2
+    #: THE CELL IS AS WIDE AS THE ROW ALLOWS. With four panels two across, a third-page
+    #: cell left 1.1 in of white on either side; the panels take the whole measure
+    #: instead, and the plot grows taller with them so the aspect stays near the
+    #: electron plate's rather than flattening to a 3.6:1 strip.
+    PW = (W - 2 * MX - (PCOL - 1) * COLGAP) / PCOL
     YLABW = 0.42                       # y title + y tick labels
-    PLOTH, XTICKH, XLABH, ROWGAP = 0.72, 0.17, 0.20, 0.16
+    PLOTH, XTICKH, XLABH, ROWGAP = (0.72 if arm == "SEM" else 1.02), 0.17, 0.20, 0.16
     PANELROW = PLOTH + XTICKH + XLABH + ROWGAP
     ARMH, LEAD, TOPM, FOOTH = 0.20, 0.132, 0.07, 0.62
     TCOL, TGAP = 3, 0.16               # the table's column groups
@@ -1557,8 +1567,8 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem, arm):
     sem_p = [q for q in PANELS if q[0] == "SEM" and arm == "SEM"]
     txm_p = [q for q in PANELS if q[0] == "TXM" and arm == "TXM"]
     ARM_PANELS = [q for q in PANELS if q[0] == arm]
-    sem_rows = -(-len(sem_p) // NCOL)
-    txm_rows = -(-len(txm_p) // NCOL)
+    sem_rows = -(-len(sem_p) // PCOL)
+    txm_rows = -(-len(txm_p) // PCOL)
     _srows = SEM_ROWS if arm == "SEM" else []
     _trows = TXM_ROWS if arm == "TXM" else []
     sem_t_h = ((LEAD + 0.02 + LEAD + 0.040 + (-(-len(_srows) // TCOL)) * LEAD + 0.030)
@@ -1597,11 +1607,11 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem, arm):
         #: the transmission arm has three. Laid out from the left, each row ended in
         #: empty columns and the author read the plate as truncated -- as though a
         #: panel had failed to draw. Centring says the row is the whole row.
-        _n_last = len(items) % NCOL or NCOL
+        _n_last = len(items) % PCOL or PCOL
         for i, (_arm, letter, xlab, ylab, fn, xt, xl, yt, yl) in enumerate(items):
-            r, c = divmod(i, NCOL)
-            _in_row = NCOL if (r + 1) * NCOL <= len(items) else _n_last
-            x = MX + c * (PW + COLGAP) + (NCOL - _in_row) * (PW + COLGAP) / 2.0
+            r, c = divmod(i, PCOL)
+            _in_row = PCOL if (r + 1) * PCOL <= len(items) else _n_last
+            x = MX + c * (PW + COLGAP) + (PCOL - _in_row) * (PW + COLGAP) / 2.0
             ax = fig.add_axes([(x + YLABW) / W,
                                1.0 - (y0 + r * PANELROW + PLOTH) / H,
                                (PW - YLABW) / W, PLOTH / H])
@@ -1680,8 +1690,8 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem, arm):
             _n = _CON[_arm]["n_frames"]
             _below = _CON[_arm]["frames_median_critical_k_below_k"]
             _prop = 100 * _CON[_arm]["median_crack_px_proposed_frac"]
-            _say.append(f"{_arm}: {_below} of {_n} frames below the shipped k; "
-                        f"{_prop:.0f}% of painted crack proposed on the median frame")
+            _say.append(f"{_arm}: {_below}/{_n} frames below shipped k; "
+                        f"median frame proposes {_prop:.0f}% of painted crack")
         cax.axvline(K, color=J.INK, lw=1.0, dashes=(3.0, 1.8), zorder=6)
         cax.text(K, 1.62, f"shipped k = {K:g}", fontsize=T_TICK, ha="center", va="bottom",
                  color=J.INK)
@@ -1712,8 +1722,8 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem, arm):
     # on the plate said what M was. A key that is typed cannot be kept in step with a
     # column that is computed, so it is no longer typed.
     KEY_PHRASE = {SWEEP: "swept here", TEST: "settled by a test",
-                  MEASURED: "measured in the source, not drawn",
-                  FIXED: "fixed by construction, nothing measured"}
+                  MEASURED: "in the source, not drawn",
+                  FIXED: "by construction, nothing measured"}
     #: SEM_ROWS + TXM_ROWS rather than ROWS: ROWS is assembled further down,
     #: after the tables are drawn, and the footnote is drawn before it.
     _used = {r[2] for r in SEM_ROWS + TXM_ROWS}
@@ -1729,12 +1739,11 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem, arm):
     #: series are told apart by line style, and the style has to be named.
     T(MX, y + 0.03,
       f"ref.   {_key}.\n"
-      "FILLED SQUARE: the value the software uses.   Bracketed letter: the panel "
-      "above.\n"
-      #: NOT "throughout this paper", which is what this said and which is false.\n      #: Figure 1 colours the pipeline STAGE -- blue is crack found so far and\n      #: orange is pixels the step removes, in both arms -- and Figure 4 colours\n      #: the operator VERDICT. Those are not arm colours and should not be. The\n      #: rule is about panels that distinguish the arms, and it has to say so.\n      "WHERE COLOUR DISTINGUISHES THE ARMS it is blue SEM, orange TXM.\\n"
-      #: ONLY THIS PLATE'S PANELS. Listing all five on both sheets sent a reader of the
-      #: transmission plate looking for panels (a), (c), (d) and (f), which are on the
-      #: electron one -- a reference the split created and nothing would have caught.
+      "FILLED SQUARE the shipped value.   (letter) the panel above.   "
+      #: WHAT THE COLOUR MEANS, on this plate. Not "throughout this paper":
+      #: Figure 1 colours the pipeline STAGE and Figure 4 the operator
+      #: VERDICT, and neither is an arm colour.
+      "COLOUR blue SEM, orange TXM.\n"
       + _DASHED_KEY[arm],
       T_TICK, color=J.G_DARK)
 

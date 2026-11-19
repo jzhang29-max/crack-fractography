@@ -105,6 +105,18 @@ def _score_facts():
         in_sample=d.get("the_sem_bars_are_in_sample", ""))
 
 
+def _flow_facts():
+    """The flow chart's own record, so the bullet cannot describe a plate it no longer
+    draws. The inset magnifications move every time the panels are resized, and the
+    bullet went on quoting the pair it was first written against."""
+    import json as _j
+    d = _j.load(open(os.path.join(OUT, "F1 - flow chart.caption.json")))
+    mags = [v["magnification"] for a in d["arms"].values()
+            for v in a["cleaning_steps"].values()]
+    return {"mag_lo": min(mags), "mag_hi": max(mags), "n_insets": len(mags)}
+
+
+FL = _flow_facts()
 SW = _sweep_facts()
 DZ = _deadzone_facts()
 SC = _score_facts()
@@ -127,8 +139,9 @@ FIGURES = [
    "docs/figures/sem_classifier_lofo.json holds the leave-one-frame-out answer. "
    "TXM is a trained per-pixel model — 17 image "
    "channels plus a frozen SAM embedding, the mean of two fitted members cut at 0.60.",
-   "The operation is written on every arrow, and each cleaning step carries a "
-   "before/after inset magnified 4x to 19x, so the reader can see what 'cleaned' "
+   "The operation is written beside every panel, and each cleaning step carries "
+   f"a before/after inset magnified {FL['mag_lo']:.0f}x to {FL['mag_hi']:.0f}x, "
+   "so the reader can see what 'cleaned' "
    "actually did. No pixel is dilated. The inset sits on the largest piece that step "
    "removes which is FREE-STANDING and which the operator did not paint as crack — "
    "dropping a free-standing speck is what the step is for. Taking bites out of a "
@@ -295,18 +308,44 @@ def pages():
 
 def build(path, with_text):
     pdf = PdfPages(path)
+    pages_out = 0
     for n, (fname, title, bullets) in enumerate(pages(), start=1):
         im = Image.open(os.path.join(OUT, fname))
         ar = im.height / im.width
         wrapped = [textwrap.wrap(b, 108) for b in bullets] if with_text else []
         nlines = sum(len(w) for w in wrapped) + len(wrapped)
         text_h = nlines * 0.155 + 0.30 if with_text else 0.0
+        plate_in = im.width / 600.0
 
-        avail_w = W - 2 * M
-        max_img_h = H - 2 * M - text_h - (0.80 if with_text else 0.55)
-        iw, ih = avail_w, avail_w * ar
-        if ih > max_img_h:
-            ih, iw = max_img_h, max_img_h / ar
+        def _fit(th):
+            """Image width and height on a page that reserves `th` inches for text."""
+            aw = W - 2 * M
+            mh = H - 2 * M - th - (0.80 if th else 0.55)
+            w_, h_ = aw, aw * ar
+            if h_ > mh:
+                h_, w_ = mh, mh / ar
+            return w_, h_
+
+        iw, ih = _fit(text_h)
+        #: A PLATE TOO TALL FOR THE PAGE IS SHRUNK, AND ITS TYPE WITH IT. That is how
+        #: the parameters plate came to print its 8 pt labels at 5.6 pt, and nothing
+        #: said so: journal_style's floor is applied to the plate's own width, which
+        #: is correct there and blind to what this pack does to it afterwards. The
+        #: same floor is applied here, to the size the page actually prints. Where the
+        #: bullets are what squeezed it, the bullets move to a page of their own
+        #: rather than the plate going unreadable.
+        split = with_text and 8.0 * (iw / plate_in) < 8.0 - 1e-9
+        if split:
+            iw, ih = _fit(0.0)
+        printed_pt = 8.0 * (iw / plate_in)
+        if with_text:
+            print(f"    Figure {n}  {iw:.2f} in wide, 8 pt prints at {printed_pt:.1f} pt"
+                  + ("  (bullets overleaf)" if split else ""))
+        if printed_pt < 8.0 - 1e-9:
+            raise SystemExit(
+                f"{fname}: the plate is {plate_in:.2f} x {im.height / 600.0:.2f} in "
+                f"and a whole page fits it to {iw:.2f} in wide, so its 8 pt type "
+                f"prints at {printed_pt:.1f} pt. Make the plate shorter or split it.")
 
         fig = plt.figure(figsize=(W, H))
         fig.text(M / W, 1 - (M - 0.12) / H, "Figure %d" % n, fontsize=15,
@@ -317,13 +356,27 @@ def build(path, with_text):
         ax = fig.add_axes([(W - iw) / 2 / W, top - ih / H, iw / W, ih / H])
         ax.imshow(im)
         ax.axis("off")
+        if split:
+            fig.text(M / W, M / H, "What it establishes: overleaf.", fontsize=9.3,
+                     va="bottom", ha="left", color="#666666")
+        pdf.savefig(fig)
+        plt.close(fig)
+        pages_out += 1
 
         if with_text:
-            y = top - ih / H - 0.42 / H
+            if split:
+                fig = plt.figure(figsize=(W, H))
+                fig.text(M / W, 1 - (M - 0.12) / H, "Figure %d" % n, fontsize=15,
+                         fontweight="bold", va="top", ha="left")
+                fig.text(M / W, 1 - (M + 0.16) / H, title, fontsize=11.5, va="top",
+                         ha="left", color="#333333")
+                y = 1 - (M + 0.62) / H
+            else:
+                y = top - ih / H - 0.42 / H
             for w in wrapped:
                 for i, line in enumerate(w):
                     fig.text(M / W + (0.0 if i == 0 else 0.0155), y,
-                             ("•  " if i == 0 else "") + line,
+                             ("\u2022  " if i == 0 else "") + line,
                              fontsize=9.3, va="top", ha="left", color="#1a1a1a")
                     y -= 0.155 / H
                 y -= 0.075 / H
@@ -331,11 +384,13 @@ def build(path, with_text):
                 raise SystemExit(
                     f"figure {n} ({fname}): bullets overflow the page, last baseline at "
                     f"{y:.4f} against a bottom margin of {M / H:.4f}")
-        pdf.savefig(fig)
-        plt.close(fig)
+            if split:
+                pdf.savefig(fig)
+                plt.close(fig)
+                pages_out += 1
     pdf.close()
     print(f"  wrote {path}  ({os.path.getsize(path) / 1e6:.1f} MB, "
-          f"{len(FIGURES)} pages)")
+          f"{pages_out} pages for {len(FIGURES)} figures)")
 
 
 def main():

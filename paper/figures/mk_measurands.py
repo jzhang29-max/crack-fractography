@@ -166,7 +166,7 @@ def straight_floor(chord_px, n_angles=46):
             "chord_px": L, "n_angles": len(vals)}
 
 
-def prepare(tag):
+def prepare(tag, aspect=None):
     """Measure one modality's largest interior region with the SHIPPED functions.
 
     Everything drawn for that modality comes out of this one call, so the panel and the
@@ -189,6 +189,26 @@ def prepare(tag):
     y1 = min(by1 + PAD, region_full.shape[0])
     x0 = max(bx0 - PAD, 0)
     x1 = min(bx1 + PAD, region_full.shape[1])
+    #: THE TWO DETAIL PANELS ARE DRAWN AT THE SAME SIZE. Each arm's crop is its
+    #: region's bounding box plus a margin, and the two regions are not the same
+    #: shape, so at a shared panel box one picture came out visibly smaller than
+    #: the other. The window is widened to a shared aspect instead -- with real
+    #: micrograph, never blank padding, and never by cropping away region -- so
+    #: the two panels fill the same rectangle. `aspect` is width/height.
+    if aspect is not None:
+        H0, W0 = region_full.shape
+        want_w = int(round((y1 - y0) * aspect))
+        want_h = int(round((x1 - x0) / aspect))
+        if want_w > x1 - x0:
+            grow = want_w - (x1 - x0)
+            x0 = max(0, x0 - grow // 2)
+            x1 = min(W0, x0 + want_w)
+            x0 = max(0, x1 - want_w)
+        elif want_h > y1 - y0:
+            grow = want_h - (y1 - y0)
+            y0 = max(0, y0 - grow // 2)
+            y1 = min(H0, y0 + want_h)
+            y0 = max(0, y1 - want_h)
     sl = (slice(y0, y1), slice(x0, x1))
     region, img = region_full[sl], d["img"][sl]
     sy = (by0 - 2 if by0 >= 2 else 0) - y0
@@ -279,6 +299,18 @@ def values(P):
 
 def main():
     P = {t: prepare(t) for t in ("sem", "txm")}
+    #: SECOND PASS at the wider of the two windows, so neither arm loses any of its
+    #: own region to make the pair match.
+    _ASP = max(P[t]["region"].shape[1] / P[t]["region"].shape[0] for t in P)
+    P = {t: prepare(t, aspect=_ASP) for t in ("sem", "txm")}
+    _got = {t: P[t]["region"].shape[1] / P[t]["region"].shape[0] for t in P}
+    if abs(_got["sem"] - _got["txm"]) > 0.02 * _ASP:
+        raise SystemExit(
+            "the two detail panels would not draw at the same size: aspect "
+            f"{_got['sem']:.3f} SEM against {_got['txm']:.3f} TXM; a window ran "
+            "into the edge of its frame before it reached the shared shape")
+    print(f"  CONTROL both detail panels drawn at one aspect "
+          f"{_got['sem']:.3f}/{_got['txm']:.3f}: PASS")
 
     W = J.PAGEW
     Mg = 0.03

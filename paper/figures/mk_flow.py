@@ -574,12 +574,13 @@ def main():
                    ("mask", sem_flat, sem["proposed"]),
                    ("mask", sem_flat, sem["cleaned"]),
                    ("mask", sem_flat, sem["final"])],
-        "ops": ["cut the\ndetail window",
-                "subtract background,\nseven radii",
-                "darker than\nmedian − 6 MAD",
-                "drop specks,\nclose small gaps",
-                ("keep regions the\nmodel calls crack"
-                 if BM.DO.USE_REGION_CLASSIFIER else "keep regions\n≥ 40 px")],
+        #: TWO OR THREE WORDS EACH, at the author's instruction. These were sentences.
+        "ops": ["crop",
+                "flatten,\n7 radii",
+                "darkness cut",
+                "clean",
+                ("trained\nclassifier"
+                 if BM.DO.USE_REGION_CLASSIFIER else "area floor")],
         #: WHICH STEP IS THE LEARNED ONE. The author asked whether a reader of this
         #: plate can tell a model is employed at all. The words were there -- "keep
         #: regions the model calls crack" -- in the same grey as the four hand-written
@@ -603,14 +604,11 @@ def main():
                    ("mask", txm_base, txm["over"]),
                    ("mask", txm_base, txm["cleaned"]),
                    ("mask", txm_base, txm["final"])],
-        "ops": ["cut the\ndetail window",
-                "17 channels + SAM,\nmean of two models",
+        "ops": ["crop",
+                "17 ch + SAM,\nmean of 2",
                 f"threshold {txm['threshold']:.2f}",
-                #: "blobs" was the implementation's word for what this removes. The
-                #: things it removes are imaging artefacts, and that is what a reader
-                #: of the figure needs to be told.
-                "drop specks,\nfill holes",
-                "narrow to the\nmeasured width"],
+                "clean",
+                "narrow\nto width"],
         "insets": {3: (txm["over"], txm["cleaned"], "thresholded", "cleaned"),
                    4: (txm["cleaned"], txm["final"], "cleaned", "detected")},
         "painted": txm["paint_crack"],
@@ -624,6 +622,13 @@ def main():
     LINE = J.TICK / 72.0 * 1.22                     # one line of body text, inches
 
     HEAD, STAGEH, OPH = 0.235, 0.30, 2 * LINE + 0.04
+    #: --- vertical geometry: one COLUMN per arm, one ROW per stage ---
+    VGAP = 0.30                                   # between the two arm columns
+    VCOLW = (W - 2 * MX - VGAP) / 2.0             # one arm's column
+    VPANW = 1.17                                  # the panel: was 0.83 across
+    VTXTX = VPANW + 0.12                          # text starts here inside the column
+    VROWGAP = 0.12                                # arrow room between stages
+    VROWH = VPANW + VROWGAP
     INSW = min(0.50, (PITCH - 0.11) / 2.0)
     #: Reserved for exactly what the block draws -- the inset, the two-line
     #: transition label and the magnification marker. The old reserve left a
@@ -631,7 +636,8 @@ def main():
     INSH = INSW + 0.03 + 2.45 * LINE + 0.05
     CHARTH = HEAD + STAGEH + IMW + OPH + INSH
     TOP, CHARTGAP, LEGH, BOT = 0.05, 0.17, 0.33, 0.05
-    Htot = TOP + 2 * CHARTH + CHARTGAP + LEGH + BOT
+    #: six stages down the page, both arms side by side, one legend under both
+    Htot = TOP + HEAD + 6 * VROWH + 0.10 + LEGH + BOT
 
     fig = plt.figure(figsize=(W, Htot))
     guard = []
@@ -646,30 +652,20 @@ def main():
         guard.append((t, maxw))
         return t
 
-    xs = [MX + i * PITCH for i in range(NCOL)]
     rec = {}
-
+    #: ONE COLUMN PER ARM, ONE ROW PER STAGE. `cx` is the column's left edge and `ry`
+    #: the row's top; the panel sits at the column's left and its two labels -- the
+    #: stage name and the operation that produced it -- stack to its right, so no
+    #: string floats free of the thing it describes.
     for ci, ch in enumerate(charts):
-        top = TOP + ci * (CHARTH + CHARTGAP)
+        cx = MX + ci * (VCOLW + VGAP)
         sl, H, nm = ch["sl"], ch["H"], ch["nm"]
         y0w, x0w = sl[0].start, sl[1].start
-        ytop = top + HEAD + STAGEH
 
-        fig.add_artist(plt.Line2D([MX / W, (W - MX) / W], [1.0 - top / Htot] * 2,
-                                  transform=fig.transFigure, color=J.INK, lw=0.9))
-        txt(MX, top + 0.15, ch["title"], maxw=2.9, fontsize=J.LABEL,
-            fontweight="bold", ha="left", va="baseline")
-        if ch["sub"]:
-            txt(W - MX, top + 0.15, ch["sub"], maxw=AVAIL - 3.0, ha="right",
-                va="baseline", color=J.G_DARK)
-        for c, name in enumerate(ch["stages"]):
-            txt(xs[c] + IMW / 2.0, ytop - 0.045, name, maxw=PITCH - 0.06,
-                fontweight="bold", ha="center", va="bottom", linespacing=1.15)
+        txt(cx, TOP + 0.15, ch["title"], maxw=VCOLW, fontsize=J.LABEL,
+            fontweight="bold", ha="left", va="baseline", color=J.ACCENT if ci == 0
+            else J.ACCENT2)
 
-        # WHERE THE MAGNIFIED WINDOWS ARE, computed before the panels are drawn: a
-        # marker that lands under the panel letter is a marker a reader cannot see, and
-        # the letter is the thing that can move. Which corner it ends up in is recorded
-        # in the caption JSON rather than left as an unexplained inconsistency.
         marks, corners = {}, {}
         for c, (before, after, _nb, _na) in ch["insets"].items():
             got = largest_removed(before, after, sl, painted=ch.get("painted"),
@@ -677,32 +673,26 @@ def main():
             marks[c] = got
             if got is None:
                 continue
-            fx = (got["at"][1] - x0w) / H
-            fy = (got["at"][0] - y0w) / H
-            fs = got["side"] / H
-            hits_left = fx < 0.30 and fy < 0.26
-            corners[c] = "right" if hits_left and fx + fs < 0.70 else "left"
+            corners[c] = "left"
 
-        # ---- the stage panels ------------------------------------------------------
         axes = []
         for c, (kind, arr, mask) in enumerate(ch["panels"]):
+            ry = TOP + HEAD + c * VROWH
             if kind == "field":
                 step = max(1, arr.shape[1] // 1400)
                 thumb = ST.stretch(arr[::step, ::step], arr)
-                fw, fh = IMW, IMW * thumb.shape[0] / thumb.shape[1]
-                if fh > IMW:
-                    fh, fw = IMW, IMW * thumb.shape[1] / thumb.shape[0]
-                ax = ax_at(xs[c] + (IMW - fw) / 2.0, ytop + (IMW - fh) / 2.0, fw, fh)
+                fw, fh = VPANW, VPANW * thumb.shape[0] / thumb.shape[1]
+                if fh > VPANW:
+                    fh, fw = VPANW, VPANW * thumb.shape[1] / thumb.shape[0]
+                ax = ax_at(cx, ry + (VPANW - fh) / 2.0, fw, fh)
                 show(ax, thumb)
                 ax.add_patch(Rectangle((x0w / step, y0w / step), H / step, H / step,
                                        fill=False, edgecolor=J.ROI, linewidth=1.0,
                                        zorder=20))
                 bar(ax, nm * step, thumb.shape[1])
             else:
-                ax = ax_at(xs[c], ytop, IMW, IMW)
+                ax = ax_at(cx, ry, VPANW, VPANW)
                 if kind == "prob":
-                    #: a probability map is continuous data, not a mask, so it is
-                    #: resampled like the photograph it is derived from.
                     ax.imshow(arr, cmap=PROB_CMAP, vmin=0, vmax=1,
                               interpolation=GREY_INTERP)
                 elif kind == "mask":
@@ -715,76 +705,67 @@ def main():
                                            zorder=30))
                     bar(ax, nm, H)
             boxed(ax)
-            if corners.get(c) == "right":
-                ax.text(0.98, 0.98, f"({ch['letters'][c]})", transform=ax.transAxes,
-                        fontsize=J.PANEL, fontweight="bold", va="top", ha="right",
-                        color=J.INK, bbox=dict(facecolor="white", edgecolor="none",
-                                               boxstyle="square,pad=0.22"))
-            else:
-                J.panel_label(ax, ch["letters"][c], inside=True)
+            J.panel_label(ax, ch["letters"][c], inside=True)
             axes.append(ax)
 
-        # ---- the arrows, each carrying its operation --------------------------------
-        ymid = 1.0 - (ytop + IMW / 2.0) / Htot
-        for c in range(NCOL - 1):
-            xa, xb = xs[c] + IMW, xs[c + 1]
-            fig.add_artist(FancyArrowPatch(
-                ((xa + 0.045) / W, ymid), ((xb - 0.025) / W, ymid),
-                transform=fig.transFigure, arrowstyle="-|>", mutation_scale=7,
-                lw=1.0, color=J.INK, zorder=1))
-            txt((xa + xb) / 2.0, ytop + IMW + 0.022, ch["ops"][c], maxw=PITCH + 0.20,
-                ha="center", va="top", linespacing=1.22, color=J.G_DARK)
+            #: THE TWO LABELS SIT BESIDE THE PANEL, not under an arrow. The stage name
+            #: is what the panel IS; the operation beneath it is what produced it.
+            txt(cx + VTXTX, ry + 0.10, ch["stages"][c].replace("\n", " "),
+                maxw=VCOLW - VTXTX, fontweight="bold", ha="left", va="top",
+                linespacing=1.15)
+            if c > 0:
+                txt(cx + VTXTX, ry + 0.10 + 1.5 * LINE, ch["ops"][c - 1],
+                    maxw=VCOLW - VTXTX, ha="left", va="top", linespacing=1.18,
+                    color=J.G_DARK)
 
-        # ---- what each cleaning step removes, magnified ------------------------------
-        yins = ytop + IMW + OPH
-        steps, ins_n = {}, 0
+            #: the arrow points DOWN the chain, between this panel and the next
+            if c < len(ch["panels"]) - 1:
+                ax_mid = (cx + VPANW / 2.0) / W
+                fig.add_artist(FancyArrowPatch(
+                    (ax_mid, 1.0 - (ry + VPANW + 0.03) / Htot),
+                    (ax_mid, 1.0 - (ry + VROWH - 0.015) / Htot),
+                    transform=fig.transFigure, arrowstyle="-|>", mutation_scale=7,
+                    lw=1.0, color=J.INK, zorder=1))
+
+        #: the magnified before/after pairs ride beside the rows they belong to
+        steps = {}
         for c, (before, after, nb, na) in sorted(ch["insets"].items()):
             got = marks[c]
-            xc = (xs[c] + IMW + xs[c + 1]) / 2.0
             if got is None:
-                txt(xc, yins + 0.1, "this step removes nothing\ninside the window shown",
-                    maxw=PITCH, ha="center", va="top", style="italic", color=J.G_MID)
                 continue
-            s, (iy, ix) = got["side"], got["at"]
-            isl = (slice(iy, iy + s), slice(ix, ix + s))
+            s_, (iy, ix) = got["side"], got["at"]
+            isl = (slice(iy, iy + s_), slice(ix, ix + s_))
             cut = ST.stretch(ch["whole"][isl], ch["whole"])
+            ry = TOP + HEAD + c * VROWH
+            #: the caption clears the operation text above it -- however many lines
+            #: that runs to -- and the pair hangs below the caption, so the three
+            #: never overlap whatever the wording.
+            nop = ch["ops"][c - 1].count("\n") + 1 if c > 0 else 0
+            cap_top = 0.10 + 1.5 * LINE + (nop + 0.35) * LINE
+            ins_top = cap_top + 1.15 * LINE
+            iw = min(0.70, (VCOLW - VTXTX - 0.06) / 2.0, VPANW - ins_top - 0.02)
             for k in (0, 1):
-                xl = xc - INSW - 0.025 + k * (INSW + 0.05)
-                ax = ax_at(xl, yins, INSW, INSW)
-                #: the removed pixels paint over the kept mask, which is the order
-                #: the burnt-in version applied them in.
-                show(ax, cut, ((before if k == 0 else after)[isl], J.MASK),
+                xl = cx + VTXTX + k * (iw + 0.05)
+                axi = ax_at(xl, ry + ins_top, iw, iw)
+                show(axi, cut, ((before if k == 0 else after)[isl], J.MASK),
                      ((before & ~after)[isl] if k == 0 else None, J.ACCENT2))
-                boxed(ax, colour=J.ROI if k == 0 else J.G_DARK, lw=0.9 if k == 0 else 0.5)
-                #: INSIDE the panel, like the chain above it, so four more letters cost
-                #: no further floating text.
-                J.panel_label(ax, ch["inset_letters"][ins_n * 2 + k], inside=True)
-            ins_n += 1
-            #: ONE LABEL FOR THE PAIR, NAMING THE TRANSITION. Two labels reading "before"
-            #: and "after" were identical under all four pairs, which is what made the two
-            #: pairs in a row look like the same picture twice. The stage names were already
-            #: being carried here and thrown away. They do not fit under a single inset --
-            #: "thresholded" is 0.57 in against an inset's 0.53 -- so the pair gets one
-            #: label across its full width, which is also the honest unit: the pair shows a
-            #: transition, not two independent pictures.
-            #: On two lines: "thresholded -> cleaned" sets 1.18 in on one line against
-            #: the pair's 1.03 in, and the layout guard below refuses it. The
-            #: magnification rides on the second line rather than in a block of its own,
-            #: which is one fewer floating string and removes the collision two separate
-            #: blocks kept having -- the marker was landing on the label's second line.
-            mag = (INSW / s) / (IMW / H)
-            txt(xc, yins + INSW + 0.03, f"{nb}\n\u2192 {na}   \u00d7{mag:.0f}",
-                maxw=2 * INSW + 0.05, ha="center", va="top", fontstyle="italic",
-                color=J.G_DARK, linespacing=1.15)
+                boxed(axi, colour=J.ROI if k == 0 else J.G_DARK,
+                      lw=0.9 if k == 0 else 0.5)
+            mag = (iw / s_) / (VPANW / H)
+            txt(cx + VTXTX, ry + cap_top,
+                f"{nb} \u2192 {na}  \u00d7{mag:.0f}", maxw=VCOLW - VTXTX,
+                ha="left", va="top", fontstyle="italic", color=J.G_DARK)
             pad = 0.012 * H
             axes[c].add_patch(Rectangle((ix - x0w - pad, iy - y0w - pad),
-                                        s + 2 * pad, s + 2 * pad, fill=False,
+                                        s_ + 2 * pad, s_ + 2 * pad, fill=False,
                                         edgecolor="white", linewidth=1.4, zorder=24))
-            axes[c].add_patch(Rectangle((ix - x0w, iy - y0w), s, s, fill=False,
+            axes[c].add_patch(Rectangle((ix - x0w, iy - y0w), s_, s_, fill=False,
                                         edgecolor=J.ROI, linewidth=0.9, zorder=25))
             steps[f"{nb}_to_{na}"] = {
-                "inset_at": [int(iy), int(ix)], "inset_side_px": int(s),
-                "inset_um": round(s * nm / 1000.0, 3), "magnification": round(mag, 1),
+                "inset_at": [int(iy), int(ix)], "inset_side_px": int(s_),
+                "removed_in_frame_px": int((before & ~after).sum()),
+                "added_in_frame_px": int((after & ~before).sum()),
+                "magnification": float(mag),
                 "largest_removed_component_px": got["comp_px"],
                 "inset_placed_on": got["chosen"],
                 "removed_in_window_px": got["window_px"],
@@ -794,8 +775,6 @@ def main():
                 "removed_px_free_standing": got["free_standing_px"],
                 "removed_px_adjoining_kept_mask": got["adjoining_px"],
                 "free_standing_means_no_kept_mask_within_px": got["isolation_px"],
-                "removed_in_frame_px": int((before & ~after).sum()),
-                "added_in_frame_px": int((after & ~before).sum()),
                 "panel_letter_corner": corners.get(c, "left")}
 
 
@@ -811,10 +790,10 @@ def main():
             "cleaning_steps": steps}
 
     # ---- the key, so the plate reads with no caption ---------------------------------
-    ky = TOP + 2 * CHARTH + CHARTGAP + 0.09
+    ky = TOP + HEAD + 6 * VROWH + 0.10
     cells = [("swatch", J.MASK, "crack found at this stage"),
              ("swatch", J.ACCENT2, "pixels this step removes"),
-             ("box", J.ROI, "window magnified below"),
+             ("box", J.ROI, "window magnified at right"),
              ("ramp", None, "crack probability, 0 to 1")]
     for i, (kind, colour, label) in enumerate(cells):
         cx = MX + i * (AVAIL / len(cells))

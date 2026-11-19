@@ -449,6 +449,16 @@ for _t in ("sem", "txm"):
     })
 MP.VALUES["st_zoom"] = f"{ST['inset_magnification']:g}"
 
+# THE FLOW CHART'S OWN INSET RANGE. It was typed into the caption as "4x to 19x"
+# and the panels have been resized twice since; the plate records what it drew,
+# so the caption reads it back instead of asserting it.
+FLOW = MP._f(os.path.join(PAPER, "figures/out/F1 - flow chart.caption.json"),
+             "the flow chart's caption")
+_fmags = [_v["magnification"] for _a in FLOW["arms"].values()
+          for _v in _a["cleaning_steps"].values()]
+MP.VALUES["flow_mag_lo"] = f"{min(_fmags):.0f}"
+MP.VALUES["flow_mag_hi"] = f"{max(_fmags):.0f}"
+
 MD = MP._f(os.path.join(PAPER, "figures/out/F2 - how each modality sees a crack"
                               ".caption.json"), "the modality plate's caption")
 MP.VALUES["fig_modality_fov"] = f"{MD['matched_fov_um']:g}"

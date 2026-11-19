@@ -365,7 +365,7 @@ def how_it_works(ax, x0, colour, kind):
                                      mutation_scale=6, color=colour, lw=0.7,
                                      zorder=7, shrinkA=0, shrinkB=0,
                                      connectionstyle="arc3,rad=0.25"))
-        note = "signal from the surface only"
+        note = "surface only"
     else:
         ax.add_patch(Polygon([(cx - 2.6, sy), (cx + 2.6, sy),
                               (cx + fw / 2.0, GEO_Y0 + 1.4),
@@ -376,7 +376,7 @@ def how_it_works(ax, x0, colour, kind):
                                edgecolor=J.G_DARK, lw=LW_EDGE, zorder=6))
         ax.text(fx + fw + 0.8, GEO_Y0 + 0.8, "detector", fontsize=J.TICK,
                 ha="left", va="center", color=J.INK, zorder=7)
-        note = f"beam through all {FOIL_UM:g} {MU}m"
+        note = f"through {FOIL_UM:g} {MU}m"
 
     ax.add_patch(Rectangle((fx, fy), fw, FOIL_T, facecolor="#e8e8e8",
                            edgecolor=J.G_DARK, lw=LW_EDGE, zorder=5))
@@ -441,7 +441,7 @@ def combined_schematic(ax, data, crops):
     #: the load and the charging are the TRANSMISSION experiment's conditions, so they
     #: are labelled as such rather than left to look like the shared setting.
     ax.text(DB_CX, CANVAS[1] - 2.3,
-            "pulled and hydrogen-charged WHILE the X-ray images it",
+            "pulled and H-charged during TXM",
             fontsize=J.TICK, ha="center", va="bottom", color=J.ACCENT2, zorder=8)
     bars = {}
     #: WHEN each arm looks, beside WHAT it is -- the one correction that matters most
@@ -450,9 +450,9 @@ def combined_schematic(ax, data, crops):
     #: evolution. Two words each, on the title line; the caption carries the rest.
     for tag, x0, colour, name, when, kind, records in (
             ("sem", PAN_X[0], J.ACCENT, "SEM", "post mortem", "surface",
-             "specimen b2, back face"),
-            ("txm", PAN_X[1], J.ACCENT2, "TXM", "in situ, under load", "through",
-             "specimen b2, in transmission")):
+             "b2, back face"),
+            ("txm", PAN_X[1], J.ACCENT2, "TXM", "in situ", "through",
+             "b2, transmission")):
         ax.text(x0, GEO_Y0 + GEO_H + 0.6, name, fontsize=12.0, fontweight="bold",
                 ha="left", va="bottom", color=colour, zorder=11)
         ax.text(x0 + PAN_SIDE, GEO_Y0 + GEO_H + 0.9, when, fontsize=J.TICK,
@@ -478,6 +478,22 @@ def groups_present(con):
     if extra:
         raise SystemExit(f"TXM groups {extra} are in the measurement file but not in "
                          f"GROUP_ORDER -- add them rather than letting them vanish")
+    return out
+
+
+def _words_drawn(fig):
+    """Every text string the finished figure draws, in draw order.
+
+    Collected from the figure itself rather than retyped, so shortening a label
+    shortens this record with it. Scale bars and panel letters are included: they
+    are words on the plate too, and the point of the record is the word count.
+    """
+    out = []
+    for ax in [fig] + list(fig.axes):
+        for t in getattr(ax, "texts", []):
+            v = t.get_text().replace("\n", " ").strip()
+            if v:
+                out.append(v)
     return out
 
 
@@ -580,13 +596,10 @@ def main():
         #: The thickness the section is dimensioned at. Recorded so the manuscript's
         #: caption quotes the number the plate draws rather than a second copy of it.
         "foil_thickness_um": FOIL_UM,
-        "labels_on_the_plate": [
-            "tensile axis", "F", "gauge section",
-            "one 35 um field of the gauge, imaged in both instruments",
-            "a SEM", "the crack where it cuts the surface", "electron source",
-            "detector", "22 um", "records the surface trace",
-            "b TXM", "the crack through the whole thickness", "X-ray source",
-            "detector", "22 um", "records the whole projection", "5 um"],
+        #: READ OFF THE ARTIFACT, never retyped. Every string this plate actually
+        #: draws, in draw order, so the record cannot drift from the picture the way
+        #: a hand-kept list does.
+        "labels_on_the_plate": _words_drawn(fig),
         "measurement_geometry": {
             "copied_from": "docs/FIGURE_CONVENTIONS_FROM_PUBLISHED_WORK.md, which "
                            "records what two real published figures of this kind do, "

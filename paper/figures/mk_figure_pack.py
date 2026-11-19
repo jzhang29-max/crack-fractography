@@ -47,6 +47,15 @@ with PdfPages(pdf_path) as pdf, open(md_path, "w", encoding="utf-8") as md:
         tw = W - 2 * ML
         ih = min(tw * img.shape[0] / img.shape[1], 6.6)
         iw = ih * img.shape[1] / img.shape[0]
+        #: THE SAME 8 pt FLOOR THE OTHER PACK APPLIES. A plate taller than 6.6 in is
+        #: scaled down here, and its type with it; journal_style's floor is applied at
+        #: the plate's own width and cannot see this.
+        _plate_in = img.shape[1] / 600.0
+        _pt = 8.0 * (iw / _plate_in)
+        if _pt < 8.0 - 1e-9:
+            raise SystemExit(
+                f"{os.path.basename(img_path)}: this page fits the plate to "
+                f"{iw:.2f} in wide, so its 8 pt type prints at {_pt:.1f} pt")
         ax = fig.add_axes([(W - iw) / 2 / W, 1 - (1.0 + ih) / H, iw / W, ih / H])
         ax.imshow(img); ax.axis("off")
         body = f"Figure {i}.  {cap}"

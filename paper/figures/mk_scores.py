@@ -524,6 +524,9 @@ for arm in ("SEM", "TXM"):
     #: NAMED WHERE IT IS DRAWN. The red rule is what predicting no crack at all scores,
     #: and it was explained only in the footnote at the foot of the plate -- two panels
     #: away from the mark, which is where the author went looking for it.
+    #: ABOVE THE RULE WHERE THERE IS ROOM, BELOW IT WHERE THERE IS NOT. On the
+    #: transmission arm the rule sits at 0.96 and the label above it ran into the
+    #: panel heading.
     ax_b.text(_bx, base + 0.018, "no crack at all", ha="center", va="bottom",
               fontsize=J.TICK, color=J.ROI, zorder=7)
     _bx += 1.0
@@ -531,7 +534,10 @@ for arm in ("SEM", "TXM"):
     ax_b.set_xlim(-0.7, _bx - 1.0 + 0.7)
 for _i, t in enumerate(bticks):
     _ax = ARM_AX[t["arm"]]
-    _ax.set_ylim(0, 1.0)
+    #: HEADROOM FOR THE RED RULE'S LABEL. The transmission arm's "no crack at
+    #: all" line sits at 0.96; with the axis stopping at 1.0 its label had
+    #: nowhere to go that was not either the heading or the bar it marks.
+    _ax.set_ylim(0, 1.12)
     _ax.set_yticks([0, 0.2, 0.4, 0.6, 0.8, 1.0])
     _ax.set_yticklabels(["0", "0.2", "0.4", "0.6", "0.8", "1.0"] if _i == 0 else [],
                         fontsize=J.TICK)
@@ -541,10 +547,10 @@ for _i, t in enumerate(bticks):
     _ax.tick_params(axis="both", which="both", length=0)
     for _s in _ax.spines.values():
         _s.set_linewidth(0.6)
-    _ax.text(0.5, -0.045, f"{t['arm']}, {t['n']} frames",
-             transform=_ax.transAxes, ha="center", va="top",
-             fontsize=J.TICK, color=ARM_COLOUR[t["arm"]])
-    _ax.text(0.0, 1.015, f"({'ab'[_i]})  {t['arm']}",
+    #: THE ARM AND ITS n ARE ONE LABEL, not two. The panel letter carried the arm
+    #: and a line under the axis repeated it with the frame count; the count moves
+    #: into the heading and the second label goes.
+    _ax.text(0.0, 1.015, f"({'ab'[_i]})  {t['arm']}, {t['n']} frames",
              transform=_ax.transAxes, ha="left", va="bottom",
              fontsize=J.PANEL, fontweight="bold", color=J.INK)
 
@@ -593,7 +599,7 @@ for _i, (_arm, _n, _det, _cei) in enumerate(_CEIL):
         ax_r.text(_base + _k * _CW, _v + 0.012, f"{_v:.3f}", fontsize=J.TICK,
                   ha="center", va="bottom", color=J.INK,
                   fontweight=("bold" if _k == 0 else "normal"), zorder=5)
-    ax_r.text(_base + _CW / 2.0, -0.055, f"{_arm}\n{_n} frames", fontsize=J.TICK,
+    ax_r.text(_base + _CW / 2.0, -0.055, _arm, fontsize=J.TICK,
               ha="center", va="top", color=ARM_COLOUR[_arm], fontweight="bold",
               transform=ax_r.get_xaxis_transform(), linespacing=1.15)
     #: the multiple, which is the sentence the pair makes
