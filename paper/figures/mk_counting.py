@@ -1025,7 +1025,8 @@ def main():
     #: TWO gaps, not one: there is a seam between the rows AND a seam above the key.
     #: With a single GAP in this sum the key began at the exact inch the lower row's
     #: caption ended, and the row's bold identity line printed into the swatches.
-    Htot = Mg + HDR + 2 * (PAN + CAP) + 2 * GAP + LEG + Mg
+    BARH = 1.05           # the counted-pixel bar panel below the rows
+    Htot = Mg + HDR + 2 * (PAN + CAP) + 2 * GAP + BARH + 0.10 + LEG + Mg
 
     fig = plt.figure(figsize=(W, Htot))
     overflow = []
@@ -1131,6 +1132,45 @@ def main():
         #: detector marked it are caption facts, not artwork. Both are still in this
         #: figure's record, under rows.<arm>.specimen and rows.<arm>.detector, and
         #: the manuscript caption states them.
+
+    #: WHAT THE WHOLE FRAME COUNTS, not just the two windows above it. The author asked
+    #: for the raw image, the coloured overlay and then a bar graph of the three
+    #: outcomes, and the three outcomes are already on each arm's record: tp_px is
+    #: correctly counted, fp_px over-counted, fn_px under-counted, measured over the
+    #: refereed pixels of the whole frame rather than the chosen window. The windows
+    #: above are chosen to SHOW each error; this says how much of each there is.
+    _bw = 3.10
+    bax = ax_at(Mg + LAB + 0.42, Htot - Mg - LEG - 0.10 - BARH, _bw, BARH)
+    _w, _gap = 0.26, 0.10
+    _xt, _xl = [], []
+    for _i, coll in enumerate(("SEM", "TXM")):
+        m = meta[coll]
+        tot = max(m["tp_px"] + m["fp_px"] + m["fn_px"], 1)
+        vals = [100.0 * m["tp_px"] / tot, 100.0 * m["fp_px"] / tot,
+                100.0 * m["fn_px"] / tot]
+        base = _i * (3 * _w + _gap + 0.22)
+        for _j, (v, col) in enumerate(zip(vals, (AGREE, OVER, UNDER))):
+            x = base + _j * _w
+            bax.bar(x, v, _w * 0.88, color=col, edgecolor=J.INK, linewidth=0.5,
+                    zorder=3)
+            bax.text(x, v + 1.2, f"{v:.1f}", ha="center", va="bottom",
+                     fontsize=J.TICK, color=J.INK)
+        _xt.append(base + _w)
+        _xl.append(coll)
+    bax.set_xticks(_xt)
+    bax.set_xticklabels(_xl, fontsize=J.TICK)
+    bax.tick_params(axis="x", pad=1.0)
+    bax.set_ylim(0, 100)
+    bax.set_yticks([0, 25, 50, 75, 100])
+    bax.set_yticklabels(["0", "25", "50", "75", "100"], fontsize=J.TICK)
+    bax.set_ylabel("% of refereed px", fontsize=J.TICK, labelpad=3.0)
+    bax.tick_params(axis="both", which="both", length=2.0, width=0.5, pad=1.6)
+    for _sp in ("top", "right"):
+        bax.spines[_sp].set_visible(False)
+    for _sp in bax.spines.values():
+        _sp.set_linewidth(0.6)
+    bax.text(0.0, 1.02, "(i)  the whole frame, counted", transform=bax.transAxes,
+             ha="left", va="bottom", fontsize=J.BODY, fontweight="bold", color=J.INK)
 
     lg = ax_at(Mg, Htot - Mg - LEG, W - 2 * Mg, LEG)
     lg.set_axis_off()
