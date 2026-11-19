@@ -1164,9 +1164,9 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
     def p_madk(ax):
         """The MAD multiplier on this laboratory's frames: recall and precision."""
         L(ax, kgrid_lab, [k_rec[g] for g in kgrid_lab])
-        L(ax, kgrid_lab, [k_pre[g] for g in kgrid_lab], dashed=True, colour=J.ACCENT2)
+        L(ax, kgrid_lab, [k_pre[g] for g in kgrid_lab], dashed=True)
         S(ax, K, k_rec[K])
-        S(ax, K, k_pre[K], colour=J.ACCENT2)
+        S(ax, K, k_pre[K])
         ax.set_xlim(min(kgrid_lab) - 0.4, max(kgrid_lab) + 0.4)
         ax.set_ylim(0.0, 1.05)
 
@@ -1191,15 +1191,14 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
         L(ax, [max(float(v), 0.5) for v in CLEANMIN_GRID],
           [cmin[str(v)] for v in CLEANMIN_GRID], logx=True)
         L(ax, [float(v) for v in CANDMIN_GRID], [amin[str(v)] for v in CANDMIN_GRID],
-          dashed=True, colour=J.ACCENT2)
+          dashed=True)
         S(ax, CLEAN_MIN, cmin[str(CLEAN_MIN)])
-        S(ax, CAND_MIN, amin[str(CAND_MIN)], colour=J.ACCENT2)
+        S(ax, CAND_MIN, amin[str(CAND_MIN)])
         ax.set_xlim(0.4, 4500); ax.set_ylim(0.15, 0.36)
 
     def p_d(ax):
         L(ax, list(OPEN_GRID), [op8[str(v)] for v in OPEN_GRID])
-        L(ax, list(OPEN_GRID), [op4[str(v)] for v in OPEN_GRID], dashed=True,
-          colour=J.ACCENT2)
+        L(ax, list(OPEN_GRID), [op4[str(v)] for v in OPEN_GRID], dashed=True)
         S(ax, 1, op8["1"])
         ax.set_xlim(-0.4, max(OPEN_GRID) + 0.4); ax.set_ylim(0.15, 0.36)
 
@@ -1226,13 +1225,13 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
         #: a blue filled square marks it; here the value in use is the UNION, which
         #: was the orange dashed line, so the one panel where a reader most needs to
         #: find "the setting" was the one where it was not blue. The union is now
-        #: blue and carries the square; the single-radius curve it is compared
-        #: against is the second series and takes the second colour.
+        #: Both series are the ELECTRON arm, so both are blue: colour means the arm
+        #: now, not "first or second series". The single-radius curve is the dashed
+        #: one, matching the key, and the union in use is a solid horizontal
+        #: reference, which is what it is.
         xs = [int(v) for v in SINGLE_LADDER_GRID]
-        L(ax, xs, [sing[str(v)] for v in xs], logx=True, dashed=True,
-          colour=J.ACCENT2)
-        ax.axhline(union_iou, color=J.ACCENT, lw=1.0, zorder=5,
-                   dashes=(3.0, 1.8))
+        L(ax, xs, [sing[str(v)] for v in xs], logx=True, dashed=True)
+        ax.axhline(union_iou, color=J.ACCENT, lw=1.0, zorder=5)
         #: the value in use on this axis is the UNION, not any single radius, so the
         #: dashed line is what the filled square means on the other panels and is
         #: named here rather than left to the footnote.
@@ -1280,14 +1279,14 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
         ax.set_ylim(min(dns.values()) * 0.99, max(dns.values()) * 1.01)
 
     def p_i(ax):
-        L(ax, tgrid, trec)
+        L(ax, tgrid, trec, colour=J.ACCENT2)
         L(ax, tgrid, tfp, dashed=True, colour=J.ACCENT2)
-        S(ax, THR, at_ship["recall"])
+        S(ax, THR, at_ship["recall"], colour=J.ACCENT2)
         ax.set_xlim(0.03, 0.97); ax.set_ylim(0.0, 1.0)
 
     def p_j(ax):
         ys = [cv["f17_mean_iou"], cv["hybrid_mean_iou"], cv["ens_mean_iou"]]
-        L(ax, [0, 1, 2], ys); S(ax, 2, ys[2])
+        L(ax, [0, 1, 2], ys, colour=J.ACCENT2); S(ax, 2, ys[2], colour=J.ACCENT2)
         ax.set_xlim(-0.35, 2.35); ax.set_ylim(0.0, 1.0)
 
     def p_k(ax):
@@ -1299,7 +1298,7 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
         # HEADROOM FOR THE PANEL LETTER. At a ylim of 1.0 the bold 'h' printed on top
         # of the stride callout, which the control below now also measures.
         ax.set_ylim(0.0, 1.34)
-        for i, c in enumerate((J.ACCENT, J.ACCENT2, J.ACCENT)):
+        for i, c in enumerate((J.ACCENT2, J.ACCENT2, J.ACCENT2)):
             ax.add_patch(Rectangle((i * STR, 0.30), TILE, 0.40, facecolor=c,
                                    alpha=0.22, edgecolor=c, lw=0.6, zorder=2 + i))
         for k_ in (0, 1):
@@ -1319,13 +1318,13 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
                 va="center", color=J.INK, zorder=8)
 
     def p_l(ax):
-        #: BLUE, like every other single-series panel. It was drawn in the second
-        #: colour, which on this plate means "a second series" and there is only one
-        #: here, so the one panel a reader reaches last was the one whose marker did
-        #: not match the ten before it.
-        L(ax, kgrid, kmar)
+        #: ORANGE, because it is a transmission panel. It used to be blue on the old
+        #: rule that the second colour meant "a second series"; colour now means the
+        #: arm, and this panel asks what the ELECTRON arm's k does on TRANSMISSION
+        #: frames, which is a transmission measurement and sits under that heading.
+        L(ax, kgrid, kmar, colour=J.ACCENT2)
         ax.axhline(0.0, color=J.INK, lw=0.7, zorder=5)
-        S(ax, K, karm[K]["margin_pp"])
+        S(ax, K, karm[K]["margin_pp"], colour=J.ACCENT2)
         ax.set_xlim(min(kgrid) - 0.4, max(kgrid) + 0.4)
         ax.set_ylim(min(kmar) * 1.15, abs(min(kmar)) * 0.18)
 
@@ -1477,12 +1476,12 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
 
     # ---- geometry, in inches ---------------------------------------------------
     W = J.PAGEW
-    MX, NCOL, COLGAP = 0.05, 4, 0.185
+    MX, NCOL, COLGAP = 0.05, 3, 0.185
     PW = (W - 2 * MX - (NCOL - 1) * COLGAP) / NCOL
     YLABW = 0.42                       # y title + y tick labels
     PLOTH, XTICKH, XLABH, ROWGAP = 0.72, 0.17, 0.20, 0.16
     PANELROW = PLOTH + XTICKH + XLABH + ROWGAP
-    ARMH, LEAD, TOPM, FOOTH = 0.20, 0.132, 0.07, 0.40
+    ARMH, LEAD, TOPM, FOOTH = 0.20, 0.132, 0.07, 0.62
     TCOL, TGAP = 3, 0.16               # the table's column groups
 
     def _tcolw(rows):
@@ -1577,9 +1576,11 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
                 ax.set_ylabel(ylab, fontsize=T_TICK, labelpad=1.6)
             if xlab:
                 ax.set_xlabel(xlab, fontsize=T_TICK, labelpad=1.6)
-            # lowercase, bold, no parentheses, top left INSIDE the axes: both
-            # reference figures letter their panels exactly so
-            ax.text(0.035, 0.965, letter, transform=ax.transAxes, fontsize=T_NAME,
+            #: PARENTHESISED, at the author's instruction for every plate in the pack.
+            #: This read "no parentheses ... both reference figures letter their panels
+            #: exactly so", which was true of the reference figures and is not what this
+            #: paper does.
+            ax.text(0.035, 0.965, f"({letter})", transform=ax.transAxes, fontsize=T_NAME,
                     fontweight="bold", ha="left", va="top", color=J.INK, zorder=9)
 
     y = TOPM
@@ -1613,10 +1614,18 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
         raise SystemExit(f"the table prints {_unkeyed} and the footnote key does not "
                          f"define them; a reader cannot decode the ref. column")
     _key = ";   ".join(f"{CODE[c]} {KEY_PHRASE[c]}" for c, _w in PROV if c in _used)
+    #: WHAT THE DASHED LINE IS, PANEL BY PANEL. "Dashed: a second series" was the whole
+    #: of the old key, and that is not an explanation -- the second series is a
+    #: different quantity in every panel that has one. Colour now means the ARM and
+    #: nothing else (blue SEM, orange TXM, throughout the paper), so within a panel the
+    #: series are told apart by line style, and the style has to be named.
     T(MX, y + 0.03,
       f"ref.   {_key}.\n"
       "FILLED SQUARE: the value the software uses.   Bracketed letter: the panel "
-      "above.\nDashed: a second series; in e the blue dashed line is the seven-rung union.",
+      "above.\n"
+      "COLOUR IS THE ARM: blue SEM, orange TXM, throughout this paper.\n"
+      "DASHED is the panel\u2019s second series: (a) precision, (c) candidate floor,\n"
+      "(d) 4-connectivity, (f) one radius at a time, (j) false-positive rate.",
       T_TICK, color=J.G_DARK)
 
     # ---- the controls ----------------------------------------------------------

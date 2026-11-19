@@ -365,7 +365,7 @@ def how_it_works(ax, x0, colour, kind):
                                      mutation_scale=6, color=colour, lw=0.7,
                                      zorder=7, shrinkA=0, shrinkB=0,
                                      connectionstyle="arc3,rad=0.25"))
-        note = "the signal escapes the surface"
+        note = "signal from the surface only"
     else:
         ax.add_patch(Polygon([(cx - 2.6, sy), (cx + 2.6, sy),
                               (cx + fw / 2.0, GEO_Y0 + 1.4),
@@ -376,12 +376,15 @@ def how_it_works(ax, x0, colour, kind):
                                edgecolor=J.G_DARK, lw=LW_EDGE, zorder=6))
         ax.text(fx + fw + 0.8, GEO_Y0 + 0.8, "detector", fontsize=J.TICK,
                 ha="left", va="center", color=J.INK, zorder=7)
-        note = "the beam crosses the whole foil"
+        note = f"beam through all {FOIL_UM:g} {MU}m"
 
     ax.add_patch(Rectangle((fx, fy), fw, FOIL_T, facecolor="#e8e8e8",
                            edgecolor=J.G_DARK, lw=LW_EDGE, zorder=5))
     ax.text(fx - 0.8, fy + FOIL_T / 2.0, f"{FOIL_UM:g} {MU}m\nfoil", fontsize=J.TICK,
             ha="right", va="center", color=J.G_DARK, zorder=7, linespacing=1.15)
+    ax.text(x0, GEO_Y0 + GEO_H - 0.1, f"({'b' if kind == 'surface' else 'c'})",
+            fontsize=J.PANEL, fontweight="bold", ha="left", va="top", color=J.INK,
+            zorder=12)
     ax.text(cx, GEO_Y0 - 1.1, note, fontsize=J.TICK, ha="center", va="top",
             color=colour, zorder=7, linespacing=1.2)
 
@@ -394,7 +397,7 @@ def how_it_works(ax, x0, colour, kind):
 MOUNTED = []
 
 
-def mount(ax, arr, x0, colour, nm_per_px, win_px, name, records):
+def mount(ax, arr, x0, colour, nm_per_px, win_px, name, records, letter):
     """One REAL micrograph of such a field, named, with what it records under it."""
     s = PAN_SIDE
     MOUNTED.append((x0, PAN_Y, x0 + s, PAN_Y + s))
@@ -405,8 +408,11 @@ def mount(ax, arr, x0, colour, nm_per_px, win_px, name, records):
               extent=(x0, x0 + s, PAN_Y, PAN_Y + s), aspect="auto", zorder=9)
     ax.add_patch(Rectangle((x0, PAN_Y), s, s, fill=False, edgecolor=colour,
                            lw=1.4, zorder=11))
-    ax.text(x0, PAN_Y - 0.5, name + " \u2014 " + records, fontsize=J.TICK,
-            ha="left", va="top", color=colour, zorder=11)
+    #: THE PANEL LETTER leads the caption line. Inside the frame it trips this plate's
+    #: own guard, which refuses a label that overlaps a micrograph -- and that guard is
+    #: right: a letter burnt over the data is a letter covering data.
+    ax.text(x0, PAN_Y - 0.5, f"({letter}) " + name + " \u2014 " + records,
+            fontsize=J.TICK, ha="left", va="top", color=colour, zorder=11)
     blen = s * (BAR_UM * 1000.0 / nm_per_px) / win_px
     pad, bh = 0.016 * s, 0.022 * s
     bx1, by = x0 + s - 0.055 * s, PAN_Y + 0.055 * s
@@ -427,6 +433,11 @@ def combined_schematic(ax, data, crops):
     cell_top = cell(ax)
     rx0, ry0 = specimen(ax)
     leaders(ax, rx0, ry0)
+    #: (a) the specimen itself. The plate's five parts are now (a) the loaded,
+    #: hydrogen-charged specimen, (b, c) how each instrument looks at it, and
+    #: (d, e) what each one records.
+    ax.text(1.0, CANVAS[1] - 2.3, "(a)", fontsize=J.PANEL, fontweight="bold",
+            ha="left", va="bottom", color=J.INK, zorder=12)
     #: the load and the charging are the TRANSMISSION experiment's conditions, so they
     #: are labelled as such rather than left to look like the shared setting.
     ax.text(DB_CX, CANVAS[1] - 2.3,
@@ -439,9 +450,9 @@ def combined_schematic(ax, data, crops):
     #: evolution. Two words each, on the title line; the caption carries the rest.
     for tag, x0, colour, name, when, kind, records in (
             ("sem", PAN_X[0], J.ACCENT, "SEM", "post mortem", "surface",
-             "the crack where it cuts the surface"),
+             "specimen b2, back face"),
             ("txm", PAN_X[1], J.ACCENT2, "TXM", "in situ, under load", "through",
-             f"the crack through all {FOIL_UM:g} {MU}m")):
+             "specimen b2, in transmission")):
         ax.text(x0, GEO_Y0 + GEO_H + 0.6, name, fontsize=12.0, fontweight="bold",
                 ha="left", va="bottom", color=colour, zorder=11)
         ax.text(x0 + PAN_SIDE, GEO_Y0 + GEO_H + 0.9, when, fontsize=J.TICK,
@@ -450,7 +461,7 @@ def combined_schematic(ax, data, crops):
         d = data[tag]
         sl, win, nm = crops[tag]
         bars[tag] = mount(ax, stretch(d["img"][sl]), x0, colour, nm, win, name,
-                          records)
+                          records, "d" if tag == "sem" else "e")
     return bars
 
 
