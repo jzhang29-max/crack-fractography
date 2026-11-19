@@ -79,6 +79,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from matplotlib.legend_handler import HandlerTuple
+from matplotlib.lines import Line2D
 
 import journal_style as J
 from _paths import scoped, DOC_FIGURES
@@ -458,10 +459,15 @@ fig = plt.figure(figsize=(J.PAGEW, 3.12))
 #: not a result on a sheet of results. Panel (c) now draws the electron arm's own
 #: question -- what its one trained stage bought -- on its own axis, because the two
 #: are a TXM IoU and an SEM F1 over different unit sets and must not share a scale.
-gs = fig.add_gridspec(1, 2, left=0.062, right=0.993, top=0.858, bottom=0.330,
-                      width_ratios=[1.0, 1.15], wspace=0.46)
-ax_b = fig.add_subplot(gs[0, 0])
-ax_r = fig.add_subplot(gs[0, 1])
+gs = fig.add_gridspec(1, 3, left=0.062, right=0.993, top=0.830, bottom=0.330,
+                      width_ratios=[1.0, 1.0, 1.25], wspace=0.42)
+#: ONE AXIS PER ARM. They shared one, which put a SEM bar and a TXM bar side by side on
+#: one scale and invited a reader to read the pair as a contest. Each arm is scored on
+#: its own frames against its own all-background baseline, so each gets its own axis.
+ax_sem = fig.add_subplot(gs[0, 0])
+ax_txm = fig.add_subplot(gs[0, 1])
+ax_r = fig.add_subplot(gs[0, 2])
+ARM_AX = {"SEM": ax_sem, "TXM": ax_txm}
 
 
 def score_bar(ax, centre, lo, hi, colour):
@@ -492,8 +498,10 @@ def score_bar(ax, centre, lo, hi, colour):
 #: scores on that arm's refereed pixels. Where the rule sits ABOVE the bar, accuracy
 #: is telling the reader nothing about the detector, which is the point.
 BX, BGAP = 0.80, 0.42
-_bx, bticks = 0.0, []
+bticks = []
 for arm in ("SEM", "TXM"):
+    ax_b = ARM_AX[arm]
+    _bx = 0.0
     c = COMBINED[arm]
     start = _bx
     hue = ARM_COLOUR[arm]
@@ -513,26 +521,32 @@ for arm in ("SEM", "TXM"):
     base = c["all_background"]
     ax_b.plot([_bx - BX / 2, _bx + BX / 2], [base] * 2, color=J.ROI, lw=1.6, zorder=6,
               solid_capstyle="butt")
+    #: NAMED WHERE IT IS DRAWN. The red rule is what predicting no crack at all scores,
+    #: and it was explained only in the footnote at the foot of the plate -- two panels
+    #: away from the mark, which is where the author went looking for it.
+    ax_b.text(_bx, base + 0.018, "no crack at all", ha="center", va="bottom",
+              fontsize=J.TICK, color=J.ROI, zorder=7)
     _bx += 1.0
     bticks.append(dict(arm=arm, centre=0.5 * (start + _bx - 1.0), n=c["n"]))
-    _bx += BGAP
-ax_b.set_xlim(-0.7, _bx - BGAP + 0.7)
-ax_b.set_ylim(0, 1.0)
-ax_b.set_yticks([0, 0.2, 0.4, 0.6, 0.8, 1.0])
-ax_b.set_yticklabels(["0", "0.2", "0.4", "0.6", "0.8", "1.0"], fontsize=J.TICK)
-ax_b.set_ylabel("score", fontsize=J.LABEL, labelpad=2.0)
-ax_b.set_xticks([])
-ax_b.tick_params(axis="both", which="both", length=0)
-for _s in ax_b.spines.values():
-    _s.set_linewidth(0.6)
-for t in bticks:
-    ax_b.text(t["centre"], -0.045, t["arm"],
-              transform=ax_b.get_xaxis_transform(), ha="center", va="top",
-              fontsize=J.TICK, color=ARM_COLOUR[t["arm"]])
-ax_b.text(0.5, -0.115, "mean over frames", transform=ax_b.transAxes, ha="center",
-          va="top", fontsize=J.TICK, color=J.INK)
-ax_b.text(0.0, 1.015, "(a)  how well it does", transform=ax_b.transAxes, ha="left",
-          va="bottom", fontsize=J.PANEL, fontweight="bold", color=J.INK)
+    ax_b.set_xlim(-0.7, _bx - 1.0 + 0.7)
+for _i, t in enumerate(bticks):
+    _ax = ARM_AX[t["arm"]]
+    _ax.set_ylim(0, 1.0)
+    _ax.set_yticks([0, 0.2, 0.4, 0.6, 0.8, 1.0])
+    _ax.set_yticklabels(["0", "0.2", "0.4", "0.6", "0.8", "1.0"] if _i == 0 else [],
+                        fontsize=J.TICK)
+    if _i == 0:
+        _ax.set_ylabel("score", fontsize=J.LABEL, labelpad=2.0)
+    _ax.set_xticks([])
+    _ax.tick_params(axis="both", which="both", length=0)
+    for _s in _ax.spines.values():
+        _s.set_linewidth(0.6)
+    _ax.text(0.5, -0.045, f"{t['arm']}, {t['n']} frames",
+             transform=_ax.transAxes, ha="center", va="top",
+             fontsize=J.TICK, color=ARM_COLOUR[t["arm"]])
+    _ax.text(0.0, 1.015, f"({'ab'[_i]})  {t['arm']}",
+             transform=_ax.transAxes, ha="left", va="bottom",
+             fontsize=J.PANEL, fontweight="bold", color=J.INK)
 
 # -------------------------------------------------- panel (b): how the TXM model got there
 #: ABSORBED FROM WHAT WAS A SEPARATE PLATE. Panel (a) says how well the two arms do;
@@ -593,7 +607,7 @@ ax_r.set_ylabel("mean per-frame F1", fontsize=J.LABEL, labelpad=2.0)
 ax_r.tick_params(labelsize=J.TICK, pad=1.6)
 for _s2 in ax_r.spines.values():
     _s2.set_linewidth(0.6)
-ax_r.text(0.0, 1.015, "(b)  what the score is measuring",
+ax_r.text(0.0, 1.015, "(c)  what F1 can reach",
           transform=ax_r.transAxes, ha="left", va="bottom", fontsize=J.PANEL,
           fontweight="bold", color=J.INK)
 ax_r.text(0.5, -0.215,
@@ -636,8 +650,7 @@ fig.legend([_pair(f) for _, f in METRICS] + [_ACC],
 #: KEEP EVERY LINE UNDER ABOUT 110 CHARACTERS. At 8 pt on a 6.37 in text block that is
 #: the width available, and the label check measures it rather than trusting the eye.
 FOOT = ("Whisker: every unadjudicated marked pixel counted a false positive."
-        "\nHatched bar: whole-frame pixel accuracy; the red rule is what predicting "
-        "no crack at all scores.")
+        "\nHatched bar: whole-frame pixel accuracy.")
 #: WHAT WAS TAKEN OFF, ON THE PLATE. A figure that quietly drops its worst groups is one
 #: a reader cannot calibrate. This line was lost once already, in an edit that removed a
 #: neighbouring note, and the plate went out naming nothing while the caption file still

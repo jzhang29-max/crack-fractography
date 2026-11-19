@@ -290,9 +290,9 @@ def main():
     NROWS = len(['Area', 'Network length', 'Longest crack',
                   'Mean width', 'Max width', 'Orientation'])
     TABH = 0.26 + NROWS * ROWH + 0.12
-    FOOT = 0.06
+    FOOT = 0.30
     TITLE = 0.17          # room above the panels for the SEM / TXM headings
-    Htot = Mg + TITLE + IMH + 0.30 + TABH + FOOT + Mg
+    Htot = Mg + TITLE + IMH + 0.10 + FOOT + Mg
 
     fig = plt.figure(figsize=(W, Htot))
 
@@ -300,11 +300,21 @@ def main():
         return fig.add_axes([xin / W, 1.0 - (yin + hin) / Htot, win / W, hin / Htot])
 
     for i, (tag, letter) in enumerate((("sem", "a"), ("txm", "b"))):
-        hh = min(LW * P[tag]["region"].shape[0] / P[tag]["region"].shape[1], IMH)
-        ax = ax_at(Mg + i * (LW + GAP), Mg + TITLE + (IMH - hh) / 2.0, LW, hh)
+        #: BOTH PANELS THE SAME SIZE. Each used to take the height its own crack's
+        #: aspect ratio implied, so the two printed at different sizes and a reader
+        #: comparing them compared two box sizes as well as two instruments.
+        ax = ax_at(Mg + i * (LW + GAP), Mg + TITLE, LW, IMH)
         draw_region(ax, P[tag], letter)
+        #: THE ARM'S OWN COLOUR ROUND THE PANEL, so which micrograph is which is read
+        #: off the frame, the same blue-SEM orange-TXM convention the rest of the pack
+        #: uses.
+        arm_colour = J.ACCENT if tag == "sem" else J.ACCENT2
+        for sp in ax.spines.values():
+            sp.set_visible(True)
+            sp.set_edgecolor(arm_colour)
+            sp.set_linewidth(1.6)
         ax.set_title("SEM" if tag == "sem" else "TXM", fontsize=J.LABEL,
-                     fontweight="bold", pad=2.0)
+                     fontweight="bold", pad=2.0, color=arm_colour)
 
     #: TORTUOSITY IS OFF THE TABLE. It had a row that said "no value" in both value
     #: columns on both arms, because the definition needs an unbranched medial axis
@@ -323,33 +333,33 @@ def main():
              "the region's second-moment major axis"]
     vs, vt = values(P["sem"]), values(P["txm"])
 
-    ytab = Mg + TITLE + IMH + 0.30
-    dax = ax_at(Mg, ytab, W - 2 * Mg, TABH)
-    dax.set_axis_off()
-    C1, C2, C3 = 0.160, 0.515, 0.775
-    dax.plot([0, 1], [1.0, 1.0], transform=dax.transAxes, color=J.INK, lw=0.8,
-             clip_on=False)
-    for xx, head in ((0.0, "measurand"), (C1, "how it is measured"),
-                     (C2, "on the SEM crack in (a)"), (C3, "on the TXM crack in (b)")):
-        dax.text(xx, 0.955, head, fontsize=J.TICK, fontweight="bold", va="top",
-                 ha="left", color=J.G_DARK, transform=dax.transAxes)
-    hline = 0.955 - 0.26 / TABH + 0.02
-    dax.plot([0, 1], [hline, hline], transform=dax.transAxes, color=J.G_MID, lw=0.6,
-             clip_on=False)
-    for i in range(NROWS):
-        top = hline - 0.035 - i * (ROWH / TABH)
-        dax.text(0.0, top, names[i], fontsize=J.BODY, fontweight="bold", va="top",
-                 ha="left", color=J.INK, transform=dax.transAxes)
-        dax.text(C1, top, rules[i], fontsize=J.TICK, va="top", ha="left",
-                 color=J.G_DARK, transform=dax.transAxes)
-        dax.text(C2, top, vs[i], fontsize=J.TICK, va="top", ha="left", color=J.ACCENT,
-                 transform=dax.transAxes)
-        dax.text(C3, top, vt[i], fontsize=J.TICK, va="top", ha="left", color=J.ACCENT2,
-                 transform=dax.transAxes)
-    dax.plot([0, 1], [hline - 0.035 - NROWS * (ROWH / TABH) + 0.03] * 2,
-             transform=dax.transAxes, color=J.INK, lw=0.8, clip_on=False)
-    dax.text(0.0, 1.0 + 0.055 / TABH, "(c)", fontsize=J.PANEL, fontweight="bold",
-             va="bottom", ha="left", color=J.INK, transform=dax.transAxes)
+    #: WHAT THE DRAWN GEOMETRY IS. Three things are drawn over each crack and the
+    #: plate named none of them -- the rules lived in the table that has now gone, so
+    #: without this key the circles and the dashed line are decoration.
+    from matplotlib.lines import Line2D as _L2D
+    _keys = [
+        (_L2D([], [], color="#DAA520", lw=0.9, linestyle=":"),
+         "medial axis \u2014 network length"),
+        (_L2D([], [], color=J.ROI, lw=1.2, linestyle="--", marker="o",
+              markerfacecolor="white", markeredgecolor=J.ROI, markersize=3.2),
+         "longest tip-to-tip route"),
+        (_L2D([], [], color=J.ROI, lw=1.2, marker="o", markerfacecolor="none",
+              markeredgecolor=J.ROI, markersize=6.0, linestyle="none"),
+         "inscribed circles \u2014 width"),
+    ]
+    fig.legend([h for h, _ in _keys], [t for _, t in _keys],
+               loc="lower center", bbox_to_anchor=(0.5, 0.004), ncol=3,
+               frameon=False, fontsize=J.TICK, handlelength=1.6,
+               handletextpad=0.4, columnspacing=1.1, borderpad=0.0,
+               borderaxespad=0.0)
+
+    #: THE TABLE IS NOT ON THE PLATE ANY MORE. The author asked for it separate from
+    #: the figure, and for "how it is measured" to be prose rather than a column.
+    #: Every value it carried -- area, network length, longest route, mean and max
+    #: width, orientation, for both arms -- is still computed above and still written
+    #: to this module's caption file, which is where the manuscript reads them from,
+    #: so dropping the drawn table loses no number. `values()` and the name and rule
+    #: lists above are kept for exactly that record.
 
     J.save(fig, os.path.join(OUT, NAME + ".png"))
     json.dump({
