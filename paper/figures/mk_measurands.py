@@ -63,6 +63,7 @@ sys.path.insert(0, os.path.join(_paths.ANALYSIS, "_vendor"))
 import extended_features as EF                      # noqa: E402  -- the shipped measurands
 import geodesic                                     # noqa: E402  -- the shipped longest route
 import both_modalities as BM                        # noqa: E402
+from matplotlib.patches import Rectangle
 import journal_style as J                           # noqa: E402
 from scalebar import scalebar                       # noqa: E402
 
@@ -292,7 +293,13 @@ def main():
     TABH = 0.26 + NROWS * ROWH + 0.12
     FOOT = 0.30
     TITLE = 0.17          # room above the panels for the SEM / TXM headings
-    Htot = Mg + TITLE + IMH + 0.10 + FOOT + Mg
+    #: THE FULL FIELD, under the two details. The plate showed one crack each and
+    #: nothing of where it sits or what the detector did with the rest of the
+    #: frame, which the author asked for.
+    FULLH = 1.46
+    FULLGAP = 0.30
+    FULLROWGAP = 0.26    # clears the caption line under the overlay row
+    Htot = Mg + TITLE + IMH + FULLGAP + 2 * FULLH + FULLROWGAP + FOOT + Mg
 
     fig = plt.figure(figsize=(W, Htot))
 
@@ -332,6 +339,52 @@ def main():
              "the largest circle that fits inside",
              "the region's second-moment major axis"]
     vs, vt = values(P["sem"]), values(P["txm"])
+
+    #: (c) TO (f): THE WHOLE FRAME EACH DETAIL CAME OUT OF, as the detector left it --
+    #: the overlay first and then the mask alone, which is the thing the application
+    #: actually exports and the thing a reader will compare against their own. The red
+    #: box is the window drawn above, so the detail is locatable rather than floating.
+    _fy = Mg + TITLE + IMH + FULLGAP
+    for _r, (_kind, _letters) in enumerate((("overlay", ("c", "d")),
+                                            ("mask", ("e", "f")))):
+        for _i, tag in enumerate(("sem", "txm")):
+            Pt = P[tag]
+            full_img, full_mask = Pt["d"]["img"], Pt["d"]["final"]
+            cy, cx, ch_, cw = Pt["crop"]
+            arm_colour = J.ACCENT if tag == "sem" else J.ACCENT2
+            fh = FULLH
+            fw = min(LW, fh * full_img.shape[1] / full_img.shape[0])
+            fax = ax_at(Mg + _i * (LW + GAP) + (LW - fw) / 2.0,
+                        _fy + _r * (FULLH + FULLROWGAP), fw, fh)
+            if _kind == "overlay":
+                fax.imshow(BM.display_stretch(full_img) if hasattr(BM, "display_stretch")
+                           else full_img, cmap="gray", interpolation="bilinear", zorder=1)
+                _ov = np.zeros(full_mask.shape + (4,), float)
+                _ov[full_mask, :3] = np.array(J.rgb(J.MASK))
+                _ov[full_mask, 3] = 0.55
+                fax.imshow(_ov, interpolation="nearest", zorder=2)
+            else:
+                #: CRACK = BLACK, the application's own convention and the polarity of
+                #: every mask in the corpus.
+                fax.imshow(np.where(full_mask, 0.0, 1.0), cmap="gray", vmin=0, vmax=1,
+                           interpolation="nearest", zorder=1)
+            fax.add_patch(Rectangle((cx, cy), cw, ch_, fill=False,
+                                    edgecolor=J.ROI, linewidth=0.9, zorder=5))
+            fax.set_xticks([]); fax.set_yticks([])
+            for sp in fax.spines.values():
+                sp.set_visible(True)
+                sp.set_edgecolor(arm_colour)
+                sp.set_linewidth(1.2)
+            fax.text(0.012, 0.988, f"({_letters[_i]})", transform=fax.transAxes,
+                     fontsize=J.PANEL, fontweight="bold", ha="left", va="top",
+                     color=J.INK, zorder=9,
+                     bbox=dict(facecolor="white", edgecolor="none",
+                               boxstyle="square,pad=0.18"))
+            fax.text(0.5, -0.03,
+                     ("detector overlay, whole field" if _kind == "overlay"
+                      else "exported mask, crack = black"),
+                     transform=fax.transAxes, ha="center", va="top",
+                     fontsize=J.TICK, color=J.G_DARK)
 
     #: WHAT THE DRAWN GEOMETRY IS. Three things are drawn over each crack and the
     #: plate named none of them -- the rules lived in the table that has now gone, so
