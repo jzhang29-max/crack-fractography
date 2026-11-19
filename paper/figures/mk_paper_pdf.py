@@ -154,11 +154,12 @@ FIGURES = [
    "Both panels are real fields at a matched 35 um field of view with their own scale "
    "bars. The specimen and the two geometries are schematic and not to scale; the "
    "foil thickness is the only real dimension on either."]),
- ("F6 - how the parameters were determined.png",
-  "Every constant, and how each one was fixed",
-  ["TWELVE choice graphs, one per constant that has evidence, over a printed table "
-   "carrying all FIFTY constants both detectors read. A constant with a graph names "
-   "its letter in its table row.",
+ ("F6a - SEM, how the parameters were determined.png",
+  "Every SEM constant, and how each one was fixed",
+  ["NINE choice graphs over the electron arm's own table. The transmission arm is the "
+   "next figure, and the two are separate plates because on one sheet this ran 12.69 "
+   "in tall: the pack fits a plate to a 8.95 in page, so it was scaled by 0.705 and "
+   "its 8 pt type printed at 5.6 pt. Each plate now prints at full size.",
    "THREE OF THE TWELVE ARE NEW IN THIS REVISION. The closing radius, the denoise "
    "sigma and the flattening radius had never been swept anywhere; all three can be "
    "swept on the same 26 tiles and the same scorer as the rest, so they now are. "
@@ -191,6 +192,27 @@ FIGURES = [
    "the data and not declared is an undeclared degree of freedom.",
    "Every value is parsed out of the shipped source with ast, never retyped; a name "
    "that stops being defined there aborts the build."]),
+ ("F6b - TXM, how the parameters were determined.png",
+  "Every TXM constant, and what one shared constant costs the other arm",
+  ["FOUR choice graphs over the transmission arm's own table, on the same conventions "
+   "as the electron plate before it: where colour distinguishes the arms it is "
+   "blue SEM and orange TXM, a "
+   "filled square is the value the software uses, and a dashed line is the panel's "
+   "second series, named in the key.",
+   "PANEL (n) IS THE COMPARISON THE SET WAS MISSING. Every other panel in both plates "
+   "sweeps a constant inside ONE arm. This one asks the question across them, on the "
+   "constant both arms share: each point is one frame's critical MAD multiplier, the "
+   "value at which that frame's painted crack stops separating from its painted "
+   "not-crack. Below the shipped k a frame is losing crack the detector could have "
+   "proposed.",
+   "The two arms do not sit the same way against the single shipped value. The "
+   "electron frames straddle it -- median 4.26, 11 of 18 below -- and the transmission "
+   "frames are almost all under it, median 2.15 with 30 of 31 below. On the median "
+   "frame the detector proposes 53% of the painted crack on SEM and 24% on TXM. One "
+   "constant does not serve both arms, and it serves worse the arm that already gets "
+   "less.",
+   "Read from docs/figures/modality_contrast.json, which had held this per frame and "
+   "had never been drawn."]),
  ("F5 - over- and under-counting.png",
   "What the errors look like, on each arm's own detector",
   ["Blue is marked area the operator confirms, red is marked area the operator ruled "

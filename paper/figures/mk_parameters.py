@@ -198,7 +198,20 @@ J.use()
 CONTRAST_REC = _paths.scoped("modality_contrast.json", scope=False)
 
 OUT = _paths.FIG_DIR
+#: WHAT THE DASHED SERIES IS, per plate. Each entry names only the panels that plate
+#: draws.
+_DASHED_KEY = {
+    "SEM": "DASHED is the panel\u2019s second series: (a) precision, "
+           "(c) candidate floor,\n(d) 4-connectivity, (f) one radius at a time.",
+    "TXM": "DASHED is the panel\u2019s second series: (j) false-positive rate.",
+}
+
 NAME = "F6 - how the parameters were determined"
+#: ONE PLATE PER ARM. See draw()'s docstring for the measurement that forced the split:
+#: on one sheet this ran 12.69 in tall and the figure pack printed its 8 pt type at
+#: 5.6 pt.
+PLATE_NAME = {"SEM": "F6a - SEM, how the parameters were determined",
+              "TXM": "F6b - TXM, how the parameters were determined"}
 DOCS = os.path.join(_paths.REPO, "docs", "figures")
 
 #: The setting the paper evaluates at. Read from both_modalities so this plate and the
@@ -1041,7 +1054,21 @@ def _mark(ax, x, y, color):
     ax.plot([x], [y], "s", color=color, ms=3.6, mew=0, zorder=7)
 
 
-def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
+def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem, arm):
+    """One arm's plate. `arm` is "SEM" or "TXM".
+
+    THE TWO ARMS ARE TWO FIGURES, and the reason is measurable rather than editorial.
+    On one plate this ran 12.69 in tall against a 6.37 in text block. The figure pack
+    fits each plate to a 8.5 x 11 in page with 0.75 in margins, which leaves 8.95 in of
+    height, so the plate was scaled by 0.705 and its 8.0 pt type printed at 5.6 pt --
+    under the 8 pt floor journal_style enforces at draw time and under the 6 pt floor
+    reserved for sub- and superscripts. The plate passed its own checks because they
+    measure the plate, not the page it is pasted on.
+
+    Everything below is unchanged except that each block is drawn only for its own arm.
+    The cross-arm comparison rides with TXM, because that is the arm the shared constant
+    serves worse and the panel exists to say so.
+    """
     """The plate: every constant of both detectors, and the evidence where there is any.
 
     WHY IT WAS REDRAWN AGAIN. The wordless edition before this one was nine line panels
@@ -1527,16 +1554,23 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
             rule(x, x + cw, yy + 0.010, lw=0.8)
         return y0 + LEAD + 0.040 + per * LEAD + 0.030
 
-    sem_p = [q for q in PANELS if q[0] == "SEM"]
-    txm_p = [q for q in PANELS if q[0] == "TXM"]
+    sem_p = [q for q in PANELS if q[0] == "SEM" and arm == "SEM"]
+    txm_p = [q for q in PANELS if q[0] == "TXM" and arm == "TXM"]
+    ARM_PANELS = [q for q in PANELS if q[0] == arm]
     sem_rows = -(-len(sem_p) // NCOL)
     txm_rows = -(-len(txm_p) // NCOL)
-    sem_t_h = LEAD + 0.02 + LEAD + 0.040 + (-(-len(SEM_ROWS) // TCOL)) * LEAD + 0.030
-    txm_t_h = LEAD + 0.02 + LEAD + 0.040 + (-(-len(TXM_ROWS) // TCOL)) * LEAD + 0.030
+    _srows = SEM_ROWS if arm == "SEM" else []
+    _trows = TXM_ROWS if arm == "TXM" else []
+    sem_t_h = ((LEAD + 0.02 + LEAD + 0.040 + (-(-len(_srows) // TCOL)) * LEAD + 0.030)
+               if _srows else 0.0)
+    txm_t_h = ((LEAD + 0.02 + LEAD + 0.040 + (-(-len(_trows) // TCOL)) * LEAD + 0.030)
+               if _trows else 0.0)
     #: the cross-arm comparison block: its gap, its heading, its axes and the gap under
-    CMPH = 0.30 + ARMH + 0.86 + 0.36 + 0.30 + 0.16
-    H = (TOPM + ARMH + sem_rows * PANELROW + sem_t_h + 0.22
-         + ARMH + txm_rows * PANELROW + txm_t_h + CMPH + FOOTH)
+    CMPH = (0.30 + ARMH + 0.86 + 0.36 + 0.30 + 0.16) if arm == "TXM" else 0.0
+    _armh_sem = ARMH if arm == "SEM" else 0.0
+    _armh_txm = ARMH if arm == "TXM" else 0.0
+    H = (TOPM + _armh_sem + sem_rows * PANELROW + sem_t_h + (0.22 if arm == "SEM" else 0)
+         + _armh_txm + txm_rows * PANELROW + txm_t_h + CMPH + FOOTH)
     fig = plt.figure(figsize=(W, H))
     texts = []
 
@@ -1593,77 +1627,81 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
             ax.text(0.035, 0.965, f"({letter})", transform=ax.transAxes, fontsize=T_NAME,
                     fontweight="bold", ha="left", va="top", color=J.INK, zorder=9)
 
+    cmp_axes = []
     y = TOPM
-    T(MX, y, "SEM arm", T_NAME, weight="bold", color=J.ACCENT)
-    y += ARMH
-    panels(y, sem_p)
-    y += sem_rows * PANELROW
-    y = table_block(y, SEM_ROWS, "SEM arm: every constant") + 0.22
-    T(MX, y, "TXM arm", T_NAME, weight="bold", color=J.ACCENT2)
-    y += ARMH
-    panels(y, txm_p)
-    y += txm_rows * PANELROW
-    y = table_block(y, TXM_ROWS, "TXM arm: every constant")
+    if arm == "SEM":
+        T(MX, y, "SEM arm", T_NAME, weight="bold", color=J.ACCENT)
+        y += ARMH
+        panels(y, sem_p)
+        y += sem_rows * PANELROW
+        y = table_block(y, SEM_ROWS, "SEM arm: every constant") + 0.22
+    else:
+        T(MX, y, "TXM arm", T_NAME, weight="bold", color=J.ACCENT2)
+        y += ARMH
+        panels(y, txm_p)
+        y += txm_rows * PANELROW
+        y = table_block(y, TXM_ROWS, "TXM arm: every constant")
 
-    # ---- the cross-arm comparison -------------------------------------------------
-    #: WHAT ONE CONSTANT COSTS THE OTHER ARM. Every panel above varies a constant inside
-    #: one arm. This one asks the question across them, on the constant both arms share:
-    #: the MAD multiplier. For each frame, the critical k is the multiplier at which that
-    #: frame's painted crack stops separating from its painted not-crack -- below the
-    #: shipped k the frame is losing crack the detector could have had.
-    #:
-    #: The two arms do not sit the same way against the single shipped value, and that
-    #: is the finding: the electron frames straddle it and the transmission frames are
-    #: almost all under it.
-    _CON = json.load(open(CONTRAST_REC))
-    y += 0.30
-    T(MX, y, "Both arms, one constant", T_NAME, weight="bold", color=J.INK)
-    y += ARMH
-    cax = fig.add_axes([(MX + 0.52) / W, 1.0 - (y + 0.86) / H,
-                        (W - 2 * MX - 0.70) / W, 0.86 / H])
-    #: DELIBERATELY NOT IN `panel_axes`. That list is checked one-to-one against the
-    #: lettered rows of the two tables, because every panel above sweeps a constant that
-    #: the tables name. This one does not sweep a constant -- it compares the two arms
-    #: against the one they share -- so it has no row to cite and counting it there would
-    #: make the control fail for the right reason about the wrong panel. It IS measured
-    #: for text collisions, which is a separate list.
-    cmp_axes = [cax]
-    _rng = np.random.default_rng(0)
-    _say = []
-    for _i, (_arm, _col) in enumerate((("SEM", J.ACCENT), ("TXM", J.ACCENT2))):
-        _ks = [f["median_critical_k_crack"] for f in _CON[_arm]["per_frame"]]
-        _yy = _i + _rng.uniform(-0.17, 0.17, len(_ks))
-        cax.scatter(_ks, _yy, s=9, facecolors="none", edgecolors=_col, linewidths=0.7,
-                    zorder=4)
-        _med = _CON[_arm]["median_of_median_critical_k_crack"]
-        cax.plot([_med, _med], [_i - 0.30, _i + 0.30], color=_col, lw=1.8, zorder=5)
-        cax.text(_med, _i + 0.34, f"median {_med:.2f}", color=_col, fontsize=T_TICK,
-                 ha="center", va="bottom")
-        _n = _CON[_arm]["n_frames"]
-        _below = _CON[_arm]["frames_median_critical_k_below_k"]
-        _prop = 100 * _CON[_arm]["median_crack_px_proposed_frac"]
-        _say.append(f"{_arm}: {_below} of {_n} frames below the shipped k; "
-                    f"{_prop:.0f}% of painted crack proposed on the median frame")
-    cax.axvline(K, color=J.INK, lw=1.0, dashes=(3.0, 1.8), zorder=6)
-    cax.text(K, 1.62, f"shipped k = {K:g}", fontsize=T_TICK, ha="center", va="bottom",
-             color=J.INK)
-    cax.set_xlim(0, 10.4)
-    cax.set_ylim(-0.6, 1.6)
-    cax.set_yticks([0, 1])
-    cax.set_yticklabels(["SEM", "TXM"], fontsize=T_TICK)
-    cax.set_xticks([0, 2, 4, 6, 8, 10])
-    cax.set_xticklabels(["0", "2", "4", "6", "8", "10"], fontsize=T_TICK)
-    cax.set_xlabel("critical MAD multiplier $k$ this frame needs", fontsize=T_TICK,
-                   labelpad=1.6)
-    cax.tick_params(which="both", length=2.0, width=0.5, pad=1.6, top=False,
-                    right=False, direction="out")
-    for _sp in cax.spines.values():
-        _sp.set_linewidth(0.5)
-    cax.text(0.012, 0.95, "(n)", transform=cax.transAxes, fontsize=T_NAME,
-             fontweight="bold", ha="left", va="top", color=J.INK)
-    y += 0.86 + 0.36
-    T(MX, y, "\n".join(_say), T_TICK, color=J.G_DARK)
-    y += 0.30
+    if arm == "TXM":
+        # ---- the cross-arm comparison -------------------------------------------------
+        #: WHAT ONE CONSTANT COSTS THE OTHER ARM. Every panel above varies a constant inside
+        #: one arm. This one asks the question across them, on the constant both arms share:
+        #: the MAD multiplier. For each frame, the critical k is the multiplier at which that
+        #: frame's painted crack stops separating from its painted not-crack -- below the
+        #: shipped k the frame is losing crack the detector could have had.
+        #:
+        #: The two arms do not sit the same way against the single shipped value, and that
+        #: is the finding: the electron frames straddle it and the transmission frames are
+        #: almost all under it.
+        _CON = json.load(open(CONTRAST_REC))
+        y += 0.30
+        T(MX, y, "Both arms, one constant", T_NAME, weight="bold", color=J.INK)
+        y += ARMH
+        cax = fig.add_axes([(MX + 0.52) / W, 1.0 - (y + 0.86) / H,
+                            (W - 2 * MX - 0.70) / W, 0.86 / H])
+        #: DELIBERATELY NOT IN `panel_axes`. That list is checked one-to-one against the
+        #: lettered rows of the two tables, because every panel above sweeps a constant that
+        #: the tables name. This one does not sweep a constant -- it compares the two arms
+        #: against the one they share -- so it has no row to cite and counting it there would
+        #: make the control fail for the right reason about the wrong panel. It IS measured
+        #: for text collisions, which is a separate list.
+        cmp_axes.append(cax)
+        _rng = np.random.default_rng(0)
+        _say = []
+        for _i, (_arm, _col) in enumerate((("SEM", J.ACCENT), ("TXM", J.ACCENT2))):
+            _ks = [f["median_critical_k_crack"] for f in _CON[_arm]["per_frame"]]
+            _yy = _i + _rng.uniform(-0.17, 0.17, len(_ks))
+            cax.scatter(_ks, _yy, s=9, facecolors="none", edgecolors=_col, linewidths=0.7,
+                        zorder=4)
+            _med = _CON[_arm]["median_of_median_critical_k_crack"]
+            cax.plot([_med, _med], [_i - 0.30, _i + 0.30], color=_col, lw=1.8, zorder=5)
+            cax.text(_med, _i + 0.34, f"median {_med:.2f}", color=_col, fontsize=T_TICK,
+                     ha="center", va="bottom")
+            _n = _CON[_arm]["n_frames"]
+            _below = _CON[_arm]["frames_median_critical_k_below_k"]
+            _prop = 100 * _CON[_arm]["median_crack_px_proposed_frac"]
+            _say.append(f"{_arm}: {_below} of {_n} frames below the shipped k; "
+                        f"{_prop:.0f}% of painted crack proposed on the median frame")
+        cax.axvline(K, color=J.INK, lw=1.0, dashes=(3.0, 1.8), zorder=6)
+        cax.text(K, 1.62, f"shipped k = {K:g}", fontsize=T_TICK, ha="center", va="bottom",
+                 color=J.INK)
+        cax.set_xlim(0, 10.4)
+        cax.set_ylim(-0.6, 1.6)
+        cax.set_yticks([0, 1])
+        cax.set_yticklabels(["SEM", "TXM"], fontsize=T_TICK)
+        cax.set_xticks([0, 2, 4, 6, 8, 10])
+        cax.set_xticklabels(["0", "2", "4", "6", "8", "10"], fontsize=T_TICK)
+        cax.set_xlabel("critical MAD multiplier $k$ this frame needs", fontsize=T_TICK,
+                       labelpad=1.6)
+        cax.tick_params(which="both", length=2.0, width=0.5, pad=1.6, top=False,
+                        right=False, direction="out")
+        for _sp in cax.spines.values():
+            _sp.set_linewidth(0.5)
+        cax.text(0.012, 0.95, "(n)", transform=cax.transAxes, fontsize=T_NAME,
+                 fontweight="bold", ha="left", va="top", color=J.INK)
+        y += 0.86 + 0.36
+        T(MX, y, "\n".join(_say), T_TICK, color=J.G_DARK)
+        y += 0.30
 
     # one footnote, which is how a printed table carries a flag column
     # TWO LINES. One ran 7 in on a 6.27 in sheet and the plate's own check caught it.
@@ -1693,9 +1731,11 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
       f"ref.   {_key}.\n"
       "FILLED SQUARE: the value the software uses.   Bracketed letter: the panel "
       "above.\n"
-      "COLOUR IS THE ARM: blue SEM, orange TXM, throughout this paper.\n"
-      "DASHED is the panel\u2019s second series: (a) precision, (c) candidate floor,\n"
-      "(d) 4-connectivity, (f) one radius at a time, (j) false-positive rate.",
+      #: NOT "throughout this paper", which is what this said and which is false.\n      #: Figure 1 colours the pipeline STAGE -- blue is crack found so far and\n      #: orange is pixels the step removes, in both arms -- and Figure 4 colours\n      #: the operator VERDICT. Those are not arm colours and should not be. The\n      #: rule is about panels that distinguish the arms, and it has to say so.\n      "WHERE COLOUR DISTINGUISHES THE ARMS it is blue SEM, orange TXM.\\n"
+      #: ONLY THIS PLATE'S PANELS. Listing all five on both sheets sent a reader of the
+      #: transmission plate looking for panels (a), (c), (d) and (f), which are on the
+      #: electron one -- a reference the split created and nothing would have caught.
+      + _DASHED_KEY[arm],
       T_TICK, color=J.G_DARK)
 
     # ---- the controls ----------------------------------------------------------
@@ -1741,16 +1781,19 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
           f"sheet: PASS")
 
     ROWS = [("SEM", r) for r in SEM_ROWS] + [("TXM", r) for r in TXM_ROWS]
-    drawn = {q[1] for q in PANELS}
-    cited = {r[3] for _a, r in ROWS if r[3]}
+    drawn = {q[1] for q in ARM_PANELS}
+    cited = {r[3] for _a, r in ROWS if r[3] and _a == arm}
     if drawn != cited:
         raise SystemExit(f"panels drawn {sorted(drawn)} but the tables cite "
                          f"{sorted(cited)}")
-    if len(panel_axes) != len(PANELS):
-        raise SystemExit(f"{len(panel_axes)} axes drawn for {len(PANELS)} panels")
-    #: and the comparison axis is accounted for separately rather than ignored
-    if len(cmp_axes) != 1:
-        raise SystemExit(f"{len(cmp_axes)} cross-arm comparison axes, expected 1")
+    if len(panel_axes) != len(ARM_PANELS):
+        raise SystemExit(f"{len(panel_axes)} axes drawn for {len(ARM_PANELS)} "
+                         f"{arm} panels")
+    #: the comparison axis rides with TXM and is accounted for rather than ignored
+    _want_cmp = 1 if arm == "TXM" else 0
+    if len(cmp_axes) != _want_cmp:
+        raise SystemExit(f"{len(cmp_axes)} cross-arm comparison axes on the {arm} "
+                         f"plate, expected {_want_cmp}")
     print(f"  CONTROL {len(drawn)} panels, every one of them a row of its table, and "
           f"every lettered row a panel: PASS")
 
@@ -1833,7 +1876,7 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem):
     print(f"  CONTROL {n_rows} constants on the plate ({len(SEM_ROWS)} SEM, "
           f"{len(TXM_ROWS)} TXM), every value parsed from the shipped source or read "
           f"off a record: PASS")
-    J.save(fig, os.path.join(OUT, NAME + ".png"))
+    J.save(fig, os.path.join(OUT, PLATE_NAME[arm] + ".png"))
     return dict(
         figure_height_in=H, n_text=len(boxes), n_placed=len(boxes),
         n_constants_on_the_plate=n_rows, panel_letters=sorted(drawn), tally=tally,
@@ -2654,7 +2697,12 @@ def sidecar(tiles, frames, madk, madp, dead, txm, units, scores, stats, const, b
         raise SystemExit("the plate's tally and this module's docstring disagree")
     print(f"  CONTROL the caption file's panel letters are the panels the plate draws "
           f"({''.join(sorted(drawn))}): PASS")
-    json.dump(rec, open(os.path.join(OUT, NAME + ".caption.json"), "w"), indent=1)
+    #: ONE RECORD, BOTH PLATES. The sidecar describes all fifty constants and all
+    #: thirteen panels, which now live on two sheets; it is written under each plate's
+    #: name so neither ships without the record that documents it, and it says so.
+    rec["covers_plates"] = [PLATE_NAME["SEM"] + ".png", PLATE_NAME["TXM"] + ".png"]
+    for _nm in PLATE_NAME.values():
+        json.dump(rec, open(os.path.join(OUT, _nm + ".caption.json"), "w"), indent=1)
     return rec
 
 
@@ -2709,8 +2757,18 @@ def main():
           f"{txm['model_key']} at threshold {const['DEFAULT_THRESHOLD']}: PASS")
 
     sem = _sem_constants()
-    bars = draw(tiles, frames, madk, dead, txm, units, scores, stats, const,
-                sem)
+    #: ONE CALL PER ARM. Each writes its own plate and its own caption sidecar; the
+    #: bars the SEM pass returns are the ones the record quotes, and the TXM pass
+    #: returns the same object because `bars` is built from both arms' data.
+    _letters = []
+    for _arm in ("SEM", "TXM"):
+        bars = draw(tiles, frames, madk, dead, txm, units, scores, stats, const,
+                    sem, _arm)
+        _letters.extend(bars["panel_letters"])
+    #: THE RECORD DESCRIBES BOTH PLATES, so the letters it is checked against are both
+    #: plates' letters. Taking them from the last call alone would have let the control
+    #: pass while the sidecar described panels the TXM plate does not draw.
+    bars["panel_letters"] = _letters
     rec = sidecar(tiles, frames, madk, madp, dead, txm, units, scores, stats, const, bars)
     for k_, v in rec["tally"].items():
         print(f"  {k_}: {', '.join(v)}")

@@ -78,8 +78,12 @@ FIGS = {
     "flow": os.path.join(PAPER, "figures/out/F1 - flow chart.png"),
     "modality": os.path.join(
         PAPER, "figures/out/F2 - how each modality sees a crack.png"),
+    #: TWO PLATES, one per arm. See mk_parameters.draw()'s docstring: on one sheet the
+    #: combined plate printed its 8 pt type at 5.6 pt once the pack fitted it to a page.
     "parameters": os.path.join(
-        PAPER, "figures/out/F6 - how the parameters were determined.png"),
+        PAPER, "figures/out/F6a - SEM, how the parameters were determined.png"),
+    "parameters_txm": os.path.join(
+        PAPER, "figures/out/F6b - TXM, how the parameters were determined.png"),
     "counting": os.path.join(PAPER, "figures/out/F5 - over- and under-counting.png"),
     "scores": os.path.join(PAPER, "figures/out/F8 - scores by sample.png"),
     "measurands": os.path.join(PAPER, "figures/out/F4 - what is measured.png"),
@@ -524,7 +528,7 @@ MP.VALUES.update({"fr_gate_on": f"{_kept(_FR['gate']):.3f}",
 # retyped: the plate computes it with "%.1f%%" and the caption is written as the plate
 # is drawn, so this follows the panel it describes.
 _P6 = MP._f(os.path.join(PAPER, "figures", "out",
-                         "F6 - how the parameters were determined.caption.json"),
+                         "F6a - SEM, how the parameters were determined.caption.json"),
             "the parameters plate's caption")
 _lad = re.search(r"([0-9.]+)% of what the ladder reaches is reached by two or more",
                  json.dumps(_P6))
@@ -622,7 +626,10 @@ for _g, _t in (("B3", "b3"), ("B2", "b2")):
     })
 
 
-FIG_RE = re.compile(r"^\[FIGURE ([a-z]+)\s*\|\s*(.+)\]$")
+#: UNDERSCORES ALLOWED. The parameters plate became two -- one per arm --
+#: and the second key, parameters_txm, silently did not match: the tag was
+#: left in the prose verbatim and the plate reported as defined-but-unplaced.
+FIG_RE = re.compile(r"^\[FIGURE ([a-z_]+)\s*\|\s*(.+)\]$")
 #: `[TABLE key | caption]` on its own line, IMMEDIATELY BEFORE a pipe table. The same
 #: shape as the figure directive, and for the same reason -- see `number_the_tables`.
 TBL_RE = re.compile(r"^\[TABLE ([a-z0-9_]+)\s*\|\s*(.+)\]$")
