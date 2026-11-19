@@ -557,7 +557,7 @@ def main():
 
     charts = [{
         "tag": "sem", "nm": sem_nm, "whole": sem["flat"], "field": sem["img"],
-        "sl": ssl, "H": sH, "letters": "abcdef",
+        "sl": ssl, "H": sH, "letters": "abcdef", "inset_letters": "mnop",
         #: THE ROW NAMES THE MICROSCOPY AND NOTHING ELSE, at the author's instruction.
         #: What each arm's detector IS belongs in the caption; a dash and a description
         #: on the title line is the same sub-line that was taken off the stage boxes.
@@ -577,7 +577,7 @@ def main():
         "ops": ["cut the\ndetail window",
                 "subtract background,\nseven radii",
                 "darker than\nmedian − 6 MAD",
-                "drop specks,\nopen and close",
+                "drop specks,\nclose small gaps",
                 ("keep regions the\nmodel calls crack"
                  if BM.DO.USE_REGION_CLASSIFIER else "keep regions\n≥ 40 px")],
         #: WHICH STEP IS THE LEARNED ONE. The author asked whether a reader of this
@@ -592,7 +592,7 @@ def main():
         "painted": sem.get("paint_crack"),
     }, {
         "tag": "txm", "nm": txm_nm, "whole": txm["img"], "field": txm["img"],
-        "sl": tsl, "H": tH, "letters": "ghijkl",
+        "sl": tsl, "H": tH, "letters": "ghijkl", "inset_letters": "qrst",
         "title": "TXM",
         "sub": "",
         "stages": ["full field", "detail", "crack\nprobability", "thresholded",
@@ -609,7 +609,7 @@ def main():
                 #: "blobs" was the implementation's word for what this removes. The
                 #: things it removes are imaging artefacts, and that is what a reader
                 #: of the figure needs to be told.
-                "drop imaging\nartifacts, fill holes",
+                "drop specks,\nfill holes",
                 "narrow to the\nmeasured width"],
         "insets": {3: (txm["over"], txm["cleaned"], "thresholded", "cleaned"),
                    4: (txm["cleaned"], txm["final"], "cleaned", "detected")},
@@ -617,15 +617,18 @@ def main():
     }]
 
     # ---- geometry ------------------------------------------------------------------
-    W, MX, NCOL, GAP = J.PAGEW, 0.05, 6, 0.40
+    W, MX, NCOL, GAP = J.PAGEW, 0.05, 6, 0.26
     AVAIL = W - 2 * MX
     IMW = (AVAIL - (NCOL - 1) * GAP) / NCOL
     PITCH = IMW + GAP
     LINE = J.TICK / 72.0 * 1.22                     # one line of body text, inches
 
-    HEAD, STAGEH, OPH = 0.235, 0.30, 2 * LINE + 0.07
+    HEAD, STAGEH, OPH = 0.235, 0.30, 2 * LINE + 0.04
     INSW = min(0.50, (PITCH - 0.11) / 2.0)
-    INSH = INSW + 0.03 + LINE + 0.04 + 3 * LINE + 0.04
+    #: Reserved for exactly what the block draws -- the inset, the two-line
+    #: transition label and the magnification marker. The old reserve left a
+    #: 0.47 in white band above the next rule, measured off the render.
+    INSH = INSW + 0.03 + 2.45 * LINE + 0.05
     CHARTH = HEAD + STAGEH + IMW + OPH + INSH
     TOP, CHARTGAP, LEGH, BOT = 0.05, 0.17, 0.33, 0.05
     Htot = TOP + 2 * CHARTH + CHARTGAP + LEGH + BOT
@@ -729,12 +732,12 @@ def main():
                 ((xa + 0.045) / W, ymid), ((xb - 0.025) / W, ymid),
                 transform=fig.transFigure, arrowstyle="-|>", mutation_scale=7,
                 lw=1.0, color=J.INK, zorder=1))
-            txt((xa + xb) / 2.0, ytop + IMW + 0.055, ch["ops"][c], maxw=PITCH - 0.03,
+            txt((xa + xb) / 2.0, ytop + IMW + 0.022, ch["ops"][c], maxw=PITCH + 0.20,
                 ha="center", va="top", linespacing=1.22, color=J.G_DARK)
 
         # ---- what each cleaning step removes, magnified ------------------------------
         yins = ytop + IMW + OPH
-        steps = {}
+        steps, ins_n = {}, 0
         for c, (before, after, nb, na) in sorted(ch["insets"].items()):
             got = marks[c]
             xc = (xs[c] + IMW + xs[c + 1]) / 2.0
@@ -753,19 +756,32 @@ def main():
                 show(ax, cut, ((before if k == 0 else after)[isl], J.MASK),
                      ((before & ~after)[isl] if k == 0 else None, J.ACCENT2))
                 boxed(ax, colour=J.ROI if k == 0 else J.G_DARK, lw=0.9 if k == 0 else 0.5)
-                txt(xl + INSW / 2.0, yins + INSW + 0.03, "before" if k == 0 else "after",
-                    maxw=INSW + 0.04, ha="center", va="top", fontstyle="italic",
-                    color=J.G_DARK)
+                #: INSIDE the panel, like the chain above it, so four more letters cost
+                #: no further floating text.
+                J.panel_label(ax, ch["inset_letters"][ins_n * 2 + k], inside=True)
+            ins_n += 1
+            #: ONE LABEL FOR THE PAIR, NAMING THE TRANSITION. Two labels reading "before"
+            #: and "after" were identical under all four pairs, which is what made the two
+            #: pairs in a row look like the same picture twice. The stage names were already
+            #: being carried here and thrown away. They do not fit under a single inset --
+            #: "thresholded" is 0.57 in against an inset's 0.53 -- so the pair gets one
+            #: label across its full width, which is also the honest unit: the pair shows a
+            #: transition, not two independent pictures.
+            #: On two lines: "thresholded -> cleaned" sets 1.18 in on one line against
+            #: the pair's 1.03 in, and the layout guard below refuses it. The
+            #: magnification rides on the second line rather than in a block of its own,
+            #: which is one fewer floating string and removes the collision two separate
+            #: blocks kept having -- the marker was landing on the label's second line.
+            mag = (INSW / s) / (IMW / H)
+            txt(xc, yins + INSW + 0.03, f"{nb}\n\u2192 {na}   \u00d7{mag:.0f}",
+                maxw=2 * INSW + 0.05, ha="center", va="top", fontstyle="italic",
+                color=J.G_DARK, linespacing=1.15)
             pad = 0.012 * H
             axes[c].add_patch(Rectangle((ix - x0w - pad, iy - y0w - pad),
                                         s + 2 * pad, s + 2 * pad, fill=False,
                                         edgecolor="white", linewidth=1.4, zorder=24))
             axes[c].add_patch(Rectangle((ix - x0w, iy - y0w), s, s, fill=False,
                                         edgecolor=J.ROI, linewidth=0.9, zorder=25))
-            mag = (INSW / s) / (IMW / H)
-            txt(xc, yins + INSW + 0.03 + LINE + 0.04,
-                f"×{mag:.0f}",
-                maxw=PITCH - 0.02, ha="center", va="top", linespacing=1.22)
             steps[f"{nb}_to_{na}"] = {
                 "inset_at": [int(iy), int(ix)], "inset_side_px": int(s),
                 "inset_um": round(s * nm / 1000.0, 3), "magnification": round(mag, 1),
