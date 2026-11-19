@@ -158,6 +158,28 @@ LEGIB = _paths.scoped("frame_legibility.json", scope=False)
 #: family lets the same selection rule -- best agreement among eligible frames -- pick a
 #: field that an operator ruled in BOTH directions, so every panel reports a measured
 #: share. The rule is unchanged; only the pool it chooses from is.
+#: THE TWO ROWS ARE DIFFERENT MATERIALS AND THE DATA WILL NOT CURRENTLY ALLOW OTHERWISE.
+#: The author asked for both rows on one material, which is right -- as it stands a
+#: reader comparing the rows is comparing two materials as well as two instruments.
+#: `316_h_b2` was tried, since the transmission row is hydrogen-charged 316L and a
+#: hydrogen-charged 316 electron series exists. It fails on a second requirement:
+#:
+#:   eligible for this plate  an operator ruled BOTH directions, the annotation is a
+#:                            trace not a filled region, and no single object holds
+#:                            more than 35% of the over-counted area
+#:   drawable                 the frame has a measured field width, so a scale bar can
+#:                            be drawn
+#:
+#: Of 20 '316_h_b2' frames exactly two are eligible -- 260708_316_H_b2_front_CBS_002
+#: (F1 0.735) and _CBS_012 (F1 0.687) -- and NEITHER has a row in
+#: crack_export/analysis/scale_hfw.csv, nor FEI metadata to recover one from
+#: (scale.from_tiff returns None on both). The only 260708 frame with a measured width,
+#: _CBS_001, has 0 px of not-crack and so cannot show over-counting at all.
+#:
+#: So matching the material would cost the scale bar, and a micrograph in a methods
+#: paper without one is worse than a material mismatch the caption states. To fix this
+#: properly, measure the field width of _CBS_002 from its databar and add it to the
+#: scale table; then switch SPECIMEN["SEM"] to "316_h_b2" and this comment goes.
 SPECIMEN = {"SEM": "mar_amb_hip", "TXM": "hc_316l"}
 SPECIMEN_WORDS = {"SEM": "HIP (MAR 247, ambient)",
                   "TXM": "hydrogen-charged 316L fatigue"}
@@ -992,14 +1014,14 @@ def main():
     #: spaced as one -- PAIR between them, the wider GAP between the error kinds --
     #: so the grouping is read off the layout and does not need saying.
     PAN = (W - 2 * Mg - LAB - 2 * PAIR - GAP) / 4
-    HDR = 0.56
+    HDR = 0.40
     # Under each row: one line per panel saying how much of IT is the error it was chosen
     # for, then two lines for the row. The per-panel line exists because a panel can be
     # honestly almost empty -- the SEM field's precision is 0.97, so its over-counted
     # window is 0.14% red -- and an almost-empty panel under a header that says
     # "over-counted" reads as a mistake unless the figure says the number.
     CAP = 0.36
-    LEG = 0.34
+    LEG = 0.26
     #: TWO gaps, not one: there is a seam between the rows AND a seam above the key.
     #: With a single GAP in this sum the key began at the exact inch the lower row's
     #: caption ended, and the row's bold identity line printed into the swatches.
@@ -1038,13 +1060,13 @@ def main():
     #: rewritten every time a window moves; one that describes what the colours mean
     #: does not, and the placement is in the caption and in this figure's record,
     #: per panel, under placed_by.
-    heads = (("Over-counted", "marked, but the operator ruled it not crack"),
-             ("Under-counted", "painted crack the detector never marked"))
+    heads = (("Over-counted", ""), ("Under-counted", ""))
     for c, (head, sub) in enumerate(heads):
         hx = ax_at(col_x(c, 0), Mg, 2 * PAN + PAIR, HDR)
         hx.set_axis_off()
         say(hx, 0.5, 0.84, head, size=J.BODY, weight="bold", ha="center")
-        say(hx, 0.5, 0.52, sub, colour=J.G_DARK, ha="center")
+        if sub:
+            say(hx, 0.5, 0.52, sub, colour=J.G_DARK, ha="center")
         #: which half is which, said once per pair rather than inside eight panels.
         for half, what in enumerate(("the micrograph", "detector vs operator")):
             hw = ax_at(col_x(c, half), Mg, PAN, HDR)
@@ -1120,7 +1142,6 @@ def main():
                                facecolor=colour, edgecolor="none", clip_on=False))
         say(lg, xx + 0.024, 0.72, text, colour=J.G_DARK)
         xx += 0.024 + 0.0105 * len(text) + 0.022
-    say(lg, 0.015, 0.22, "grey: nobody adjudicated it", colour=J.G_DARK)
 
     # THE TYPE HAS TO FIT, AND THAT IS MEASURED. Every line drawn through say() is
     # checked against the axes it was placed in, at the renderer's own geometry. A line
