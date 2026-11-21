@@ -188,12 +188,17 @@ def stretch(arr):
 #: pictures come from, and why do they disagree". The specimen-to-region-to-two-views
 #: chain answers that in one read, and the measurand difference survives as one line
 #: of text under each panel rather than as a drawing of its own.
-CANVAS = (100.0, 78.5)
+#: TALLER, SO THE TWO MICROGRAPHS ARE WORTH LOOKING AT. At 24 canvas units the
+#: panels reached the page 1.5 in across on a sheet that fits nine inches, and
+#: the plate -- which exists to let a reader SEE that the two instruments record
+#: different things -- showed each of them in a thumbnail. Everything above the
+#: panels moves up by what they gained; nothing is rearranged.
+CANVAS = (100.0, 94.0)
 
 LW_OUT, LW_EDGE, LW_LEAD = 1.0, 0.6, 0.6
 
 #: The specimen. It is the figure, so it gets the full width and a real thickness.
-DB_Y = 66.5
+DB_Y = 82.0
 DB_CX, DB_HALF = 50.0, 38.0
 DB_WGRIP, DB_WGAUGE = 7.0, 3.1
 #: The region taken out of the middle of the gauge.
@@ -204,9 +209,9 @@ ROI_W, ROI_H = 7.0, 7.4
 #: as a filled cone, the foil, and a detector. That is enough to say how the two
 #: machines work and why they cannot record the same thing, and it is what published
 #: figures of this kind draw -- see docs/FIGURE_CONVENTIONS_FROM_PUBLISHED_WORK.md.
-PAN_Y, PAN_SIDE = 3.0, 24.0
-PAN_X = (9.0, 65.5)
-GEO_Y0, GEO_H = 31.8, 16.5        # the how-it-works strip, between region and panel
+PAN_Y, PAN_SIDE = 3.0, 34.0
+PAN_X = (8.0, 58.0)
+GEO_Y0, GEO_H = 42.0, 19.0        # the how-it-works strip, between region and panel
 FOIL_T = 2.6                      # the foil, in the little geometry drawing
 
 FOIL_UM = 22.0

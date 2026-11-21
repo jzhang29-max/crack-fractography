@@ -1524,7 +1524,12 @@ def draw(tiles, frames, madk, dead, txm, units, scores, stats, const, sem, arm):
     #: electron plate's rather than flattening to a 3.6:1 strip.
     PW = (W - 2 * MX - (PCOL - 1) * COLGAP) / PCOL
     YLABW = 0.42                       # y title + y tick labels
-    PLOTH, XTICKH, XLABH, ROWGAP = (0.72 if arm == "SEM" else 1.02), 0.17, 0.20, 0.16
+    #: THE PLOT FILLS THE PAGE IT IS GIVEN. At 0.72 in the electron plate came out
+    #: 6.27 in tall, and the pack fits a plate into about 9 in, so a third of the
+    #: sheet under it was blank and every curve was drawn at half the size the
+    #: page could carry. Both arms are sized so the finished plate lands near 8 in,
+    #: which is as tall as the manuscript's text block will take at full scale.
+    PLOTH, XTICKH, XLABH, ROWGAP = (1.30 if arm == "SEM" else 1.16), 0.17, 0.20, 0.16
     PANELROW = PLOTH + XTICKH + XLABH + ROWGAP
     ARMH, LEAD, TOPM, FOOTH = 0.20, 0.132, 0.07, 0.62
     TCOL, TGAP = 3, 0.16               # the table's column groups

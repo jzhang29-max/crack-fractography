@@ -454,10 +454,12 @@ MP.VALUES["st_zoom"] = f"{ST['inset_magnification']:g}"
 # so the caption reads it back instead of asserting it.
 FLOW = MP._f(os.path.join(PAPER, "figures/out/F1 - flow chart.caption.json"),
              "the flow chart's caption")
-_fmags = [_v["magnification"] for _a in FLOW["arms"].values()
-          for _v in _a["cleaning_steps"].values()]
-MP.VALUES["flow_mag_lo"] = f"{min(_fmags):.0f}"
-MP.VALUES["flow_mag_hi"] = f"{max(_fmags):.0f}"
+_fmags = sorted({round(_v["magnification"], 1) for _a in FLOW["arms"].values()
+                 for _v in _a["cleaning_steps"].values()})
+if len(_fmags) != 1:
+    raise SystemExit(f"the flow chart's windows are drawn at {_fmags}; the caption "
+                     "quotes one magnification")
+MP.VALUES["flow_mag"] = f"{_fmags[0]:.0f}"
 
 MD = MP._f(os.path.join(PAPER, "figures/out/F2 - how each modality sees a crack"
                               ".caption.json"), "the modality plate's caption")

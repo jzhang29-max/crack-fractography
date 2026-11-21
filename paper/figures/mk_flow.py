@@ -131,12 +131,19 @@ TXM_IID = ("Average_mosaic_260618_b2_335_31um_FRFR_idx00000_mosaictileAA_img001o
 TXM_GATE = os.path.join(_paths.TXM_REPO, "app_data", "models", "retrain_history.json")
 TXM_STAMP = "20260824_225236"
 
-#: Inset geometry. The window is six times the longest side of the component it is
-#: centred on, floored at 80 px so a tiny component still has context around it, and
-#: capped at a sixth of the detail window so an inset is always a magnification.
-#: 6 put the removed piece in the middle of a field six times its own width, where a
-#: 30 px speck is a dot. 4 fills the panel with the thing the inset is about.
-INSET_SPAN, INSET_MIN_PX = 4, 80
+#: Inset geometry. THESE TWO ONLY CHOOSE THE PIECE the window is centred on -- its
+#: size comes from INSET_MAG below, so that the magnification is a constant of the
+#: plate rather than a by-product of how big the chosen component happened to be.
+#: Sizing the window from the component is what let a 531 px piece reach the sheet
+#: at twice life size, which is not a magnification: it is the picture again.
+INSET_SPAN, INSET_MIN_PX = 4, 48
+#: WHAT THE INSET MAGNIFIES BY, on both arms. The window is derived from this
+#: rather than the other way round, so no inset can reach the sheet at a
+#: magnification that does not magnify.
+INSET_MAG = 5.0
+#: the smallest piece an inset will be placed on; under this the window is all
+#: matrix and the inset shows nothing
+INSET_MIN_COMPONENT_PX = 60
 
 #: WHAT MAKES A REMOVED PIECE FREE-STANDING. A cleaning step does two different things
 #: and they look nothing alike: it drops free-standing specks, which is what it is for,
@@ -319,11 +326,11 @@ def largest_removed(before, after, sl, painted=None, base=None):
     def _window_of(idx):
         yy, xx = np.where(lab == idx)
         sp = max(int(yy.max() - yy.min()), int(xx.max() - xx.min())) + 1
-        hh = sl[0].stop - sl[0].start
-        sd = int(np.clip(INSET_SPAN * sp, INSET_MIN_PX, max(hh // 6, INSET_MIN_PX)))
-        sd = min(max(sd, sp + 20), hh)
+        hh, ww = sl[0].stop - sl[0].start, sl[1].stop - sl[1].start
+        sd = int(np.clip(INSET_SPAN * sp, INSET_MIN_PX, max(hh // 4, INSET_MIN_PX)))
+        sd = min(max(sd, sp + 20), hh, ww)
         cy0 = int(np.clip(int(round(yy.mean())) - sd // 2, 0, hh - sd)) + sl[0].start
-        cx0 = int(np.clip(int(round(xx.mean())) - sd // 2, 0, hh - sd)) + sl[1].start
+        cx0 = int(np.clip(int(round(xx.mean())) - sd // 2, 0, ww - sd)) + sl[1].start
         return sd, cy0, cx0
 
     def _pick(ok):
@@ -339,26 +346,42 @@ def largest_removed(before, after, sl, painted=None, base=None):
                     return int(i)
         return int(idx[0])
 
-    for cand, why in ((unpainted & alone,
+    #: AND IT MUST BE BIG ENOUGH TO SEE. The window is now sized from a fixed
+    #: magnification rather than from the piece, so a 3 px speck in it is two pixels
+    #: on the sheet and the inset reads as an empty grey square -- which is what the
+    #: electron arm's first inset and the transmission arm's both were. The whole of
+    #: what each step removes is drawn on the panel itself, so the inset no longer
+    #: has to carry the honest-sample burden on its own: it may insist on a piece a
+    #: reader can actually make out, and every rule below says whether it got one.
+    big = sz >= INSET_MIN_COMPONENT_PX
+    for cand, why in ((unpainted & alone & big,
                        "the largest free-standing piece the step removes that the "
                        "operator did not paint as crack and whose magnified window is "
                        "no darker than the frame"),
-                      (unpainted,
+                      (unpainted & big,
                        "the largest piece the step removes that the operator did not "
                        "paint as crack; no removed piece in this window is "
                        "free-standing"),
-                      (sz > 0,
+                      (big,
                        "the largest piece the step removes; none passes either "
-                       "filter")):
+                       "filter"),
+                      (sz > 0,
+                       "the largest piece the step removes, and it is under "
+                       f"{INSET_MIN_COMPONENT_PX} px, so the window is mostly "
+                       "the matrix around it")):
         k = _pick(cand)
         if k is not None:
             chosen = why
             break
     ys, xs = np.where(lab == k)
     span = max(int(ys.max() - ys.min()), int(xs.max() - xs.min())) + 1
-    H = sl[0].stop - sl[0].start
-    side = int(np.clip(INSET_SPAN * span, INSET_MIN_PX, max(H // 6, INSET_MIN_PX)))
-    side = min(max(side, span + 20), H)
+    #: THE WINDOW IS A BAND, NOT A SQUARE, so the two axes have different lengths and
+    #: the inset must be clipped to each of them. Clipping x against the HEIGHT, which
+    #: is what a square window let this code get away with, pinned every inset into
+    #: the left quarter of its panel.
+    Hh, Hw = sl[0].stop - sl[0].start, sl[1].stop - sl[1].start
+    side = int(np.clip(INSET_SPAN * span, INSET_MIN_PX, max(Hh // 4, INSET_MIN_PX)))
+    side = min(max(side, span + 20), Hh, Hw)
     cy, cx = int(round(ys.mean())), int(round(xs.mean()))
     return {"comp_px": int(sz[k]), "window_px": int(gone.sum()), "side": side,
             "painted_crack_px": painted_px, "chosen": chosen,
@@ -366,8 +389,8 @@ def largest_removed(before, after, sl, painted=None, base=None):
             "free_standing_px": int(sz[alone].sum()),
             "adjoining_px": int(sz[(sz > 0) & ~alone].sum()),
             "isolation_px": ISOLATION_PX,
-            "at": (int(np.clip(cy - side // 2, 0, H - side)) + sl[0].start,
-                   int(np.clip(cx - side // 2, 0, H - side)) + sl[1].start)}
+            "at": (int(np.clip(cy - side // 2, 0, Hh - side)) + sl[0].start,
+                   int(np.clip(cx - side // 2, 0, Hw - side)) + sl[1].start)}
 
 
 def tint(base, mask, colour):
@@ -405,6 +428,25 @@ def tint(base, mask, colour):
 #: the output pixels they landed on before. CONTROL_mask_pixels_unchanged below renders
 #: the plate both ways and checks that, so the claim is measured and not asserted.
 GREY_INTERP = "bilinear"
+
+
+PANEL_ASPECT = 2.55          # the detail panel, width / height
+
+
+def band(sl, frame_h):
+    """Trim a square window to a PANEL_ASPECT band about its own centre.
+
+    The width is untouched -- it is what sets the scale bar and the magnification --
+    and only the top and bottom come off, so the band is a crop of the same window
+    rather than a different one. It is clipped to the frame, so a window already
+    near an edge slides rather than running off.
+    """
+    y, x = sl
+    side = y.stop - y.start
+    h = max(1, int(round(side / PANEL_ASPECT)))
+    cy = (y.start + y.stop) // 2
+    y0 = max(0, min(cy - h // 2, frame_h - h))
+    return (slice(y0, y0 + h), x)
 
 
 def show(ax, base, *layers):
@@ -552,12 +594,23 @@ def main():
                                   confirm=None if pc is None else (txm["final"] & pc))
     tsl = (slice(ty0, ty0 + tH), slice(tx0, tx0 + tH))
 
+    #: WIDE PANELS, NOT SQUARE ONES. The window was square, and a square panel on a
+    #: two-column sheet six rows deep cannot be wider than about 1.2 in -- the page's
+    #: HEIGHT is what binds -- so more than half of every column was left white and
+    #: every micrograph was small. A crack is a horizontal feature in both arms, so
+    #: the window keeps its full width and is trimmed to a band about its own centre.
+    #: The panel is then 2.5 in across instead of 1.2, nearly twice the area, and the
+    #: crack fills it rather than running as a stripe through a square of matrix.
+    ssl = band(ssl, sem["img"].shape[0])
+    tsl = band(tsl, txm["img"].shape[0])
+    sHh, tHh = ssl[0].stop - ssl[0].start, tsl[0].stop - tsl[0].start
+
     sem_flat = ST.stretch(sem["flat"][ssl], sem["flat"])
     txm_base = ST.stretch(txm["img"][tsl], txm["img"])
 
     charts = [{
         "tag": "sem", "nm": sem_nm, "whole": sem["flat"], "field": sem["img"],
-        "sl": ssl, "H": sH, "letters": "abcdef", "inset_letters": "mnop",
+        "sl": ssl, "H": sH, "Hh": sHh, "letters": "abcdef",
         #: THE ROW NAMES THE MICROSCOPY AND NOTHING ELSE, at the author's instruction.
         #: What each arm's detector IS belongs in the caption; a dash and a description
         #: on the title line is the same sub-line that was taken off the stage boxes.
@@ -576,10 +629,10 @@ def main():
                    ("mask", sem_flat, sem["final"])],
         #: TWO OR THREE WORDS EACH, at the author's instruction. These were sentences.
         "ops": ["crop",
-                "flatten,\n7 radii",
+                "flatten, 7 radii",
                 "darkness cut",
                 "clean",
-                ("trained\nclassifier"
+                ("trained classifier"
                  if BM.DO.USE_REGION_CLASSIFIER else "area floor")],
         #: WHICH STEP IS THE LEARNED ONE. The author asked whether a reader of this
         #: plate can tell a model is employed at all. The words were there -- "keep
@@ -593,7 +646,7 @@ def main():
         "painted": sem.get("paint_crack"),
     }, {
         "tag": "txm", "nm": txm_nm, "whole": txm["img"], "field": txm["img"],
-        "sl": tsl, "H": tH, "letters": "ghijkl", "inset_letters": "qrst",
+        "sl": tsl, "H": tH, "Hh": tHh, "letters": "ghijkl",
         "title": "TXM",
         "sub": "",
         "stages": ["full field", "detail", "crack\nprobability", "thresholded",
@@ -605,39 +658,41 @@ def main():
                    ("mask", txm_base, txm["cleaned"]),
                    ("mask", txm_base, txm["final"])],
         "ops": ["crop",
-                "17 ch + SAM,\nmean of 2",
+                "17 ch + SAM, mean of 2",
                 f"threshold {txm['threshold']:.2f}",
                 "clean",
-                "narrow\nto width"],
+                "narrow to width"],
         "insets": {3: (txm["over"], txm["cleaned"], "thresholded", "cleaned"),
                    4: (txm["cleaned"], txm["final"], "cleaned", "detected")},
         "painted": txm["paint_crack"],
     }]
 
-    # ---- geometry ------------------------------------------------------------------
-    W, MX, NCOL, GAP = J.PAGEW, 0.05, 6, 0.26
-    AVAIL = W - 2 * MX
-    IMW = (AVAIL - (NCOL - 1) * GAP) / NCOL
-    PITCH = IMW + GAP
+    # ---- geometry: one row per stage, the two arms side by side --------------------
+    W, MX = J.PAGEW, 0.05
+    AVAILW = W - 2 * MX
     LINE = J.TICK / 72.0 * 1.22                     # one line of body text, inches
+    #: THE STAGE IS NAMED ONCE, in a column of its own, because on any row both arms
+    #: are at the same stage. Twelve stage labels became six, the arms sit side by
+    #: side so the comparison the plate is FOR can be made without moving the eye
+    #: across the sheet, and the words that differ between the arms -- the operation
+    #: each one actually applies -- are the only thing written twice.
+    LABW, LABGAP, PANGAP = 0.95, 0.10, 0.20
+    PANW = (AVAILW - LABW - LABGAP - PANGAP) / 2.0
+    PANH = PANW / PANEL_ASPECT
+    OPH = 1.30 * LINE                               # the operation, above its panel
+    ROWGAP = 0.07
+    ROWH = OPH + PANH + ROWGAP
+    TOP, HEAD, LEGH, BOT = 0.06, 0.26, 0.34, 0.06
+    PX = [MX + LABW + LABGAP, MX + LABW + LABGAP + PANW + PANGAP]
+    SPINEX = MX + LABW - 0.02
+    Htot = TOP + HEAD + 6 * ROWH + LEGH + BOT
 
-    HEAD, STAGEH, OPH = 0.235, 0.30, 2 * LINE + 0.04
-    #: --- vertical geometry: one COLUMN per arm, one ROW per stage ---
-    VGAP = 0.30                                   # between the two arm columns
-    VCOLW = (W - 2 * MX - VGAP) / 2.0             # one arm's column
-    VPANW = 1.17                                  # the panel: was 0.83 across
-    VTXTX = VPANW + 0.12                          # text starts here inside the column
-    VROWGAP = 0.12                                # arrow room between stages
-    VROWH = VPANW + VROWGAP
-    INSW = min(0.50, (PITCH - 0.11) / 2.0)
-    #: Reserved for exactly what the block draws -- the inset, the two-line
-    #: transition label and the magnification marker. The old reserve left a
-    #: 0.47 in white band above the next rule, measured off the render.
-    INSH = INSW + 0.03 + 2.45 * LINE + 0.05
-    CHARTH = HEAD + STAGEH + IMW + OPH + INSH
-    TOP, CHARTGAP, LEGH, BOT = 0.05, 0.17, 0.33, 0.05
-    #: six stages down the page, both arms side by side, one legend under both
-    Htot = TOP + HEAD + 6 * VROWH + 0.10 + LEGH + BOT
+    #: ONE VOCABULARY FOR BOTH ARMS. The two detectors had their own words for the
+    #: same step -- "background removed" against "crack probability", "proposed"
+    #: against "thresholded" -- which made two chains look unrelated. The row says
+    #: what the stage IS in both; the line over each panel says what that arm did.
+    STAGE = ["full field", "detail", "what the\ncut reads", "first pass",
+             "cleaned", "detected"]
 
     fig = plt.figure(figsize=(W, Htot))
     guard = []
@@ -652,51 +707,78 @@ def main():
         guard.append((t, maxw))
         return t
 
-    rec = {}
-    #: ONE COLUMN PER ARM, ONE ROW PER STAGE. `cx` is the column's left edge and `ry`
-    #: the row's top; the panel sits at the column's left and its two labels -- the
-    #: stage name and the operation that produced it -- stack to its right, so no
-    #: string floats free of the thing it describes.
+    #: WHERE THE INSET IS FOUND, before anything is drawn, because the panel needs
+    #: its locator box and the overlay needs its window.
+    marks = {}
+    for ch in charts:
+        marks[ch["tag"]] = {
+            c: largest_removed(before, after, ch["sl"], painted=ch.get("painted"),
+                               base=ch["whole"])
+            for c, (before, after, _nb, _na) in ch["insets"].items()}
+
     for ci, ch in enumerate(charts):
-        cx = MX + ci * (VCOLW + VGAP)
-        sl, H, nm = ch["sl"], ch["H"], ch["nm"]
-        y0w, x0w = sl[0].start, sl[1].start
+        txt(PX[ci], TOP + 0.18, ch["title"], maxw=PANW, fontsize=J.LABEL,
+            fontweight="bold", ha="left", va="baseline",
+            color=J.ACCENT if ci == 0 else J.ACCENT2)
 
-        txt(cx, TOP + 0.15, ch["title"], maxw=VCOLW, fontsize=J.LABEL,
-            fontweight="bold", ha="left", va="baseline", color=J.ACCENT if ci == 0
-            else J.ACCENT2)
+    #: THE SPINE. A column of six arrows between the rows was six more marks on the
+    #: sheet saying what the reading order already says; one rule down the stage
+    #: column, with a head at the foot of it, says the same thing once.
+    _sp0 = TOP + HEAD + OPH
+    _sp1 = TOP + HEAD + 5 * ROWH + OPH + PANH
+    fig.add_artist(FancyArrowPatch(
+        (SPINEX / W, 1.0 - _sp0 / Htot), (SPINEX / W, 1.0 - (_sp1 + 0.10) / Htot),
+        transform=fig.transFigure, arrowstyle="-|>", mutation_scale=8, lw=0.8,
+        color=J.G_DARK, zorder=1, shrinkA=0, shrinkB=0))
 
-        marks, corners = {}, {}
-        for c, (before, after, _nb, _na) in ch["insets"].items():
-            got = largest_removed(before, after, sl, painted=ch.get("painted"),
-                                  base=ch["whole"])
-            marks[c] = got
-            if got is None:
-                continue
-            corners[c] = "left"
+    rec, axes = {}, {}
+    for ch in charts:
+        axes[ch["tag"]] = []
 
-        axes = []
-        for c, (kind, arr, mask) in enumerate(ch["panels"]):
-            ry = TOP + HEAD + c * VROWH
+    for c in range(len(STAGE)):
+        ry = TOP + HEAD + c * ROWH
+        py = ry + OPH
+        txt(SPINEX - 0.10, py + PANH / 2.0, STAGE[c], maxw=LABW - 0.12,
+            fontweight="bold", ha="right", va="center", linespacing=1.12)
+        fig.add_artist(plt.Line2D(
+            [(SPINEX - 0.035) / W, SPINEX / W], [1.0 - (py + PANH / 2.0) / Htot] * 2,
+            transform=fig.transFigure, color=J.G_DARK, lw=0.8, zorder=2))
+
+        for ci, ch in enumerate(charts):
+            sl, H, Hh, nm = ch["sl"], ch["H"], ch["Hh"], ch["nm"]
+            y0w, x0w = sl[0].start, sl[1].start
+            kind, arr, mask = ch["panels"][c]
+
             if kind == "field":
                 step = max(1, arr.shape[1] // 1400)
                 thumb = ST.stretch(arr[::step, ::step], arr)
-                fw, fh = VPANW, VPANW * thumb.shape[0] / thumb.shape[1]
-                if fh > VPANW:
-                    fh, fw = VPANW, VPANW * thumb.shape[1] / thumb.shape[0]
-                ax = ax_at(cx, ry + (VPANW - fh) / 2.0, fw, fh)
+                fh = PANH
+                fw = fh * thumb.shape[1] / thumb.shape[0]
+                if fw > PANW:
+                    fw, fh = PANW, PANW * thumb.shape[0] / thumb.shape[1]
+                ax = ax_at(PX[ci] + (PANW - fw) / 2.0, py + (PANH - fh) / 2.0, fw, fh)
                 show(ax, thumb)
-                ax.add_patch(Rectangle((x0w / step, y0w / step), H / step, H / step,
+                ax.add_patch(Rectangle((x0w / step, y0w / step), H / step, Hh / step,
                                        fill=False, edgecolor=J.ROI, linewidth=1.0,
                                        zorder=20))
                 bar(ax, nm * step, thumb.shape[1])
             else:
-                ax = ax_at(cx, ry, VPANW, VPANW)
+                ax = ax_at(PX[ci], py, PANW, PANH)
                 if kind == "prob":
                     ax.imshow(arr, cmap=PROB_CMAP, vmin=0, vmax=1,
                               interpolation=GREY_INTERP)
                 elif kind == "mask":
-                    show(ax, arr, (mask[sl], J.MASK))
+                    #: EVERY PIXEL THE NEXT STEP TAKES, ON THE PANEL, in the colour
+                    #: the key gives it. It used to be visible only inside a pair of
+                    #: thumbnails sitting on one hand-picked component, so a reader
+                    #: saw one speck and had to take the rest on trust; here the
+                    #: whole of what the step removes is in front of them at panel
+                    #: scale, and the inset is only there to show what it looks like
+                    #: close up.
+                    _goes = ch["insets"].get(c)
+                    show(ax, arr, (mask[sl], J.MASK),
+                         ((None if _goes is None
+                           else (_goes[0] & ~_goes[1])[sl]), J.ACCENT2))
                 else:
                     show(ax, arr)
                 if c == 1:
@@ -706,61 +788,58 @@ def main():
                     bar(ax, nm, H)
             boxed(ax)
             J.panel_label(ax, ch["letters"][c], inside=True)
-            axes.append(ax)
+            axes[ch["tag"]].append(ax)
 
-            #: THE TWO LABELS SIT BESIDE THE PANEL, not under an arrow. The stage name
-            #: is what the panel IS; the operation beneath it is what produced it.
-            txt(cx + VTXTX, ry + 0.10, ch["stages"][c].replace("\n", " "),
-                maxw=VCOLW - VTXTX, fontweight="bold", ha="left", va="top",
-                linespacing=1.15)
+            #: THE OPERATION SITS ON THE PANEL IT PRODUCED, on the line above it, so
+            #: no string floats between two pictures belonging to neither.
             if c > 0:
-                txt(cx + VTXTX, ry + 0.10 + 1.5 * LINE, ch["ops"][c - 1],
-                    maxw=VCOLW - VTXTX, ha="left", va="top", linespacing=1.18,
-                    color=J.G_DARK)
+                txt(PX[ci], ry + 0.012, ch["ops"][c - 1], maxw=PANW,
+                    ha="left", va="top", color=J.G_DARK)
 
-            #: the arrow points DOWN the chain, between this panel and the next
-            if c < len(ch["panels"]) - 1:
-                ax_mid = (cx + VPANW / 2.0) / W
-                fig.add_artist(FancyArrowPatch(
-                    (ax_mid, 1.0 - (ry + VPANW + 0.03) / Htot),
-                    (ax_mid, 1.0 - (ry + VROWH - 0.015) / Htot),
-                    transform=fig.transFigure, arrowstyle="-|>", mutation_scale=7,
-                    lw=1.0, color=J.INK, zorder=1))
-
-        #: the magnified before/after pairs ride beside the rows they belong to
+    # ---- the before/after pairs, over the right end of the panel they belong to -----
+    #: THEY USED TO TAKE A COLUMN OF THEIR OWN beside the text, which is what made the
+    #: sheet half white. A magnified window drawn over the picture it came out of is
+    #: the ordinary way to show one, and it costs the layout nothing.
+    for ci, ch in enumerate(charts):
+        sl, H, Hh, nm = ch["sl"], ch["H"], ch["Hh"], ch["nm"]
+        y0w, x0w = sl[0].start, sl[1].start
         steps = {}
         for c, (before, after, nb, na) in sorted(ch["insets"].items()):
-            got = marks[c]
+            got = marks[ch["tag"]][c]
             if got is None:
                 continue
-            s_, (iy, ix) = got["side"], got["at"]
+            #: ONE WINDOW, AT ONE MAGNIFICATION, ON EVERY ARM. The pair was sized
+            #: from the component, so a big piece got a big window and reached the
+            #: sheet at twice life size -- which is not a magnification, it is the
+            #: picture again. The window is sized from the magnification instead:
+            #: every inset on this plate is exactly INSET_MAG, the two arms can be
+            #: compared through it, and the caption quotes one number. The "after"
+            #: thumbnail went with it; what the step removes is now orange on the
+            #: panel itself, which is where a reader can see all of it at once.
+            iw = min(0.50, PANH - 0.09)
+            s_ = max(16, int(round(iw * H / (PANW * INSET_MAG))))
+            s_ = min(s_, Hh, H)
+            cy_, cx_ = got["at"][0] + got["side"] // 2, got["at"][1] + got["side"] // 2
+            iy = int(np.clip(cy_ - s_ // 2, y0w, y0w + Hh - s_))
+            ix = int(np.clip(cx_ - s_ // 2, x0w, x0w + H - s_))
             isl = (slice(iy, iy + s_), slice(ix, ix + s_))
             cut = ST.stretch(ch["whole"][isl], ch["whole"])
-            ry = TOP + HEAD + c * VROWH
-            #: the caption clears the operation text above it -- however many lines
-            #: that runs to -- and the pair hangs below the caption, so the three
-            #: never overlap whatever the wording.
-            nop = ch["ops"][c - 1].count("\n") + 1 if c > 0 else 0
-            cap_top = 0.10 + 1.5 * LINE + (nop + 0.35) * LINE
-            ins_top = cap_top + 1.15 * LINE
-            iw = min(0.70, (VCOLW - VTXTX - 0.06) / 2.0, VPANW - ins_top - 0.02)
-            for k in (0, 1):
-                xl = cx + VTXTX + k * (iw + 0.05)
-                axi = ax_at(xl, ry + ins_top, iw, iw)
-                show(axi, cut, ((before if k == 0 else after)[isl], J.MASK),
-                     ((before & ~after)[isl] if k == 0 else None, J.ACCENT2))
-                boxed(axi, colour=J.ROI if k == 0 else J.G_DARK,
-                      lw=0.9 if k == 0 else 0.5)
-            mag = (iw / s_) / (VPANW / H)
-            txt(cx + VTXTX, ry + cap_top,
-                f"{nb} \u2192 {na}  \u00d7{mag:.0f}", maxw=VCOLW - VTXTX,
-                ha="left", va="top", fontstyle="italic", color=J.G_DARK)
+            py = TOP + HEAD + c * ROWH + OPH
+            axi = ax_at(PX[ci] + PANW - iw - 0.045, py + (PANH - iw) / 2.0, iw, iw)
+            show(axi, cut, (before[isl], J.MASK), ((before & ~after)[isl], J.ACCENT2))
+            #: a white rule outside the coloured one, so the window reads as
+            #: something laid OVER the micrograph and not a hole cut in it
+            boxed(axi, colour="white", lw=2.4)
+            boxed(axi, colour=J.ROI, lw=1.0)
+            mag = (iw / s_) / (PANW / H)
             pad = 0.012 * H
-            axes[c].add_patch(Rectangle((ix - x0w - pad, iy - y0w - pad),
-                                        s_ + 2 * pad, s_ + 2 * pad, fill=False,
-                                        edgecolor="white", linewidth=1.4, zorder=24))
-            axes[c].add_patch(Rectangle((ix - x0w, iy - y0w), s_, s_, fill=False,
-                                        edgecolor=J.ROI, linewidth=0.9, zorder=25))
+            axes[ch["tag"]][c].add_patch(
+                Rectangle((ix - x0w - pad, iy - y0w - pad), s_ + 2 * pad,
+                          s_ + 2 * pad, fill=False, edgecolor="white",
+                          linewidth=1.4, zorder=24))
+            axes[ch["tag"]][c].add_patch(
+                Rectangle((ix - x0w, iy - y0w), s_, s_, fill=False,
+                          edgecolor=J.ROI, linewidth=0.9, zorder=25))
             steps[f"{nb}_to_{na}"] = {
                 "inset_at": [int(iy), int(ix)], "inset_side_px": int(s_),
                 "removed_in_frame_px": int((before & ~after).sum()),
@@ -775,28 +854,30 @@ def main():
                 "removed_px_free_standing": got["free_standing_px"],
                 "removed_px_adjoining_kept_mask": got["adjoining_px"],
                 "free_standing_means_no_kept_mask_within_px": got["isolation_px"],
-                "panel_letter_corner": corners.get(c, "left")}
-
+                "panel_letter_corner": "left"}
 
         rec[ch["tag"]] = {
             "field": str(sem["field"]) if ch["tag"] == "sem" else txm["field"],
             "nm_per_px": nm, "scale_source": (BM.SEM_SCALE_SOURCE if ch["tag"] == "sem"
                                               else BM.TXM_SCALE_SOURCE),
             "frame_px": [int(ch["field"].shape[0]), int(ch["field"].shape[1])],
-            "detail_px": int(H), "detail_um": round(H * nm / 1000.0, 2),
+            "detail_px": int(H), "detail_band_px": int(Hh),
+            "detail_um": round(H * nm / 1000.0, 2),
+            "detail_band_um": round(Hh * nm / 1000.0, 2),
             "detail_at": [int(y0w), int(x0w)],
-            "stages": [s.replace("\n", " ") for s in ch["stages"]],
+            "stage_names_on_the_plate": [t.replace("\n", " ") for t in STAGE],
+            "this_arm_calls_them": [s.replace("\n", " ") for s in ch["stages"]],
             "operations": [o.replace("\n", " ") for o in ch["ops"]],
             "cleaning_steps": steps}
 
     # ---- the key, so the plate reads with no caption ---------------------------------
-    ky = TOP + HEAD + 6 * VROWH + 0.10
+    ky = TOP + HEAD + 6 * ROWH + 0.06
     cells = [("swatch", J.MASK, "crack found at this stage"),
              ("swatch", J.ACCENT2, "pixels this step removes"),
-             ("box", J.ROI, "window magnified at right"),
+             ("box", J.ROI, "window shown magnified"),
              ("ramp", None, "crack probability, 0 to 1")]
     for i, (kind, colour, label) in enumerate(cells):
-        cx = MX + i * (AVAIL / len(cells))
+        cx = MX + i * (AVAILW / len(cells))
         ax = ax_at(cx, ky, 0.095, 0.085)
         if kind == "ramp":
             ax.imshow(np.linspace(0, 1, 64)[None, :], cmap=PROB_CMAP, aspect="auto",
@@ -809,7 +890,7 @@ def main():
             ax.imshow(np.array(J.rgb(colour), dtype=float)[None, None, :],
                       interpolation="nearest")
             boxed(ax, colour=J.G_DARK, lw=0.4)
-        txt(cx + 0.14, ky + 0.065, label, maxw=AVAIL / len(cells) - 0.19, ha="left",
+        txt(cx + 0.14, ky + 0.065, label, maxw=AVAILW / len(cells) - 0.19, ha="left",
             va="baseline")
 
     # ---- nothing may overflow the box it was given, and the check says which ---------
@@ -904,9 +985,14 @@ def main():
                   "instead: per inset, removed_in_window_painted_crack_px against "
                   "removed_in_window_px, and inset_placed_on names the rule that chose "
                   "the piece, including the fallback used where every piece a step "
-                  "removes overlaps painted crack. The window is six times the "
-                  "component's longest side, magnified by nearest neighbour. No mask "
-                  "is dilated anywhere in this figure.",
+                  "removes overlaps painted crack, and the floor under the piece's "
+                  f"own size ({INSET_MIN_COMPONENT_PX} px) below which no window is "
+                  "large enough to show it. EVERY PIXEL THE STEP REMOVES is drawn in "
+                  "orange on the panel itself, so this one window is an illustration "
+                  "and not the reader's only sight of the step's cost. The window is "
+                  f"sized from the magnification, not from the piece: every inset on "
+                  f"this plate is exactly x{INSET_MAG:g}, by nearest neighbour. No "
+                  "mask is dilated anywhere in this figure.",
         "detail_window_rule": "mk_workflow.boundary_window applied to each arm's OWN "
                               "final mask. The SEM window is the %g um the companion "
                               "workflow figure records, and the transmission window is "

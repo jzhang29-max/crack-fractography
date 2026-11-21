@@ -439,7 +439,14 @@ XLIM = (-0.7, x - SAMPGAP + 0.7)
 #: sheet. It is now inside the figure with white above it, and the plate is taller by
 #: that much. Height costs nothing here -- J.save scales type by the printed WIDTH --
 #: so there is no reason for the top line of a figure to sit on its own edge.
-fig = plt.figure(figsize=(J.PAGEW, 3.12))
+#: THE AXES GROW, THE TEXT BANDS DO NOT. The plate was 3.12 in on a sheet that
+#: fits about nine, so two thirds of the page under it was blank and three bar
+#: panels were drawn 1.56 in tall. The two bands -- the key over the panels and
+#: the labels and footnote under them -- are what they always were, in INCHES,
+#: and every inch added to the figure goes to the axes.
+FIGH = 5.10
+TOPBAND, BOTBAND = 0.60, 1.03
+fig = plt.figure(figsize=(J.PAGEW, FIGH))
 #: ONE COMBINED GROUP PER ARM, AND THE TXM RETRAINING HISTORY BESIDE IT, at the
 #: author's instruction, replacing the per-specimen panel this plate used to lead with
 #: and absorbing what was a separate figure.
@@ -459,7 +466,8 @@ fig = plt.figure(figsize=(J.PAGEW, 3.12))
 #: not a result on a sheet of results. Panel (c) now draws the electron arm's own
 #: question -- what its one trained stage bought -- on its own axis, because the two
 #: are a TXM IoU and an SEM F1 over different unit sets and must not share a scale.
-gs = fig.add_gridspec(1, 3, left=0.062, right=0.993, top=0.830, bottom=0.330,
+gs = fig.add_gridspec(1, 3, left=0.062, right=0.993,
+                      top=1.0 - TOPBAND / FIGH, bottom=BOTBAND / FIGH,
                       width_ratios=[1.0, 1.0, 1.25], wspace=0.42)
 #: ONE AXIS PER ARM. They shared one, which put a SEM bar and a TXM bar side by side on
 #: one scale and invited a reader to read the pair as a contest. Each arm is scored on
@@ -609,6 +617,10 @@ for _i, (_arm, _n, _det, _cei) in enumerate(_CEIL):
 ax_r.set_xticks([])
 ax_r.set_xlim(-0.34, (len(_CEIL) - 1) * (2 * _CW + _CGAP) + 2 * _CW)
 ax_r.set_ylim(0, max(v for _a, _n, v, _c in _CEIL) + 0.20)
+#: FIXED TICKS. A taller axis makes matplotlib choose a finer locator, and the
+#: extra top tick it added ran into the key over the panels.
+ax_r.set_yticks([0.0, 0.2, 0.4, 0.6, 0.8])
+ax_r.set_yticklabels(["0.0", "0.2", "0.4", "0.6", "0.8"])
 ax_r.set_ylabel("mean per-frame F1", fontsize=J.LABEL, labelpad=2.0)
 ax_r.tick_params(labelsize=J.TICK, pad=1.6)
 for _s2 in ax_r.spines.values():
@@ -642,7 +654,8 @@ _TUPLE = {tuple: HandlerTuple(ndivide=None, pad=0.0)}
 _ACC = Patch(facecolor="white", edgecolor=J.INK, linewidth=0.7, hatch="///")
 fig.legend([_pair(f) for _, f in METRICS] + [_ACC],
            [m for m, _ in METRICS] + ["pixel accuracy"], handler_map=_TUPLE,
-           loc="upper center", bbox_to_anchor=(0.50, 0.972), ncol=4, frameon=False,
+           loc="upper center", bbox_to_anchor=(0.50, 1.0 - 0.10 / FIGH), ncol=4,
+           frameon=False,
            handlelength=1.3, handletextpad=0.35, columnspacing=0.9,
            borderpad=0.0, borderaxespad=0.0, fontsize=J.TICK)
 # Panel (b) draws ONE quantity, so it carries no legend: a key with a single entry

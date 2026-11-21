@@ -113,7 +113,11 @@ def _flow_facts():
     d = _j.load(open(os.path.join(OUT, "F1 - flow chart.caption.json")))
     mags = [v["magnification"] for a in d["arms"].values()
             for v in a["cleaning_steps"].values()]
-    return {"mag_lo": min(mags), "mag_hi": max(mags), "n_insets": len(mags)}
+    uniq = sorted({round(m, 1) for m in mags})
+    if len(uniq) != 1:
+        raise SystemExit("the flow chart draws its windows at more than one "
+                         f"magnification ({uniq}); the bullet quotes one")
+    return {"mag": uniq[0], "n_insets": len(mags)}
 
 
 FL = _flow_facts()
@@ -139,14 +143,16 @@ FIGURES = [
    "docs/figures/sem_classifier_lofo.json holds the leave-one-frame-out answer. "
    "TXM is a trained per-pixel model — 17 image "
    "channels plus a frozen SAM embedding, the mean of two fitted members cut at 0.60.",
-   "The operation is written beside every panel, and each cleaning step carries "
-   f"a before/after inset magnified {FL['mag_lo']:.0f}x to {FL['mag_hi']:.0f}x, "
-   "so the reader can see what 'cleaned' "
-   "actually did. No pixel is dilated. The inset sits on the largest piece that step "
-   "removes which is FREE-STANDING and which the operator did not paint as crack — "
-   "dropping a free-standing speck is what the step is for. Taking bites out of a "
-   "region it otherwise keeps is its side effect, and the figure's record carries "
-   "that split per step, in pixels.",
+   "One row per stage with the two arms side by side, so the stage is named once "
+   "and the comparison the plate is for is made without moving the eye across the "
+   "sheet. The operation each arm applies is written over the panel it produced. "
+   "Every pixel a cleaning step removes is drawn in orange on the panel it comes "
+   f"off, and a x{FL['mag']:.0f} window over the right-hand end of that panel shows "
+   "what one of them looks like close up. No pixel is dilated. The window sits on "
+   "the largest piece that step removes which is FREE-STANDING and which the "
+   "operator did not paint as crack — dropping a free-standing speck is what the "
+   "step is for. Taking bites out of a region it otherwise keeps is its side "
+   "effect, and the figure's record carries that split per step, in pixels.",
    "The TXM arm has NO background-subtraction step: the model reads the frame itself "
    "and its smoothed channels carry the local background.",
    "Held out, the TXM model reaches IoU 0.811 +/- 0.023 over 71 labelled frames. On the "
@@ -352,8 +358,14 @@ def build(path, with_text):
                  fontweight="bold", va="top", ha="left")
         fig.text(M / W, 1 - (M + 0.16) / H, title, fontsize=11.5, va="top", ha="left",
                  color="#333333")
+        #: A SHORT PLATE SITS IN THE MIDDLE OF THE SPACE IT HAS, not at the top of
+        #: it. Hung from the heading, a 5 in plate on a 9 in page left four blank
+        #: inches in one block at the foot, which reads as a page that failed to
+        #: finish rather than as a figure with air around it.
         top = 1 - (M + 0.52) / H
-        ax = fig.add_axes([(W - iw) / 2 / W, top - ih / H, iw / W, ih / H])
+        room = top - (M + (text_h + 0.28 if (with_text and not split) else 0.0)) / H
+        ax = fig.add_axes([(W - iw) / 2 / W, top - ih / H - max(0.0, room - ih / H) / 2,
+                           iw / W, ih / H])
         ax.imshow(im)
         ax.axis("off")
         if split:
@@ -372,7 +384,7 @@ def build(path, with_text):
                          ha="left", color="#333333")
                 y = 1 - (M + 0.62) / H
             else:
-                y = top - ih / H - 0.42 / H
+                y = ax.get_position().y0 - 0.42 / H
             for w in wrapped:
                 for i, line in enumerate(w):
                     fig.text(M / W + (0.0 if i == 0 else 0.0155), y,

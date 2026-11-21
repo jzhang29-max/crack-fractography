@@ -301,7 +301,12 @@ def main():
     P = {t: prepare(t) for t in ("sem", "txm")}
     #: SECOND PASS at the wider of the two windows, so neither arm loses any of its
     #: own region to make the pair match.
-    _ASP = max(P[t]["region"].shape[1] / P[t]["region"].shape[0] for t in P)
+    #: AND NOT THE NARROWER OF THE TWO SHAPES. Taking the wider arm's aspect made
+    #: both panels 1.23 in tall on a sheet with two spare inches under it. A fixed,
+    #: squarer target widens the shorter window instead of flattening the taller
+    #: one: both crops gain real micrograph, neither loses any region, and the pair
+    #: reaches the page half as tall again.
+    _ASP = min(1.80, max(P[t]["region"].shape[1] / P[t]["region"].shape[0] for t in P))
     P = {t: prepare(t, aspect=_ASP) for t in ("sem", "txm")}
     _got = {t: P[t]["region"].shape[1] / P[t]["region"].shape[0] for t in P}
     if abs(_got["sem"] - _got["txm"]) > 0.02 * _ASP:
@@ -328,7 +333,12 @@ def main():
     #: THE FULL FIELD, under the two details. The plate showed one crack each and
     #: nothing of where it sits or what the detector did with the rest of the
     #: frame, which the author asked for.
-    FULLH = 1.46
+    #: AS TALL AS THE WIDER ARM'S FRAME ALLOWS. The whole-field panels were 1.46 in
+    #: on a sheet with three blank inches under it. 2.00 is the ceiling: above it
+    #: the electron frame's 1.5:1 would hit the column width, and the `min` below
+    #: would clamp its width while its height went on growing -- which does not
+    #: letterbox the picture, it stretches it.
+    FULLH = 2.00
     FULLGAP = 0.30
     FULLROWGAP = 0.26    # clears the caption line under the overlay row
     Htot = Mg + TITLE + IMH + FULLGAP + 2 * FULLH + FULLROWGAP + FOOT + Mg
@@ -384,10 +394,14 @@ def main():
             full_img, full_mask = Pt["d"]["img"], Pt["d"]["final"]
             cy, cx, ch_, cw = Pt["crop"]
             arm_colour = J.ACCENT if tag == "sem" else J.ACCENT2
+            #: ASPECT FIRST, ALWAYS. Clamping the width alone would stretch the
+            #: frame; where the width binds, the height comes down with it.
             fh = FULLH
-            fw = min(LW, fh * full_img.shape[1] / full_img.shape[0])
+            fw = fh * full_img.shape[1] / full_img.shape[0]
+            if fw > LW:
+                fw, fh = LW, LW * full_img.shape[0] / full_img.shape[1]
             fax = ax_at(Mg + _i * (LW + GAP) + (LW - fw) / 2.0,
-                        _fy + _r * (FULLH + FULLROWGAP), fw, fh)
+                        _fy + _r * (FULLH + FULLROWGAP) + (FULLH - fh) / 2.0, fw, fh)
             if _kind == "overlay":
                 fax.imshow(BM.display_stretch(full_img) if hasattr(BM, "display_stretch")
                            else full_img, cmap="gray", interpolation="bilinear", zorder=1)

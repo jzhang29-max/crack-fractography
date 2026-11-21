@@ -1025,7 +1025,11 @@ def main():
     #: TWO gaps, not one: there is a seam between the rows AND a seam above the key.
     #: With a single GAP in this sum the key began at the exact inch the lower row's
     #: caption ended, and the row's bold identity line printed into the swatches.
-    BARH = 1.05           # the counted-pixel bar panel below the rows
+    #: THE BAR PANEL IS THE PLATE'S CONCLUSION, so it is drawn at the size of one.
+    #: At 1.05 in tall and 3.10 wide it sat in the bottom-left corner of a sheet
+    #: that had three blank inches under it, and read as an afterthought beside
+    #: the eight micrographs rather than the count they are examples of.
+    BARH = 1.95           # the counted-pixel bar panel below the rows
     Htot = Mg + HDR + 2 * (PAN + CAP) + 2 * GAP + BARH + 0.10 + LEG + Mg
 
     fig = plt.figure(figsize=(W, Htot))
@@ -1139,8 +1143,9 @@ def main():
     #: correctly counted, fp_px over-counted, fn_px under-counted, measured over the
     #: refereed pixels of the whole frame rather than the chosen window. The windows
     #: above are chosen to SHOW each error; this says how much of each there is.
-    _bw = 3.10
-    bax = ax_at(Mg + LAB + 0.42, Htot - Mg - LEG - 0.10 - BARH, _bw, BARH)
+    _bw = 4.30
+    bax = ax_at(Mg + LAB + (W - 2 * Mg - LAB - _bw) / 2.0,
+                Htot - Mg - LEG - 0.10 - BARH, _bw, BARH)
     _w, _gap = 0.26, 0.10
     _xt, _xl = [], []
     for _i, coll in enumerate(("SEM", "TXM")):
@@ -1157,14 +1162,22 @@ def main():
                      fontsize=J.TICK, color=J.INK)
         _xt.append(base + _w)
         _xl.append(coll)
+    #: THE AXIS ENDS WHERE THE BARS DO. Matplotlib's own margins put half an
+    #: inch of empty axis outside the first and last bar on a panel this wide.
+    bax.set_xlim(-0.5 * _w - 0.04, _xt[-1] + 1.5 * _w + 0.04)
+    bax.minorticks_off()
     bax.set_xticks(_xt)
     bax.set_xticklabels(_xl, fontsize=J.TICK)
-    bax.tick_params(axis="x", pad=1.0)
+    bax.tick_params(axis="x", pad=2.6)
     bax.set_ylim(0, 100)
     bax.set_yticks([0, 25, 50, 75, 100])
     bax.set_yticklabels(["0", "25", "50", "75", "100"], fontsize=J.TICK)
     bax.set_ylabel("% of refereed px", fontsize=J.TICK, labelpad=3.0)
-    bax.tick_params(axis="both", which="both", length=2.0, width=0.5, pad=1.6)
+    #: HIDING A SPINE DOES NOT HIDE ITS TICKS. The top and right spines were off
+    #: and their tick marks went on printing, as a row of dashes floating above
+    #: the bars and another down the right-hand edge of the panel.
+    bax.tick_params(axis="both", which="both", length=2.0, width=0.5, pad=1.6,
+                    top=False, right=False)
     for _sp in ("top", "right"):
         bax.spines[_sp].set_visible(False)
     for _sp in bax.spines.values():
